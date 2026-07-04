@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 import json
 import math
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence, TypeAlias
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -56,6 +57,7 @@ Y_UP_FRAME_CONVENTIONS = {
 STATIC_SCENARIO_TIME_MS = 0
 STATIC_SCENARIO_DURATION_MS = 0
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
+_WorldLayoutSourceKind: TypeAlias = Literal["world_layout", "world_snapshot"]
 
 STUDIO_Y_UP_TO_Z_UP = np.array(
     [
@@ -64,6 +66,15 @@ STUDIO_Y_UP_TO_Z_UP = np.array(
         [0.0, 1.0, 0.0],
     ]
 )
+
+
+@dataclass(frozen=True)
+class _WorldLayoutSnapshotEnvelope:
+    snapshot: dict[str, Any]
+    name: str
+    source_kind: _WorldLayoutSourceKind
+    frame_convention: str | None
+    frame_map_hint: ConcreteWorldLayoutFrameMap | None
 
 
 def _is_record(value: Any) -> bool:
@@ -110,7 +121,10 @@ def _read_optional_bool(value: Any, default: bool, field: str) -> bool:
 def _read_vector3(value: Any, field: str, *, positive: bool = False) -> tuple[float, float, float]:
     if not isinstance(value, list | tuple) or len(value) != 3:
         raise WorldLayoutTransferError(f"{field} must be an array of 3 finite numbers")
-    parsed = tuple(_read_finite_number(component, f"{field}[{index}]") for index, component in enumerate(value))
+    parsed = tuple(
+        _read_finite_number(component, f"{field}[{index}]")
+        for index, component in enumerate(value)
+    )
     if positive and any(component <= 0 for component in parsed):
         raise WorldLayoutTransferError(f"{field} components must be > 0")
     return parsed
@@ -123,9 +137,13 @@ def _read_static_timing(snapshot: dict[str, Any]) -> tuple[int, int]:
         raise WorldLayoutTransferError("scenario_time_ms must be an integer")
     if not isinstance(scenario_duration_ms, int) or isinstance(scenario_duration_ms, bool):
         raise WorldLayoutTransferError("scenario_duration_ms must be an integer")
-    if scenario_time_ms != STATIC_SCENARIO_TIME_MS or scenario_duration_ms != STATIC_SCENARIO_DURATION_MS:
+    if (
+        scenario_time_ms != STATIC_SCENARIO_TIME_MS
+        or scenario_duration_ms != STATIC_SCENARIO_DURATION_MS
+    ):
         raise WorldLayoutTransferError(
-            "Only static world layouts are supported: scenario_time_ms and scenario_duration_ms must both be 0."
+            "Only static world layouts are supported: scenario_time_ms and "
+            "scenario_duration_ms must both be 0."
         )
     return scenario_time_ms, scenario_duration_ms
 
@@ -308,51 +326,54 @@ def _read_frame_convention(payload: dict[str, Any], snapshot: dict[str, Any]) ->
 
 def _read_snapshot_from_payload(
     payload: Any,
-) -> tuple[dict[str, Any], str, str, str | None, ConcreteWorldLayoutFrameMap | None]:
+) -> _WorldLayoutSnapshotEnvelope:
     if not _is_record(payload):
         raise WorldLayoutTransferError("World layout payload must be a JSON object")
     if _is_record(payload.get("manifest")):
         return _read_snapshot_from_payload(payload["manifest"])
     if _is_record(payload.get("world_layout")):
         snapshot = payload["world_layout"]
-        name = snapshot.get("name") if isinstance(snapshot.get("name"), str) else "static-world-layout"
-        return (
-            snapshot,
-            name,
-            "world_layout",
-            _read_frame_convention(payload, snapshot),
-            _read_frame_map_hint(payload),
+        raw_name = snapshot.get("name")
+        name = raw_name if isinstance(raw_name, str) else "static-world-layout"
+        return _WorldLayoutSnapshotEnvelope(
+            snapshot=snapshot,
+            name=name,
+            source_kind="world_layout",
+            frame_convention=_read_frame_convention(payload, snapshot),
+            frame_map_hint=_read_frame_map_hint(payload),
         )
     if _is_record(payload.get("world_snapshot")):
         snapshot = payload["world_snapshot"]
-        name = payload.get("title") if isinstance(payload.get("title"), str) else "world-snapshot"
-        return (
-            snapshot,
-            name,
-            "world_snapshot",
-            _read_frame_convention(payload, snapshot),
-            _read_frame_map_hint(payload),
+        raw_title = payload.get("title")
+        name = raw_title if isinstance(raw_title, str) else "world-snapshot"
+        return _WorldLayoutSnapshotEnvelope(
+            snapshot=snapshot,
+            name=name,
+            source_kind="world_snapshot",
+            frame_convention=_read_frame_convention(payload, snapshot),
+            frame_map_hint=_read_frame_map_hint(payload),
         )
     raise WorldLayoutTransferError("Payload must contain world_layout, world_snapshot, or manifest")
 
 
 def parse_static_world_layout_payload(payload: Any) -> StaticWorldLayout:
-    snapshot, name, source_kind, frame_convention, frame_map_hint = _read_snapshot_from_payload(
-        payload
-    )
-    raw_objects = snapshot.get("objects")
+    envelope = _read_snapshot_from_payload(payload)
+    raw_objects = envelope.snapshot.get("objects")
     if not isinstance(raw_objects, list):
         raise WorldLayoutTransferError("World layout objects must be an array")
-    scenario_time_ms, scenario_duration_ms = _read_static_timing(snapshot)
-    objects = tuple(_read_world_object(item, index) for index, item in enumerate(raw_objects))
+    scenario_time_ms, scenario_duration_ms = _read_static_timing(envelope.snapshot)
+    objects = tuple(
+        _read_world_object(raw_object, index)
+        for index, raw_object in enumerate(raw_objects)
+    )
     return StaticWorldLayout(
-        name=name.strip() or "static-world-layout",
+        name=envelope.name.strip() or "static-world-layout",
         objects=objects,
         scenario_time_ms=scenario_time_ms,
         scenario_duration_ms=scenario_duration_ms,
-        source_kind=source_kind,
-        frame_convention=frame_convention,
-        frame_map_hint=frame_map_hint,
+        source_kind=envelope.source_kind,
+        frame_convention=envelope.frame_convention,
+        frame_map_hint=envelope.frame_map_hint,
     )
 
 
@@ -501,9 +522,10 @@ def _duplicate_world_object_warnings(objects: Sequence[WorldLayoutObject]) -> tu
         ("name", [world_object.name for world_object in objects]),
     ):
         counts = Counter(values)
-        for value in sorted(item for item, count in counts.items() if count > 1):
+        for duplicated_value in sorted(value for value, count in counts.items() if count > 1):
             warnings.append(
-                f"Duplicate world object {label} '{value}' appears {counts[value]} times; "
+                f"Duplicate world object {label} '{duplicated_value}' "
+                f"appears {counts[duplicated_value]} times; "
                 "simulator transfer may be ambiguous."
             )
     return tuple(warnings)
