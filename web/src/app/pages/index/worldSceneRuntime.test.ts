@@ -4,6 +4,7 @@ import {
   createWorldRolloutCheckerProfile,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
+  readWorldSceneLayerFromUrl,
   readWorldSceneManifestPayload,
   resolveWorldRolloutImportPayload,
 } from "@/app/pages/index/worldSceneRuntime";
@@ -220,6 +221,95 @@ describe("worldSceneRuntime world package import", () => {
         version: "",
       })
     ).rejects.toThrow("Import link did not contain a valid world package manifest.");
+  });
+});
+
+describe("worldSceneRuntime world layout import", () => {
+  it("reports embedded cameras from world-scene package payloads", async () => {
+    const manifestPayload = createManifestPayload({
+      cameras: [
+        {
+          id: "wrist-camera",
+          name: "Wrist Camera",
+          parent_joint: "wrist_roll",
+          pose: {
+            xyz: [0.1, 0.2, 0.3],
+            rpy: [0.4, 0.5, 0.6],
+          },
+          intrinsics: {
+            width: 640,
+            height: 480,
+            fov_deg: 70,
+          },
+        },
+        {
+          id: "overview-camera",
+          name: "Overview Camera",
+          parent_joint: "base",
+          pose: {
+            xyz: [1, 2, 3],
+            rpy: [0, 0, 0],
+          },
+          intrinsics: {
+            width: 1280,
+            height: 720,
+            fov_deg: 60,
+          },
+        },
+      ],
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      expect(input).toBe("https://example.test/layout.json");
+      expect(init?.headers).toEqual({ Accept: "application/json" });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => manifestPayload,
+      } as Response;
+    }) as typeof fetch;
+
+    try {
+      const importedWorldLayout = await readWorldSceneLayerFromUrl(
+        "https://example.test/layout.json",
+        "World layout import"
+      );
+
+      expect(importedWorldLayout.embeddedCameras).toBe(2);
+      expect(importedWorldLayout.worldLayout.objects).toHaveLength(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reports zero embedded cameras for plain world layout payloads", async () => {
+    const manifestPayload = createManifestPayload();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          world_layout: {
+            name: "Desk setup",
+            objects: manifestPayload.world_snapshot.objects,
+            scenario_time_ms: 0,
+            scenario_duration_ms: 0,
+          },
+        }),
+      }) as Response) as typeof fetch;
+
+    try {
+      const importedWorldLayout = await readWorldSceneLayerFromUrl(
+        "https://example.test/layout.json",
+        "World layout import"
+      );
+
+      expect(importedWorldLayout.embeddedCameras).toBe(0);
+      expect(importedWorldLayout.worldLayout.name).toBe("Desk setup");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

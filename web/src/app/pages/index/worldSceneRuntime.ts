@@ -543,6 +543,13 @@ export const loadWorldScenePackageFromImportParams = async (
   throw new Error("Import link did not contain a valid world package manifest.");
 };
 
+const countEmbeddedWorldSnapshotCameras = (worldLayoutPayload: unknown): number => {
+  if (!isRecord(worldLayoutPayload)) return 0;
+  const worldSnapshot = worldLayoutPayload.world_snapshot;
+  if (!isRecord(worldSnapshot)) return 0;
+  return Array.isArray(worldSnapshot.cameras) ? worldSnapshot.cameras.length : 0;
+};
+
 export const readWorldSceneLayerFromUrl = async (
   worldLayoutUrl: string,
   contextLabel: string
@@ -572,19 +579,8 @@ export const readWorldSceneLayerFromUrl = async (
     throw new Error(errors[0] ? `Invalid world layout: ${errors.join("; ")}` : "Invalid world layout");
   }
 
-  const embeddedCameras =
-    typeof payload === "object" &&
-    payload !== null &&
-    "world_snapshot" in payload &&
-    typeof (payload as { world_snapshot?: unknown }).world_snapshot === "object" &&
-    (payload as { world_snapshot?: { cameras?: unknown } }).world_snapshot?.cameras &&
-    Array.isArray(
-      (payload as { world_snapshot?: { cameras?: unknown[] } }).world_snapshot?.cameras
-    )
-      ? (
-          payload as { world_snapshot?: { cameras?: unknown[] } }
-        ).world_snapshot?.cameras?.length ?? 0
-      : 0;
-
-  return { worldLayout, embeddedCameras };
+  return {
+    worldLayout,
+    embeddedCameras: countEmbeddedWorldSnapshotCameras(payload),
+  };
 };
