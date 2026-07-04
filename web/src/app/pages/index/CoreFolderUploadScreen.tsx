@@ -59,6 +59,35 @@ type StagedRobotSource = {
   load: () => Promise<void>;
 };
 
+const LocalSourceButtons = ({
+  onBrowseFolder,
+  onBrowseFiles,
+}: {
+  onBrowseFiles: () => void;
+  onBrowseFolder: () => void;
+}) => (
+  <div className="flex flex-wrap gap-2">
+    <Button
+      type="button"
+      size="sm"
+      onClick={onBrowseFolder}
+      className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+    >
+      <Upload className="mr-1.5 h-3.5 w-3.5" />
+      Local Folder
+    </Button>
+    <Button
+      type="button"
+      size="sm"
+      onClick={onBrowseFiles}
+      className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+    >
+      <FileUp className="mr-1.5 h-3.5 w-3.5" />
+      Local Files
+    </Button>
+  </div>
+);
+
 export const CoreFolderUploadScreen = ({
   onFolderSelected,
   onGitHubSelected,
@@ -466,26 +495,10 @@ export const CoreFolderUploadScreen = ({
         <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
         <p>Load a URDF package folder, loose robot files, GitHub repository, or direct URDF/Xacro URL.</p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => folderInputRef.current?.click()}
-          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-        >
-          <Upload className="mr-1.5 h-3.5 w-3.5" />
-          Local Folder
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => localFilesInputRef.current?.click()}
-          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-        >
-          <FileUp className="mr-1.5 h-3.5 w-3.5" />
-          Local Files
-        </Button>
-      </div>
+      <LocalSourceButtons
+        onBrowseFolder={() => folderInputRef.current?.click()}
+        onBrowseFiles={() => localFilesInputRef.current?.click()}
+      />
       <form className="space-y-2" onSubmit={stageGithubRobot}>
         <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
           <div className="flex w-full min-w-0 items-center gap-1.5">
@@ -721,26 +734,10 @@ export const CoreFolderUploadScreen = ({
           splat, or texture assets it references. Public and GitHub file links are supported.
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => worldLayoutFolderInputRef.current?.click()}
-          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-        >
-          <Upload className="mr-1.5 h-3.5 w-3.5" />
-          Local Folder
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => worldLayoutFileInputRef.current?.click()}
-          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-        >
-          <FileUp className="mr-1.5 h-3.5 w-3.5" />
-          Local Files
-        </Button>
-      </div>
+      <LocalSourceButtons
+        onBrowseFolder={() => worldLayoutFolderInputRef.current?.click()}
+        onBrowseFiles={() => worldLayoutFileInputRef.current?.click()}
+      />
       <CompactSourceIntake
         isDropActive={worldSourceDropActive}
         isPreparing={isLoadingWorldLayout}
