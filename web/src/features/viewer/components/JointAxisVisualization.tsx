@@ -18,6 +18,52 @@ type RotationPlaneProps = {
   robot: URDFRobot | null;
 };
 
+type AxisTuple = readonly [number, number, number];
+type JointWithAxis = {
+  axis?: unknown;
+};
+
+const DEFAULT_JOINT_AXIS: AxisTuple = [0, 0, 1];
+
+const isFiniteAxisTuple = (
+  axis: readonly number[] | undefined
+): axis is AxisTuple =>
+  Boolean(
+    axis &&
+      Number.isFinite(axis[0]) &&
+      Number.isFinite(axis[1]) &&
+      Number.isFinite(axis[2])
+  );
+
+const readJointAxisVector = (joint: unknown): THREE.Vector3 | null => {
+  if (!joint || typeof joint !== "object") return null;
+  const axis = (joint as JointWithAxis).axis;
+  return axis instanceof THREE.Vector3 ? axis : null;
+};
+
+const resolveJointAxisTuple = (
+  axisFromStore: readonly number[] | undefined,
+  joint: unknown
+): AxisTuple => {
+  if (isFiniteAxisTuple(axisFromStore)) {
+    return [axisFromStore[0], axisFromStore[1], axisFromStore[2]];
+  }
+  const axisFromJoint = readJointAxisVector(joint);
+  if (axisFromJoint) {
+    return [axisFromJoint.x, axisFromJoint.y, axisFromJoint.z];
+  }
+  return DEFAULT_JOINT_AXIS;
+};
+
+const setResolvedJointAxis = (
+  target: THREE.Vector3,
+  axisFromStore: readonly number[] | undefined,
+  joint: unknown
+): void => {
+  const [x, y, z] = resolveJointAxisTuple(axisFromStore, joint);
+  target.set(x, y, z);
+};
+
 export const RotationPlane = ({
   robot,
   jointName,
@@ -156,24 +202,7 @@ export const JointAxisIndicator = ({
 
     const joint = robot.joints?.[jointName];
     const axisFromStore = jointAxes?.[jointName]?.xyz;
-
-    let x = 0;
-    let y = 0;
-    let z = 1;
-    if (
-      axisFromStore &&
-      Number.isFinite(axisFromStore[0]) &&
-      Number.isFinite(axisFromStore[1]) &&
-      Number.isFinite(axisFromStore[2])
-    ) {
-      x = axisFromStore[0];
-      y = axisFromStore[1];
-      z = axisFromStore[2];
-    } else if ((joint as unknown as { axis?: THREE.Vector3 }).axis instanceof THREE.Vector3) {
-      x = (joint as unknown as { axis: THREE.Vector3 }).axis.x;
-      y = (joint as unknown as { axis: THREE.Vector3 }).axis.y;
-      z = (joint as unknown as { axis: THREE.Vector3 }).axis.z;
-    }
+    const [x, y, z] = resolveJointAxisTuple(axisFromStore, joint);
 
     const absX = Math.abs(x);
     const absY = Math.abs(y);
@@ -272,20 +301,7 @@ export const JointAxisIndicator = ({
     if (!joint) return;
 
     const axisFromStore = jointAxes?.[jointName]?.xyz;
-    if (
-      axisFromStore &&
-      Number.isFinite(axisFromStore[0]) &&
-      Number.isFinite(axisFromStore[1]) &&
-      Number.isFinite(axisFromStore[2])
-    ) {
-      axisLocalRef.current.set(axisFromStore[0], axisFromStore[1], axisFromStore[2]);
-    } else if ((joint as unknown as { axis?: THREE.Vector3 }).axis instanceof THREE.Vector3) {
-      axisLocalRef.current.copy(
-        (joint as unknown as { axis: THREE.Vector3 }).axis
-      );
-    } else {
-      axisLocalRef.current.set(0, 0, 1);
-    }
+    setResolvedJointAxis(axisLocalRef.current, axisFromStore, joint);
 
     if (axisLocalRef.current.lengthSq() < 1e-9) {
       axisLocalRef.current.set(0, 0, 1);
