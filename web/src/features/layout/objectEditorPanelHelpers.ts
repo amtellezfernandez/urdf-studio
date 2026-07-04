@@ -10,6 +10,15 @@ export type ObjectEditorKeyboardCommand =
   | { type: "toggleTransformSpace" }
   | { position: THREE.Vector3; type: "updatePosition" };
 
+type ApplyObjectEditorKeyboardCommandParams = {
+  command: ObjectEditorKeyboardCommand;
+  onRedo: () => void;
+  onSelectMode: (mode: ObjectEditMode) => void;
+  onToggleTransformSpace: () => void;
+  onUndo: () => void;
+  onUpdatePosition: (position: THREE.Vector3) => void;
+};
+
 type KeyboardModifierState = {
   altKey: boolean;
   ctrlKey: boolean;
@@ -137,4 +146,31 @@ export const resolveObjectEditorKeyboardCommand = ({
     type: "updatePosition",
     position: nextPosition,
   };
+};
+
+export const applyObjectEditorKeyboardCommand = ({
+  command,
+  onRedo,
+  onSelectMode,
+  onToggleTransformSpace,
+  onUndo,
+  onUpdatePosition,
+}: ApplyObjectEditorKeyboardCommandParams): void => {
+  switch (command.type) {
+    case "undo":
+      onUndo();
+      return;
+    case "redo":
+      onRedo();
+      return;
+    case "toggleTransformSpace":
+      onToggleTransformSpace();
+      return;
+    case "selectMode":
+      onSelectMode(command.mode);
+      return;
+    case "updatePosition":
+      onUpdatePosition(command.position);
+      return;
+  }
 };

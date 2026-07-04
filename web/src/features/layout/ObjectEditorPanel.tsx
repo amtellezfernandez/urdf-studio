@@ -8,6 +8,7 @@ import { resolveTrackingReference } from "@/features/viewer/trackingTarget";
 import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
 import { LabeledNumberField } from "@/features/layout/sidebarNumberField";
 import {
+  applyObjectEditorKeyboardCommand,
   normalizeDegrees360,
   normalizeOrbitStartPoint,
   resolveObjectEditorKeyboardCommand,
@@ -168,6 +169,54 @@ export const ObjectEditorPanel = ({
   const canRedoObjectEdit = useObjectStore((state) => state.canRedo);
 
   const selectedObject = objects.find((object) => object.id === objectId);
+  const updateSelectedObjectPosition = useCallback(
+    (position: THREE.Vector3) => {
+      if (!selectedObject) {
+        return;
+      }
+      updateObjectPosition(selectedObject.id, position);
+    },
+    [selectedObject, updateObjectPosition]
+  );
+  const updateSelectedObjectSize = useCallback(
+    (size: THREE.Vector3) => {
+      if (!selectedObject) {
+        return;
+      }
+      updateObjectSize(selectedObject.id, size);
+    },
+    [selectedObject, updateObjectSize]
+  );
+  const updateSelectedObjectTrackedJoint = useCallback(
+    (value: string) => {
+      if (!selectedObject) {
+        return;
+      }
+      updateTrackedJoint(
+        selectedObject.id,
+        resolveTrackedJointValueFromSelection(value)
+      );
+    },
+    [selectedObject, updateTrackedJoint]
+  );
+  const updateSelectedObjectIkTargetType = useCallback(
+    (nextTargetType: "punctual" | "orbit") => {
+      if (!selectedObject) {
+        return;
+      }
+      updateIkTargetType(selectedObject.id, nextTargetType);
+    },
+    [selectedObject, updateIkTargetType]
+  );
+  const updateSelectedObjectOrbitTargetPoint = useCallback(
+    (value: "primary" | "secondary") => {
+      if (!selectedObject) {
+        return;
+      }
+      updateOrbitTargetPoint(selectedObject.id, value);
+    },
+    [selectedObject, updateOrbitTargetPoint]
+  );
   const toggleObjectTransformSpace = useCallback(() => {
     if (objectEditMode === "resize") {
       return;
@@ -212,26 +261,14 @@ export const ObjectEditorPanel = ({
       event.preventDefault();
       event.stopPropagation();
 
-      if (command.type === "undo") {
-        undoObjectEdit();
-        return;
-      }
-      if (command.type === "redo") {
-        redoObjectEdit();
-        return;
-      }
-      if (command.type === "toggleTransformSpace") {
-        toggleObjectTransformSpace();
-        return;
-      }
-      if (command.type === "selectMode") {
-        selectObjectEditMode(command.mode);
-        return;
-      }
-
-      if (command.type === "updatePosition") {
-        updateObjectPosition(selectedObject.id, command.position);
-      }
+      applyObjectEditorKeyboardCommand({
+        command,
+        onRedo: redoObjectEdit,
+        onSelectMode: selectObjectEditMode,
+        onToggleTransformSpace: toggleObjectTransformSpace,
+        onUndo: undoObjectEdit,
+        onUpdatePosition: updateSelectedObjectPosition,
+      });
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -246,7 +283,7 @@ export const ObjectEditorPanel = ({
     selectObjectEditMode,
     toggleObjectTransformSpace,
     undoObjectEdit,
-    updateObjectPosition,
+    updateSelectedObjectPosition,
   ]);
   const updateObjectVectorAxis = useCallback(
     (
@@ -370,7 +407,7 @@ export const ObjectEditorPanel = ({
               useCompactStackedInputs={useCompactStackedInputs}
               onAxisValueChange={(axis, value) =>
                 updateObjectVectorAxis(selectedObject.position, axis, value, (nextVector) =>
-                  updateObjectPosition(selectedObject.id, nextVector)
+                  updateSelectedObjectPosition(nextVector)
                 )
               }
             />
@@ -383,7 +420,7 @@ export const ObjectEditorPanel = ({
               min={0.01}
               onAxisValueChange={(axis, value) =>
                 updateObjectVectorAxis(selectedObject.size, axis, value, (nextVector) =>
-                  updateObjectSize(selectedObject.id, nextVector)
+                  updateSelectedObjectSize(nextVector)
                 )
               }
             />
@@ -397,12 +434,7 @@ export const ObjectEditorPanel = ({
                   endEffectorLink,
                 })
               }
-              onValueChange={(value) => {
-                updateTrackedJoint(
-                  selectedObject.id,
-                  resolveTrackedJointValueFromSelection(value)
-                );
-              }}
+              onValueChange={updateSelectedObjectTrackedJoint}
             >
               <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                 <SelectValue />
@@ -439,7 +471,7 @@ export const ObjectEditorPanel = ({
           <BlenderPropertyRow label="Mode" labelWidth="w-16">
             <Select
               value={selectedObject.ikTargetType ?? "punctual"}
-              onValueChange={(value: "punctual" | "orbit") => updateIkTargetType(selectedObject.id, value)}
+              onValueChange={updateSelectedObjectIkTargetType}
             >
               <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                 <SelectValue />
@@ -460,9 +492,7 @@ export const ObjectEditorPanel = ({
               <BlenderPropertyRow label="Start" labelWidth="w-16">
                 <Select
                   value={normalizedOrbitStartPoint}
-                  onValueChange={(value: "primary" | "secondary") =>
-                    updateOrbitTargetPoint(selectedObject.id, value)
-                  }
+                  onValueChange={updateSelectedObjectOrbitTargetPoint}
                 >
                   <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                     <SelectValue />

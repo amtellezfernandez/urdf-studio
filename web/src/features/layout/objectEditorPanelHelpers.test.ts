@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import {
+  applyObjectEditorKeyboardCommand,
   isEditableKeyboardTarget,
   normalizeDegrees360,
   normalizeOrbitStartPoint,
@@ -120,5 +121,44 @@ describe("objectEditorPanelHelpers", () => {
     if (result?.type === "updatePosition") {
       expect(result.position.toArray()).toEqual([1, 2, 3.002]);
     }
+  });
+
+  it("applies resolved keyboard commands through the provided callbacks", () => {
+    const events: string[] = [];
+
+    applyObjectEditorKeyboardCommand({
+      command: { type: "undo" },
+      onRedo: () => events.push("redo"),
+      onSelectMode: (mode) => events.push(`mode:${mode}`),
+      onToggleTransformSpace: () => events.push("space"),
+      onUndo: () => events.push("undo"),
+      onUpdatePosition: (position) => events.push(`pos:${position.toArray().join(",")}`),
+    });
+    applyObjectEditorKeyboardCommand({
+      command: { type: "selectMode", mode: "rotate" },
+      onRedo: () => events.push("redo"),
+      onSelectMode: (mode) => events.push(`mode:${mode}`),
+      onToggleTransformSpace: () => events.push("space"),
+      onUndo: () => events.push("undo"),
+      onUpdatePosition: (position) => events.push(`pos:${position.toArray().join(",")}`),
+    });
+    applyObjectEditorKeyboardCommand({
+      command: { type: "toggleTransformSpace" },
+      onRedo: () => events.push("redo"),
+      onSelectMode: (mode) => events.push(`mode:${mode}`),
+      onToggleTransformSpace: () => events.push("space"),
+      onUndo: () => events.push("undo"),
+      onUpdatePosition: (position) => events.push(`pos:${position.toArray().join(",")}`),
+    });
+    applyObjectEditorKeyboardCommand({
+      command: { type: "updatePosition", position: new THREE.Vector3(4, 5, 6) },
+      onRedo: () => events.push("redo"),
+      onSelectMode: (mode) => events.push(`mode:${mode}`),
+      onToggleTransformSpace: () => events.push("space"),
+      onUndo: () => events.push("undo"),
+      onUpdatePosition: (position) => events.push(`pos:${position.toArray().join(",")}`),
+    });
+
+    expect(events).toEqual(["undo", "mode:rotate", "space", "pos:4,5,6"]);
   });
 });
