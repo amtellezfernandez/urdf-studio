@@ -104,13 +104,6 @@ import {
   type InertialMassDeltaSummary,
 } from "@/features/urdf/inertia/inertialSynthesis";
 import {
-  applyRepeatedInertiaGroupManualFix,
-  REPEATED_INERTIA_MANUAL_FIX_DIFFERS_TOO_MUCH_ERROR,
-  REPEATED_INERTIA_MANUAL_FIX_LOW_CONFIDENCE_ERROR,
-  REPEATED_INERTIA_MANUAL_FIX_POSTWRITE_MISMATCH_ERROR,
-  REPEATED_INERTIA_MANUAL_FIX_ALREADY_CONSISTENT_ERROR,
-} from "@/features/urdf/inertia/repeatedInertiaManualFix";
-import {
   buildSimulationPrepUpdateToastPlan,
   buildPhysicsDraftSummaryText,
   buildPhysicsIssueSummary,
@@ -118,25 +111,16 @@ import {
   resolveSimulationPrepPhysicsSourceContent,
 } from "@/features/layout/page/simulationPrepState";
 import { buildRepeatedInertiaDiagnostics } from "@/features/layout/page/repeatedInertiaDiagnostics";
-import {
-  buildRepeatedInertiaSymmetryChainKey,
-  buildRepeatedInertiaSymmetryChains,
-  type RepeatedInertiaSymmetryChain,
-} from "@/features/layout/page/repeatedInertiaSymmetry";
+import { buildRepeatedInertiaSymmetryChains } from "@/features/layout/page/repeatedInertiaSymmetry";
 import { buildRobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
-import {
-  applyRobotMirrorParallelFix,
-  applyRobotMirrorSymmetryFix,
-  type RobotMirrorFixMode,
-} from "@/features/layout/page/robotMirrorSymmetryFix";
 import { buildRobotMirrorSelectionLinks } from "@/features/layout/page/robotMirrorSymmetrySelection";
-import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
 import { useSimulationPrepVisualizationController } from "@/app/pages/index/useSimulationPrepVisualizationController";
 import {
   useSimulationPrepReviewState,
   type SimulationPrepAcceptedUrdfReviewState,
 } from "@/app/pages/index/useSimulationPrepReviewState";
+import { useSimulationPrepRepairActions } from "@/app/pages/index/useSimulationPrepRepairActions";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -1112,18 +1096,40 @@ const Index = () => {
     urdfBasePath,
     vizUrdfContent,
   });
-  useEffect(() => {
-    setRepeatedInertiaResolvedGroupKeys((current) =>
-      current.filter((groupKey) => repeatedInertiaDiagnosticsByKey.has(groupKey))
-    );
-  }, [repeatedInertiaDiagnosticsByKey, setRepeatedInertiaResolvedGroupKeys]);
-  useEffect(() => {
-    setRepeatedInertiaOutcomeByGroupKey((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([groupKey]) => repeatedInertiaDiagnosticsByKey.has(groupKey))
-      )
-    );
-  }, [repeatedInertiaDiagnosticsByKey, setRepeatedInertiaOutcomeByGroupKey]);
+  const {
+    handleAlignRobotMirrorOrientation,
+    handleFixRepeatedInertiaGroup,
+    handleFixRepeatedInertiaSymmetryChain,
+    handleFixRobotMirrorSymmetry,
+  } = useSimulationPrepRepairActions({
+    applySimulationPrepUrdfUpdate,
+    enableSimulationPrepViewerHighlights,
+    hasSimulationPrepFixActionInFlight,
+    meshFiles,
+    packageRoots,
+    repeatedInertiaDiagnostics,
+    repeatedInertiaDiagnosticsByKey,
+    repeatedInertiaSymmetryLinkCentersLocal,
+    robotMirrorFixAvailability,
+    robotMirrorScopeKey,
+    robotMirrorSelectionLinks,
+    robotMirrorSymmetryCheck,
+    robotMirrorVisualizationLinkNames: robotMirrorVisualizationState.visualizationLinkNames,
+    selectedRobotMirrorLinkNames,
+    setActiveInertiaVisualizationScopeKey,
+    setActiveRobotMirrorAction,
+    setIsRobotMirrorActing,
+    setRepeatedInertiaGroupAction,
+    setRepeatedInertiaOutcomeByGroupKey,
+    setRepeatedInertiaResolvedGroupKeys,
+    setRepeatedInertiaSymmetryActingChainKey,
+    setRepeatedInertiaSymmetryActingProgress,
+    setRobotMirrorOutcome,
+    setShowHealthActionPanel,
+    urdfAnalysis,
+    urdfBasePath,
+    vizUrdfContent,
+  });
   const {
     activeRobotMirrorVisualization: activeSimulationPrepRobotMirrorVisualization,
     activeSymmetryVisualization: activeSimulationPrepSymmetryVisualization,
@@ -1179,268 +1185,6 @@ const Index = () => {
   });
 
   const worldHubEnabled = isWorldHubConfigured();
-  const handleFixRepeatedInertiaGroup = useCallback(
-    async (groupKey: string) => {
-      if (hasSimulationPrepFixActionInFlight) {
-        return;
-      }
-      setRepeatedInertiaGroupAction({
-        groupKey,
-      });
-      try {
-        const result = await applyRepeatedInertiaGroupManualFix({
-          urdfContent: vizUrdfContent,
-          urdfAnalysis,
-          groupKey,
-          meshFiles,
-          urdfBasePath,
-          packageRoots,
-        });
-        if (result.ok === false) {
-          if (result.error === REPEATED_INERTIA_MANUAL_FIX_ALREADY_CONSISTENT_ERROR) {
-            setRepeatedInertiaResolvedGroupKeys((current) =>
-              current.includes(groupKey) ? current : [...current, groupKey]
-            );
-            setRepeatedInertiaOutcomeByGroupKey((current) => ({
-              ...current,
-              [groupKey]: {
-                tone: "resolved",
-                message: "No changes applied. Group is already consistent.",
-              },
-            }));
-          } else if (
-            result.error === REPEATED_INERTIA_MANUAL_FIX_LOW_CONFIDENCE_ERROR ||
-            result.error === REPEATED_INERTIA_MANUAL_FIX_POSTWRITE_MISMATCH_ERROR ||
-            result.error === REPEATED_INERTIA_MANUAL_FIX_DIFFERS_TOO_MUCH_ERROR
-          ) {
-            setRepeatedInertiaOutcomeByGroupKey((current) => ({
-              ...current,
-              [groupKey]: {
-                tone: "warning",
-                message:
-                  "No changes applied. Fix was rejected because it would worsen the result. Manual review required.",
-              },
-            }));
-          } else {
-            setRepeatedInertiaOutcomeByGroupKey((current) => ({
-              ...current,
-              [groupKey]: {
-                tone: "warning",
-                message: "No changes applied. This repeated group needs manual review.",
-              },
-            }));
-          }
-          toast.error(result.error);
-          return;
-        }
-        await applySimulationPrepUrdfUpdate({
-          nextUrdfContent: result.draftUrdfContent,
-          successMessage: `Unified repeated group for ${result.linkNames.length} link${result.linkNames.length === 1 ? "" : "s"} (${result.meshReference}).`,
-        });
-        setRepeatedInertiaOutcomeByGroupKey((current) => ({
-          ...current,
-          [groupKey]: {
-            tone: "success",
-            message: "Direct fix applied to this repeated group.",
-          },
-        }));
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to fix the repeated mesh group.");
-      } finally {
-        setRepeatedInertiaGroupAction(null);
-      }
-    },
-    [
-      applySimulationPrepUrdfUpdate,
-      hasSimulationPrepFixActionInFlight,
-      meshFiles,
-      packageRoots,
-      setRepeatedInertiaGroupAction,
-      setRepeatedInertiaOutcomeByGroupKey,
-      setRepeatedInertiaResolvedGroupKeys,
-      urdfAnalysis,
-      urdfBasePath,
-      vizUrdfContent,
-    ]
-  );
-  const handleFixRepeatedInertiaSymmetryChain = useCallback(
-    async (chain: RepeatedInertiaSymmetryChain) => {
-      const chainKey = buildRepeatedInertiaSymmetryChainKey({
-        symmetryRootLinkName: chain.symmetryRootLinkName,
-        outlierBranchRootLinkName: chain.outlierBranchRootLinkName,
-      });
-      const symmetryScopeKey = buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain);
-      const symmetryScopedLinkNames = collectRepeatedInertiaSymmetryFamilyLinkNames(chain);
-      if (hasSimulationPrepFixActionInFlight) {
-        return;
-      }
-
-      enableSimulationPrepViewerHighlights(symmetryScopedLinkNames);
-      setActiveInertiaVisualizationScopeKey(symmetryScopeKey);
-      setShowHealthActionPanel(true);
-      setRepeatedInertiaSymmetryActingChainKey(chainKey);
-      setRepeatedInertiaSymmetryActingProgress({
-        chainKey,
-        appliedStepCount: 0,
-        totalStepCount: chain.recommendedRepair?.stepCount ?? 0,
-      });
-      try {
-        const result = await applyRepeatedInertiaSymmetryFix({
-          chain,
-          linkCentersLocal: repeatedInertiaSymmetryLinkCentersLocal,
-          repeatedInertiaDiagnostics,
-          urdfContent: vizUrdfContent,
-          onProgress: async ({ appliedStepCount, totalStepCount }) => {
-            setRepeatedInertiaSymmetryActingProgress({
-              chainKey,
-              appliedStepCount,
-              totalStepCount,
-            });
-            await new Promise<void>((resolve) => {
-              window.setTimeout(resolve, 0);
-            });
-          },
-        });
-        if (result.ok === false) {
-          toast.error(result.error);
-          return;
-        }
-        await applySimulationPrepUrdfUpdate({
-          nextUrdfContent: result.draftUrdfContent,
-          pinnedSymmetryChain: chain,
-          pinnedSymmetryOutcome: {
-            completedProgress: {
-              appliedStepCount: result.appliedStepCount,
-              totalStepCount: chain.recommendedRepair?.stepCount ?? result.appliedStepCount,
-            },
-            tone: "success",
-            message: "Alignment applied. Keep the eye on to verify the result.",
-          },
-          successMessage: result.summary,
-        });
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to auto-align the symmetry branch."
-        );
-      } finally {
-        setRepeatedInertiaSymmetryActingChainKey(null);
-        setRepeatedInertiaSymmetryActingProgress(null);
-      }
-    },
-    [
-      applySimulationPrepUrdfUpdate,
-      enableSimulationPrepViewerHighlights,
-      hasSimulationPrepFixActionInFlight,
-      repeatedInertiaDiagnostics,
-      setRepeatedInertiaSymmetryActingProgress,
-      repeatedInertiaSymmetryLinkCentersLocal,
-      setActiveInertiaVisualizationScopeKey,
-      setRepeatedInertiaSymmetryActingChainKey,
-      setShowHealthActionPanel,
-      vizUrdfContent,
-    ]
-  );
-
-  const runRobotMirrorFix = useCallback(async (fixMode: RobotMirrorFixMode) => {
-    if (hasSimulationPrepFixActionInFlight || robotMirrorFixAvailability.isLoading) {
-      return;
-    }
-    if (
-      fixMode === "orientation-only" &&
-      !robotMirrorFixAvailability.value.orientationOnlyAvailable
-    ) {
-      return;
-    }
-    if (fixMode === "center-only" && !robotMirrorFixAvailability.value.centerOnlyAvailable) {
-      return;
-    }
-    if (robotMirrorScopeKey) {
-      enableSimulationPrepViewerHighlights(robotMirrorVisualizationState.visualizationLinkNames);
-      setActiveInertiaVisualizationScopeKey(robotMirrorScopeKey);
-    }
-    setShowHealthActionPanel(true);
-    setRobotMirrorOutcome(null);
-    setActiveRobotMirrorAction(fixMode);
-    setIsRobotMirrorActing(true);
-    try {
-      const result =
-        fixMode === "orientation-only"
-          ? await applyRobotMirrorParallelFix({
-              meshFiles,
-              packageRoots,
-              robotMirrorSymmetryCheck,
-              selectedLinkNames: selectedRobotMirrorLinkNames,
-              selectionLinks: robotMirrorSelectionLinks,
-              urdfBasePath,
-              urdfContent: vizUrdfContent,
-            })
-          : applyRobotMirrorSymmetryFix({
-              fixMode,
-              linkCentersLocal: repeatedInertiaSymmetryLinkCentersLocal,
-              orientationMode: "conservative",
-              robotMirrorSymmetryCheck,
-              selectedLinkNames: selectedRobotMirrorLinkNames,
-              selectionLinks: robotMirrorSelectionLinks,
-              urdfContent: vizUrdfContent,
-            });
-      if (result.ok === false) {
-        setRobotMirrorOutcome({
-          tone: "warning",
-          message: result.error,
-        });
-        toast.error(result.error);
-        return;
-      }
-      await applySimulationPrepUrdfUpdate({
-        nextUrdfContent: result.draftUrdfContent,
-        robotMirrorOutcome: {
-          linkResults: result.linkResults,
-          message: result.summary,
-          tone: "success",
-        },
-        successMessage: result.summary,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to auto-align the mirror selection.";
-      setRobotMirrorOutcome({
-        tone: "warning",
-        message,
-      });
-      toast.error(message);
-    } finally {
-      setIsRobotMirrorActing(false);
-      setActiveRobotMirrorAction(null);
-    }
-  }, [
-    applySimulationPrepUrdfUpdate,
-    enableSimulationPrepViewerHighlights,
-    hasSimulationPrepFixActionInFlight,
-    repeatedInertiaSymmetryLinkCentersLocal,
-    robotMirrorSelectionLinks,
-    robotMirrorFixAvailability,
-    robotMirrorScopeKey,
-    robotMirrorSymmetryCheck,
-    robotMirrorVisualizationState,
-    meshFiles,
-    packageRoots,
-    selectedRobotMirrorLinkNames,
-    setActiveInertiaVisualizationScopeKey,
-    setActiveRobotMirrorAction,
-    setIsRobotMirrorActing,
-    setRobotMirrorOutcome,
-    setShowHealthActionPanel,
-    urdfBasePath,
-    vizUrdfContent,
-  ]);
-  const handleFixRobotMirrorSymmetry = useCallback(
-    async () => runRobotMirrorFix("center-only"),
-    [runRobotMirrorFix]
-  );
-  const handleAlignRobotMirrorOrientation = useCallback(
-    async () => runRobotMirrorFix("orientation-only"),
-    [runRobotMirrorFix]
-  );
   const handleGoHome = useCallback(() => {
     resetLoadedUrdf();
     clearCameras();
