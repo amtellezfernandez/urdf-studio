@@ -117,23 +117,3 @@ export const buildHierarchyTree = ({
     filteredJoints,
   };
 };
-
-export const buildFilteredHierarchyJoints = ({
-  jointHierarchy,
-  jointLimits,
-  typeFilter,
-  searchQuery,
-}: {
-  jointHierarchy: JointHierarchyLike | null;
-  jointLimits: JointLimits;
-  typeFilter: string;
-  searchQuery: string;
-}): JointHierarchyNode[] => {
-  if (!jointHierarchy) return [];
-  return filterHierarchyJoints({
-    jointHierarchy,
-    jointLimits,
-    typeFilter,
-    searchQuery,
-  });
-};

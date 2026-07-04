@@ -28,7 +28,7 @@ const HEALTH_ACTION_CLASS_NAMES = HEALTH_ACTION_PANEL_PARAMS.classNames;
 export const MATERIAL_OPTIONS: ReadonlyArray<MaterialOption> = HEALTH_ACTION_PANEL_PARAMS.materialOptions;
 export const MATERIAL_BUTTON_GRID_CLASS = HEALTH_ACTION_CLASS_NAMES.materialButtonGrid;
 
-export const PHYSICS_ACTION_STATUS_LABELS: Record<
+const PHYSICS_ACTION_STATUS_LABELS: Record<
   PhysicsPanelActionKey,
   { queued: string; running: string }
 > = {
@@ -38,7 +38,7 @@ export const PHYSICS_ACTION_STATUS_LABELS: Record<
   "psd-regularize": { queued: "Queued", running: "Regularizing..." },
 };
 
-export const getPhysicsActionStatus = (
+const getPhysicsActionStatus = (
   statusByKey: HealthActionPanelProps["physicsActionStatusByKey"],
   actionKey: PhysicsPanelActionKey
 ): SimulationPrepPhysicsActionStatus => statusByKey?.[actionKey] ?? "idle";

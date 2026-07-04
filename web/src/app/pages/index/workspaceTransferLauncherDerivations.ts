@@ -28,10 +28,10 @@ const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
   ["native", "native"],
 ]);
 
-export const formatWorkspaceAssetFormat = (format: string): string =>
+const formatWorkspaceAssetFormat = (format: string): string =>
   WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
 
-export const describeWorkspaceAssetFormats = (
+const describeWorkspaceAssetFormats = (
   robotAssetFormat: WorkspaceTransferAssetFormat,
   sceneAssetFormat: WorkspaceTransferAssetFormat,
 ): string => {
@@ -45,7 +45,7 @@ export const formatSceneTransferSummary = (
   cameraCount: number,
 ): string => `${objectCount} obj · ${cameraCount} cam`;
 
-export const resolveWorkspaceTransferTargetTransferDescription = (
+const resolveWorkspaceTransferTargetTransferDescription = (
   descriptor: WorkspaceTransferTargetDescriptor,
 ): string => {
   const assetFormats = describeWorkspaceAssetFormats(
@@ -70,7 +70,7 @@ export const resolveWorkspaceTransferTargetTransferDescription = (
   }
 };
 
-export const createsWorkspaceTransferAsset = (
+const createsWorkspaceTransferAsset = (
   descriptor: WorkspaceTransferTargetDescriptor,
 ): boolean =>
   descriptor.transferPolicy.transferStrategy !== "direct" ||
@@ -87,7 +87,7 @@ export const resolveWorkspaceTransferTargetStatusLabel = (
   return "checking";
 };
 
-export const workspaceTransferTargetNeedsAttention = (
+const workspaceTransferTargetNeedsAttention = (
   status?: WorkspaceTransferTargetStatus,
 ): boolean => {
   if (status?.available !== true) return false;
@@ -110,7 +110,7 @@ export const assertWorkspacePackageCarriesSceneObjects = (
   );
 };
 
-export const resolveWorkspaceTransferTargetDetail = (
+const resolveWorkspaceTransferTargetDetail = (
   descriptor: WorkspaceTransferTargetDescriptor,
   sceneSummary: string,
   status?: WorkspaceTransferTargetStatus,

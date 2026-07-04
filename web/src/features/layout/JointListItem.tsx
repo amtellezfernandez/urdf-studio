@@ -1,12 +1,14 @@
-import { memo, useRef, useState, useCallback, useEffect } from "react";
+import { memo, useCallback } from "react";
 import { hexToRgba } from "@/shared/lib/color";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimitInfo } from "@/shared/lib/urdfBrowser";
 import jointColors from "@/shared/joint_colors.json";
 import { getJointColor } from "@/features/urdf/utils/jointColors";
 import { useJointStore } from "@/shared/store/useJointStore";
+import { RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { resolveJointValueRange } from "@/features/layout/jointValueRange";
 import { getJointValueColor } from "@/features/layout/jointValueColor";
+import { useJointValueInteraction } from "@/features/layout/jointValueInteraction";
 import { JOINT_LIST_ITEM_PARAMS } from "@/features/layout/jointListItemParams";
 
 interface JointListItemProps {
@@ -73,234 +75,28 @@ const JointListItemBase = ({
       groupLabel,
     });
   const hasBothLimits = hasFiniteHardLimits;
-  const angleDisplayValue = angleUnit === "deg" ? resolvedValue * (180 / Math.PI) : resolvedValue;
+  const angleDisplayValue = angleUnit === "deg" ? resolvedValue * RAD_TO_DEG : resolvedValue;
   const angleDisplay = angleDisplayValue.toFixed(JOINT_LIST_ITEM_PARAMS.angleDisplayPrecision);
   const velocityDisplay = formatMetricValue(jointInfo?.velocity);
   const effortDisplay = formatMetricValue(effortLimit);
+  const isFixedJoint = jointInfo?.type === "fixed";
 
   const valueColor = getJointValueColor(resolvedValue, min, max, hasBothLimits);
-  const valueDisplayRef = useRef<HTMLSpanElement>(null);
-  const [isValueFocused, setIsValueFocused] = useState(false);
-  const isDraggingValue = useRef(false);
-  const dragDirection = useRef<"vertical" | "horizontal" | "undecided">("undecided");
-  const dragState = useRef<{
-    startX: number;
-    startY: number;
-    startValue: number;
-    originalCursor: string;
-  }>({
-    startX: 0,
-    startY: 0,
-    startValue: resolvedValue,
-    originalCursor: "",
+  const {
+    handleValueKeyDown,
+    handleValueMouseDown,
+    handleValueWheel,
+    setIsValueFocused,
+    valueDisplayRef,
+  } = useJointValueInteraction({
+    clampLower,
+    clampUpper,
+    disabled: isFixedJoint,
+    displayMax: max,
+    displayMin: min,
+    onValueChange,
+    resolvedValue,
   });
-
-  const clampValue = useCallback(
-    (value: number) => {
-      let clamped = value;
-      if (Number.isFinite(clampLower)) {
-        clamped = Math.max(clampLower as number, clamped);
-      }
-      if (Number.isFinite(clampUpper)) {
-        clamped = Math.min(clampUpper as number, clamped);
-      }
-      return clamped;
-    },
-    [clampLower, clampUpper]
-  );
-
-  const snapValueIfNeeded = useCallback(
-    (value: number, shouldSnap: boolean) => {
-      if (!shouldSnap) return value;
-      const snapIncrementDeg = 5;
-      const snapIncrementRad = snapIncrementDeg * (Math.PI / 180);
-      const snapped = Math.round(value / snapIncrementRad) * snapIncrementRad;
-      return snapped;
-    },
-    []
-  );
-
-  const applyValueChange = useCallback(
-    (value: number, options?: { snap?: boolean }) => {
-      const snapped = snapValueIfNeeded(value, Boolean(options?.snap));
-      const clamped = clampValue(snapped);
-      if (Number.isFinite(clamped)) {
-        if (clamped !== resolvedValue) {
-          onValueChange(clamped);
-        }
-      } else {
-        onValueChange(clamped);
-      }
-    },
-    [clampValue, onValueChange, resolvedValue, snapValueIfNeeded]
-  );
-
-  const getDragSensitivity = useCallback(
-    (isFine: boolean) => {
-      const range = max - min;
-      let baseSensitivity = !Number.isFinite(range) || range === 0 ? 0.005 : range / 800;
-      if (angleUnit === "deg") {
-        baseSensitivity *= 180 / Math.PI;
-      }
-      if (isFine) {
-        baseSensitivity *= 0.2;
-      }
-      return baseSensitivity;
-    },
-    [angleUnit, max, min]
-  );
-
-  const handleValueMouseMove = useCallback(
-    (event: MouseEvent) => {
-      if (!isDraggingValue.current) return;
-      event.preventDefault();
-
-      if (event.altKey) {
-        applyValueChange(0);
-        return;
-      }
-
-      const deltaX = event.clientX - dragState.current.startX;
-      const deltaY = dragState.current.startY - event.clientY;
-
-      if (dragDirection.current === "undecided") {
-        if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
-          dragDirection.current =
-            Math.abs(deltaX) > Math.abs(deltaY) ? "horizontal" : "vertical";
-          document.body.style.cursor =
-            dragDirection.current === "horizontal" ? "ew-resize" : "ns-resize";
-        }
-      }
-
-      const direction =
-        dragDirection.current === "horizontal" ? deltaX : deltaY;
-      const sensitivity = getDragSensitivity(event.shiftKey);
-      const delta = direction * sensitivity;
-      const deltaRad = angleUnit === "deg" ? delta * (Math.PI / 180) : delta;
-      const nextValue = dragState.current.startValue + deltaRad;
-
-      applyValueChange(nextValue, { snap: event.ctrlKey });
-    },
-    [angleUnit, applyValueChange, getDragSensitivity]
-  );
-
-  const handleValueMouseUp = useCallback(
-    (event: MouseEvent) => {
-      if (!isDraggingValue.current) return;
-      if (event.type === "mouseup") {
-        event.preventDefault();
-      }
-      window.removeEventListener("mousemove", handleValueMouseMove);
-      window.removeEventListener("mouseup", handleValueMouseUp);
-      document.body.style.cursor = dragState.current.originalCursor;
-      isDraggingValue.current = false;
-      dragDirection.current = "undecided";
-    },
-    [handleValueMouseMove]
-  );
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener("mousemove", handleValueMouseMove);
-      window.removeEventListener("mouseup", handleValueMouseUp);
-      if (isDraggingValue.current) {
-        document.body.style.cursor = dragState.current.originalCursor;
-        isDraggingValue.current = false;
-        dragDirection.current = "undecided";
-      }
-    };
-  }, [handleValueMouseMove, handleValueMouseUp]);
-
-  const handleValueMouseDown = (event: React.MouseEvent<HTMLSpanElement>) => {
-    if (event.button !== 0 && event.button !== 1) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (event.altKey) {
-      applyValueChange(0);
-      return;
-    }
-
-    valueDisplayRef.current?.focus();
-
-    isDraggingValue.current = true;
-    dragDirection.current = "undecided";
-    dragState.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      startValue: resolvedValue,
-      originalCursor: document.body.style.cursor,
-    };
-
-    document.body.style.cursor = "ns-resize";
-    window.addEventListener("mousemove", handleValueMouseMove);
-    window.addEventListener("mouseup", handleValueMouseUp);
-  };
-
-  const getWheelStep = useCallback(
-    (isFine: boolean, isCoarse: boolean) => {
-      let stepDeg = 1;
-      if (isFine) stepDeg = 0.1;
-      if (isCoarse) stepDeg = 10;
-      if (angleUnit === "deg") {
-        return stepDeg;
-      }
-      return stepDeg * (Math.PI / 180);
-    },
-    [angleUnit]
-  );
-
-  const handleValueWheel = useCallback(
-    (event: React.WheelEvent<HTMLSpanElement>) => {
-      if (!isValueFocused) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (event.altKey) {
-        applyValueChange(0);
-        return;
-      }
-
-      const step = getWheelStep(event.shiftKey, event.ctrlKey);
-      const direction = event.deltaY < 0 ? 1 : -1;
-      let delta = step * direction;
-      if (angleUnit === "deg") {
-        delta *= Math.PI / 180;
-      }
-      applyValueChange(resolvedValue + delta);
-    },
-    [angleUnit, applyValueChange, resolvedValue, getWheelStep, isValueFocused]
-  );
-
-  const handleValueKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLSpanElement>) => {
-      const baseStepDeg = event.ctrlKey ? 10 : event.shiftKey ? 0.1 : 1;
-      const stepRad = baseStepDeg * (Math.PI / 180);
-
-      if (["ArrowUp", "ArrowRight", "PageUp"].includes(event.key)) {
-        event.preventDefault();
-        applyValueChange(resolvedValue + stepRad, { snap: event.ctrlKey });
-      } else if (["ArrowDown", "ArrowLeft", "PageDown"].includes(event.key)) {
-        event.preventDefault();
-        applyValueChange(resolvedValue - stepRad, { snap: event.ctrlKey });
-      } else if (event.key === "Home" && Number.isFinite(clampLower)) {
-        event.preventDefault();
-        applyValueChange(clampLower as number, { snap: event.ctrlKey });
-      } else if (event.key === "End" && Number.isFinite(clampUpper)) {
-        event.preventDefault();
-        applyValueChange(clampUpper as number, { snap: event.ctrlKey });
-      } else if (event.altKey && event.key.toLowerCase() === "r") {
-        event.preventDefault();
-        applyValueChange(0);
-      } else if (event.altKey && event.key === "0") {
-        event.preventDefault();
-        applyValueChange(0);
-      }
-    },
-    [applyValueChange, clampLower, clampUpper, resolvedValue]
-  );
-
-  const isFixedJoint = jointInfo?.type === "fixed";
 
   // Get joint type color from joint_colors.json
   const jointTypeColor = isFixedJoint
@@ -393,20 +189,20 @@ const JointListItemBase = ({
       <div className="grid w-[112px] shrink-0 grid-cols-3 gap-1 text-right leading-tight">
         <span
           ref={valueDisplayRef}
-          tabIndex={0}
+          tabIndex={isFixedJoint ? -1 : 0}
           role="spinbutton"
           aria-label="Joint angle"
           aria-valuemin={
             Number.isFinite(clampLower)
               ? angleUnit === "deg"
-                ? (clampLower as number) * (180 / Math.PI)
+                ? (clampLower as number) * RAD_TO_DEG
                 : (clampLower as number)
               : undefined
           }
           aria-valuemax={
             Number.isFinite(clampUpper)
               ? angleUnit === "deg"
-                ? (clampUpper as number) * (180 / Math.PI)
+                ? (clampUpper as number) * RAD_TO_DEG
                 : (clampUpper as number)
               : undefined
           }

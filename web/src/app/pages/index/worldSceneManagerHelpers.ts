@@ -80,7 +80,7 @@ export async function waitForWorldRolloutJob(jobId: string) {
   return latest;
 }
 
-export function toImportedObjectParams(
+function toImportedObjectParams(
   object: WorldScenePackageManifest["world_snapshot"]["objects"][number]
 ): Omit<CreatedObject, "id"> {
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =

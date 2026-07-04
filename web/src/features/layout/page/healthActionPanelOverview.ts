@@ -25,7 +25,7 @@ export const buildPlausibilityHeading = ({
   return verdict === "plausible" ? "Plausibility looks reasonable" : "Plausibility warning";
 };
 
-export const buildCompactPlausibilityRange = (
+const buildCompactPlausibilityRange = (
   plausibility: NonNullable<HealthActionPanelProps["physicsPlausibilitySummary"]>
 ): string => `${plausibility.lightEstimateMassKg.toFixed(3)}-${plausibility.heavyEstimateMassKg.toFixed(3)} kg`;
 

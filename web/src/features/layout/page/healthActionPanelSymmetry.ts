@@ -321,10 +321,10 @@ export const formatRepeatedInertiaSymmetryCenterMode = (
   REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS.find((option) => option.value === centerMode)
     ?.label ?? centerMode;
 
-export const formatRepeatedInertiaSymmetryAngle = (degrees: number): string =>
+const formatRepeatedInertiaSymmetryAngle = (degrees: number): string =>
   `${degrees.toFixed(1)}°`;
 
-export const formatRepeatedInertiaSymmetryRadiusComparison = (
+const formatRepeatedInertiaSymmetryRadiusComparison = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): string => {
   const actualDistance = formatRepeatedInertiaSymmetryDistance(row.radialDistanceMeters);
@@ -334,7 +334,7 @@ export const formatRepeatedInertiaSymmetryRadiusComparison = (
   return `${actualDistance} → ${formatRepeatedInertiaSymmetryDistance(row.idealRadialDistanceMeters)}`;
 };
 
-export const formatRepeatedInertiaSymmetryAngleComparison = (
+const formatRepeatedInertiaSymmetryAngleComparison = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): string => {
   const actualAngle = formatRepeatedInertiaSymmetryAngle(row.angleDegrees);
@@ -344,7 +344,7 @@ export const formatRepeatedInertiaSymmetryAngleComparison = (
   return `${actualAngle} → ${formatRepeatedInertiaSymmetryAngle(row.idealAngleDegrees)}`;
 };
 
-export const formatRepeatedInertiaSymmetrySignedDistance = (
+const formatRepeatedInertiaSymmetrySignedDistance = (
   meters: number | null
 ): string => {
   if (meters === null) {
@@ -354,7 +354,7 @@ export const formatRepeatedInertiaSymmetrySignedDistance = (
   return `${signedPrefix}${formatRepeatedInertiaSymmetryDistance(Math.abs(meters))}`;
 };
 
-export const formatRepeatedInertiaSymmetryLinkOffsets = (
+const formatRepeatedInertiaSymmetryLinkOffsets = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): string => {
   const linkRows = Array.isArray(row.linkRows) ? row.linkRows : [];
@@ -385,14 +385,14 @@ export const formatRepeatedInertiaSymmetryOffsetSummary = (
   )} • lat ${formatRepeatedInertiaSymmetryDistance(row.lateralOffsetMeters)})`;
 };
 
-export const hasMeaningfulRepeatedInertiaSymmetryAlignmentError = (
+const hasMeaningfulRepeatedInertiaSymmetryAlignmentError = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): boolean =>
   (row.angularErrorDegrees ?? 0) > REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_ANGLE_ERROR_DEGREES ||
   row.offsetDistanceMeters > REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_OFFSET_METERS ||
   (row.lateralOffsetMeters ?? 0) > REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_LATERAL_OFFSET_METERS;
 
-export const resolveRepeatedInertiaSymmetryStatusTone = (
+const resolveRepeatedInertiaSymmetryStatusTone = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): "aligned" | "warning" | "danger" => {
   if (row.status === "outlier") {
@@ -404,7 +404,7 @@ export const resolveRepeatedInertiaSymmetryStatusTone = (
   return "aligned";
 };
 
-export const resolveRepeatedInertiaSymmetryDominantIssue = (
+const resolveRepeatedInertiaSymmetryDominantIssue = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): "aligned" | "angle" | "offset" | "outlier" => {
   if (row.status === "outlier") {
@@ -455,7 +455,7 @@ export const resolveRepeatedInertiaSymmetryStatusBadgeClass = (
   }
 };
 
-export const resolveRepeatedInertiaSymmetryRowToneClass = (
+const resolveRepeatedInertiaSymmetryRowToneClass = (
   row: RepeatedInertiaSymmetryChain["branchRows"][number]
 ): string => {
   switch (resolveRepeatedInertiaSymmetryStatusTone(row)) {
@@ -470,11 +470,11 @@ export const resolveRepeatedInertiaSymmetryRowToneClass = (
   }
 };
 
-export const formatRepeatedInertiaSymmetryBranchLinks = (
+const formatRepeatedInertiaSymmetryBranchLinks = (
   branchLinkGroup: RepeatedInertiaSymmetryChain["branchLinkGroups"][number]
 ): string => branchLinkGroup.linkNames.join(", ");
 
-export const formatRepeatedInertiaSymmetryBranchSummary = (
+const formatRepeatedInertiaSymmetryBranchSummary = (
   branchLinkGroup: RepeatedInertiaSymmetryChain["branchLinkGroups"][number]
 ): string => {
   if (branchLinkGroup.linkNames.length === 0) {
@@ -624,7 +624,7 @@ export const formatRepeatedInertiaSymmetryAutoAlignButtonLabel = ({
   return "Auto Align";
 };
 
-export const resolveRepeatedInertiaSymmetryOutcome = ({
+const resolveRepeatedInertiaSymmetryOutcome = ({
   chain,
   outcomeByKey,
 }: {

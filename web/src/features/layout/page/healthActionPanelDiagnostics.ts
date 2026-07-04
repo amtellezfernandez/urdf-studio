@@ -47,7 +47,7 @@ export type SanitizationSummary = {
 export const formatDiagnosticNumber = (value: number): string =>
   Number.isFinite(value) ? value.toExponential(2) : "n/a";
 
-export const formatExclusionReasonLabel = (
+const formatExclusionReasonLabel = (
   reason:
     | "missing-authored-mass"
     | "unresolved-mesh-reference"
@@ -97,7 +97,7 @@ export const buildExcludedLinkBucketKey = (entry: ExcludedLinkEntry): ExcludedLi
   return entry.reason;
 };
 
-export const getExcludedLinkGroupMeta = (
+const getExcludedLinkGroupMeta = (
   key: ExcludedLinkBucketKey,
   count: number
 ): { label: string; summary: string; guidance: string | null } => {
