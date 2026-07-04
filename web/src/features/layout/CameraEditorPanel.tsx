@@ -5,10 +5,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import {
   normalizeCameraIntrinsics,
-  scaleIntrinsicsToResolution,
-  withIntrinsicsFocalLengths,
-  withIntrinsicsFovDeg,
-  withIntrinsicsPrincipalPoint,
 } from "@/shared/lib/cameraIntrinsics";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import {
@@ -21,6 +17,16 @@ import {
   LabeledNumberField,
   type LabeledNumberFieldProps,
 } from "@/features/layout/sidebarNumberField";
+import {
+  buildCameraDebugSummary,
+  buildFocalLengthIntrinsics,
+  buildFovIntrinsics,
+  buildPrincipalPointIntrinsics,
+  buildResolutionIntrinsics,
+  degToRad,
+  radToDeg,
+  updateCameraPoseField,
+} from "@/features/layout/cameraEditorPanelHelpers";
 
 export interface CameraEditorPanelProps {
   cameraId: string;
@@ -32,19 +38,6 @@ export interface CameraEditorPanelProps {
 const CAMERA_SECTION_LABEL_CLASS = JOINT_LIST_SIDEBAR_PARAMS.classNames.cameraSectionLabel;
 const CAMERA_FIELD_LABEL_CLASS = JOINT_LIST_SIDEBAR_PARAMS.classNames.cameraFieldLabel;
 const CAMERA_EDITOR_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
-
-const radToDeg = (rad: number) => (rad * 180) / Math.PI;
-const degToRad = (deg: number) => (deg * Math.PI) / 180;
-
-const updatePoseAxis = (
-  values: [number, number, number],
-  axisIndex: 0 | 1 | 2,
-  nextValue: number
-): [number, number, number] => {
-  const nextValues = [...values] as [number, number, number];
-  nextValues[axisIndex] = nextValue;
-  return nextValues;
-};
 
 const CameraNumberField = (
   props: Omit<LabeledNumberFieldProps, "labelClassName">
@@ -70,10 +63,12 @@ export const CameraEditorPanel = ({
     nextValue: number
   ) => {
     updateCamera(id, {
-      pose: {
-        ...pose,
-        [field]: updatePoseAxis(pose[field], axisIndex, nextValue),
-      },
+      pose: updateCameraPoseField({
+        pose,
+        field,
+        axisIndex,
+        nextValue,
+      }),
     });
   };
   const refreshCameraDebugReport = useCallback(
@@ -223,11 +218,11 @@ export const CameraEditorPanel = ({
                 value={intrinsics.width}
                 onValueChange={(widthPixels) => {
                   updateCamera(camera.id, {
-                    intrinsics: scaleIntrinsicsToResolution(
-                      camera.intrinsics,
-                      Math.round(widthPixels),
-                      intrinsics.height
-                    ),
+                    intrinsics: buildResolutionIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      widthPixels,
+                      heightPixels: intrinsics.height,
+                    }),
                   });
                 }}
                 step={1}
@@ -239,11 +234,11 @@ export const CameraEditorPanel = ({
                 value={intrinsics.height}
                 onValueChange={(heightPixels) => {
                   updateCamera(camera.id, {
-                    intrinsics: scaleIntrinsicsToResolution(
-                      camera.intrinsics,
-                      intrinsics.width,
-                      Math.round(heightPixels)
-                    ),
+                    intrinsics: buildResolutionIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      widthPixels: intrinsics.width,
+                      heightPixels,
+                    }),
                   });
                 }}
                 step={1}
@@ -255,7 +250,10 @@ export const CameraEditorPanel = ({
                 value={intrinsics.fov_deg}
                 onValueChange={(fovDegrees) => {
                   updateCamera(camera.id, {
-                    intrinsics: withIntrinsicsFovDeg(camera.intrinsics, fovDegrees),
+                    intrinsics: buildFovIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      fovDegrees,
+                    }),
                   });
                 }}
                 step={1}
@@ -273,11 +271,11 @@ export const CameraEditorPanel = ({
                 value={intrinsics.fx ?? 0}
                 onValueChange={(focalLengthPixels) => {
                   updateCamera(camera.id, {
-                    intrinsics: withIntrinsicsFocalLengths(
-                      camera.intrinsics,
-                      Math.max(1e-3, focalLengthPixels),
-                      intrinsics.fy ?? focalLengthPixels
-                    ),
+                    intrinsics: buildFocalLengthIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      axis: "fx",
+                      focalLengthPixels,
+                    }),
                   });
                 }}
                 step={1}
@@ -289,11 +287,11 @@ export const CameraEditorPanel = ({
                 value={intrinsics.fy ?? 0}
                 onValueChange={(focalLengthPixels) => {
                   updateCamera(camera.id, {
-                    intrinsics: withIntrinsicsFocalLengths(
-                      camera.intrinsics,
-                      intrinsics.fx ?? focalLengthPixels,
-                      Math.max(1e-3, focalLengthPixels)
-                    ),
+                    intrinsics: buildFocalLengthIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      axis: "fy",
+                      focalLengthPixels,
+                    }),
                   });
                 }}
                 step={1}
@@ -310,11 +308,11 @@ export const CameraEditorPanel = ({
                 value={intrinsics.cx ?? intrinsics.width * 0.5}
                 onValueChange={(principalPointPixels) => {
                   updateCamera(camera.id, {
-                    intrinsics: withIntrinsicsPrincipalPoint(
-                      camera.intrinsics,
+                    intrinsics: buildPrincipalPointIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      axis: "cx",
                       principalPointPixels,
-                      intrinsics.cy ?? intrinsics.height * 0.5
-                    ),
+                    }),
                   });
                 }}
                 step={0.5}
@@ -325,11 +323,11 @@ export const CameraEditorPanel = ({
                 value={intrinsics.cy ?? intrinsics.height * 0.5}
                 onValueChange={(principalPointPixels) => {
                   updateCamera(camera.id, {
-                    intrinsics: withIntrinsicsPrincipalPoint(
-                      camera.intrinsics,
-                      intrinsics.cx ?? intrinsics.width * 0.5,
-                      principalPointPixels
-                    ),
+                    intrinsics: buildPrincipalPointIntrinsics({
+                      intrinsics: camera.intrinsics,
+                      axis: "cy",
+                      principalPointPixels,
+                    }),
                   });
                 }}
                 step={0.5}
@@ -349,14 +347,7 @@ export const CameraEditorPanel = ({
             {debugReport ? (
               <div className="mt-1 rounded border border-border/40 bg-muted/10 p-1">
                 <div className="text-[8px] text-muted-foreground">
-                  Alignment:{" "}
-                  {debugReport.within_tolerance === null
-                    ? "N/A"
-                    : debugReport.within_tolerance
-                      ? "OK"
-                      : "Mismatch"}{" "}
-                  · Δpos: {debugReport.position_delta_m ?? "n/a"} m · Δang:{" "}
-                  {debugReport.angle_delta_deg ?? "n/a"} deg
+                  {buildCameraDebugSummary(debugReport)}
                 </div>
                 <pre className="mt-0.5 max-h-40 overflow-auto text-[8px] leading-tight text-muted-foreground">
                   {JSON.stringify(debugReport, null, 2)}
