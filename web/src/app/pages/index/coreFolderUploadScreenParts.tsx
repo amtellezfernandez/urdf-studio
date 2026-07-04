@@ -1,4 +1,15 @@
-import { Folder, FolderOpen, Github, Globe, Loader2, X } from "lucide-react";
+import type { DragEvent, ReactNode } from "react";
+import {
+  FileUp,
+  Folder,
+  Github,
+  Globe,
+  Info,
+  Loader2,
+  Upload,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -6,6 +17,93 @@ import {
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
   deriveSourceLabel,
 } from "@/app/pages/index/coreFolderUploadScreenState";
+
+export const SourcePanel = ({
+  children,
+  description,
+  icon: Icon,
+  isDropActive,
+  onDrop,
+  onDropActiveChange,
+  title,
+}: {
+  children: ReactNode;
+  description: ReactNode;
+  icon: LucideIcon;
+  isDropActive: boolean;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  onDropActiveChange: (isActive: boolean) => void;
+  title: string;
+}) => {
+  const activateDrop = (event: DragEvent<HTMLDivElement>): void => {
+    event.preventDefault();
+    onDropActiveChange(true);
+  };
+
+  const deactivateDrop = (event: DragEvent<HTMLDivElement>): void => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    onDropActiveChange(false);
+  };
+
+  return (
+    <div
+      className={`space-y-4 rounded-lg border p-4 transition-colors ${
+        isDropActive ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05]" : "border-border bg-background/40"
+      }`}
+      onDragEnter={activateDrop}
+      onDragOver={activateDrop}
+      onDragLeave={deactivateDrop}
+      onDrop={onDrop}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        <p className="text-sm font-medium text-foreground">{title}</p>
+      </div>
+      <div className="flex items-start gap-2 text-xs text-muted-foreground">
+        <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+        <p>{description}</p>
+      </div>
+      {children}
+    </div>
+  );
+};
+
+export const LocalSourceButtons = ({
+  filesLabel = "Local Files",
+  folderLabel = "Local Folder",
+  onBrowseFiles,
+  onBrowseFolder,
+}: {
+  filesLabel?: string;
+  folderLabel?: string;
+  onBrowseFiles?: () => void;
+  onBrowseFolder?: () => void;
+}) => (
+  <div className="flex flex-wrap gap-2">
+    {onBrowseFolder ? (
+      <Button
+        type="button"
+        size="sm"
+        onClick={onBrowseFolder}
+        className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+      >
+        <Upload className="mr-1.5 h-3.5 w-3.5" />
+        {folderLabel}
+      </Button>
+    ) : null}
+    {onBrowseFiles ? (
+      <Button
+        type="button"
+        size="sm"
+        onClick={onBrowseFiles}
+        className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+      >
+        <FileUp className="mr-1.5 h-3.5 w-3.5" />
+        {filesLabel}
+      </Button>
+    ) : null}
+  </div>
+);
 
 export const RecentLinkPanel = ({
   title,
@@ -78,11 +176,7 @@ export const RecentLinkPanel = ({
   </div>
 );
 
-export const CompactSourceIntake = ({
-  isDropActive,
-  isPreparing,
-  localLabel,
-  onBrowseLocal,
+export const RemoteSourceInput = ({
   inputPlaceholder,
   inputValue,
   onInputValueChange,
@@ -91,10 +185,6 @@ export const CompactSourceIntake = ({
   isLoading,
   loadIcon,
 }: {
-  isDropActive: boolean;
-  isPreparing: boolean;
-  localLabel: string;
-  onBrowseLocal: () => void;
   inputPlaceholder: string;
   inputValue: string;
   onInputValueChange: (value: string) => void;
@@ -103,62 +193,37 @@ export const CompactSourceIntake = ({
   isLoading: boolean;
   loadIcon: "github" | "globe";
 }) => (
-  <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
-    <div
-      className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2.5 transition-colors sm:w-auto sm:shrink-0 ${
-        isDropActive
-          ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05] text-foreground"
-          : "border-border/70 bg-background/35 text-muted-foreground"
-      }`}
-    >
-      <div className="flex items-center gap-1.5">
-        {isPreparing ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <FolderOpen className="h-3.5 w-3.5" />
-        )}
-        <span>{localLabel}</span>
-        <button
-          type="button"
-          onClick={onBrowseLocal}
-          className="text-[11px] font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Browse Locally
-        </button>
-      </div>
-    </div>
-    <div className="flex w-full min-w-0 items-center gap-1.5 sm:flex-1">
-      <Input
-        type="text"
-        placeholder={inputPlaceholder}
-        value={inputValue}
-        onChange={(event) => onInputValueChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !isLoading) {
-            void onLoadRemote();
-          }
-        }}
-        disabled={isLoading}
-        className="min-w-0 flex-1 bg-background/80"
-      />
-      <Button
-        type="button"
-        onClick={() => {
+  <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <Input
+      type="text"
+      placeholder={inputPlaceholder}
+      value={inputValue}
+      onChange={(event) => onInputValueChange(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && !isLoading) {
           void onLoadRemote();
-        }}
-        disabled={loadDisabled}
-        size="sm"
-        className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-      >
-        {isLoading ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-        ) : loadIcon === "github" ? (
-          <Github className="mr-1.5 h-3.5 w-3.5" />
-        ) : (
-          <Globe className="mr-1.5 h-3.5 w-3.5" />
-        )}
-        Load
-      </Button>
-    </div>
+        }
+      }}
+      disabled={isLoading}
+      className="min-w-0 flex-1 bg-background/80"
+    />
+    <Button
+      type="button"
+      onClick={() => {
+        void onLoadRemote();
+      }}
+      disabled={loadDisabled}
+      size="sm"
+      className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+    >
+      {isLoading ? (
+        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+      ) : loadIcon === "github" ? (
+        <Github className="mr-1.5 h-3.5 w-3.5" />
+      ) : (
+        <Globe className="mr-1.5 h-3.5 w-3.5" />
+      )}
+      Load
+    </Button>
   </div>
 );

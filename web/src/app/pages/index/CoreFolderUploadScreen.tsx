@@ -13,14 +13,11 @@ import {
   Bot,
   Camera,
   Check,
-  FileUp,
   Github,
   Globe,
-  Info,
   Loader2,
   Play,
   Trash2,
-  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,8 +28,10 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Switch } from "@/shared/ui/switch";
 import {
-  CompactSourceIntake,
+  LocalSourceButtons,
   RecentLinkPanel,
+  RemoteSourceInput,
+  SourcePanel,
 } from "@/app/pages/index/coreFolderUploadScreenParts";
 import {
   buildWorldLayoutFolderAssetMap,
@@ -58,35 +57,6 @@ type StagedRobotSource = {
   kind: "local" | "github" | "url";
   load: () => Promise<void>;
 };
-
-const LocalSourceButtons = ({
-  onBrowseFolder,
-  onBrowseFiles,
-}: {
-  onBrowseFiles: () => void;
-  onBrowseFolder: () => void;
-}) => (
-  <div className="flex flex-wrap gap-2">
-    <Button
-      type="button"
-      size="sm"
-      onClick={onBrowseFolder}
-      className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-    >
-      <Upload className="mr-1.5 h-3.5 w-3.5" />
-      Local Folder
-    </Button>
-    <Button
-      type="button"
-      size="sm"
-      onClick={onBrowseFiles}
-      className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-    >
-      <FileUp className="mr-1.5 h-3.5 w-3.5" />
-      Local Files
-    </Button>
-  </div>
-);
 
 export const CoreFolderUploadScreen = ({
   onFolderSelected,
@@ -467,34 +437,14 @@ export const CoreFolderUploadScreen = ({
   );
 
   const renderRobotLoader = () => (
-    <div
-      className={`space-y-4 rounded-lg border p-4 transition-colors ${
-        robotSourceDropActive
-          ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05]"
-          : "border-border bg-background/40"
-      }`}
-      onDragEnter={(event) => {
-        event.preventDefault();
-        setRobotSourceDropActive(true);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setRobotSourceDropActive(true);
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        setRobotSourceDropActive(false);
-      }}
+    <SourcePanel
+      icon={Bot}
+      title="Robot"
+      description="Load a URDF package folder, loose robot files, GitHub repository, or direct URDF/Xacro URL."
+      isDropActive={robotSourceDropActive}
+      onDropActiveChange={setRobotSourceDropActive}
       onDrop={handleRobotSourceDrop}
     >
-      <div className="flex items-center gap-2">
-        <Bot className="h-4 w-4 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Robot</p>
-      </div>
-      <div className="flex items-start gap-2 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-        <p>Load a URDF package folder, loose robot files, GitHub repository, or direct URDF/Xacro URL.</p>
-      </div>
       <LocalSourceButtons
         onBrowseFolder={() => folderInputRef.current?.click()}
         onBrowseFiles={() => localFilesInputRef.current?.click()}
@@ -590,43 +540,23 @@ export const CoreFolderUploadScreen = ({
           }}
         />
       )}
-    </div>
+    </SourcePanel>
   );
 
   const renderCameraSetupLoader = () => (
-    <div
-      className={`space-y-4 rounded-lg border p-4 transition-colors ${
-        cameraSourceDropActive
-          ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05]"
-          : "border-border bg-background/40"
-      }`}
-      onDragEnter={(event) => {
-        event.preventDefault();
-        setCameraSourceDropActive(true);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setCameraSourceDropActive(true);
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        setCameraSourceDropActive(false);
-      }}
+    <SourcePanel
+      icon={Camera}
+      title="Camera"
+      description="Load a camera JSON/YAML with name, parent joint, pose, and intrinsics."
+      isDropActive={cameraSourceDropActive}
+      onDropActiveChange={setCameraSourceDropActive}
       onDrop={handleCameraSourceDrop}
     >
-      <div className="flex items-center gap-2">
-        <Camera className="h-4 w-4 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Camera</p>
-      </div>
-      <div className="flex items-start gap-2 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-        <p>Load a camera JSON/YAML with name, parent joint, pose, and intrinsics.</p>
-      </div>
-      <CompactSourceIntake
-        isDropActive={cameraSourceDropActive}
-        isPreparing={isLoadingCameraConfig}
-        localLabel="Drag camera JSON/YAML"
-        onBrowseLocal={() => cameraConfigFileInputRef.current?.click()}
+      <LocalSourceButtons
+        filesLabel="Local File"
+        onBrowseFiles={() => cameraConfigFileInputRef.current?.click()}
+      />
+      <RemoteSourceInput
         inputPlaceholder="https://.../camera-config.json"
         inputValue={cameraConfigUrl}
         onInputValueChange={setCameraConfigUrl}
@@ -699,50 +629,23 @@ export const CoreFolderUploadScreen = ({
           }}
         />
       )}
-    </div>
+    </SourcePanel>
   );
 
   const renderWorldLayoutLoader = () => (
-    <div
-      className={`space-y-4 rounded-lg border p-4 transition-colors ${
-        worldSourceDropActive
-          ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05]"
-          : "border-border bg-background/40"
-      }`}
-      onDragEnter={(event) => {
-        event.preventDefault();
-        setWorldSourceDropActive(true);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setWorldSourceDropActive(true);
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        setWorldSourceDropActive(false);
-      }}
+    <SourcePanel
+      icon={Globe}
+      title="World"
+      description="Paste a world link, or load a folder containing the world layout JSON plus any mesh, splat, or texture assets it references. Public and GitHub file links are supported."
+      isDropActive={worldSourceDropActive}
+      onDropActiveChange={setWorldSourceDropActive}
       onDrop={handleWorldSourceDrop}
     >
-      <div className="flex items-center gap-2">
-        <Globe className="h-4 w-4 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">World</p>
-      </div>
-      <div className="flex items-start gap-2 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-        <p>
-          Paste a world link, or load a folder containing the world layout JSON plus any mesh,
-          splat, or texture assets it references. Public and GitHub file links are supported.
-        </p>
-      </div>
       <LocalSourceButtons
         onBrowseFolder={() => worldLayoutFolderInputRef.current?.click()}
         onBrowseFiles={() => worldLayoutFileInputRef.current?.click()}
       />
-      <CompactSourceIntake
-        isDropActive={worldSourceDropActive}
-        isPreparing={isLoadingWorldLayout}
-        localLabel="Drag world JSON/assets"
-        onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
+      <RemoteSourceInput
         inputPlaceholder="https://.../world-layout.json"
         inputValue={worldLayoutUrl}
         onInputValueChange={setWorldLayoutUrl}
@@ -782,7 +685,7 @@ export const CoreFolderUploadScreen = ({
           }}
         />
       )}
-    </div>
+    </SourcePanel>
   );
 
   return (
