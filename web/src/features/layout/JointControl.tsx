@@ -457,21 +457,6 @@ export const JointControl = ({
   );
   const [localOriginXyz, setLocalOriginXyz] = useState<[number, number, number]>(jointOrigin.xyz);
   const [localOriginRpy, setLocalOriginRpy] = useState<[number, number, number]>(jointOrigin.rpy);
-  const resolveLimitValue = useCallback(
-    (value: string, fallback?: number | null) => {
-      if (value.trim().length > 0) {
-        const parsed = Number.parseFloat(value);
-        if (Number.isFinite(parsed)) {
-          return parsed;
-        }
-      }
-      if (fallback !== null && fallback !== undefined && Number.isFinite(fallback)) {
-        return fallback;
-      }
-      return undefined;
-    },
-    []
-  );
   const parseLimitInput = useCallback((value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return undefined;

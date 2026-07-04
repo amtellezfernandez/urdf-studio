@@ -11,7 +11,6 @@ import { DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
 import { aliasRepeatedLinkMeshFiles } from "@/features/urdf/loader/repeatedMeshAlias";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
-import { formatUrdfMeshLoadDiagnostics } from "@/features/urdf/loader/urdfLoaderDiagnostics";
 import type { UrdfLoadIssueSummary } from "@/features/urdf/loader/urdfLoadIssues";
 import { buildDebugMeshInfo } from "@/features/urdf/loader/urdfMeshDebugInfo";
 import { indexMeshResources } from "@/features/urdf/loader/urdfMeshIndex";
@@ -291,15 +290,6 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         });
 
         if (import.meta.env.DEV) {
-          formatUrdfMeshLoadDiagnostics({
-            debugMeshInfo: debugInfo,
-            loadedMeshAssetCount: meshAssets.length,
-            totalPathVariationCount: Object.keys(meshes).length,
-            unmatchedRefCount: issueSummary.unmatchedRefs.length,
-            urdfMeshReferenceCount: urdfMeshReferences.length,
-          }).forEach((line) => {
-            console.debug(line);
-          });
           if (issueSummary.unmatchedRefs.length > 0) {
             console.warn("Unmatched URDF references:", issueSummary.unmatchedRefs);
           }
