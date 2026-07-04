@@ -2,11 +2,11 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { URDFRobot } from "urdf-loader";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
+import { hasJointMapChanged } from "@/features/viewer/viewer-helpers";
 import {
-  hasJointMapChanged,
   applyRobotBasePose,
   extractRobotBasePose,
-} from "@/features/viewer/viewer-helpers";
+} from "@/shared/lib/urdfRobotBasePose";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import type { AnimationController } from "@/features/viewer/useAnimationController";
 import {

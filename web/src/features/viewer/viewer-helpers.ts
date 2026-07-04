@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import type { URDFJoint, URDFRobot } from "urdf-loader";
-import type { RobotBasePose } from "@/shared/types/feature";
 import {
   createIdentityRigidFrame,
   updateRigidFrameFromMatrixWorld,
@@ -8,7 +7,6 @@ import {
   worldToLocalQuaternionInFrame,
 } from "@/shared/lib/spatialFrame";
 
-const BASE_POSE_APPLY_EPSILON = 1e-9;
 const tempRobotBaseFrame = createIdentityRigidFrame();
 
 export type DragMode = "move-joints" | "drag-handle";
@@ -179,88 +177,6 @@ export const getLiveRobotJoints = (
   }
   // Fallback to provided map if we missed anything
   return Object.keys(result).length > 0 ? result : fallback;
-};
-
-export const extractRobotBasePose = (robot: URDFRobot | null): RobotBasePose | null => {
-  if (!robot) return null;
-  const { position, quaternion } = robot;
-  if (
-    !Number.isFinite(position.x) ||
-    !Number.isFinite(position.y) ||
-    !Number.isFinite(position.z) ||
-    !Number.isFinite(quaternion.x) ||
-    !Number.isFinite(quaternion.y) ||
-    !Number.isFinite(quaternion.z) ||
-    !Number.isFinite(quaternion.w)
-  ) {
-    return null;
-  }
-  return {
-    position: {
-      x: position.x,
-      y: position.y,
-      z: position.z,
-    },
-    quaternion: {
-      x: quaternion.x,
-      y: quaternion.y,
-      z: quaternion.z,
-      w: quaternion.w,
-    },
-  };
-};
-
-export const applyRobotBasePose = (
-  robot: URDFRobot | null,
-  basePose: RobotBasePose | null | undefined
-) => {
-  if (!robot || !basePose) return false;
-  const { position, quaternion } = basePose;
-  const values = [
-    position.x,
-    position.y,
-    position.z,
-    quaternion.x,
-    quaternion.y,
-    quaternion.z,
-    quaternion.w,
-  ];
-  if (!values.every(Number.isFinite)) return false;
-
-  let changed = false;
-  if (Math.abs(robot.position.x - position.x) > BASE_POSE_APPLY_EPSILON) {
-    robot.position.x = position.x;
-    changed = true;
-  }
-  if (Math.abs(robot.position.y - position.y) > BASE_POSE_APPLY_EPSILON) {
-    robot.position.y = position.y;
-    changed = true;
-  }
-  if (Math.abs(robot.position.z - position.z) > BASE_POSE_APPLY_EPSILON) {
-    robot.position.z = position.z;
-    changed = true;
-  }
-  if (Math.abs(robot.quaternion.x - quaternion.x) > BASE_POSE_APPLY_EPSILON) {
-    robot.quaternion.x = quaternion.x;
-    changed = true;
-  }
-  if (Math.abs(robot.quaternion.y - quaternion.y) > BASE_POSE_APPLY_EPSILON) {
-    robot.quaternion.y = quaternion.y;
-    changed = true;
-  }
-  if (Math.abs(robot.quaternion.z - quaternion.z) > BASE_POSE_APPLY_EPSILON) {
-    robot.quaternion.z = quaternion.z;
-    changed = true;
-  }
-  if (Math.abs(robot.quaternion.w - quaternion.w) > BASE_POSE_APPLY_EPSILON) {
-    robot.quaternion.w = quaternion.w;
-    changed = true;
-  }
-
-  if (changed) {
-    robot.updateMatrixWorld?.(true);
-  }
-  return changed;
 };
 
 export const hasJointMapChanged = (

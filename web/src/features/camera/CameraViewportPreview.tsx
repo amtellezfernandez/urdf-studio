@@ -8,14 +8,16 @@ import { createUrdfMeshLoadCallback } from "@/features/urdf/runtime/urdfMeshLoad
 import { createUrdfVisualMaterialApplyScheduler } from "@/features/urdf/runtime/materialApplyScheduler";
 import { URDF_VISUAL_MATERIAL_APPLY_RETRY_DELAY_MS } from "@/features/urdf/runtime/materialApplySchedulerParams";
 import { useJointStore } from "@/shared/store/useJointStore";
+import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
+import { applyRobotBasePose } from "@/shared/lib/urdfRobotBasePose";
 import { applyIntrinsicsToPerspectiveCamera, normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
-import type { MeshFiles } from "@/shared/types/feature";
+import type { MeshFiles, RobotBasePose } from "@/shared/types/feature";
 
 type PreviewRobot = URDFRobot;
 
@@ -30,6 +32,10 @@ type CameraViewportPreviewProps = {
 };
 
 const FLOAT_EPSILON = 1e-4;
+const PREVIEW_DEFAULT_BASE_POSE: RobotBasePose = {
+  position: { x: 0, y: 0, z: 0 },
+  quaternion: { x: 0, y: 0, z: 0, w: 1 },
+};
 
 const approxEqual = (a: number, b: number, eps = FLOAT_EPSILON) => Math.abs(a - b) <= eps;
 
@@ -133,15 +139,36 @@ const useResolvedPreviewCameraConfig = (cameraId: string | null) => {
   }, [cameraId, cameras]);
 };
 
-const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
+const RobotKinematicSync = ({ robot }: { robot: PreviewRobot | null }) => {
   const lastValuesRef = useRef<Record<string, number> | null>(null);
+  const lastBasePoseRef = useRef<RobotBasePose | null | undefined>(undefined);
+
+  useEffect(() => {
+    lastValuesRef.current = null;
+    lastBasePoseRef.current = undefined;
+  }, [robot]);
+
   useFrame(() => {
     if (!robot) return;
+    let needsMatrixUpdate = false;
     const values = useJointStore.getState().jointValues;
-    if (lastValuesRef.current === values) return;
-    lastValuesRef.current = values;
-    applyJointValues(robot, values);
-    robot.updateMatrixWorld?.(true);
+    if (lastValuesRef.current !== values) {
+      lastValuesRef.current = values;
+      applyJointValues(robot, values);
+      needsMatrixUpdate = true;
+    }
+
+    const liveBasePose = useRobotPoseStore.getState().pose;
+    if (lastBasePoseRef.current !== liveBasePose) {
+      lastBasePoseRef.current = liveBasePose;
+      needsMatrixUpdate =
+        applyRobotBasePose(robot, liveBasePose ?? PREVIEW_DEFAULT_BASE_POSE) ||
+        needsMatrixUpdate;
+    }
+
+    if (needsMatrixUpdate) {
+      robot.updateMatrixWorld?.(true);
+    }
   });
   return null;
 };
@@ -507,7 +534,7 @@ export const CameraViewportPreview = ({
             <ViewerFloorPlane gpuMode={gpuMode} />
             <group ref={groupRef} />
             <PreviewObjects objects={objects} gpuMode={gpuMode} />
-            <JointValueSync robot={robot} />
+            <RobotKinematicSync robot={robot} />
             <RobotMountKeeper groupRef={groupRef} robot={robot} />
             <CameraPoseController
               cameraId={cameraConfig.id}

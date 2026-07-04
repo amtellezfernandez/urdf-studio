@@ -34,6 +34,15 @@ import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import jointColors from "@/shared/joint_colors.json";
 import { AxisGizmo3D } from "@/features/viewer/AxisGizmo3D";
 import { AssemblyPlacementHelpers } from "@/features/viewer/AssemblyPlacementHelpers";
+import {
+  computeAssemblyContactPairs,
+  resolveAssemblyNearestContactSnap,
+  type AssemblyMeshProxy,
+  type AssemblyPlacementRobot,
+  type AssemblyWheelJoint,
+  type AssemblyWheelProfile,
+} from "@/features/viewer/assemblyPlacementContact";
+import { ASSEMBLY_PLACEMENT_CONTACT_PARAMS } from "@/features/viewer/assemblyPlacementContactParams";
 import { CustomAxesHelper } from "@/features/viewer/CustomAxesHelper";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBoundary";
@@ -62,11 +71,11 @@ import { API_BASE_URL } from "@/shared/config/api";
 import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderState";
 import {
   extractLinkPose,
-  extractRobotBasePose,
   resolveJointScalarValue,
   setEmissiveColor,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
+import { extractRobotBasePose } from "@/shared/lib/urdfRobotBasePose";
 import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 import { CollisionGeometries } from "@/features/viewer/CollisionGeometries";
 import { RoverApproachGuideLine } from "@/features/viewer/RoverApproachGuideLine";
@@ -162,10 +171,7 @@ import {
 } from "@/features/camera/cameraAutoGenerationHelpers";
 import type { AssemblySecondaryModel } from "@/features/assembly/types";
 import type { WorkspaceMode } from "@/features/workspace/types";
-import {
-  buildContactPairKey,
-  useAssemblyPlacementStore,
-} from "@/features/assembly/store/useAssemblyPlacementStore";
+import { useAssemblyPlacementStore } from "@/features/assembly/store/useAssemblyPlacementStore";
 import { isFeatureFlagEnabled, subscribeFeatureFlags } from "@/shared/config/featureFlags";
 import { buildMotionPartitions, createMotionKernel } from "@/features/viewer/motion-kernel";
 import {
@@ -418,43 +424,6 @@ const URDFModel = ({
   readOnlyMode?: boolean;
   onReadOnlyInteractionAttempt?: () => void;
 }) => {
-  type AssemblyMeshProxy = {
-    mesh: THREE.Mesh;
-    localBounds: THREE.Box3;
-  };
-  type AssemblyWheelJoint = {
-    jointName: string;
-    joint: URDFJoint;
-    axisLocal: THREE.Vector3;
-    radius: number;
-    directionSign: number;
-  };
-  type AssemblyWheelProfile = {
-    forwardLocal: THREE.Vector3;
-    wheels: AssemblyWheelJoint[];
-  };
-  type AssemblyPlacementRobot = {
-    id: string;
-    robot: URDFRobot;
-    radius: number;
-    halfExtentX: number;
-    halfExtentZ: number;
-    meshProxies: AssemblyMeshProxy[];
-    wheelProfile: AssemblyWheelProfile | null;
-  };
-  type AssemblyContactMetric = {
-    dx: number;
-    dz: number;
-    distance: number;
-    targetDistance: number;
-    gap: number;
-    absGap: number;
-    targetX: number;
-    targetZ: number;
-    axisMode: "x" | "z" | "free";
-    meshGap: number;
-  };
-
   const workspaceModeUi = getWorkspaceModeUiPolicy(workspaceMode);
   const isAssemblyWorkspace = workspaceModeUi.isAssembly;
   const thumbnailWorldObjects = useObjectStore((state) => state.objects);
@@ -709,134 +678,6 @@ const URDFModel = ({
     [getAssemblyForwardWorld]
   );
 
-  const computeMeshContactGap = useCallback(
-    (lhs: AssemblyPlacementRobot, rhs: AssemblyPlacementRobot): number => {
-      const rhsBoxes = rhs.meshProxies.map((proxy) =>
-        proxy.localBounds.clone().applyMatrix4(proxy.mesh.matrixWorld)
-      );
-      if (rhsBoxes.length === 0) return Number.POSITIVE_INFINITY;
-      let minGap = Number.POSITIVE_INFINITY;
-      lhs.meshProxies.forEach((lhsProxy) => {
-        const lhsBox = lhsProxy.localBounds.clone().applyMatrix4(lhsProxy.mesh.matrixWorld);
-        rhsBoxes.forEach((rhsBox) => {
-          const dx = Math.max(lhsBox.min.x - rhsBox.max.x, rhsBox.min.x - lhsBox.max.x, 0);
-          const dy = Math.max(lhsBox.min.y - rhsBox.max.y, rhsBox.min.y - lhsBox.max.y, 0);
-          const dz = Math.max(lhsBox.min.z - rhsBox.max.z, rhsBox.min.z - lhsBox.max.z, 0);
-          const gap = Math.hypot(dx, dy, dz);
-          if (gap < minGap) {
-            minGap = gap;
-          }
-        });
-      });
-      return minGap;
-    },
-    []
-  );
-
-  const computeDirectionalFootprintSupport = useCallback(
-    (entry: AssemblyPlacementRobot, dirX: number, dirZ: number): number => {
-      if (entry.meshProxies.length === 0) {
-        const yaw = entry.robot.rotation.y;
-        const cos = Math.cos(-yaw);
-        const sin = Math.sin(-yaw);
-        const localX = dirX * cos - dirZ * sin;
-        const localZ = dirX * sin + dirZ * cos;
-        return Math.abs(localX) * entry.halfExtentX + Math.abs(localZ) * entry.halfExtentZ;
-      }
-      const robotPosition = entry.robot.position;
-      let support = 0;
-      entry.meshProxies.forEach((proxy) => {
-        const worldBox = proxy.localBounds.clone().applyMatrix4(proxy.mesh.matrixWorld);
-        const centerX = (worldBox.min.x + worldBox.max.x) * 0.5;
-        const centerZ = (worldBox.min.z + worldBox.max.z) * 0.5;
-        const halfX = (worldBox.max.x - worldBox.min.x) * 0.5;
-        const halfZ = (worldBox.max.z - worldBox.min.z) * 0.5;
-        const projectedCenter = (centerX - robotPosition.x) * dirX + (centerZ - robotPosition.z) * dirZ;
-        const projectedHalf = Math.abs(dirX) * halfX + Math.abs(dirZ) * halfZ;
-        support = Math.max(support, projectedCenter + projectedHalf);
-      });
-      return Math.max(support, 0.01);
-    },
-    []
-  );
-
-  const computeAssemblyContactMetric = useCallback(
-    (lhs: AssemblyPlacementRobot, rhs: AssemblyPlacementRobot): AssemblyContactMetric => {
-      lhs.robot.updateMatrixWorld(true);
-      rhs.robot.updateMatrixWorld(true);
-      const rawDx = lhs.robot.position.x - rhs.robot.position.x;
-      const rawDz = lhs.robot.position.z - rhs.robot.position.z;
-      const baseDistance = Math.hypot(rawDx, rawDz);
-      const fallbackX = Math.cos(lhs.robot.rotation.y);
-      const fallbackZ = Math.sin(lhs.robot.rotation.y);
-      const safeSign = (value: number, fallback: number) => {
-        if (Math.abs(value) > 1e-6) return value > 0 ? 1 : -1;
-        return fallback >= 0 ? 1 : -1;
-      };
-      let dirX = baseDistance > 1e-6 ? rawDx / baseDistance : safeSign(rawDx, fallbackX);
-      let dirZ = baseDistance > 1e-6 ? rawDz / baseDistance : safeSign(rawDz, fallbackZ);
-      let axisMode: "x" | "z" | "free" = "free";
-      const absDx = Math.abs(rawDx);
-      const absDz = Math.abs(rawDz);
-      if (
-        absDz <= ASSEMBLY_AXIS_SNAP_TOLERANCE_M ||
-        (absDz <= ASSEMBLY_AXIS_ASSIST_RANGE_M && absDz < absDx * 0.22)
-      ) {
-        dirX = safeSign(rawDx, fallbackX);
-        dirZ = 0;
-        axisMode = "x";
-      } else if (
-        absDx <= ASSEMBLY_AXIS_SNAP_TOLERANCE_M ||
-        (absDx <= ASSEMBLY_AXIS_ASSIST_RANGE_M && absDx < absDz * 0.22)
-      ) {
-        dirX = 0;
-        dirZ = safeSign(rawDz, fallbackZ);
-        axisMode = "z";
-      }
-      const lhsSupport = computeDirectionalFootprintSupport(lhs, dirX, dirZ);
-      const rhsSupport = computeDirectionalFootprintSupport(rhs, -dirX, -dirZ);
-      const targetDistance = lhsSupport + rhsSupport;
-      const distance = axisMode === "x" ? absDx : axisMode === "z" ? absDz : baseDistance;
-      const estimatedGap = distance - targetDistance;
-      let meshGap = Number.POSITIVE_INFINITY;
-      if (baseDistance <= lhs.radius + rhs.radius + ASSEMBLY_MESH_CONTACT_DISTANCE_LIMIT_M) {
-        meshGap = computeMeshContactGap(lhs, rhs);
-      }
-      const gap = Number.isFinite(meshGap) ? meshGap : estimatedGap;
-      return {
-        dx: rawDx,
-        dz: rawDz,
-        distance,
-        targetDistance,
-        gap,
-        absGap: Math.abs(gap),
-        targetX: rhs.robot.position.x + dirX * targetDistance,
-        targetZ: rhs.robot.position.z + dirZ * targetDistance,
-        axisMode,
-        meshGap,
-      };
-    },
-    [computeDirectionalFootprintSupport, computeMeshContactGap]
-  );
-
-  const computeAssemblyContactPairs = useCallback(
-    (robots: AssemblyPlacementRobot[]) => {
-      const pairs: string[] = [];
-      for (let i = 0; i < robots.length; i += 1) {
-        for (let j = i + 1; j < robots.length; j += 1) {
-          const lhs = robots[i];
-          const rhs = robots[j];
-          const metric = computeAssemblyContactMetric(lhs, rhs);
-          if (metric.gap <= ASSEMBLY_CONTACT_DETECTION_TOLERANCE_M) {
-            pairs.push(buildContactPairKey(lhs.id, rhs.id));
-          }
-        }
-      }
-      return pairs;
-    },
-    [computeAssemblyContactMetric]
-  );
-
   const syncAssemblyPlacementState = useCallback(
     (updatePoses: boolean) => {
       if (!isAssemblyWorkspace) return;
@@ -864,7 +705,6 @@ const URDFModel = ({
       }
     },
     [
-      computeAssemblyContactPairs,
       isAssemblyWorkspace,
       setAssemblyContactPairs,
       setAssemblyPoses,
@@ -879,39 +719,20 @@ const URDFModel = ({
       options?: { maxGap?: number; preferOtherId?: string | null }
     ): { snapped: boolean; otherId?: string; absGap?: number } => {
       const robots = assemblyRobotsRef.current;
-      if (robots.length < 2) return { snapped: false };
+      const snapResult = resolveAssemblyNearestContactSnap(robots, robotId, options);
+      if (!snapResult.snapped) return { snapped: false };
       const target = robots.find((item) => item.id === robotId);
       if (!target) return { snapped: false };
 
-      let best:
-        | {
-            other: AssemblyPlacementRobot;
-            metric: AssemblyContactMetric;
-            score: number;
-          }
-        | null = null;
-      robots.forEach((other) => {
-        if (other.id === robotId) return;
-        const metric = computeAssemblyContactMetric(target, other);
-        const preferenceBias =
-          options?.preferOtherId && options.preferOtherId === other.id ? -0.02 : 0;
-        const axisBonus = metric.axisMode !== "free" ? -0.004 : 0;
-        const score = metric.absGap + preferenceBias + axisBonus;
-        if (!best || score < best.score) {
-          best = { other, metric, score };
-        }
-      });
-      if (!best) return { snapped: false };
-      const maxGap = options?.maxGap;
-      if (typeof maxGap === "number" && best.metric.absGap > maxGap) {
-        return { snapped: false };
-      }
-
-      target.robot.position.x = best.metric.targetX;
-      target.robot.position.z = best.metric.targetZ;
-      return { snapped: true, otherId: best.other.id, absGap: best.metric.absGap };
+      target.robot.position.x = snapResult.targetX;
+      target.robot.position.z = snapResult.targetZ;
+      return {
+        snapped: true,
+        otherId: snapResult.otherId,
+        absGap: snapResult.absGap,
+      };
     },
-    [computeAssemblyContactMetric]
+    []
   );
 
   useEffect(() => {
@@ -1250,7 +1071,6 @@ const URDFModel = ({
     }
   }, [
     assemblyStoredPoses,
-    computeAssemblyContactPairs,
     isAssemblyWorkspace,
     setAssemblyContactPairs,
   ]);
@@ -1615,7 +1435,8 @@ const URDFModel = ({
           const travelMeters = requestedDeltaX * forward.x + requestedDeltaZ * forward.z;
           if (
             requestedDistance > 1e-6 &&
-            Math.abs(travelMeters) < requestedDistance * ASSEMBLY_WHEEL_DRAG_MIN_PROGRESS_RATIO
+            Math.abs(travelMeters) <
+              requestedDistance * ASSEMBLY_PLACEMENT_CONTACT_PARAMS.wheelDragMinProgressRatio
           ) {
             drag.robot.position.x = nextX;
             drag.robot.position.z = nextZ;
@@ -1629,15 +1450,15 @@ const URDFModel = ({
         }
         const snapResult = snapRobotToNearestContact(drag.robotId, {
           maxGap: drag.lockedOtherId
-            ? ASSEMBLY_MAGNETIC_LOCK_RELEASE_TOLERANCE_M
-            : ASSEMBLY_MAGNETIC_SNAP_TOLERANCE_M,
+            ? ASSEMBLY_PLACEMENT_CONTACT_PARAMS.magneticLockReleaseToleranceM
+            : ASSEMBLY_PLACEMENT_CONTACT_PARAMS.magneticSnapToleranceM,
           preferOtherId: drag.lockedOtherId,
         });
         if (snapResult.snapped) {
           if (
             snapResult.otherId &&
             typeof snapResult.absGap === "number" &&
-            snapResult.absGap <= ASSEMBLY_MAGNETIC_LOCK_ENTER_TOLERANCE_M
+            snapResult.absGap <= ASSEMBLY_PLACEMENT_CONTACT_PARAMS.magneticLockEnterToleranceM
           ) {
             drag.lockedOtherId = snapResult.otherId;
           } else if (!drag.lockedOtherId) {
@@ -2085,15 +1906,6 @@ const hexToThreeJsHex = (hex: string): number => {
   const cleanHex = hex.replace("#", "");
   return parseInt(cleanHex, 16);
 };
-
-const ASSEMBLY_CONTACT_DETECTION_TOLERANCE_M = 0.008;
-const ASSEMBLY_MESH_CONTACT_DISTANCE_LIMIT_M = 0.45;
-const ASSEMBLY_MAGNETIC_SNAP_TOLERANCE_M = 0.22;
-const ASSEMBLY_MAGNETIC_LOCK_ENTER_TOLERANCE_M = 0.018;
-const ASSEMBLY_MAGNETIC_LOCK_RELEASE_TOLERANCE_M = 0.26;
-const ASSEMBLY_AXIS_SNAP_TOLERANCE_M = 0.05;
-const ASSEMBLY_AXIS_ASSIST_RANGE_M = 0.24;
-const ASSEMBLY_WHEEL_DRAG_MIN_PROGRESS_RATIO = 0.22;
 
 const isFinitePositiveMotionDimension = (value: number | null | undefined): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > Number.EPSILON;

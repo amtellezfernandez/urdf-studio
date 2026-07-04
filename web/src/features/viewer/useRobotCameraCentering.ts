@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { URDFRobot } from "urdf-loader";
 import { computeRobotFocusBounds } from "@/features/viewer/cameraBounds";
-import { extractRobotBasePose } from "@/features/viewer/viewer-helpers";
+import { extractRobotBasePose } from "@/shared/lib/urdfRobotBasePose";
 import {
   ROBOT_CAMERA_CENTERING_BASE_MOTION_ROTATION_EPSILON_RAD,
   ROBOT_CAMERA_CENTERING_BASE_MOTION_TRANSLATION_EPSILON_M,

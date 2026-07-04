@@ -1,0 +1,15 @@
+export const ASSEMBLY_PLACEMENT_CONTACT_PARAMS = {
+  contactDetectionToleranceM: 0.008,
+  meshContactDistanceLimitM: 0.45,
+  magneticSnapToleranceM: 0.22,
+  magneticLockEnterToleranceM: 0.018,
+  magneticLockReleaseToleranceM: 0.26,
+  axisSnapToleranceM: 0.05,
+  axisAssistRangeM: 0.24,
+  axisAssistDominanceRatio: 0.22,
+  wheelDragMinProgressRatio: 0.22,
+  directionEpsilonM: 1e-6,
+  minDirectionalSupportM: 0.01,
+  preferredContactScoreBias: -0.02,
+  axisContactScoreBias: -0.004,
+} as const;
