@@ -7,7 +7,7 @@ import math
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Literal, Sequence, TypeAlias, TypeGuard, cast
+from typing import Any, Literal, Sequence, TypeAlias, TypedDict, TypeGuard, cast
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -18,6 +18,7 @@ from backend.services.world_layout_transfer_constants import (
     QUATERNION_TOLERANCE,
     SIZE_TOLERANCE_M,
 )
+from backend.services.world_layout_transfer_report import PrimitiveCheckReport
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     SimPrimitive,
@@ -60,9 +61,64 @@ DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
 _WorldLayoutSourceKind: TypeAlias = Literal["world_layout", "world_snapshot"]
 WorldLayoutPayloadRecord: TypeAlias = dict[str, Any]
 PrimitiveSimulationFields: TypeAlias = dict[str, Any]
-BackendTransferReport: TypeAlias = dict[str, Any]
-StaticTransferReport: TypeAlias = dict[str, Any]
-BackendTransferReports: TypeAlias = dict[str, BackendTransferReport]
+
+
+class BackendTransferErrorReport(TypedDict):
+    backend: StaticTransferValidationBackend
+    ok: Literal[False]
+    error: str
+    error_type: str
+
+
+BackendTransferReport: TypeAlias = PrimitiveCheckReport | BackendTransferErrorReport
+BackendTransferReports: TypeAlias = dict[StaticTransferValidationBackend, BackendTransferReport]
+
+
+class StaticTransferLayoutReport(TypedDict):
+    name: str
+    source_kind: str
+    object_count: int
+    active_object_count: int
+    scenario_time_ms: int
+    scenario_duration_ms: int
+    frame_convention: str | None
+    frame_map_hint: ConcreteWorldLayoutFrameMap | None
+
+
+class StaticTransferToleranceReport(TypedDict):
+    position_m: float
+    size_m: float
+    quat: float
+
+
+class StaticTransferPrimitiveReport(TypedDict):
+    source_id: str
+    sim_name: str
+    source_type: str
+    sim_type: str
+    position_xyz: list[float]
+    quat_wxyz: list[float]
+    size_xyz: list[float]
+    rgba: list[float]
+    collision: bool
+    fixed: bool
+    mass_kg: float | None
+    friction: float | None
+    restitution: float | None
+    semantic_role: str | None
+    asset_ref: str | None
+    asset_scale_xyz: list[float] | None
+
+
+class StaticTransferReport(TypedDict):
+    ok: bool
+    layout: StaticTransferLayoutReport
+    requested_frame_map: WorldLayoutFrameMap
+    frame_map: ConcreteWorldLayoutFrameMap
+    tolerances: StaticTransferToleranceReport
+    warnings: list[str]
+    primitives: list[StaticTransferPrimitiveReport]
+    backends: BackendTransferReports
 
 STUDIO_Y_UP_TO_Z_UP = np.array(
     [

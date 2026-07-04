@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Sequence, TypeAlias
+from typing import Sequence, TypeAlias, TypedDict
 
 import numpy as np
 
@@ -13,8 +13,56 @@ from backend.services.world_layout_transfer_constants import (
 )
 from backend.services.world_layout_transfer_types import LoadedPrimitive, SimPrimitive
 
-PrimitiveCheckObjectReport: TypeAlias = dict[str, Any]
-PrimitiveCheckReport: TypeAlias = dict[str, Any]
+_JsonFloatVector: TypeAlias = list[float]
+
+
+class PrimitiveCheckObjectReport(TypedDict):
+    source_id: str
+    sim_name: str
+    source_type: str
+    sim_type: str
+    loaded_sim_type: str | None
+    expected_position_xyz: _JsonFloatVector
+    loaded_position_xyz: _JsonFloatVector
+    position_error_m: float
+    expected_quat_wxyz: _JsonFloatVector
+    loaded_quat_wxyz: _JsonFloatVector | None
+    quat_error: float | None
+    expected_size_xyz: _JsonFloatVector
+    loaded_size_xyz: _JsonFloatVector | None
+    size_error_m: float | None
+    expected_rgba: _JsonFloatVector
+    loaded_rgba: _JsonFloatVector | None
+    color_error: float | None
+    collision: bool
+    loaded_collision: bool | None
+    type_matches: bool
+    collision_matches: bool
+    color_matches: bool
+
+
+class _PrimitiveCheckReportRequired(TypedDict):
+    ok: bool
+    expected_count: int
+    loaded_count: int
+    missing_source_ids: list[str]
+    type_mismatch_source_ids: list[str]
+    collision_mismatch_source_ids: list[str]
+    color_mismatch_source_ids: list[str]
+    duplicate_loaded_sim_names: list[str]
+    max_position_error_m: float
+    max_size_error_m: float
+    max_quat_error: float
+    max_color_error: float
+    position_tolerance_m: float
+    size_tolerance_m: float
+    quat_tolerance: float
+    color_tolerance: float
+    objects: list[PrimitiveCheckObjectReport]
+
+
+class PrimitiveCheckReport(_PrimitiveCheckReportRequired, total=False):
+    compiled_geom_count: int
 
 
 def _quat_error(lhs: Sequence[float] | None, rhs: Sequence[float]) -> float | None:
