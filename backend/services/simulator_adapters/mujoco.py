@@ -332,7 +332,7 @@ def start_mujoco_workspace(
         simulator_id=simulator_id,
     )
     shared = prepared.shared_workspace
-    workspace_process = plugin.workspace_process or MUJOCO_WORKSPACE_PROCESS_PARAMS
+    workspace_process = plugin.require_workspace_process()
     return start_prepared_workspace_process(
         runtime_spec=runtime_spec,
         prepared=shared,

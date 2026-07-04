@@ -36,6 +36,7 @@ from backend.services.simulator_adapters import (
     list_simulator_runtime_specs,
     normalize_simulator_workspace_change_set_request,
 )
+from backend.services.simulator_adapters.base import SimulatorCapabilityError
 from backend.services.simulator_adapters.blender_change_sets import build_blender_change_set_source
 from backend.services.simulator_adapters.camera_conventions import (
     world_camera_to_opengl_camera_rotation,
@@ -44,6 +45,7 @@ from backend.services.simulator_adapters.params import (
     SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,
 )
+from backend.services.simulator_adapters.plugin import DirectUrdfSimulatorPlugin, get_plugin
 from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
     declared_world_snapshot_digests,
@@ -295,12 +297,30 @@ def test_openable_simulator_runtime_params_are_centralized() -> None:
         workspace_process = SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID[simulator_id]
         scene_params = SIMULATOR_SCENE_PARAMS_BY_ID[simulator_id]
 
+        assert get_plugin(simulator_id).require_workspace_process() is workspace_process
         assert workspace_process.ready_log_marker
         assert workspace_process.ready_timeout_sec > 0
         if hasattr(scene_params, "viewer_step_hz"):
             assert scene_params.viewer_step_hz > 0
         if hasattr(scene_params, "gravity_xyz"):
             assert len(scene_params.gravity_xyz) == 3
+
+
+def test_plugin_require_workspace_process_reports_missing_config() -> None:
+    class MissingWorkspaceProcessPlugin(DirectUrdfSimulatorPlugin):
+        _abstract = True
+        simulator_id = "pybullet"
+        label = "Missing process"
+        robot_asset_format = "urdf"
+        transfer_strategy = "direct"
+
+    plugin = MissingWorkspaceProcessPlugin()
+
+    with pytest.raises(
+        SimulatorCapabilityError,
+        match="Missing process is missing workspace process configuration.",
+    ):
+        plugin.require_workspace_process()
 
 
 def test_mjlab_workspace_status_uses_mujoco_workspace_dependency(monkeypatch) -> None:

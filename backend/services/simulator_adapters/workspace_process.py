@@ -3,14 +3,16 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Callable, Sequence
 
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SimulatorRuntimeSpec,
     SimulatorWorkspacePrepareResponse,
 )
+from backend.services.simulator_adapters import simulator_acceleration
+from backend.services.simulator_adapters.simulator_acceleration import SimulatorEnvironment
 from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
     wait_for_workspace_readiness,
@@ -25,7 +27,6 @@ from backend.services.simulator_adapters.workspace_launches import (
     is_workspace_launch_cancelled,
     terminate_workspace_process,
 )
-from backend.services.simulator_adapters import simulator_acceleration
 from backend.services.simulator_adapters.params import (
     WORKSPACE_LAUNCH_FRAME_MAP,
     SimulatorWorkspaceProcessParams,
@@ -36,7 +37,10 @@ SIMULATOR_ACCELERATION_DISABLE_ENV = simulator_acceleration.SIMULATOR_ACCELERATI
 SIMULATOR_GPU_DEVICE_ENV = simulator_acceleration.SIMULATOR_GPU_DEVICE_ENV
 
 
-def build_simulator_workspace_env(cache_root: Path, simulator_id: str | None = None) -> dict[str, str]:
+def build_simulator_workspace_env(
+    cache_root: Path,
+    simulator_id: str | None = None,
+) -> SimulatorEnvironment:
     return simulator_acceleration.build_simulator_workspace_env(
         cache_root,
         simulator_id=simulator_id,

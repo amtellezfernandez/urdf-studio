@@ -153,6 +153,14 @@ class SimulatorPlugin:
             transferStrategy=self.transfer_strategy,
         )
 
+    def require_workspace_process(self) -> SimulatorWorkspaceProcessParams:
+        workspace_process = self.workspace_process
+        if workspace_process is None:
+            raise SimulatorCapabilityError(
+                f"{self.label} is missing workspace process configuration."
+            )
+        return workspace_process
+
     def as_workspace_target(self) -> WorkspaceTarget:
         return WorkspaceTarget(
             simulator_id=self.simulator_id,
@@ -181,9 +189,10 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
         def error(msg: str) -> SimulatorAdapterError:
             return self.workspace_error_class(msg)
 
+        workspace_process = self.require_workspace_process()
         prepared = prepare_simulator_workspace_package(
             request,
-            workspace_root=self.workspace_process.workspace_root,
+            workspace_root=workspace_process.workspace_root,
             error=error,
         )
         return start_prepared_workspace_process(
@@ -191,7 +200,7 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
             prepared=prepared,
             simulator_asset_path=prepared.robot_urdf_path,
             simulator_asset_flag="--robot-urdf",
-            workspace_process=self.workspace_process,
+            workspace_process=workspace_process,
             error=error,
             launch_id=request.launch_id,
         )
@@ -225,7 +234,7 @@ class MjcfSimulatorPlugin(SimulatorPlugin):
             _module_command,
         )
 
-        workspace_process = self.workspace_process
+        workspace_process = self.require_workspace_process()
         prepared: PreparedMujocoWorkspace = prepare_mujoco_workspace(
             request,
             simulator_id=self.simulator_id,
