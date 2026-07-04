@@ -6,9 +6,10 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence, cast
 
 from backend.core.paths import BASE_DIR
+from backend.models.json_payload import JsonObject, JsonValue
 
 URDF_MATERIAL_POLICY_CONFIG_PATH = BASE_DIR / "config" / "urdf_material_policy.json"
 UINT32_MASK = 0xFFFFFFFF
@@ -23,7 +24,7 @@ class UrdfMaterialPolicy:
 
 
 def load_urdf_material_policy(path: Path = URDF_MATERIAL_POLICY_CONFIG_PATH) -> UrdfMaterialPolicy:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = _load_policy_payload(path)
     raw_palette = _require_list(payload, "syntheticColorPalette")
     raw_semantic_colors = _require_list(payload, "semanticSyntheticColors")
     palette = tuple(
@@ -31,15 +32,9 @@ def load_urdf_material_policy(path: Path = URDF_MATERIAL_POLICY_CONFIG_PATH) -> 
         for index, entry in enumerate(raw_palette)
     )
     semantic_colors = tuple(
-        (
-            tuple(str(term) for term in _require_list(entry, "terms")),
-            _rgba_string(entry.get("rgba"), f"semanticSyntheticColors[{index}].rgba"),
-        )
+        _read_semantic_synthetic_color(entry, index)
         for index, entry in enumerate(raw_semantic_colors)
-        if isinstance(entry, dict)
     )
-    if len(semantic_colors) != len(raw_semantic_colors):
-        raise ValueError("semanticSyntheticColors entries must be objects")
     return UrdfMaterialPolicy(
         synthetic_color_palette=palette,
         semantic_synthetic_colors=semantic_colors,
@@ -181,21 +176,57 @@ def _fnv1a_32(data: Sequence[int], *, offset_basis: int, prime: int) -> int:
     return digest
 
 
-def _require_list(payload: dict[str, Any], key: str) -> list[Any]:
+def _load_policy_payload(path: Path) -> JsonObject:
+    raw_payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw_payload, dict):
+        raise ValueError("URDF material policy must be a JSON object")
+    return cast(JsonObject, raw_payload)
+
+
+def _require_object(value: JsonValue, path: str) -> JsonObject:
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must be an object")
+    return cast(JsonObject, value)
+
+
+def _require_list(payload: JsonObject, key: str) -> list[JsonValue]:
     value = payload.get(key)
     if not isinstance(value, list) or len(value) == 0:
         raise ValueError(f"{key} must be a non-empty list")
     return value
 
 
-def _require_int(payload: dict[str, Any], key: str) -> int:
+def _require_int(payload: JsonObject, key: str) -> int:
     value = payload.get(key)
-    if not isinstance(value, int):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise ValueError(f"{key} must be an integer")
     return value
 
 
-def _rgba_string(value: Any, path: str) -> str:
+def _read_semantic_synthetic_color(
+    value: JsonValue,
+    index: int,
+) -> tuple[tuple[str, ...], str]:
+    path = f"semanticSyntheticColors[{index}]"
+    entry = _require_object(value, path)
+    return (
+        _require_string_list(entry.get("terms"), f"{path}.terms"),
+        _rgba_string(entry.get("rgba"), f"{path}.rgba"),
+    )
+
+
+def _require_string_list(value: JsonValue, path: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{path} must be a non-empty string list")
+    terms: list[str] = []
+    for index, term in enumerate(value):
+        if not isinstance(term, str) or not term.strip():
+            raise ValueError(f"{path}[{index}] must be a non-empty string")
+        terms.append(term.strip())
+    return tuple(terms)
+
+
+def _rgba_string(value: JsonValue, path: str) -> str:
     if not isinstance(value, list) or len(value) != 4:
         raise ValueError(f"{path} must be an RGBA list")
     components: list[float] = []

@@ -202,3 +202,31 @@ def test_load_urdf_material_policy_rejects_empty_palette(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="syntheticColorPalette"):
         load_urdf_material_policy(policy_path)
+
+
+def test_load_urdf_material_policy_rejects_non_object_root(tmp_path) -> None:
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a JSON object"):
+        load_urdf_material_policy(policy_path)
+
+
+def test_load_urdf_material_policy_rejects_non_string_semantic_terms(tmp_path) -> None:
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        """
+        {
+          "syntheticColorPalette": [[0.1, 0.2, 0.3, 1.0]],
+          "semanticSyntheticColors": [
+            {"terms": ["base", 42], "rgba": [0.1, 0.2, 0.3, 1.0]}
+          ],
+          "fnv1a32OffsetBasis": 2166136261,
+          "fnv1a32Prime": 16777619
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"semanticSyntheticColors\[0\]\.terms\[1\]"):
+        load_urdf_material_policy(policy_path)
