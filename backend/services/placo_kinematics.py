@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import math
 import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any, Protocol, TypeAlias
 
 import numpy as np
 from fastapi import HTTPException
@@ -19,7 +20,17 @@ from backend.models.kinematics import (
 from backend.services.ik_config import get_solver_tuning
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
 
-PlacoTaskCache: TypeAlias = dict[str, Any]
+PlacoTaskCache: TypeAlias = dict[str, object]
+
+
+class _PlacoJointTargetSetter(Protocol):
+    def set_joints(self, joint_target: object) -> None:
+        ...
+
+
+class _PlacoJointsTask(_PlacoJointTargetSetter, Protocol):
+    def configure(self, task_name: str, mode: str, weight: float) -> None:
+        ...
 
 
 @dataclass
@@ -29,7 +40,7 @@ class PlacoRobotEntry:
     robot: Any
     solver: Any
     joint_names: list[str]
-    joints_task: Any | None
+    joints_task: _PlacoJointsTask | None
     task_cache: PlacoTaskCache = field(default_factory=dict)
 
 
@@ -147,6 +158,27 @@ def _request_weight(request_value: float | None, fallback_value: float) -> float
     return float(request_value) if request_value is not None else float(fallback_value)
 
 
+def _set_placo_posture_target(
+    joints_task: _PlacoJointTargetSetter,
+    posture_target: Mapping[str, float],
+    joint_names: Sequence[str],
+) -> None:
+    try:
+        joints_task.set_joints(posture_target)
+        return
+    except Exception:
+        pass
+
+    joint_seed = [
+        float(posture_target.get(joint_name, 0.0)) for joint_name in joint_names
+    ]
+    try:
+        joints_task.set_joints(joint_seed)
+        return
+    except Exception:
+        joints_task.set_joints(np.array(joint_seed, dtype=np.float64))
+
+
 def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
     entry = _load_placo(ik_request.urdf)
     robot = entry.robot
@@ -211,18 +243,11 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
                 entry.joints_task = entry.solver.add_joints_task()
             entry.joints_task.configure("posture", "soft", posture_weight)
             posture_target = ik_request.posture_joint_values or seed_joint_values
-            try:
-                entry.joints_task.set_joints(posture_target)
-            except Exception:
-                joint_seed = [
-                    posture_target.get(joint_name, 0.0)
-                    for joint_name in entry.joint_names
-                ]
-                try:
-                    entry.joints_task.set_joints(joint_seed)
-                except Exception:
-                    joint_seed_array = np.array(joint_seed, dtype=np.float64)
-                    entry.joints_task.set_joints(joint_seed_array)
+            _set_placo_posture_target(
+                entry.joints_task,
+                posture_target,
+                entry.joint_names,
+            )
 
         entry.solver.enable_joint_limits(limit_weight > 0.0)
     except Exception as exc:
