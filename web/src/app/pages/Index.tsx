@@ -41,6 +41,7 @@ import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
 import { useAssemblyActions } from "@/app/pages/index/useAssemblyActions";
 import { useDraftPreviewActions } from "@/app/pages/index/useDraftPreviewActions";
+import { useDraftSessionInvalidation } from "@/app/pages/index/useDraftSessionInvalidation";
 import { useWorldSceneManager } from "@/app/pages/index/useWorldSceneManager";
 import { useCameraRuntimeOrchestration } from "@/app/pages/index/useCameraRuntimeOrchestration";
 import type { DemoManifestPreferencesLoad } from "@/app/pages/index/useDemoMotionFlow";
@@ -1375,38 +1376,16 @@ const Index = () => {
     [queuePhysicsAction]
   );
 
-  useEffect(() => {
-    if (!bakePreviewSession) {
-      return;
-    }
-    if (vizUrdfContent !== bakePreviewSession.sourceContent) {
-      setBakePreviewSession(null);
-    }
-  }, [bakePreviewSession, vizUrdfContent]);
-
-  useEffect(() => {
-    if (!canonicalSynthesisPreview) {
-      return;
-    }
-    if (
-      vizUrdfContent !== canonicalSynthesisPreview.sourceContent ||
-      (bakePreviewSession?.stagedContent ?? vizUrdfContent) !==
-        canonicalSynthesisPreview.synthesisSourceContent
-    ) {
-      setCanonicalSynthesisPreview(null);
-    }
-  }, [bakePreviewSession?.stagedContent, canonicalSynthesisPreview, vizUrdfContent]);
-  useEffect(() => {
-    if (!inertialSynthesisSession) {
-      return;
-    }
-    if (
-      vizUrdfContent !== inertialSynthesisSession.sourceContent ||
-      inertialDraftBaseContent !== inertialSynthesisSession.baseContent
-    ) {
-      setInertialSynthesisSession(null);
-    }
-  }, [inertialDraftBaseContent, inertialSynthesisSession, vizUrdfContent]);
+  useDraftSessionInvalidation({
+    bakePreviewSession,
+    canonicalSynthesisPreview,
+    inertialDraftBaseContent,
+    inertialSynthesisSession,
+    setBakePreviewSession,
+    setCanonicalSynthesisPreview,
+    setInertialSynthesisSession,
+    vizUrdfContent,
+  });
   useEffect(() => {
     if (hasPhysicsPreflightInputReady) {
       return;
