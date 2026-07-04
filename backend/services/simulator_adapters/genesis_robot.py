@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, TypedDict
 
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
+
+
+class GenesisRobotUrdfMorphKwargs(TypedDict):
+    file: str
+    pos: tuple[float, float, float]
+    fixed: bool
+    merge_fixed_links: bool
+    links_to_keep: tuple[str, ...]
+    prioritize_urdf_material: bool
+    collision: bool
+    visualization: bool
 
 
 def _flatten_finite_floats(value: Any) -> list[float]:
@@ -87,7 +99,7 @@ def configure_robot_position_controller(
 def apply_joint_values(
     robot_entity: Any,
     joint_dof_indices: dict[str, int],
-    joint_values: dict[str, Any],
+    joint_values: Mapping[str, object],
 ) -> int:
     dof_indices: list[int] = []
     positions: list[float] = []
@@ -165,7 +177,7 @@ def robot_urdf_morph_kwargs(
     robot_urdf_path: Path,
     *,
     links_to_keep: Sequence[str] = (),
-) -> dict[str, Any]:
+) -> GenesisRobotUrdfMorphKwargs:
     return {
         "file": str(robot_urdf_path.resolve()),
         "pos": (0.0, 0.0, GENESIS_SCENE_PARAMS.robot_base_z_offset_m),

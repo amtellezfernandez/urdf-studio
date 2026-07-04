@@ -26,6 +26,7 @@ from backend.services.simulator_adapters.genesis_camera import (
     rgb_to_image_array,
 )
 from backend.services.simulator_adapters.genesis_robot import (
+    apply_joint_values,
     attachment_links_from_urdf,
     joint_dof_indices_by_name,
     links_to_keep_for_camera_attachment,
@@ -129,6 +130,46 @@ def test_genesis_joint_dof_indices_ignore_boolean_values() -> None:
     )
 
     assert joint_dof_indices_by_name(robot_entity) == {"valid": 2}
+
+
+def test_genesis_apply_joint_values_uses_known_finite_joints_only() -> None:
+    class _FakeRobotEntity:
+        def __init__(self) -> None:
+            self.set_position_calls: list[tuple[list[float], list[int], bool]] = []
+            self.control_position_calls: list[tuple[list[float], list[int]]] = []
+
+        def set_dofs_position(
+            self,
+            positions: list[float],
+            *,
+            dofs_idx_local: list[int],
+            zero_velocity: bool,
+        ) -> None:
+            self.set_position_calls.append((positions, dofs_idx_local, zero_velocity))
+
+        def control_dofs_position(
+            self,
+            positions: list[float],
+            *,
+            dofs_idx_local: list[int],
+        ) -> None:
+            self.control_position_calls.append((positions, dofs_idx_local))
+
+    robot_entity = _FakeRobotEntity()
+
+    applied_count = apply_joint_values(
+        robot_entity,
+        {"shoulder": 1, "elbow": 2},
+        {
+            "shoulder": 0.25,
+            "elbow": float("nan"),
+            "missing": 0.75,
+        },
+    )
+
+    assert applied_count == 1
+    assert robot_entity.set_position_calls == [([0.25], [1], True)]
+    assert robot_entity.control_position_calls == [([0.25], [1])]
 
 
 def test_genesis_attachment_links_include_terminal_tool_links(tmp_path: Path) -> None:
