@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Type, TypeVar
+from typing import TypeVar
 
 from backend.models.ik_tasks import (
     JointLimitConstraint,
@@ -15,7 +15,9 @@ TaskT = TypeVar("TaskT", PoseTask, PositionTask, OrientationTask, PostureTask)
 ConstraintT = TypeVar("ConstraintT")
 
 
-def _first_task(solve_request: IkSolveRequest, task_type: Type[TaskT]) -> Optional[TaskT]:
+def _first_matching_task(
+    solve_request: IkSolveRequest, task_type: type[TaskT]
+) -> TaskT | None:
     if not solve_request.tasks:
         return None
     for task in solve_request.tasks:
@@ -24,9 +26,9 @@ def _first_task(solve_request: IkSolveRequest, task_type: Type[TaskT]) -> Option
     return None
 
 
-def _first_constraint(
-    solve_request: IkSolveRequest, constraint_type: Type[ConstraintT]
-) -> Optional[ConstraintT]:
+def _first_matching_constraint(
+    solve_request: IkSolveRequest, constraint_type: type[ConstraintT]
+) -> ConstraintT | None:
     if not solve_request.constraints:
         return None
     for constraint in solve_request.constraints:
@@ -39,11 +41,13 @@ def compile_ik_request(solve_request: IkSolveRequest) -> IKRequest:
     """
     Build a compatibility IKRequest from the task IR, falling back to the original fields.
     """
-    pose_task = _first_task(solve_request, PoseTask)
-    position_task = _first_task(solve_request, PositionTask)
-    orientation_task = _first_task(solve_request, OrientationTask)
-    posture_task = _first_task(solve_request, PostureTask)
-    joint_limit_constraint = _first_constraint(solve_request, JointLimitConstraint)
+    pose_task = _first_matching_task(solve_request, PoseTask)
+    position_task = _first_matching_task(solve_request, PositionTask)
+    orientation_task = _first_matching_task(solve_request, OrientationTask)
+    posture_task = _first_matching_task(solve_request, PostureTask)
+    joint_limit_constraint = _first_matching_constraint(
+        solve_request, JointLimitConstraint
+    )
 
     if pose_task:
         return IKRequest(

@@ -24,7 +24,7 @@ def _base_solve_request(**overrides: Any) -> IkSolveRequest:
     return IkSolveRequest(**payload)
 
 
-def test_pose_task_takes_precedence_over_legacy_target_fields():
+def test_pose_task_takes_precedence_over_legacy_target_fields() -> None:
     solve_request = _base_solve_request(
         target_wxyz=[1.0, 0.0, 0.0, 0.0],
         tasks=[
@@ -54,7 +54,7 @@ def test_pose_task_takes_precedence_over_legacy_target_fields():
     assert compiled_request.limit_weight == 0.0
 
 
-def test_position_and_orientation_tasks_compile_into_single_request():
+def test_position_and_orientation_tasks_compile_into_single_request() -> None:
     rotation_matrix = [
         [1.0, 0.0, 0.0],
         [0.0, 1.0, 0.0],
@@ -84,7 +84,7 @@ def test_position_and_orientation_tasks_compile_into_single_request():
     assert compiled_request.limit_weight is None
 
 
-def test_request_without_tasks_preserves_legacy_target_fields():
+def test_request_without_tasks_preserves_legacy_target_fields() -> None:
     solve_request = _base_solve_request(
         target_link="legacy_tool",
         target_position=[0.7, 0.8, 0.9],

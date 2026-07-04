@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union, Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
+
+JointValueMap: TypeAlias = dict[str, float]
+QuaternionWxyz: TypeAlias = list[float]
+RotationMatrix3x3: TypeAlias = list[list[float]]
+Vector3: TypeAlias = list[float]
 
 
 class PoseTask(BaseModel):
     type: Literal["pose"] = "pose"
     link: str = Field(..., description="Target link frame name.")
-    position: List[float] = Field(..., description="Target position [x, y, z].")
-    rotation: Optional[List[List[float]]] = Field(
+    position: Vector3 = Field(..., description="Target position [x, y, z].")
+    rotation: RotationMatrix3x3 | None = Field(
         default=None, description="Target rotation as 3x3 matrix (row-major)."
     )
-    wxyz: Optional[List[float]] = Field(
+    wxyz: QuaternionWxyz | None = Field(
         default=None, description="Target orientation quaternion [w, x, y, z]."
     )
     weight_position: float = Field(default=1.0, description="Position weight.")
@@ -22,17 +27,17 @@ class PoseTask(BaseModel):
 class PositionTask(BaseModel):
     type: Literal["position"] = "position"
     link: str = Field(..., description="Target link frame name.")
-    position: List[float] = Field(..., description="Target position [x, y, z].")
+    position: Vector3 = Field(..., description="Target position [x, y, z].")
     weight: float = Field(default=1.0, description="Task weight.")
 
 
 class OrientationTask(BaseModel):
     type: Literal["orientation"] = "orientation"
     link: str = Field(..., description="Target link frame name.")
-    rotation: Optional[List[List[float]]] = Field(
+    rotation: RotationMatrix3x3 | None = Field(
         default=None, description="Target rotation as 3x3 matrix (row-major)."
     )
-    wxyz: Optional[List[float]] = Field(
+    wxyz: QuaternionWxyz | None = Field(
         default=None, description="Target orientation quaternion [w, x, y, z]."
     )
     weight: float = Field(default=1.0, description="Task weight.")
@@ -40,7 +45,7 @@ class OrientationTask(BaseModel):
 
 class PostureTask(BaseModel):
     type: Literal["posture"] = "posture"
-    joint_values: Dict[str, float] = Field(
+    joint_values: JointValueMap = Field(
         default_factory=dict, description="Preferred joint posture."
     )
     weight: float = Field(default=1.0, description="Task weight.")
@@ -53,10 +58,10 @@ class JointLimitConstraint(BaseModel):
 
 class VelocityLimitConstraint(BaseModel):
     type: Literal["velocity_limits"] = "velocity_limits"
-    max_velocity: Optional[Dict[str, float]] = Field(
+    max_velocity: JointValueMap | None = Field(
         default=None, description="Optional per-joint velocity limits."
     )
 
 
-IkTask = Union[PoseTask, PositionTask, OrientationTask, PostureTask]
-IkConstraint = Union[JointLimitConstraint, VelocityLimitConstraint]
+IkTask: TypeAlias = PoseTask | PositionTask | OrientationTask | PostureTask
+IkConstraint: TypeAlias = JointLimitConstraint | VelocityLimitConstraint
