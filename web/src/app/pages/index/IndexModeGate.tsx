@@ -12,6 +12,7 @@ type IndexModeGateProps = {
   onLoadGitHubSource: SourceEntryActions["onGitHubSelected"];
   onLoadUrlSource: SourceEntryActions["onUrlSelected"];
   onImportWorldLayout: SourceEntryActions["onImportWorldLayout"];
+  onOpenWorldOnlyWorkspace: SourceEntryActions["onOpenWorldOnlyWorkspace"];
   onPlayDemoMotion: SourceEntryActions["onPlayDemoMotion"];
   thumbnailMode: boolean;
   thumbnailViewerProps: Viewer3DProps;
@@ -33,6 +34,7 @@ export const IndexModeGate = ({
   onLoadGitHubSource,
   onLoadUrlSource,
   onImportWorldLayout,
+  onOpenWorldOnlyWorkspace,
   onPlayDemoMotion,
   thumbnailMode,
   thumbnailViewerProps,
@@ -52,6 +54,7 @@ export const IndexModeGate = ({
           onUrlSelected={onLoadUrlSource}
           onPlayDemoMotion={onPlayDemoMotion}
           onImportWorldLayout={onImportWorldLayout}
+          onOpenWorldOnlyWorkspace={onOpenWorldOnlyWorkspace}
         />
       </Suspense>
     );

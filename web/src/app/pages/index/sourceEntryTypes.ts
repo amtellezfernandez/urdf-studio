@@ -15,4 +15,5 @@ export type SourceEntryActions = {
   onUrlSelected: (url: string) => Promise<void>;
   onPlayDemoMotion: () => void | Promise<void>;
   onImportWorldLayout: (worldLayoutUrl: string) => Promise<void>;
+  onOpenWorldOnlyWorkspace: () => void;
 };

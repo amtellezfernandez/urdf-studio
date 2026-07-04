@@ -61,6 +61,7 @@ export const CoreFolderUploadScreen = ({
   onUrlSelected,
   onPlayDemoMotion,
   onImportWorldLayout,
+  onOpenWorldOnlyWorkspace,
 }: CoreFolderUploadScreenProps) => {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const localFilesInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,7 +108,7 @@ export const CoreFolderUploadScreen = ({
 
   const logoUrl = `${import.meta.env.BASE_URL}assets/urdf-studio-logo.png`;
   const entryLoadInteractionsDisabled = isLoadingSetup;
-  const hasSetupSelection = Boolean(stagedRobot);
+  const hasSetupSelection = Boolean(stagedRobot) || Boolean(loadedWorldLayoutName);
   const loadedCameraSummary = useMemo(
     () => (cameras.length === 1 ? "1 camera" : `${cameras.length} cameras`),
     [cameras.length]
@@ -386,7 +387,12 @@ export const CoreFolderUploadScreen = ({
   const handleLoadSetup = useCallback(async (): Promise<void> => {
     const robotSource = stagedRobotRef.current;
     if (!robotSource) {
-      toast.error("Select a robot source before loading setup.");
+      if (!loadedWorldLayoutName) {
+        toast.error("Select a robot source or load a world layout before loading setup.");
+        return;
+      }
+      onOpenWorldOnlyWorkspace();
+      toast.success("Setup loaded.");
       return;
     }
     setIsLoadingSetup(true);
@@ -401,7 +407,7 @@ export const CoreFolderUploadScreen = ({
     } finally {
       setIsLoadingSetup(false);
     }
-  }, [loadWorldLayoutFromUrl, loadedWorldLayoutName, worldLayoutUrl]);
+  }, [loadWorldLayoutFromUrl, loadedWorldLayoutName, onOpenWorldOnlyWorkspace, worldLayoutUrl]);
 
   const handlePlayDemoMotionClick = useCallback((): void => {
     void onPlayDemoMotion();

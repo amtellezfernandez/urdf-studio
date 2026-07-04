@@ -257,6 +257,11 @@ const Index = () => {
     onClearSelection: clearSelection,
     onAutoSelectEndEffector: setEndEffectorLink,
   });
+  const [hasWorldOnlyContent, setHasWorldOnlyContent] = useState(false);
+  const hasEnteredWorkspace = hasLoadedFiles || hasWorldOnlyContent;
+  const handleOpenWorldOnlyWorkspace = useCallback(() => {
+    setHasWorldOnlyContent(true);
+  }, []);
   const {
     handleLoadGitHubSource,
     handleLoadUrlSource,
@@ -2138,12 +2143,13 @@ const Index = () => {
   const gatedModeView = (
     <IndexModeGate
       demoMode={DEMO_MODE}
-      hasLoadedFiles={hasLoadedFiles}
+      hasLoadedFiles={hasEnteredWorkspace}
       isAttachingIluSession={isAttachingIluSession || isAttachingIluAssembly}
       loadFilesFromFolderWithFreshCameras={loadFilesFromFolderWithFreshCameras}
       onLoadGitHubSource={handleLoadGitHubSource}
       onLoadUrlSource={handleLoadUrlSource}
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
+      onOpenWorldOnlyWorkspace={handleOpenWorldOnlyWorkspace}
       onPlayDemoMotion={handlePlayDemoMotion}
       thumbnailMode={thumbnailMode}
       thumbnailViewerProps={thumbnailViewerProps}
@@ -2151,7 +2157,7 @@ const Index = () => {
       FolderUploadScreen={CoreFolderUploadScreen}
     />
   );
-  if (!hasLoadedFiles || thumbnailMode) {
+  if (!hasEnteredWorkspace || thumbnailMode) {
     return gatedModeView;
   }
   return (

@@ -5134,32 +5134,33 @@ export const Viewer3D = ({
               {viewerUi.showWheelRoleMarkers && (
                 <StudioWheelRoleMarkers markers={studioWheelRoleMarkers} />
               )}
-              {viewerUi.showCreatedObjects && (
-                <CreatedObjects
-                  robot={robot}
-                  gpuMode={effectiveGpuMode}
-                  endEffectorLink={endEffectorLink}
-                  enableObjectActionsInReadOnly={enableObjectActionsInReadOnly}
-                  allowRetargetOnClick={hasActiveObjectTargetInteraction}
-                  onIkTargetClick={
-                    readOnlyMode && !enableObjectActionsInReadOnly
-                      ? undefined
-                      : handleObjectIkTargetClick
-                  }
-                  onObjectSelect={(objectId, object) => {
-                    onJointSelect?.(null);
-                    onLinkSelect?.(null);
-                    useCameraStore.getState().selectCamera(null);
-                    if (readOnlyMode || enableObjectActionsInReadOnly) {
-                      onObjectSelect?.(objectId, object);
-                    }
-                  }}
-                  editable={!readOnlyMode}
-                  onEditDragStateChange={handleObjectEditDragStateChange}
-                  orbitDefaults={orbitDefaults}
-                />
-              )}
             </>
+          )}
+
+          {viewerUi.showCreatedObjects && (
+            <CreatedObjects
+              robot={robot}
+              gpuMode={effectiveGpuMode}
+              endEffectorLink={endEffectorLink}
+              enableObjectActionsInReadOnly={enableObjectActionsInReadOnly}
+              allowRetargetOnClick={hasActiveObjectTargetInteraction}
+              onIkTargetClick={
+                readOnlyMode && !enableObjectActionsInReadOnly
+                  ? undefined
+                  : handleObjectIkTargetClick
+              }
+              onObjectSelect={(objectId, object) => {
+                onJointSelect?.(null);
+                onLinkSelect?.(null);
+                useCameraStore.getState().selectCamera(null);
+                if (readOnlyMode || enableObjectActionsInReadOnly) {
+                  onObjectSelect?.(objectId, object);
+                }
+              }}
+              editable={!readOnlyMode}
+              onEditDragStateChange={handleObjectEditDragStateChange}
+              orbitDefaults={orbitDefaults}
+            />
           )}
 
           {/* Custom axes helper - solid lines for positive, dots for negative */}
