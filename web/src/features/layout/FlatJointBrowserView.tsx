@@ -10,6 +10,10 @@ import {
 } from "@/features/layout/structureGroups";
 import { resolveVisibleSectionItemNames } from "@/features/layout/structureSectionVisibility";
 import type { StructureGroupDragHandlers } from "@/features/layout/useStructureGroupEditor";
+import {
+  resolveFlatJointBrowserEmptyState,
+  resolveJointGroupLabel,
+} from "@/features/layout/flatJointBrowserViewHelpers";
 
 type FlatJointBrowserViewProps = StructureGroupDragHandlers & {
   activeMovingJointNames: Set<string>;
@@ -68,7 +72,7 @@ export const FlatJointBrowserView = ({
   if (groupedJointsWithCustom.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-        {searchQuery || typeFilter !== "all" ? "No joints match the filters" : "No joints available"}
+        {resolveFlatJointBrowserEmptyState({ searchQuery, typeFilter })}
       </div>
     );
   }
@@ -149,7 +153,11 @@ export const FlatJointBrowserView = ({
                       colorJointNames={colorJointNames}
                       isVisible={visibleJoints.has(jointName)}
                       onVisibilityToggle={onVisibilityToggle}
-                      groupLabel={structureJointLabels[jointName] ?? section.label ?? null}
+                      groupLabel={resolveJointGroupLabel({
+                        fallbackSectionLabel: section.label,
+                        jointName,
+                        structureJointLabels,
+                      })}
                     />
                   </div>
                 </div>
