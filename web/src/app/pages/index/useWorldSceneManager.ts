@@ -9,13 +9,7 @@ import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defau
 import {
   WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
 } from "@/features/world-share/worldScenePackageParams";
-import {
-  WORLD_ROLLOUT_IMPORT_ACCEPT,
-} from "@/features/world-share/worldRolloutParams";
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
-import type {
-  WorldRolloutImportResponse,
-} from "@/features/world-share/worldRolloutTypes";
 import type {
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
@@ -32,17 +26,11 @@ import {
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
   buildWorldScenePackageManifestFromState,
-  buildWorldRolloutCampaignManifest,
-  createWorldRolloutCheckerProfile,
-  createWorldRolloutJobFromState,
   createWorldSceneLayerExportDocument,
-  downloadWorldRolloutCampaignManifest,
   downloadWorldScenePackageManifest,
-  importWorldRolloutResultPayload,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
   readWorldSceneLayerFromUrl,
-  resolveWorldRolloutImportPayload,
   validateWorldScenePackageLocally,
   validateWorldScenePackageRemotely,
 } from "@/app/pages/index/worldSceneRuntime";
@@ -51,14 +39,13 @@ import {
   downloadTextDocument,
   openFileSelectionDialog,
   applyWorldSceneLayerObjectSourceOverride,
-  readWorldRolloutConfigDraft,
   toImportedCreatedObjects,
   toImportedWorldSceneCameras,
-  waitForWorldRolloutJob,
   type MeshUriResolutionContext,
 } from "@/app/pages/index/worldSceneManagerHelpers";
 import { useWorldPublishController } from "@/app/pages/index/useWorldPublishController";
 import { useWorldRegistryController } from "@/app/pages/index/useWorldRegistryController";
+import { useWorldRolloutController } from "@/app/pages/index/useWorldRolloutController";
 
 type UseWorldSceneManagerParams = {
   addCamera: (camera: Omit<Camera, "id">) => void;
@@ -116,8 +103,6 @@ export const useWorldSceneManager = ({
   const [worldLayoutImportDialogOpen, setWorldLayoutImportDialogOpen] = useState(false);
   const [worldLayoutImportUrlDraft, setWorldLayoutImportUrlDraft] = useState("");
   const [isImportingWorldLayout, setIsImportingWorldLayout] = useState(false);
-  const [worldRolloutReviewOpen, setWorldRolloutReviewOpen] = useState(false);
-  const [worldRolloutReview, setWorldRolloutReview] = useState<WorldRolloutImportResponse | null>(null);
   const [activeWorldSnapshotRef, setActiveWorldSnapshotRef] = useState<{
     package_id: string;
     version: string;
@@ -197,81 +182,6 @@ export const useWorldSceneManager = ({
       toast.error(error instanceof Error ? error.message : "Failed to export world package");
     }
   }, [buildCurrentWorldScenePackageManifest]);
-
-  const buildWorldRolloutInputs = useCallback(async () => {
-    const defaultCheckerProfile = createWorldRolloutCheckerProfile({
-      resolvedRobotName,
-      params: {},
-    });
-    const config = readWorldRolloutConfigDraft(defaultCheckerProfile);
-    if (!config) return null;
-    const worldPackage = await buildCurrentWorldScenePackageManifest();
-    return {
-      worldPackage,
-      checkerProfile: config.checkerProfile,
-      rolloutParams: config.rolloutParams,
-      runnerParams: config.runnerParams,
-    };
-  }, [buildCurrentWorldScenePackageManifest, resolvedRobotName]);
-
-  const handleExportWorldRolloutCampaign = useCallback(async () => {
-    try {
-      const inputs = await buildWorldRolloutInputs();
-      if (!inputs) return;
-      const campaign = buildWorldRolloutCampaignManifest(inputs);
-      downloadWorldRolloutCampaignManifest(campaign, downloadJsonDocument);
-      toast.success("World rollout campaign exported");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export rollout campaign");
-    }
-  }, [buildWorldRolloutInputs]);
-
-  const handleRunLocalWorldRollout = useCallback(async () => {
-    try {
-      const inputs = await buildWorldRolloutInputs();
-      if (!inputs) return;
-      const created = await createWorldRolloutJobFromState(inputs);
-      toast.info(`World rollout job started: ${created.job_id}`);
-      const completed = await waitForWorldRolloutJob(created.job_id);
-      if (completed.status === "failed") {
-        toast.error(completed.error || "World rollout job failed");
-        return;
-      }
-      if (completed.status !== "completed") {
-        toast.warning(`World rollout job still ${completed.status}: ${completed.job_id}`);
-        return;
-      }
-      toast.success(
-        `World rollout completed: ${completed.decision_count} decisions, ${completed.stop_count} stops, ${completed.escalation_count} escalations`
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to run world rollout");
-    }
-  }, [buildWorldRolloutInputs]);
-
-  const handleImportWorldRolloutResults = useCallback(() => {
-    openFileSelectionDialog({
-      accept: WORLD_ROLLOUT_IMPORT_ACCEPT,
-      multiple: true,
-      onFiles: async (files) => {
-        try {
-          const payload = resolveWorldRolloutImportPayload(
-            await Promise.all(
-              files.map(async (file) => ({ name: file.name, text: await file.text() }))
-            )
-          );
-          const imported = await importWorldRolloutResultPayload(payload);
-          setWorldRolloutReview(imported);
-          setWorldRolloutReviewOpen(true);
-          toast.success(
-            `World rollout imported: ${imported.decision_count} decisions, ${imported.stop_count} stops, ${imported.escalation_count} escalations`
-          );
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to import rollout results");
-        }
-      },
-    });
-  }, []);
 
   const handleExportCurrentWorldSceneLayer = useCallback(async () => {
     try {
@@ -426,6 +336,18 @@ export const useWorldSceneManager = ({
     worldRegistryOpen,
   } = useWorldRegistryController({
     applyWorldScenePackage: applyImportedWorldScenePackage,
+  });
+
+  const {
+    handleExportWorldRolloutCampaign,
+    handleImportWorldRolloutResults,
+    handleRunLocalWorldRollout,
+    setWorldRolloutReviewOpen,
+    worldRolloutReview,
+    worldRolloutReviewOpen,
+  } = useWorldRolloutController({
+    buildCurrentWorldScenePackageManifest,
+    resolvedRobotName,
   });
 
   const importWorldLayoutFromUrl = useCallback(
