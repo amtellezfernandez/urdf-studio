@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
 
 from backend.world_bridge.event_codec import worldd_event_type_from_world_bridge
 from backend.world_bridge.conformance_params import (
@@ -30,6 +29,8 @@ from backend.world_bridge.types import (
 )
 from backend.world_bridge.worldd_client import (
     WORLDD_SCHEMA_VERSION,
+    WorlddJsonObject,
+    WorlddJsonResponse,
     WorlddClient,
     WorlddHttpError,
     WorlddUnavailableError,
@@ -57,7 +58,7 @@ def _ms_to_ns(timestamp_ms: int) -> int:
     return timestamp_ms * NANOSECONDS_PER_MILLISECOND
 
 
-def _to_worldd_event_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+def _to_worldd_event_payload(event: WorlddJsonObject) -> WorlddJsonObject:
     event_type = worldd_event_type_from_world_bridge(WorldBridgeEventType(event["type"]))
     if event_type is None:
         raise ValueError(f"Unsupported event type for conformance: {event['type']}")
@@ -71,7 +72,7 @@ def _to_worldd_event_payload(event: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _to_worldd_session_payload(snapshot: WorldBridgeSessionSnapshot) -> Dict[str, Any]:
+def _to_worldd_session_payload(snapshot: WorldBridgeSessionSnapshot) -> WorlddJsonObject:
     snapshot_payload = snapshot.model_dump(mode="python")
     recent_events = [
         _to_worldd_event_payload(event) for event in snapshot_payload["recent_events"]
@@ -97,7 +98,7 @@ def _to_worldd_session_payload(snapshot: WorldBridgeSessionSnapshot) -> Dict[str
     }
 
 
-def _to_worldd_transition_payload(transition: Dict[str, Any]) -> Dict[str, Any]:
+def _to_worldd_transition_payload(transition: WorlddJsonObject) -> WorlddJsonObject:
     return {
         "schema_version": WORLDD_SCHEMA_VERSION,
         "transition_id": transition["transition_id"],
@@ -118,7 +119,7 @@ def _to_worldd_transition_payload(transition: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _to_worldd_ack_payload(ack: WorldBridgeCommandAck) -> Dict[str, Any]:
+def _to_worldd_ack_payload(ack: WorldBridgeCommandAck) -> WorlddJsonObject:
     ack_payload = ack.model_dump(mode="python")
     return {
         "schema_version": WORLDD_SCHEMA_VERSION,
@@ -130,7 +131,7 @@ def _to_worldd_ack_payload(ack: WorldBridgeCommandAck) -> Dict[str, Any]:
     }
 
 
-def _snapshot_contract(snapshot: WorldBridgeSessionSnapshot) -> dict[str, Any]:
+def _snapshot_contract(snapshot: WorldBridgeSessionSnapshot) -> WorlddJsonObject:
     payload = snapshot.model_dump(mode="python")
     return {
         "robot_name": payload["robot_name"],
@@ -147,7 +148,7 @@ def _snapshot_contract(snapshot: WorldBridgeSessionSnapshot) -> dict[str, Any]:
     }
 
 
-def _ack_contract(ack: WorldBridgeCommandAck) -> dict[str, Any]:
+def _ack_contract(ack: WorldBridgeCommandAck) -> WorlddJsonObject:
     payload = ack.model_dump(mode="python")
     return {
         "accepted": payload["accepted"],
@@ -173,8 +174,8 @@ def _worldd_request_json(
     client: WorlddClient,
     method: str,
     path: str,
-    payload: dict[str, Any] | None = None,
-) -> dict[str, Any] | list[dict[str, Any]]:
+    payload: WorlddJsonObject | None = None,
+) -> WorlddJsonResponse:
     return client.request_json(method, path, payload=payload)
 
 

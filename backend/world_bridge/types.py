@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -18,6 +18,8 @@ from backend.world_bridge.params import (
     WORLD_BRIDGE_RUNTIME_MODE,
     WORLD_BRIDGE_SERVICE_NAME,
 )
+
+WorldBridgeEventPayload: TypeAlias = dict[str, object]
 
 
 class WorldBridgeEventType(str, Enum):
@@ -48,7 +50,7 @@ class WorldBridgeEvent(BaseModel):
     session_id: str
     type: WorldBridgeEventType
     timestamp_ms: int
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: WorldBridgeEventPayload = Field(default_factory=dict)
 
 
 class WorldBridgeTransitionRecord(BaseModel):
@@ -57,33 +59,33 @@ class WorldBridgeTransitionRecord(BaseModel):
     type: WorldBridgeTransitionType
     timestamp_ms: int
     source: str
-    sequence_id: Optional[int] = None
-    planner_id: Optional[str] = None
-    task_id: Optional[str] = None
-    adapter_id: Optional[str] = None
+    sequence_id: int | None = None
+    planner_id: str | None = None
+    task_id: str | None = None
+    adapter_id: str | None = None
     rollout_mode: WorldBridgeRolloutMode = WorldBridgeRolloutMode.UNSPECIFIED
     scenario_time_before_ms: int
     scenario_time_after_ms: int
-    joint_state_before: Dict[str, float] = Field(default_factory=dict)
-    action_joint_positions: Dict[str, float] = Field(default_factory=dict)
-    joint_state_after: Dict[str, float] = Field(default_factory=dict)
+    joint_state_before: dict[str, float] = Field(default_factory=dict)
+    action_joint_positions: dict[str, float] = Field(default_factory=dict)
+    joint_state_after: dict[str, float] = Field(default_factory=dict)
 
 
 class WorldBridgeSessionCreateRequest(BaseModel):
     robot_name: str = Field(..., min_length=1, description="Robot identifier in URDF Studio.")
-    urdf_sha256: Optional[str] = Field(default=None, description="Optional URDF digest for reproducibility.")
-    camera_ids: List[str] = Field(
+    urdf_sha256: str | None = Field(default=None, description="Optional URDF digest for reproducibility.")
+    camera_ids: list[str] = Field(
         default_factory=list,
         max_length=MAX_CAMERAS_PER_SESSION,
         description="Optional camera ids to track in the session.",
     )
-    planner_id: Optional[str] = Field(
+    planner_id: str | None = Field(
         default=None, min_length=1, description="Optional planner identifier for readiness telemetry."
     )
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         default=None, min_length=1, description="Optional task identifier for readiness telemetry."
     )
-    adapter_id: Optional[str] = Field(
+    adapter_id: str | None = Field(
         default=None, min_length=1, description="Optional adapter identifier for readiness telemetry."
     )
     scenario_duration_ms: int = Field(
@@ -97,43 +99,43 @@ class WorldBridgeSessionCreateRequest(BaseModel):
 class WorldBridgeSessionSnapshot(BaseModel):
     session_id: str
     robot_name: str
-    urdf_sha256: Optional[str] = None
-    camera_ids: List[str]
+    urdf_sha256: str | None = None
+    camera_ids: list[str]
     created_at_ms: int
     updated_at_ms: int
     scenario_duration_ms: int
     scenario_time_ms: int
-    joint_state: Dict[str, float]
+    joint_state: dict[str, float]
     last_command_sequence: int
-    recent_events: List[WorldBridgeEvent]
-    recent_transitions: List[WorldBridgeTransitionRecord]
-    attestation: Optional[AttestationSummary] = None
+    recent_events: list[WorldBridgeEvent]
+    recent_transitions: list[WorldBridgeTransitionRecord]
+    attestation: AttestationSummary | None = None
 
 
 class WorldBridgeJointCommandRequest(BaseModel):
-    joint_positions: Dict[str, float] = Field(
+    joint_positions: dict[str, float] = Field(
         default_factory=dict,
         max_length=MAX_JOINTS_PER_COMMAND,
         description="Joint target map joint_name -> position.",
     )
     source: str = Field(default="urdf-studio", description="Publisher name for traceability.")
-    planner_id: Optional[str] = Field(
+    planner_id: str | None = Field(
         default=None, min_length=1, description="Optional planner identifier for readiness telemetry."
     )
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         default=None, min_length=1, description="Optional task identifier for readiness telemetry."
     )
-    adapter_id: Optional[str] = Field(
+    adapter_id: str | None = Field(
         default=None, min_length=1, description="Optional adapter identifier for readiness telemetry."
     )
     rollout_mode: WorldBridgeRolloutMode = Field(
         default=WorldBridgeRolloutMode.UNSPECIFIED,
         description="Execution mode hint used for readiness telemetry.",
     )
-    sequence_id: Optional[int] = Field(
+    sequence_id: int | None = Field(
         default=None, ge=1, description="Optional command sequence. Runtime enforces monotonic ordering."
     )
-    command_time_ms: Optional[int] = Field(
+    command_time_ms: int | None = Field(
         default=None,
         ge=0,
         description="Optional scenario time associated with this command.",
@@ -141,7 +143,7 @@ class WorldBridgeJointCommandRequest(BaseModel):
 
     @field_validator("joint_positions")
     @classmethod
-    def _validate_finite_joint_positions(cls, value: Dict[str, float]) -> Dict[str, float]:
+    def _validate_finite_joint_positions(cls, value: dict[str, float]) -> dict[str, float]:
         for joint_name, joint_position in value.items():
             if not math.isfinite(joint_position):
                 raise ValueError(f"joint_positions[{joint_name!r}] must be finite.")
@@ -150,13 +152,13 @@ class WorldBridgeJointCommandRequest(BaseModel):
 
 class WorldBridgeScenarioTimeUpdateRequest(BaseModel):
     source: str = Field(default="urdf-studio", description="Publisher name for traceability.")
-    planner_id: Optional[str] = Field(
+    planner_id: str | None = Field(
         default=None, min_length=1, description="Optional planner identifier for readiness telemetry."
     )
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         default=None, min_length=1, description="Optional task identifier for readiness telemetry."
     )
-    adapter_id: Optional[str] = Field(
+    adapter_id: str | None = Field(
         default=None, min_length=1, description="Optional adapter identifier for readiness telemetry."
     )
     rollout_mode: WorldBridgeRolloutMode = Field(
@@ -198,6 +200,6 @@ class WorldBridgeReadinessMetrics(BaseModel):
 
 class WorldBridgeReadinessResponse(BaseModel):
     decision: WorldBridgeReadinessDecision
-    checks_passed: List[str] = Field(default_factory=list)
-    blockers: List[str] = Field(default_factory=list)
+    checks_passed: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
     metrics: WorldBridgeReadinessMetrics

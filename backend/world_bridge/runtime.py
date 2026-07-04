@@ -4,7 +4,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from threading import Lock
 from time import time
-from typing import Deque, Dict, List, Set
 from uuid import uuid4
 
 from backend.services.attestation import attestation_status_store
@@ -58,7 +57,7 @@ class WorldBridgeSessionState:
     session_id: str
     robot_name: str
     urdf_sha256: str | None
-    camera_ids: List[str]
+    camera_ids: list[str]
     scenario_duration_ms: int
     created_at_ms: int
     updated_at_ms: int
@@ -66,11 +65,11 @@ class WorldBridgeSessionState:
     last_command_sequence: int = 0
     event_counter: int = 0
     transition_counter: int = 0
-    joint_state: Dict[str, float] = field(default_factory=dict)
-    recent_events: Deque[WorldBridgeEvent] = field(
+    joint_state: dict[str, float] = field(default_factory=dict)
+    recent_events: deque[WorldBridgeEvent] = field(
         default_factory=lambda: deque(maxlen=MAX_EVENTS_PER_SESSION)
     )
-    recent_transitions: Deque[WorldBridgeTransitionRecord] = field(
+    recent_transitions: deque[WorldBridgeTransitionRecord] = field(
         default_factory=lambda: deque(maxlen=MAX_TRANSITIONS_PER_SESSION)
     )
 
@@ -83,17 +82,17 @@ class WorldBridgeReadinessState:
     total_transitions: int = 0
     counterfactual_transition_count: int = 0
     live_rollout_transition_count: int = 0
-    robot_names: Set[str] = field(default_factory=set)
-    planner_ids: Set[str] = field(default_factory=set)
-    task_ids: Set[str] = field(default_factory=set)
-    adapter_ids: Set[str] = field(default_factory=set)
-    external_robot_by_session_id: Dict[str, str] = field(default_factory=dict)
+    robot_names: set[str] = field(default_factory=set)
+    planner_ids: set[str] = field(default_factory=set)
+    task_ids: set[str] = field(default_factory=set)
+    adapter_ids: set[str] = field(default_factory=set)
+    external_robot_by_session_id: dict[str, str] = field(default_factory=dict)
 
 
 class WorldBridgeRuntime:
     def __init__(self) -> None:
         self._lock = Lock()
-        self._sessions: Dict[str, WorldBridgeSessionState] = {}
+        self._sessions: dict[str, WorldBridgeSessionState] = {}
         self._readiness = WorldBridgeReadinessState()
 
     def _prune_idle_sessions_locked(self, now_ms: int) -> None:
@@ -121,7 +120,7 @@ class WorldBridgeRuntime:
         self,
         session: WorldBridgeSessionState,
         event_type: WorldBridgeEventType,
-        payload: Dict[str, object],
+        payload: dict[str, object],
         timestamp_ms: int,
     ) -> None:
         session.event_counter += 1
@@ -147,9 +146,9 @@ class WorldBridgeRuntime:
         rollout_mode: WorldBridgeRolloutMode,
         scenario_time_before_ms: int,
         scenario_time_after_ms: int,
-        joint_state_before: Dict[str, float],
-        action_joint_positions: Dict[str, float],
-        joint_state_after: Dict[str, float],
+        joint_state_before: dict[str, float],
+        action_joint_positions: dict[str, float],
+        joint_state_after: dict[str, float],
         timestamp_ms: int,
     ) -> None:
         session.transition_counter += 1
@@ -386,7 +385,7 @@ class WorldBridgeRuntime:
         self,
         *,
         include_trace: bool = False,
-    ) -> List[WorldBridgeSessionSnapshot]:
+    ) -> list[WorldBridgeSessionSnapshot]:
         with self._lock:
             self._prune_idle_sessions_locked(_now_ms())
             return [
