@@ -14,6 +14,7 @@ web/node_modules/
 .codex/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 *.tsbuildinfo
 **/__pycache__/
 *.pyc
@@ -33,6 +34,17 @@ web/node_modules/
 dist/
 **/dist/
 reports/
+coverage/
+**/coverage/
+htmlcov/
+**/htmlcov/
+playwright-report/
+**/playwright-report/
+test-results/
+**/test-results/
+.coverage
+.coverage.*
+.nyc_output/
 bun.lockb
 **/b2_description.urdf
 
