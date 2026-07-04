@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TypeAlias
 from urllib import error, request
 
 from backend.world_bridge.event_codec import world_bridge_event_type_from_worldd
@@ -27,11 +28,14 @@ from backend.world_bridge.types import (
 
 WORLDD_SCHEMA_VERSION = "1"
 NANOSECONDS_PER_MILLISECOND = 1_000_000
+WorlddPayload: TypeAlias = Mapping[str, object]
+WorlddJsonObject: TypeAlias = dict[str, object]
+WorlddJsonResponse: TypeAlias = WorlddJsonObject | list[WorlddJsonObject]
 
 
 def _safe_int(
-    value: Any,
-    fallback: int = 0,
+    value: object,
+    default_value: int = 0,
     *,
     strict: bool = False,
     field_name: str = "value",
@@ -39,18 +43,18 @@ def _safe_int(
     if isinstance(value, bool):
         if strict:
             raise ValueError(f"Invalid integer for {field_name}: {value!r}")
-        return fallback
+        return default_value
     try:
         return int(value)
     except (TypeError, ValueError):
         if strict:
             raise ValueError(f"Invalid integer for {field_name}: {value!r}")
-        return fallback
+        return default_value
 
 
 def _safe_bool(
-    value: Any,
-    fallback: bool = False,
+    value: object,
+    default_value: bool = False,
     *,
     strict: bool = False,
     field_name: str = "value",
@@ -68,12 +72,12 @@ def _safe_bool(
             return False
     if strict:
         raise ValueError(f"Invalid boolean for {field_name}: {value!r}")
-    return fallback
+    return default_value
 
 
 def _safe_float(
-    value: Any,
-    fallback: float = 0.0,
+    value: object,
+    default_value: float = 0.0,
     *,
     strict: bool = False,
     field_name: str = "value",
@@ -81,13 +85,13 @@ def _safe_float(
     if isinstance(value, bool):
         if strict:
             raise ValueError(f"Invalid float for {field_name}: {value!r}")
-        return fallback
+        return default_value
     try:
         parsed = float(value)
     except (TypeError, ValueError):
         if strict:
             raise ValueError(f"Invalid float for {field_name}: {value!r}")
-        return fallback
+        return default_value
     if strict and not math.isfinite(parsed):
         raise ValueError(f"Non-finite float for {field_name}: {value!r}")
     return parsed
@@ -112,7 +116,7 @@ def _ns_to_ms(
 
 
 def _as_str_list(
-    value: Any,
+    value: object,
     *,
     strict: bool = False,
     field_name: str = "value",
@@ -128,7 +132,7 @@ def _as_str_list(
 
 
 def _as_str_float_map(
-    value: Any,
+    value: object,
     *,
     strict: bool = False,
     field_name: str = "value",
@@ -151,8 +155,8 @@ def _as_str_float_map(
 
 
 def _safe_str(
-    value: Any,
-    fallback: str = "",
+    value: object,
+    default_value: str = "",
     *,
     strict: bool = False,
     field_name: str = "value",
@@ -170,12 +174,12 @@ def _safe_str(
     if not allow_empty and parsed.strip() == "":
         if strict:
             raise ValueError(f"Missing required string for {field_name}")
-        return fallback
+        return default_value
     return parsed
 
 
 def parse_worldd_status_payload(
-    payload: dict[str, Any],
+    payload: WorlddPayload,
     *,
     strict: bool = False,
 ) -> WorldBridgeStatusResponse:
@@ -220,7 +224,7 @@ def parse_worldd_status_payload(
 
 
 def _parse_worldd_event(
-    payload: dict[str, Any],
+    payload: WorlddPayload,
     *,
     strict: bool = False,
 ) -> WorldBridgeEvent | None:
@@ -236,7 +240,7 @@ def _parse_worldd_event(
         return None
     raw_payload = payload.get("payload")
     if raw_payload is None:
-        event_payload: dict[str, Any] = {}
+        event_payload: WorlddJsonObject = {}
     elif isinstance(raw_payload, dict):
         event_payload = dict(raw_payload)
     else:
@@ -265,7 +269,7 @@ def _parse_worldd_event(
 
 
 def _parse_transition_type(
-    value: Any,
+    value: object,
     *,
     strict: bool,
 ) -> WorldBridgeTransitionType | None:
@@ -283,13 +287,13 @@ def _parse_transition_type(
 
 
 def _parse_rollout_mode(
-    value: Any,
+    value: object,
     *,
     strict: bool,
 ) -> WorldBridgeRolloutMode:
     raw_mode = _safe_str(
         value,
-        fallback=WorldBridgeRolloutMode.UNSPECIFIED.value,
+        default_value=WorldBridgeRolloutMode.UNSPECIFIED.value,
         strict=False,
         field_name="rollout_mode",
     ).strip()
@@ -304,7 +308,7 @@ def _parse_rollout_mode(
 
 
 def _parse_worldd_transition(
-    payload: dict[str, Any],
+    payload: WorlddPayload,
     *,
     strict: bool = False,
 ) -> WorldBridgeTransitionRecord | None:
@@ -330,7 +334,7 @@ def _parse_worldd_transition(
         ),
         source=_safe_str(
             payload.get("source"),
-            fallback="worldd",
+            default_value="worldd",
             strict=False,
             field_name="source",
         ),
@@ -374,7 +378,7 @@ def _parse_worldd_transition(
 
 
 def parse_worldd_session_payload(
-    payload: dict[str, Any],
+    payload: WorlddPayload,
     *,
     strict: bool = False,
 ) -> WorldBridgeSessionSnapshot:
@@ -478,7 +482,7 @@ def parse_worldd_session_payload(
 
 
 def parse_worldd_ack_payload(
-    payload: dict[str, Any],
+    payload: WorlddPayload,
     *,
     strict: bool = False,
 ) -> WorldBridgeCommandAck:
@@ -533,8 +537,8 @@ class WorlddClient:
         self,
         method: str,
         path: str,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
+        payload: WorlddJsonObject | None = None,
+    ) -> WorlddJsonResponse:
         encoded_body = None
         headers = {"Accept": "application/json"}
         if payload is not None:
@@ -567,8 +571,8 @@ class WorlddClient:
         self,
         method: str,
         path: str,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
+        payload: WorlddJsonObject | None = None,
+    ) -> WorlddJsonResponse:
         return self._request_json(method, path, payload=payload)
 
     def get_status(self) -> WorldBridgeStatusResponse:
