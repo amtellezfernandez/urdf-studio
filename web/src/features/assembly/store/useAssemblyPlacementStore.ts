@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { buildAssemblyContactPairKey } from "@/features/assembly/store/assemblyContactPair";
 
 export type AssemblyPose = {
   x: number;
@@ -21,9 +22,7 @@ type AssemblyPlacementState = {
   clear: () => void;
 };
 
-export const buildContactPairKey = (lhs: string, rhs: string): string => {
-  return lhs < rhs ? `${lhs}::${rhs}` : `${rhs}::${lhs}`;
-};
+export const buildContactPairKey = buildAssemblyContactPairKey;
 
 export const useAssemblyPlacementStore = create<AssemblyPlacementState>((set) => ({
   poses: {},

@@ -9,6 +9,7 @@ import {
   resolveAssemblySelectedGuide,
   type AssemblyPlacementPoseMap,
   type AssemblyPlacementRadiusMap,
+  type AssemblyPlacementTuple3,
 } from "@/features/viewer/assemblyPlacementHelpersState";
 
 type AssemblyPlacementHelpersProps = {
@@ -17,6 +18,54 @@ type AssemblyPlacementHelpersProps = {
   selectedRobotId: string | null;
   contactPairs: string[];
 };
+
+type HelperLineProps = {
+  color: string;
+  lineWidth: number;
+  opacity: number;
+  points: [AssemblyPlacementTuple3, AssemblyPlacementTuple3];
+};
+
+type HelperMarkerProps = {
+  color: string;
+  opacity: number;
+  position: AssemblyPlacementTuple3;
+  radius: number;
+};
+
+const HelperLine = ({ color, lineWidth, opacity, points }: HelperLineProps) => (
+  <Line
+    points={points}
+    color={color}
+    transparent
+    opacity={opacity}
+    lineWidth={lineWidth}
+    depthTest={false}
+    depthWrite={false}
+  />
+);
+
+const HelperMarker = ({ color, opacity, position, radius }: HelperMarkerProps) => (
+  <mesh
+    position={position}
+    renderOrder={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerRenderOrder}
+  >
+    <sphereGeometry
+      args={[
+        radius,
+        ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerSegments,
+        ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerSegments,
+      ]}
+    />
+    <meshBasicMaterial
+      color={color}
+      transparent
+      opacity={opacity}
+      depthTest={false}
+      depthWrite={false}
+    />
+  </mesh>
+);
 
 export const AssemblyPlacementHelpers = ({
   poses,
@@ -124,141 +173,84 @@ export const AssemblyPlacementHelpers = ({
         );
       })}
       {contactSegments.map((segment) => (
-        <Line
+        <HelperLine
           key={segment.id}
           points={[segment.from, segment.to]}
           color={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor}
-          transparent
           opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactLineOpacity}
           lineWidth={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactLineWidth}
-          depthTest={false}
-          depthWrite={false}
         />
       ))}
       {selectedGuide ? (
         <>
-          <Line
+          <HelperLine
             points={[selectedGuide.from, selectedGuide.to]}
             color={
               selectedGuide.isNearContact
                 ? ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor
                 : ASSEMBLY_PLACEMENT_HELPERS_PARAMS.warningColor
             }
-            transparent
             opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedGuideLineOpacity}
             lineWidth={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedGuideLineWidth}
-            depthTest={false}
-            depthWrite={false}
           />
-          <Line
+          <HelperLine
             points={[selectedGuide.from, selectedGuide.axisCorner]}
             color={
               selectedGuide.axisXAligned
                 ? ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor
                 : ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisGuideIdleColor
             }
-            transparent
             opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedGuideLineOpacity}
             lineWidth={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisGuideLineWidth}
-            depthTest={false}
-            depthWrite={false}
           />
-          <Line
+          <HelperLine
             points={[selectedGuide.axisCorner, selectedGuide.to]}
             color={
               selectedGuide.axisZAligned
                 ? ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor
                 : ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisGuideIdleColor
             }
-            transparent
             opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedGuideLineOpacity}
             lineWidth={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisGuideLineWidth}
-            depthTest={false}
-            depthWrite={false}
           />
-          <Line
+          <HelperLine
             points={[selectedGuide.from, selectedGuide.snap]}
             color={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedColor}
-            transparent
             opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapGuideLineOpacity}
             lineWidth={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapGuideLineWidth}
-            depthTest={false}
-            depthWrite={false}
           />
-          <Line
+          <HelperLine
             points={[selectedGuide.snap, selectedGuide.to]}
             color={
               selectedGuide.isNearContact
                 ? ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor
                 : ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedColor
             }
-            transparent
             opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapToTargetLineOpacity}
             lineWidth={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapToTargetLineWidth}
-            depthTest={false}
-            depthWrite={false}
           />
-          <mesh
+          <HelperMarker
             position={selectedGuide.axisCorner}
-            renderOrder={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerRenderOrder}
-          >
-            <sphereGeometry
-              args={[
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisCornerMarkerRadiusM,
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerSegments,
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerSegments,
-              ]}
-            />
-            <meshBasicMaterial
-              color={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisGuideIdleColor}
-              transparent
-              opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisCornerMarkerOpacity}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
-          <mesh
+            radius={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisCornerMarkerRadiusM}
+            color={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisGuideIdleColor}
+            opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.axisCornerMarkerOpacity}
+          />
+          <HelperMarker
             position={selectedGuide.to}
-            renderOrder={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerRenderOrder}
-          >
-            <sphereGeometry
-              args={[
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.nearestMarkerRadiusM,
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerSegments,
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerSegments,
-              ]}
-            />
-            <meshBasicMaterial
-              color={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor}
-              transparent
-              opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.nearestMarkerOpacity}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
-          <mesh
+            radius={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.nearestMarkerRadiusM}
+            color={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor}
+            opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.nearestMarkerOpacity}
+          />
+          <HelperMarker
             position={selectedGuide.snap}
-            renderOrder={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.helperMarkerRenderOrder}
-          >
-            <sphereGeometry
-              args={[
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapMarkerRadiusM,
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapMarkerSegments,
-                ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapMarkerSegments,
-              ]}
-            />
-            <meshBasicMaterial
-              color={
-                selectedGuide.isNearContact
-                  ? ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor
-                  : ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedColor
-              }
-              transparent
-              opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapMarkerOpacity}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
+            radius={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapMarkerRadiusM}
+            color={
+              selectedGuide.isNearContact
+                ? ASSEMBLY_PLACEMENT_HELPERS_PARAMS.contactColor
+                : ASSEMBLY_PLACEMENT_HELPERS_PARAMS.selectedColor
+            }
+            opacity={ASSEMBLY_PLACEMENT_HELPERS_PARAMS.snapMarkerOpacity}
+          />
         </>
       ) : null}
     </group>

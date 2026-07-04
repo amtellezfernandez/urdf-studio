@@ -1,4 +1,5 @@
 import type { AssemblyPose } from "@/features/assembly/store/useAssemblyPlacementStore";
+import { parseAssemblyContactPairKey } from "@/features/assembly/store/assemblyContactPair";
 import { ASSEMBLY_PLACEMENT_HELPERS_PARAMS } from "@/features/viewer/assemblyPlacementHelpersParams";
 
 export type AssemblyPlacementPoseMap = Record<string, AssemblyPose>;
@@ -29,11 +30,7 @@ type AssemblySelectedGuideCandidate = {
   snapZ: number;
 };
 
-export const parseAssemblyContactPair = (pairKey: string): [string, string] | null => {
-  const parts = pairKey.split("::");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-  return [parts[0], parts[1]];
-};
+export const parseAssemblyContactPair = parseAssemblyContactPairKey;
 
 export const resolveAssemblyHelperRadius = (radius: number | undefined): number =>
   Math.max(

@@ -1,3 +1,4 @@
+import { parseAssemblyContactPairKey } from "@/features/assembly/store/assemblyContactPair";
 import { buildAssemblyUrdf, createAssemblySpec } from "@/shared/lib/urdfCore";
 
 export type AssemblyInspectorModel = {
@@ -145,12 +146,6 @@ const summarizeUrdf = (name: string, urdfContent: string): AssemblyStructureSumm
   };
 };
 
-const parseContactPair = (pairKey: string): [string, string] | null => {
-  const parts = pairKey.split("::");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-  return [parts[0], parts[1]];
-};
-
 const sanitizeToken = (value: string, fallback: string): string => {
   const normalized = value
     .trim()
@@ -196,7 +191,7 @@ const buildAttachmentSuggestions = (
   const robotsById = new Map(robots.map((robot) => [robot.id, robot] as const));
   const pairKeys = new Set<string>();
   (options.contactPairs ?? []).forEach((pairKey) => {
-    const parsed = parseContactPair(pairKey);
+    const parsed = parseAssemblyContactPairKey(pairKey);
     if (!parsed) return;
     const [lhs, rhs] = parsed;
     if (!robotsById.has(lhs) || !robotsById.has(rhs) || lhs === rhs) return;
@@ -231,7 +226,7 @@ const buildAttachmentSuggestions = (
   const suggestions: AssemblyAttachmentSuggestion[] = [];
 
   Array.from(pairKeys).forEach((pairKey, index) => {
-    const parsed = parseContactPair(pairKey);
+    const parsed = parseAssemblyContactPairKey(pairKey);
     if (!parsed) return;
     const lhs = robotsById.get(parsed[0]);
     const rhs = robotsById.get(parsed[1]);
