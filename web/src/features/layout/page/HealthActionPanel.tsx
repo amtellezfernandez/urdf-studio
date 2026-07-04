@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -19,10 +19,6 @@ import {
   SIMULATION_PREP_PANEL_DEFAULT_TOP_PX,
   SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX,
   SIMULATION_PREP_PANEL_WIDTH_PX,
-  clampSimulationPrepPanelPosition,
-  getSimulationPrepPanelInitialPosition,
-  getSimulationPrepPanelWidthPx,
-  type SimulationPrepPanelPosition,
 } from "@/features/layout/page/simulationPrepPanelParams";
 import {
   buildRobotMirrorSymmetryVisualizationScopeKey,
@@ -88,6 +84,7 @@ import {
   MIRROR_SELECTION_RADIAL_BADGE_CLASS,
   shouldIgnoreVisualizationCardClick,
 } from "@/features/layout/page/healthActionPanelSymmetry";
+import { useSimulationPrepPanelDrag } from "@/features/layout/page/useSimulationPrepPanelDrag";
 
 type RecommendedAction = {
   kind: "frame";
@@ -252,137 +249,20 @@ export const HealthActionPanel = ({
   const [robotMirrorExpanded, setRobotMirrorExpanded] = useState(false);
   const [radialSymmetryExpanded, setRadialSymmetryExpanded] = useState(false);
   const [areUnifiedRepeatedMeshesVisible, setAreUnifiedRepeatedMeshesVisible] = useState(false);
-  const [panelPosition, setPanelPosition] = useState<SimulationPrepPanelPosition>(() =>
-    getSimulationPrepPanelInitialPosition(globalThis.window?.innerWidth ?? SIMULATION_PREP_PANEL_WIDTH_PX)
-  );
-  const [isDragging, setIsDragging] = useState(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{
-    originLeft: number;
-    originTop: number;
-    startX: number;
-    startY: number;
-  } | null>(null);
+  const {
+    handlePanelDragStart,
+    isDragging,
+    panelPosition,
+    panelRef,
+  } = useSimulationPrepPanelDrag(open);
 
   useEffect(() => {
     if (!open) {
-      setIsDragging(false);
-      dragStateRef.current = null;
       return;
     }
     setArmedPhysicsActionKey(null);
     setSelectedPhysicsMaterials({});
-    setPanelPosition(
-      getSimulationPrepPanelInitialPosition(
-        globalThis.window?.innerWidth ?? SIMULATION_PREP_PANEL_WIDTH_PX
-      )
-    );
   }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const syncPanelPositionToViewport = () => {
-      const panelRect = panelRef.current?.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const panelWidth =
-        panelRect && panelRect.width > 0
-          ? panelRect.width
-          : getSimulationPrepPanelWidthPx(viewportWidth);
-      const panelHeight = panelRect?.height ?? 0;
-
-      setPanelPosition((currentPosition) =>
-        clampSimulationPrepPanelPosition({
-          nextLeft: currentPosition.left,
-          nextTop: currentPosition.top,
-          panelWidth,
-          panelHeight,
-          viewportWidth,
-          viewportHeight,
-        })
-      );
-    };
-
-    syncPanelPositionToViewport();
-    window.addEventListener("resize", syncPanelPositionToViewport);
-    return () => window.removeEventListener("resize", syncPanelPositionToViewport);
-  }, [open]);
-
-  useEffect(() => {
-    if (!isDragging) {
-      return;
-    }
-
-    const previousUserSelect = document.body.style.userSelect;
-    const previousCursor = document.body.style.cursor;
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "grabbing";
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const dragState = dragStateRef.current;
-      if (!dragState) {
-        return;
-      }
-
-      const panelRect = panelRef.current?.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const panelWidth =
-        panelRect && panelRect.width > 0
-          ? panelRect.width
-          : getSimulationPrepPanelWidthPx(viewportWidth);
-      const panelHeight = panelRect?.height ?? 0;
-
-      setPanelPosition(
-        clampSimulationPrepPanelPosition({
-          nextLeft: dragState.originLeft + event.clientX - dragState.startX,
-          nextTop: dragState.originTop + event.clientY - dragState.startY,
-          panelWidth,
-          panelHeight,
-          viewportWidth,
-          viewportHeight,
-        })
-      );
-    };
-
-    const stopDragging = () => {
-      dragStateRef.current = null;
-      setIsDragging(false);
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", stopDragging);
-
-    return () => {
-      document.body.style.userSelect = previousUserSelect;
-      document.body.style.cursor = previousCursor;
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", stopDragging);
-    };
-  }, [isDragging]);
-
-  const handlePanelDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) {
-      return;
-    }
-
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("button, a, input, textarea, select")) {
-      return;
-    }
-
-    event.preventDefault();
-    dragStateRef.current = {
-      originLeft: panelPosition.left,
-      originTop: panelPosition.top,
-      startX: event.clientX,
-      startY: event.clientY,
-    };
-    setIsDragging(true);
-  };
 
   const compatibilityRobotMirrorSelectionState = useMemo(
     () =>
