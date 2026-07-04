@@ -89,7 +89,7 @@ def _format_expected_serial_identity(component: ZraGatewayRecord) -> str | None:
     requested_path = (
         _string_field(evidence, "requested_path") or _string_field(component, "path")
     ).strip()
-    if not any([usb_vendor, usb_product, usb_serial, requested_path]):
+    if not any((usb_vendor, usb_product, usb_serial, requested_path)):
         return None
     segments: list[str] = []
     if requested_path:

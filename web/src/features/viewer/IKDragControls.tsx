@@ -301,9 +301,9 @@ export const IKDragControls = ({
     }
     lastNativeAppliedSequenceRef.current = sequenceApplied;
 
-    const q = nativeIkRuntime.lastTelemetry.q_rad;
-    if (q && Object.keys(q).length > 0) {
-      const processed = processIkSolutionForApply(q);
+    const jointAnglesRad = telemetry.q_rad;
+    if (jointAnglesRad && Object.keys(jointAnglesRad).length > 0) {
+      const processed = processIkSolutionForApply(jointAnglesRad);
       onIkSolved(processed, endEffectorLink);
     }
   }, [
