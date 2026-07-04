@@ -3,12 +3,14 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence, TypeGuard
+from typing import TypeGuard
 
 from scipy.spatial.transform import Rotation
 
-from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.models.json_payload import JsonObject
+from backend.models.world_scene_package import WorldScenePackageManifest, WorldScenePayload
 from backend.services.simulator_adapters.camera_conventions import (
     world_camera_to_opengl_camera_rotation,
 )
@@ -87,7 +89,7 @@ def build_blender_change_set_source(
     world_object_ids: Sequence[str],
     camera_ids: Sequence[str],
     frame_map: str | None = None,
-) -> dict[str, Any]:
+) -> JsonObject:
     source = _blender_change_set_source_metadata(world_package)
     if frame_map is not None:
         source["frame_map"] = frame_map
@@ -98,7 +100,7 @@ def build_blender_change_set_source(
 
 def apply_blender_layout_change_set(
     world_package: WorldScenePackageManifest,
-    change_set: Mapping[str, Any],
+    change_set: Mapping[str, object],
 ) -> WorldScenePackageManifest:
     return apply_blender_layout_change_set_with_summary(
         world_package,
@@ -108,7 +110,7 @@ def apply_blender_layout_change_set(
 
 def apply_blender_layout_change_set_with_summary(
     world_package: WorldScenePackageManifest,
-    change_set: Mapping[str, Any],
+    change_set: Mapping[str, object],
 ) -> BlenderLayoutChangeSetApplyResult:
     (
         source,
@@ -128,7 +130,7 @@ def apply_blender_layout_change_set_with_summary(
             f"{', '.join(missing_object_ids)}."
         )
     applied_change_count = 0
-    next_objects: list[dict[str, Any]] = []
+    next_objects: list[WorldScenePayload] = []
     for item in updated.world_snapshot.objects:
         next_item = dict(item)
         object_id = str(next_item.get("id", "")).strip()
@@ -171,7 +173,7 @@ def apply_blender_layout_change_set_with_summary(
 
 def _blender_change_set_source_metadata(
     world_package: WorldScenePackageManifest,
-) -> dict[str, Any]:
+) -> JsonObject:
     return {
         "schema": BLENDER_CHANGE_SET_SOURCE_SCHEMA,
         "package_id": world_package.package_id,
@@ -182,7 +184,7 @@ def _blender_change_set_source_metadata(
 
 
 def _validate_blender_change_set(
-    change_set: Mapping[str, Any],
+    change_set: Mapping[str, object],
     world_package: WorldScenePackageManifest,
 ) -> tuple[
     BlenderChangeSetSource,
@@ -282,7 +284,7 @@ def _validate_blender_change_set(
 
 
 def _validate_change_set_source(
-    value: Any,
+    value: object,
     world_package: WorldScenePackageManifest,
 ) -> BlenderChangeSetSource:
     if not isinstance(value, Mapping):
@@ -418,13 +420,13 @@ def _validate_change_set_camera_coverage(
         )
 
 
-def _change_entity_type(value: Any, path: str) -> str:
+def _change_entity_type(value: object, path: str) -> str:
     if not isinstance(value, Mapping):
         raise ValueError(f"Blender change-set {path} must be an object.")
     return _required_string(value.get("entity_type"), f"{path}.entity_type")
 
 
-def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectChange:
+def _validate_world_object_change(value: object, path: str) -> BlenderWorldObjectChange:
     if not isinstance(value, Mapping):
         raise ValueError(f"Blender change-set {path} must be an object.")
     _reject_unknown_fields(
@@ -456,7 +458,7 @@ def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectCh
     )
 
 
-def _validate_camera_change(value: Any, path: str) -> BlenderCameraChange:
+def _validate_camera_change(value: object, path: str) -> BlenderCameraChange:
     if not isinstance(value, Mapping):
         raise ValueError(f"Blender change-set {path} must be an object.")
     _reject_unknown_fields(
@@ -489,7 +491,7 @@ def _validate_camera_change(value: Any, path: str) -> BlenderCameraChange:
     )
 
 
-def _validate_new_world_object_import(value: Any, path: str) -> BlenderNewWorldObject:
+def _validate_new_world_object_import(value: object, path: str) -> BlenderNewWorldObject:
     if not isinstance(value, Mapping):
         raise ValueError(f"Blender change-set {path} must be an object.")
     return BlenderNewWorldObject(
@@ -502,7 +504,7 @@ def _validate_new_world_object_import(value: Any, path: str) -> BlenderNewWorldO
     )
 
 
-def _validate_review_only_entry(value: Any, path: str) -> str:
+def _validate_review_only_entry(value: object, path: str) -> str:
     if not isinstance(value, Mapping):
         raise ValueError(f"Blender change-set {path} must be an object.")
     _reject_unknown_fields(
@@ -582,11 +584,11 @@ def _world_package_camera_ids(world_package: WorldScenePackageManifest) -> set[s
 
 
 def _updated_camera_fields(
-    cameras: Sequence[dict[str, Any]],
+    cameras: Sequence[WorldScenePayload],
     camera_updates: Mapping[str, BlenderCameraChange],
     deleted_camera_ids: frozenset[str],
     frame_map: ConcreteWorldLayoutFrameMap,
-) -> list[dict[str, Any]]:
+) -> list[WorldScenePayload]:
     if not camera_updates and not deleted_camera_ids:
         return [dict(camera) for camera in cameras]
     package_camera_ids = {
@@ -600,7 +602,7 @@ def _updated_camera_fields(
             "Blender change-set references unknown camera id(s): "
             f"{', '.join(missing_camera_ids)}."
         )
-    next_cameras: list[dict[str, Any]] = []
+    next_cameras: list[WorldScenePayload] = []
     for camera in cameras:
         next_camera = dict(camera)
         camera_id = str(next_camera.get("id", "")).strip()
@@ -659,7 +661,7 @@ def _validate_source_camera_ids(
         )
 
 
-def _required_string_list(value: Any, label: str) -> tuple[str, ...]:
+def _required_string_list(value: object, label: str) -> tuple[str, ...]:
     values = _required_list(value, f"Blender change-set {label}")
     return tuple(
         _required_string(item, f"{label}[{index}]")
@@ -670,9 +672,9 @@ def _required_string_list(value: Any, label: str) -> tuple[str, ...]:
 def _world_object_change_fields(
     change: BlenderWorldObjectChange,
     frame_map: ConcreteWorldLayoutFrameMap,
-) -> dict[str, Any]:
+) -> JsonObject:
     quat_wxyz = inverse_transform_quat_wxyz(change.quat_wxyz, frame_map)
-    fields: dict[str, Any] = {
+    fields: JsonObject = {
         "position_xyz": list(inverse_transform_position(change.position_xyz, frame_map)),
         "rotation_rpy_rad": list(_quat_wxyz_to_rpy(quat_wxyz)),
         "size_xyz": list(inverse_transform_size(change.size_xyz, frame_map)),
@@ -684,15 +686,15 @@ def _world_object_change_fields(
 
 def _world_camera_change_fields(
     change: BlenderCameraChange,
-    camera: Mapping[str, Any],
+    camera: Mapping[str, object],
     frame_map: ConcreteWorldLayoutFrameMap,
-) -> dict[str, Any]:
+) -> JsonObject:
     sim_rotation = _render_local_quat_to_studio_rotation(change.quat_wxyz)
     sim_quat_wxyz = _rotation_to_quat_wxyz(sim_rotation)
     world_quat_wxyz = inverse_transform_quat_wxyz(sim_quat_wxyz, frame_map)
     world_rotation = _quat_wxyz_to_rotation(world_quat_wxyz)
     rpy = world_rotation.as_euler("xyz")
-    fields: dict[str, Any] = {
+    fields: JsonObject = {
         "pose": {
             "xyz": list(inverse_transform_position(change.position_xyz, frame_map)),
             "rpy": [float(rpy[0]), float(rpy[1]), float(rpy[2])],
@@ -706,7 +708,7 @@ def _world_camera_change_fields(
     return fields
 
 
-def _camera_intrinsics_with_fov(value: Any, fov_deg: float) -> dict[str, Any]:
+def _camera_intrinsics_with_fov(value: object, fov_deg: float) -> JsonObject:
     intrinsics = dict(value) if isinstance(value, Mapping) else {}
     intrinsics["fov_deg"] = fov_deg
     width = intrinsics.get("width")
@@ -727,7 +729,9 @@ def _camera_intrinsics_with_fov(value: Any, fov_deg: float) -> dict[str, Any]:
 def _render_local_quat_to_studio_rotation(
     quat_wxyz: tuple[float, float, float, float],
 ) -> Rotation:
-    render_rotation = Rotation.from_quat((quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]))
+    render_rotation = Rotation.from_quat(
+        (quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0])
+    )
     return render_rotation * world_camera_to_opengl_camera_rotation().inv()
 
 
@@ -735,13 +739,13 @@ def _new_world_object_fields(
     new_world_objects: Sequence[BlenderNewWorldObject],
     existing_ids: set[str],
     frame_map: ConcreteWorldLayoutFrameMap,
-) -> list[dict[str, Any]]:
+) -> list[WorldScenePayload]:
     used_ids = set(existing_ids)
-    fields: list[dict[str, Any]] = []
+    fields: list[WorldScenePayload] = []
     for item in new_world_objects:
         object_id = _next_blender_object_id(item.sim_name, used_ids)
         used_ids.add(object_id)
-        world_object = {
+        world_object: WorldScenePayload = {
             "id": object_id,
             "name": item.sim_name,
             "type": "mesh" if item.asset_ref else "cube",
@@ -774,19 +778,19 @@ def _next_blender_object_id(name: str, used_ids: set[str]) -> str:
     return candidate
 
 
-def _required_list(value: Any, label: str) -> Sequence[Any]:
+def _required_list(value: object, label: str) -> Sequence[object]:
     if not isinstance(value, Sequence) or isinstance(value, str):
         raise ValueError(f"{label} must be a list.")
     return value
 
 
-def _required_string(value: Any, label: str) -> str:
+def _required_string(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Blender change-set {label} must be a non-empty string.")
     return value.strip()
 
 
-def _optional_asset_ref(value: Any, label: str) -> str | None:
+def _optional_asset_ref(value: object, label: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
@@ -799,8 +803,14 @@ def _optional_asset_ref(value: Any, label: str) -> str | None:
         ) from exc
 
 
-def _reject_unknown_fields(value: Mapping[str, Any], path: str, allowed_fields: set[str]) -> None:
-    unknown_fields = sorted(str(field) for field in value.keys() if field not in allowed_fields)
+def _reject_unknown_fields(
+    value: Mapping[str, object],
+    path: str,
+    allowed_fields: set[str],
+) -> None:
+    unknown_fields = sorted(
+        str(field) for field in value.keys() if field not in allowed_fields
+    )
     if unknown_fields:
         raise ValueError(
             f"Blender change-set {path} contains unsupported field(s): "
@@ -808,7 +818,7 @@ def _reject_unknown_fields(value: Mapping[str, Any], path: str, allowed_fields: 
         )
 
 
-def _required_vector(value: Any, label: str, expected_length: int) -> tuple[float, ...]:
+def _required_vector(value: object, label: str, expected_length: int) -> tuple[float, ...]:
     if (
         not isinstance(value, Sequence)
         or isinstance(value, str)
@@ -821,19 +831,19 @@ def _required_vector(value: Any, label: str, expected_length: int) -> tuple[floa
     return numbers
 
 
-def _required_vector3(value: Any, label: str) -> tuple[float, float, float]:
+def _required_vector3(value: object, label: str) -> tuple[float, float, float]:
     numbers = _required_vector(value, label, 3)
     return (numbers[0], numbers[1], numbers[2])
 
 
-def _required_positive_vector3(value: Any, label: str) -> tuple[float, float, float]:
+def _required_positive_vector3(value: object, label: str) -> tuple[float, float, float]:
     numbers = _required_vector3(value, label)
     if any(number <= 0.0 for number in numbers):
         raise ValueError(f"Blender change-set {label} must contain positive dimensions.")
     return numbers
 
 
-def _optional_rgba(value: Any, label: str) -> tuple[float, float, float, float] | None:
+def _optional_rgba(value: object, label: str) -> tuple[float, float, float, float] | None:
     if value is None:
         return None
     numbers = _required_vector(value, label, 4)
@@ -842,7 +852,7 @@ def _optional_rgba(value: Any, label: str) -> tuple[float, float, float, float] 
     return (numbers[0], numbers[1], numbers[2], numbers[3])
 
 
-def _optional_camera_fov_deg(value: Any, label: str) -> float | None:
+def _optional_camera_fov_deg(value: object, label: str) -> float | None:
     if value is None:
         return None
     if not is_finite_number(value):
@@ -853,7 +863,7 @@ def _optional_camera_fov_deg(value: Any, label: str) -> float | None:
     return parsed
 
 
-def _required_quat_wxyz(value: Any, label: str) -> tuple[float, float, float, float]:
+def _required_quat_wxyz(value: object, label: str) -> tuple[float, float, float, float]:
     numbers = _required_vector(value, label, 4)
     norm = math.sqrt(sum(number * number for number in numbers))
     if norm <= 0.0:

@@ -5,10 +5,12 @@ import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Literal, TypeAlias, TypedDict
 
+from scipy.spatial.transform import Rotation
 import yourdfpy  # type: ignore
 
+from backend.models.json_payload import JsonObject
 from backend.services.ilu_urdf import convert_urdf_to_usd
 from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SCHEMA,
@@ -224,8 +226,11 @@ def build_blender_edit_session(
     change_set_path: Path,
     export_script_path: Path,
     camera_screenshot_dir: Path | None = None,
-) -> dict[str, Any]:
-    objects = [_blender_object_entry(primitive, scene.robot.asset_roots) for primitive in scene.primitives]
+) -> JsonObject:
+    objects = [
+        _blender_object_entry(primitive, scene.robot.asset_roots)
+        for primitive in scene.primitives
+    ]
     change_set_source = build_blender_change_set_source(
         scene.world_package,
         frame_map=scene.frame_map,
@@ -243,9 +248,9 @@ def build_blender_edit_session(
             "frame_convention": scene.layout.frame_convention,
         },
         "round_trip": {
-            "supported_changes": tuple(sorted(BLENDER_SUPPORTED_LAYOUT_CHANGES)),
-            "review_only": tuple(sorted(BLENDER_REVIEW_ONLY_CHANGES)),
-            "locked": tuple(sorted(BLENDER_LOCKED_DOMAINS)),
+            "supported_changes": list(sorted(BLENDER_SUPPORTED_LAYOUT_CHANGES)),
+            "review_only": list(sorted(BLENDER_REVIEW_ONLY_CHANGES)),
+            "locked": list(sorted(BLENDER_LOCKED_DOMAINS)),
             "change_set_path": str(change_set_path),
             "export_script_path": str(export_script_path),
         },
@@ -890,7 +895,11 @@ def build_blender_focus_script() -> str:
     )
 
 
-def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, Any]) -> str:
+def build_blender_export_script(
+    *,
+    change_set_path: Path,
+    source: Mapping[str, object],
+) -> str:
     source_json = json.dumps(dict(source), sort_keys=True)
     return (
         textwrap.dedent(
@@ -1198,7 +1207,7 @@ def _blender_camera_entry(camera: SimCameraSpec) -> BlenderCameraEditSessionEntr
     }
 
 
-def _quat_wxyz(rotation: Any) -> tuple[float, float, float, float]:
+def _quat_wxyz(rotation: Rotation) -> tuple[float, float, float, float]:
     quat_xyzw = rotation.as_quat()
     return (
         float(quat_xyzw[3]),
