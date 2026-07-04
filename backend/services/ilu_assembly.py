@@ -12,6 +12,7 @@ from backend.models.ilu_assembly import (
     IluAssemblyManifestResponse,
     IluAssemblySource,
 )
+from backend.models.json_payload import JsonObject
 
 
 ILU_ASSEMBLY_ROOT = Path.home() / ".i-love-urdf" / "assembly-sessions"
@@ -88,18 +89,25 @@ def _guess_media_type(file_path: Path) -> str:
     extension = file_path.suffix.lower()
     media_type = MEDIA_TYPE_BY_EXTENSION.get(extension)
     if media_type:
-      return media_type
+        return media_type
     guessed = mimetypes.guess_type(file_path.name)[0]
     return guessed or "application/octet-stream"
 
 
-def _read_assembly_payload(assembly_id: str) -> dict:
+def _read_json_object(path: Path) -> JsonObject:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Expected JSON object")
+    return payload
+
+
+def _read_assembly_payload(assembly_id: str) -> JsonObject:
     metadata_path = _get_assembly_metadata_path(assembly_id)
     if not metadata_path.exists():
         raise IluAssemblyError(status_code=404, detail=f"ilu assembly not found: {assembly_id}")
     try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
+        payload = _read_json_object(metadata_path)
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
         raise IluAssemblyError(status_code=500, detail="Failed to read ilu assembly metadata.") from exc
 
     if (

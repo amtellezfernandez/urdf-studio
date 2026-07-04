@@ -3,11 +3,41 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.services import ilu_assembly as ilu_assembly_service
 
 
+def _write_assembly_metadata(
+    session_dir: Path,
+    workspace_root: Path,
+    *,
+    selected_paths: list[str],
+    names_by_path: dict[str, str],
+    source_by_path: dict[str, dict[str, str]],
+) -> None:
+    (session_dir / "assembly-session.json").write_text(
+        json.dumps(
+            {
+                "schema": "ilu-assembly-session",
+                "schemaVersion": 1,
+                "sessionId": session_dir.name,
+                "createdAt": "2026-03-26T00:00:00Z",
+                "updatedAt": "2026-03-26T00:00:01Z",
+                "label": "Bench Assembly",
+                "workspaceRoot": str(workspace_root),
+                "selectedPaths": selected_paths,
+                "namesByPath": names_by_path,
+                "sourceByPath": source_by_path,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_get_ilu_assembly_manifest_exposes_files_and_selected_paths(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     assembly_root = tmp_path / "assembly-sessions"
     session_dir = assembly_root / "assembly-1"
@@ -19,28 +49,18 @@ def test_get_ilu_assembly_manifest_exposes_files_and_selected_paths(
     (workspace_root / "tool" / "meshes" / "finger.stl").write_text(
         "solid finger\nendsolid finger\n", encoding="utf-8"
     )
-    (session_dir / "assembly-session.json").write_text(
-        json.dumps(
-            {
-                "schema": "ilu-assembly-session",
-                "schemaVersion": 1,
-                "sessionId": "assembly-1",
-                "createdAt": "2026-03-26T00:00:00Z",
-                "updatedAt": "2026-03-26T00:00:01Z",
-                "label": "Bench Assembly",
-                "workspaceRoot": str(workspace_root),
-                "selectedPaths": ["base/base.urdf", "tool/tool.urdf"],
-                "namesByPath": {
-                    "base/base.urdf": "base.urdf",
-                    "tool/tool.urdf": "tool.urdf",
-                },
-                "sourceByPath": {
-                    "base/base.urdf": {"type": "local", "folder": "base_pkg"},
-                    "tool/tool.urdf": {"type": "local", "folder": "tool_pkg"},
-                },
-            }
-        ),
-        encoding="utf-8",
+    _write_assembly_metadata(
+        session_dir,
+        workspace_root,
+        selected_paths=["base/base.urdf", "tool/tool.urdf"],
+        names_by_path={
+            "base/base.urdf": "base.urdf",
+            "tool/tool.urdf": "tool.urdf",
+        },
+        source_by_path={
+            "base/base.urdf": {"type": "local", "folder": "base_pkg"},
+            "tool/tool.urdf": {"type": "local", "folder": "tool_pkg"},
+        },
     )
     monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
 
@@ -70,29 +90,22 @@ def test_get_ilu_assembly_manifest_exposes_files_and_selected_paths(
     ]
 
 
-def test_ilu_assembly_asset_resolution_restricts_paths(monkeypatch, tmp_path: Path) -> None:
+def test_ilu_assembly_asset_resolution_restricts_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     assembly_root = tmp_path / "assembly-sessions"
     session_dir = assembly_root / "assembly-1"
     workspace_root = session_dir / "files"
     (workspace_root / "tool").mkdir(parents=True)
     asset_path = workspace_root / "tool" / "tool.urdf"
     asset_path.write_text("<robot name='tool'/>", encoding="utf-8")
-    (session_dir / "assembly-session.json").write_text(
-        json.dumps(
-            {
-                "schema": "ilu-assembly-session",
-                "schemaVersion": 1,
-                "sessionId": "assembly-1",
-                "createdAt": "2026-03-26T00:00:00Z",
-                "updatedAt": "2026-03-26T00:00:01Z",
-                "label": "Bench Assembly",
-                "workspaceRoot": str(workspace_root),
-                "selectedPaths": ["tool/tool.urdf"],
-                "namesByPath": {"tool/tool.urdf": "tool.urdf"},
-                "sourceByPath": {"tool/tool.urdf": {"type": "local", "folder": "tool_pkg"}},
-            }
-        ),
-        encoding="utf-8",
+    _write_assembly_metadata(
+        session_dir,
+        workspace_root,
+        selected_paths=["tool/tool.urdf"],
+        names_by_path={"tool/tool.urdf": "tool.urdf"},
+        source_by_path={"tool/tool.urdf": {"type": "local", "folder": "tool_pkg"}},
     )
     monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
 
@@ -105,3 +118,20 @@ def test_ilu_assembly_asset_resolution_restricts_paths(monkeypatch, tmp_path: Pa
         assert exc.status_code == 400
     else:
         raise AssertionError("Expected invalid assembly asset path to be rejected")
+
+
+def test_get_ilu_assembly_manifest_rejects_non_object_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    assembly_root = tmp_path / "assembly-sessions"
+    session_dir = assembly_root / "assembly-1"
+    session_dir.mkdir(parents=True)
+    (session_dir / "assembly-session.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
+
+    with pytest.raises(ilu_assembly_service.IluAssemblyError) as exc_info:
+        ilu_assembly_service.get_ilu_assembly_manifest("assembly-1")
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Failed to read ilu assembly metadata."
