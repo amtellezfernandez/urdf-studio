@@ -7,7 +7,7 @@ import math
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Literal, Sequence, TypeAlias
+from typing import Any, Literal, Sequence, TypeAlias, TypeGuard, cast
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -58,6 +58,11 @@ STATIC_SCENARIO_TIME_MS = 0
 STATIC_SCENARIO_DURATION_MS = 0
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
 _WorldLayoutSourceKind: TypeAlias = Literal["world_layout", "world_snapshot"]
+WorldLayoutPayloadRecord: TypeAlias = dict[str, Any]
+PrimitiveSimulationFields: TypeAlias = dict[str, Any]
+BackendTransferReport: TypeAlias = dict[str, Any]
+StaticTransferReport: TypeAlias = dict[str, Any]
+BackendTransferReports: TypeAlias = dict[str, BackendTransferReport]
 
 STUDIO_Y_UP_TO_Z_UP = np.array(
     [
@@ -70,14 +75,14 @@ STUDIO_Y_UP_TO_Z_UP = np.array(
 
 @dataclass(frozen=True)
 class _WorldLayoutSnapshotEnvelope:
-    snapshot: dict[str, Any]
+    snapshot: WorldLayoutPayloadRecord
     name: str
     source_kind: _WorldLayoutSourceKind
     frame_convention: str | None
     frame_map_hint: ConcreteWorldLayoutFrameMap | None
 
 
-def _is_record(value: Any) -> bool:
+def _is_record(value: Any) -> TypeGuard[WorldLayoutPayloadRecord]:
     return isinstance(value, dict)
 
 
@@ -130,7 +135,7 @@ def _read_vector3(value: Any, field: str, *, positive: bool = False) -> tuple[fl
     return parsed
 
 
-def _read_static_timing(snapshot: dict[str, Any]) -> tuple[int, int]:
+def _read_static_timing(snapshot: WorldLayoutPayloadRecord) -> tuple[int, int]:
     scenario_time_ms = snapshot.get("scenario_time_ms")
     scenario_duration_ms = snapshot.get("scenario_duration_ms")
     if not isinstance(scenario_time_ms, int) or isinstance(scenario_time_ms, bool):
@@ -230,7 +235,7 @@ def _read_optional_string(value: Any) -> str | None:
     return None
 
 
-def _read_object_asset_ref(value: dict[str, Any], index: int) -> str | None:
+def _read_object_asset_ref(value: WorldLayoutPayloadRecord, index: int) -> str | None:
     asset_ref_entry = read_world_object_asset_ref(value)
     if asset_ref_entry is None:
         return None
@@ -249,7 +254,10 @@ def _read_portable_asset_ref(value: str, field: str) -> str:
         ) from exc
 
 
-def _read_object_asset_scale(value: dict[str, Any], index: int) -> tuple[float, float, float] | None:
+def _read_object_asset_scale(
+    value: WorldLayoutPayloadRecord,
+    index: int,
+) -> tuple[float, float, float] | None:
     for key in ("asset_scale_xyz", "mesh_scale_xyz", "scale_xyz"):
         if key in value:
             return _read_vector3(value.get(key), f"objects[{index}].{key}", positive=True)
@@ -292,7 +300,7 @@ def _normalize_frame_convention(value: str) -> str:
     return re.sub(r"\s+", "-", normalized)
 
 
-def _read_frame_map_hint(payload: dict[str, Any]) -> ConcreteWorldLayoutFrameMap | None:
+def _read_frame_map_hint(payload: WorldLayoutPayloadRecord) -> ConcreteWorldLayoutFrameMap | None:
     environment = payload.get("environment")
     if not _is_record(environment):
         return None
@@ -303,10 +311,13 @@ def _read_frame_map_hint(payload: dict[str, Any]) -> ConcreteWorldLayoutFrameMap
     if normalized_frame_map not in CONCRETE_WORLD_LAYOUT_FRAME_MAPS:
         allowed = ", ".join(sorted(CONCRETE_WORLD_LAYOUT_FRAME_MAPS))
         raise WorldLayoutTransferError(f"environment.frame_map must be one of: {allowed}")
-    return normalized_frame_map  # type: ignore[return-value]
+    return cast(ConcreteWorldLayoutFrameMap, normalized_frame_map)
 
 
-def _read_frame_convention(payload: dict[str, Any], snapshot: dict[str, Any]) -> str | None:
+def _read_frame_convention(
+    payload: WorldLayoutPayloadRecord,
+    snapshot: WorldLayoutPayloadRecord,
+) -> str | None:
     interface = payload.get("interface")
     if _is_record(interface):
         frame_convention = _read_optional_string(interface.get("frame_convention"))
@@ -536,7 +547,7 @@ def _primitive_simulation_fields(
     *,
     collision: bool | None = None,
     fixed: bool | None = None,
-) -> dict[str, Any]:
+) -> PrimitiveSimulationFields:
     return {
         "collision": world_object.collision if collision is None else collision,
         "fixed": world_object.fixed if fixed is None else fixed,
@@ -731,7 +742,7 @@ def check_mujoco_transfer(
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
-) -> dict[str, Any]:
+) -> BackendTransferReport:
     from backend.services.world_layout_transfer_mujoco import check_mujoco_transfer as _impl
 
     return _impl(
@@ -751,7 +762,7 @@ def check_genesis_transfer(
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
-) -> dict[str, Any]:
+) -> BackendTransferReport:
     from backend.services.world_layout_transfer_genesis import check_genesis_transfer as _impl
 
     return _impl(
@@ -773,7 +784,7 @@ def build_static_transfer_report(
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
-) -> dict[str, Any]:
+) -> StaticTransferReport:
     resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     primitives, warnings = build_sim_primitives(
         layout,
@@ -785,7 +796,7 @@ def build_static_transfer_report(
         write_mjcf_path.parent.mkdir(parents=True, exist_ok=True)
         write_mjcf_path.write_text(mjcf_text, encoding="utf-8")
 
-    backend_reports: dict[str, Any] = {}
+    backend_reports: BackendTransferReports = {}
     for backend in backends:
         try:
             if backend == "mujoco":
@@ -850,7 +861,11 @@ def build_static_transfer_report(
                 "restitution": primitive.restitution,
                 "semantic_role": primitive.semantic_role,
                 "asset_ref": primitive.asset_ref,
-                "asset_scale_xyz": list(primitive.asset_scale_xyz) if primitive.asset_scale_xyz else None,
+                "asset_scale_xyz": (
+                    list(primitive.asset_scale_xyz)
+                    if primitive.asset_scale_xyz
+                    else None
+                ),
             }
             for primitive in primitives
         ],
@@ -868,7 +883,7 @@ def check_static_world_layout_file(
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
-) -> dict[str, Any]:
+) -> StaticTransferReport:
     layout = load_static_world_layout(layout_path)
     return build_static_transfer_report(
         layout,
@@ -891,7 +906,7 @@ def check_static_world_layout_text(
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
-) -> dict[str, Any]:
+) -> StaticTransferReport:
     layout = parse_static_world_layout_payload(json.loads(raw_json))
     with tempfile.TemporaryDirectory(prefix="world-layout-transfer-") as temp_dir:
         return build_static_transfer_report(
