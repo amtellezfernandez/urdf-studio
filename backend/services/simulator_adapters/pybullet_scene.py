@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 import math
 import os
 from pathlib import Path
 import sys
-from typing import Any, Iterator, Sequence
+from typing import Any, Literal, NotRequired, TypedDict
 
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import PYBULLET_SCENE_PARAMS
@@ -15,7 +16,17 @@ from backend.services.simulator_adapters.scene_bounds import (
     scene_bounds_from_aabbs,
 )
 
-PYBULLET_STATIC_VIEWER_DEBUG_FLAGS = {
+PyBulletStaticViewerFlagName = Literal["mouse_picking", "keyboard_shortcuts"]
+PyBulletViewerPumpStateName = Literal[
+    "mouse_events",
+    "keyboard_events",
+    "camera_state",
+]
+PyBulletDebugCameraSource = Literal["aabb", "default"]
+PyBulletUnavailableReason = Literal["headless", "api_missing"]
+PyBulletGravityUnavailableReason = Literal["headless", "free_base", "api_missing"]
+
+PYBULLET_STATIC_VIEWER_DEBUG_FLAGS: dict[PyBulletStaticViewerFlagName, tuple[str, int]] = {
     # Keep the mouse available for camera orbit/pan/zoom in static inspection
     # mode. Native PyBullet picking captures left-drag on fixed robot bodies,
     # which makes the viewer feel like mouse input is broken.
@@ -23,6 +34,40 @@ PYBULLET_STATIC_VIEWER_DEBUG_FLAGS = {
     "keyboard_shortcuts": ("COV_ENABLE_KEYBOARD_SHORTCUTS", 1),
 }
 PYBULLET_STATIC_JOINT_HOLD_FORCE = 500.0
+
+
+class PyBulletStaticDebugViewerState(TypedDict):
+    mouse_picking: bool
+    keyboard_shortcuts: bool
+
+
+class PyBulletViewerPumpState(TypedDict):
+    mouse_events: bool
+    keyboard_events: bool
+    camera_state: bool
+    render_frame: bool
+
+
+class PyBulletViewerFrameState(TypedDict):
+    stepped: bool
+    pump: PyBulletViewerPumpState
+
+
+class PyBulletStaticInteractiveViewerGravityState(TypedDict):
+    enabled: bool
+    reason: NotRequired[PyBulletGravityUnavailableReason]
+    gravity_xyz: NotRequired[tuple[float, float, float]]
+
+
+class PyBulletDebugCameraState(TypedDict):
+    configured: bool
+    reason: NotRequired[PyBulletUnavailableReason]
+    source: NotRequired[PyBulletDebugCameraSource]
+    target_xyz: NotRequired[list[float]]
+    distance_m: NotRequired[float]
+    yaw_deg: NotRequired[float]
+    pitch_deg: NotRequired[float]
+    body_count: NotRequired[int]
 
 
 def _joint_name_from_info(joint_info: Sequence[Any]) -> str:
@@ -39,34 +84,46 @@ def set_debug_visualizer_flag(pybullet: Any, flag_name: str, value: int) -> bool
     return True
 
 
-def configure_pybullet_static_debug_viewer(pybullet: Any, *, no_viewer: bool) -> dict[str, bool]:
+def configure_pybullet_static_debug_viewer(
+    pybullet: Any,
+    *,
+    no_viewer: bool,
+) -> PyBulletStaticDebugViewerState:
     if no_viewer:
-        return {name: False for name in PYBULLET_STATIC_VIEWER_DEBUG_FLAGS}
+        return {"mouse_picking": False, "keyboard_shortcuts": False}
     set_real_time = getattr(pybullet, "setRealTimeSimulation", None)
     if set_real_time is not None:
         set_real_time(0)
-    debug_state: dict[str, bool] = {}
+    debug_state: PyBulletStaticDebugViewerState = {
+        "mouse_picking": False,
+        "keyboard_shortcuts": False,
+    }
     for name, (flag_name, value) in PYBULLET_STATIC_VIEWER_DEBUG_FLAGS.items():
         configured = set_debug_visualizer_flag(pybullet, flag_name, value)
         debug_state[name] = configured and bool(value)
     return debug_state
 
 
-def pump_pybullet_static_debug_viewer(pybullet: Any, *, no_viewer: bool) -> dict[str, bool]:
+def pump_pybullet_static_debug_viewer(
+    pybullet: Any,
+    *,
+    no_viewer: bool,
+) -> PyBulletViewerPumpState:
+    pump_state: PyBulletViewerPumpState = {
+        "mouse_events": False,
+        "keyboard_events": False,
+        "camera_state": False,
+        "render_frame": False,
+    }
     if no_viewer:
-        return {
-            "mouse_events": False,
-            "keyboard_events": False,
-            "camera_state": False,
-            "render_frame": False,
-        }
+        return pump_state
 
-    pump_state: dict[str, bool] = {}
-    for state_name, method_name in (
+    pump_methods: tuple[tuple[PyBulletViewerPumpStateName, str], ...] = (
         ("mouse_events", "getMouseEvents"),
         ("keyboard_events", "getKeyboardEvents"),
         ("camera_state", "getDebugVisualizerCamera"),
-    ):
+    )
+    for state_name, method_name in pump_methods:
         method = getattr(pybullet, method_name, None)
         if method is None:
             pump_state[state_name] = False
@@ -95,7 +152,7 @@ def advance_pybullet_viewer_frame(
     *,
     no_viewer: bool,
     free_base: bool,
-) -> dict[str, Any]:
+) -> PyBulletViewerFrameState:
     stepped = False
     if should_step_pybullet_interactive_viewer_loop(no_viewer=no_viewer, free_base=free_base):
         pybullet.stepSimulation()
@@ -111,7 +168,7 @@ def configure_pybullet_static_interactive_viewer_gravity(
     *,
     no_viewer: bool,
     free_base: bool,
-) -> dict[str, Any]:
+) -> PyBulletStaticInteractiveViewerGravityState:
     if no_viewer:
         return {"enabled": False, "reason": "headless"}
     if free_base:
@@ -279,7 +336,7 @@ def configure_pybullet_debug_camera(
     *,
     no_viewer: bool,
     body_ids: Sequence[int],
-) -> dict[str, Any]:
+) -> PyBulletDebugCameraState:
     viewer = PYBULLET_SCENE_PARAMS.viewer
     reset_camera = getattr(pybullet, "resetDebugVisualizerCamera", None)
     if no_viewer:
