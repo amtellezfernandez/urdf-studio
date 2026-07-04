@@ -44,9 +44,9 @@ import { JOINT_CONTROL_PARAMS } from "@/features/layout/jointControlParams";
 import { LimitAttributeStatusBadge } from "@/features/layout/jointLimitDebug";
 import {
   getLimitAttributeInputTitle,
-  parseLimitAttributeDebugState,
   parsePositiveScalar,
 } from "@/features/layout/jointLimitDebugState";
+import { resolveJointDynamicLimitDisplayState } from "@/features/layout/jointDynamicLimitDisplay";
 import type { URDFRobot } from "urdf-loader";
 
 interface JointControlProps {
@@ -82,11 +82,6 @@ interface JointControlProps {
   groupLabel?: string | null;
 }
 
-type JointLimitMetadata = JointLimitInfo & {
-  effort?: number | null;
-  velocity?: number | null;
-};
-
 const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
   onParseError: () => {},
   onRobotMissing: () => {},
@@ -94,9 +89,6 @@ const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
   onOversize: () => {},
   onDepthExceeded: () => {},
 };
-
-const roundToPrecision = (value: number, precision: number): number =>
-  Math.round(value * precision) / precision;
 
 export const JointControl = ({
   jointName,
@@ -144,70 +136,32 @@ export const JointControl = ({
     });
   const hasBothLimits = hasFiniteHardLimits;
 
-  const degPerRad = RAD_TO_DEG;
   const radPerDeg = DEG_TO_RAD;
-  const velocityUnit = angleUnit === "deg" ? "°/s" : "rad/s";
-  const velocityStep =
-    angleUnit === "deg"
-      ? JOINT_CONTROL_PARAMS.velocity.degStep
-      : JOINT_CONTROL_PARAMS.velocity.radStep;
-  const velocityMin =
-    angleUnit === "deg"
-      ? JOINT_CONTROL_PARAMS.velocity.minRadPerSec * RAD_TO_DEG
-      : JOINT_CONTROL_PARAMS.velocity.minRadPerSec;
-  const velocityPrecision =
-    angleUnit === "deg"
-      ? JOINT_CONTROL_PARAMS.velocity.degPrecision
-      : JOINT_CONTROL_PARAMS.velocity.radPrecision;
-  const jointLimitMetadata = jointInfo as JointLimitMetadata | undefined;
-  const parsedJointLimitAttributes = useMemo(() => {
-    if (!urdfContent) {
-      return undefined;
-    }
-
-    const xmlDoc = parseUrdfDocument(urdfContent, JOINT_CONTROL_URDF_PARSE_OPTIONS);
-    if (!xmlDoc) {
-      return undefined;
-    }
-    const joint = getUrdfElementByName(xmlDoc, "joint", jointName, {
-      label: "joint",
-      onMissing: () => {},
-    });
-    if (!joint) {
-      return undefined;
-    }
-    const limitElement = joint.querySelector("limit");
-    return {
-      velocity: parseLimitAttributeDebugState(limitElement?.getAttribute("velocity")),
-      effort: parseLimitAttributeDebugState(limitElement?.getAttribute("effort")),
-    };
-  }, [jointName, urdfContent]);
-  const velocityAttribute =
-    parsedJointLimitAttributes !== undefined
-      ? parsedJointLimitAttributes.velocity
-      : parseLimitAttributeDebugState(jointLimitMetadata?.velocity);
-  const velocityLimit = velocityAttribute.value;
-  const velocityDisplay =
-    velocityLimit === null
-      ? undefined
-      : roundToPrecision(
-          angleUnit === "deg" ? velocityLimit * degPerRad : velocityLimit,
-          velocityPrecision
-        );
-
-  const effortAttribute =
-    parsedJointLimitAttributes !== undefined
-      ? parsedJointLimitAttributes.effort
-      : parseLimitAttributeDebugState(jointLimitMetadata?.effort);
-  const effortLimit = effortAttribute.value;
-  const effortDisplay =
-    effortLimit === null
-      ? undefined
-      : roundToPrecision(effortLimit, JOINT_CONTROL_PARAMS.effort.precision);
-  const hasEffortLimit = effortAttribute.status !== "missing";
-  const effortUnit = currentType === "prismatic" ? "N" : "N*m";
-  const velocityPlaceholder = velocityAttribute.status === "invalid" ? "bad" : "-";
-  const effortPlaceholder = effortAttribute.status === "invalid" ? "bad" : "-";
+  const {
+    effortAttribute,
+    effortDisplay,
+    effortLimit,
+    effortPlaceholder,
+    effortUnit,
+    hasEffortLimit,
+    velocityAttribute,
+    velocityDisplay,
+    velocityLimit,
+    velocityMin,
+    velocityPlaceholder,
+    velocityStep,
+    velocityUnit,
+  } = useMemo(
+    () =>
+      resolveJointDynamicLimitDisplayState({
+        angleUnit,
+        jointInfo,
+        jointName,
+        jointType: currentType,
+        urdfContent,
+      }),
+    [angleUnit, currentType, jointInfo, jointName, urdfContent]
+  );
 
   const handleJointVelocityChange = useCallback(
     (value: number) => {
