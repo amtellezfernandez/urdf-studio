@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from backend.models.simulator_runtime import (
     SIMULATOR_ISAACSIM_ID,
-    SIMULATOR_MJX_ID,
     SIMULATOR_NEWTON_ID,
     SIMULATOR_ROBOSPLATTER_ID,
     SIMULATOR_SAPIEN2_ID,
@@ -10,17 +9,6 @@ from backend.models.simulator_runtime import (
     SimulatorDependencySpec,
 )
 from backend.services.simulator_adapters.plugin import SimulatorPlugin
-
-
-class MjxPlugin(SimulatorPlugin):
-    simulator_id = SIMULATOR_MJX_ID
-    label = "MJX"
-    robot_asset_format = "mjx_mjcf"
-    transfer_strategy = "planned"
-    dependencies = (
-        SimulatorDependencySpec(name="mujoco", import_name="mujoco"),
-        SimulatorDependencySpec(name="jax", import_name="jax"),
-    )
 
 
 class Sapien2Plugin(SimulatorPlugin):

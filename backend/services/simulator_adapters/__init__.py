@@ -4,6 +4,7 @@ from __future__ import annotations
 import backend.services.simulator_adapters.genesis  # noqa: F401
 import backend.services.simulator_adapters.mjlab  # noqa: F401
 import backend.services.simulator_adapters.mujoco  # noqa: F401
+import backend.services.simulator_adapters.mjx  # noqa: F401
 import backend.services.simulator_adapters.pybullet  # noqa: F401
 import backend.services.simulator_adapters.blender  # noqa: F401
 import backend.services.simulator_adapters.planned_simulators  # noqa: F401

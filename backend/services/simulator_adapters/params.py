@@ -174,6 +174,12 @@ MJLAB_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     log_name="mjlab.log",
     ready_log_marker="[mjlab-workspace] workspace ready.",
 )
+MJX_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "mjx",
+    module_name="backend.scripts.mjx_workspace_prepare",
+    log_name="mjx.log",
+    ready_log_marker="[mjx-workspace] workspace ready.",
+)
 PYBULLET_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "pybullet",
     module_name="backend.scripts.pybullet_workspace_prepare",
@@ -281,10 +287,12 @@ def get_simulator_workspace_process_params_by_id() -> SimulatorWorkspaceProcessP
     import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
     from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
-    _simulator_workspace_process_params_by_id = {
-        plugin.simulator_id: plugin.require_workspace_process()
-        for plugin in get_workspace_plugins()
-    }
+    process_params: SimulatorWorkspaceProcessParamsById = {}
+    for plugin in get_workspace_plugins():
+        workspace_process = plugin.workspace_process
+        if workspace_process is not None:
+            process_params[plugin.simulator_id] = workspace_process
+    _simulator_workspace_process_params_by_id = process_params
     return _simulator_workspace_process_params_by_id
 
 

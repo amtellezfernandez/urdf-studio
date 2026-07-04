@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from backend.tests.simulator_adapter_test_utils import make_workspace_prepare_request
+from backend.services.simulator_adapters import mjx as mjx_adapter
+from backend.services.simulator_adapters.plugin import get_plugin
+
+pytest.importorskip("jax")
+pytest.importorskip("mujoco")
+pytest.importorskip("mujoco.mjx")
+
+_PENDULUM_URDF = """<?xml version="1.0"?>
+<robot name="pendulum">
+  <link name="base_link">
+    <inertial><mass value="1.0"/><origin xyz="0 0 0"/><inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0"/></inertial>
+  </link>
+  <link name="arm_link">
+    <inertial><mass value="0.5"/><origin xyz="0 0 -0.2"/><inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0"/></inertial>
+  </link>
+  <joint name="shoulder" type="revolute">
+    <parent link="base_link"/>
+    <child link="arm_link"/>
+    <origin xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="5"/>
+  </joint>
+</robot>
+"""
+
+
+def test_mjx_plugin_is_registered_with_convert_transfer_strategy() -> None:
+    plugin = get_plugin("mjx")
+
+    assert isinstance(plugin, mjx_adapter.MjxPlugin)
+    assert plugin.robot_asset_format == "mjx_mjcf"
+    assert plugin.transfer_strategy == "convert"
+    assert plugin.workspace_target is True
+
+
+def test_mjx_plugin_runtime_status_reports_dependencies() -> None:
+    plugin = get_plugin("mjx")
+
+    status = plugin.runtime_status()
+
+    dependency_names = {dependency.name for dependency in status.dependencies}
+    assert dependency_names == {"mujoco", "jax", "mujoco_mjx"}
+
+
+def test_mjx_prepare_workspace_runs_inspection_rollout_and_writes_report(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(mjx_adapter, "_MJX_WORKSPACE_ROOT", tmp_path)
+    plugin = mjx_adapter.MjxPlugin()
+    request = make_workspace_prepare_request(_PENDULUM_URDF)
+
+    response = plugin.prepare_workspace(request)
+
+    assert response.simulator_id == "mjx"
+    assert response.started is False
+    assert response.launch_mode == "headless_check"
+    assert response.simulator_asset_path is None
+    assert response.simulator_asset_format is None
+    report_paths = list(tmp_path.rglob("report.json"))
+    assert len(report_paths) == 1
+    report_text = report_paths[0].read_text(encoding="utf-8")
+    assert '"diverged": false' in report_text

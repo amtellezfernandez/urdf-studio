@@ -289,21 +289,33 @@ def test_openable_simulator_runtime_params_are_centralized() -> None:
         for spec in list_simulator_runtime_specs()
         if spec.capabilities_model().workspace_target and spec.transfer.transfer_strategy != "planned"
     }
+    process_backed_simulator_ids = {
+        simulator_id
+        for simulator_id in openable_simulator_ids
+        if get_plugin(simulator_id).workspace_process is not None
+    }
+    scene_param_simulator_ids = {
+        simulator_id
+        for simulator_id in openable_simulator_ids
+        if hasattr(get_plugin(simulator_id), "scene_params")
+    }
 
     assert openable_simulator_ids == set(WORKSPACE_SIMULATOR_IDS)
-    assert openable_simulator_ids == set(SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID)
-    assert openable_simulator_ids == set(SIMULATOR_SCENE_PARAMS_BY_ID)
+    assert process_backed_simulator_ids == set(SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID)
+    assert scene_param_simulator_ids == set(SIMULATOR_SCENE_PARAMS_BY_ID)
     assert SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID is get_simulator_workspace_process_params_by_id()
     assert SIMULATOR_SCENE_PARAMS_BY_ID is get_simulator_scene_params_by_id()
 
-    for simulator_id in openable_simulator_ids:
+    for simulator_id in process_backed_simulator_ids:
         assert get_simulator_adapter(simulator_id).capabilities.workspace_target
         workspace_process = SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID[simulator_id]
-        scene_params = SIMULATOR_SCENE_PARAMS_BY_ID[simulator_id]
 
         assert get_plugin(simulator_id).require_workspace_process() is workspace_process
         assert workspace_process.ready_log_marker
         assert workspace_process.ready_timeout_sec > 0
+
+    for simulator_id in scene_param_simulator_ids:
+        scene_params = SIMULATOR_SCENE_PARAMS_BY_ID[simulator_id]
         if hasattr(scene_params, "viewer_step_hz"):
             assert scene_params.viewer_step_hz > 0
         if hasattr(scene_params, "gravity_xyz"):
@@ -867,7 +879,6 @@ def test_non_workspace_target_simulators_are_registered_but_not_openable() -> No
     ]
 
     assert non_workspace_target_ids == [
-        "mjx",
         "sapien2",
         "sapien3",
         "isaacsim",
