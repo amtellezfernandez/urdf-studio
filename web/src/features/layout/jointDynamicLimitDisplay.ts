@@ -31,6 +31,19 @@ export type JointDynamicLimitDisplayState = {
   velocityUnit: string;
 };
 
+type JointLimitAttributeDisplay = {
+  display: number | undefined;
+  limit: number | null;
+  placeholder: string;
+};
+
+type VelocityDisplayConfig = {
+  precision: number;
+  step: number;
+  min: number;
+  unit: string;
+};
+
 const JOINT_LIMIT_URDF_PARSE_OPTIONS = {
   onParseError: () => {},
   onRobotMissing: () => {},
@@ -41,6 +54,41 @@ const JOINT_LIMIT_URDF_PARSE_OPTIONS = {
 
 const roundToPrecision = (value: number, precision: number): number =>
   Math.round(value * precision) / precision;
+
+export const resolveVelocityDisplayConfig = (
+  angleUnit: "rad" | "deg"
+): VelocityDisplayConfig => ({
+  min:
+    angleUnit === "deg"
+      ? JOINT_CONTROL_PARAMS.velocity.minRadPerSec * RAD_TO_DEG
+      : JOINT_CONTROL_PARAMS.velocity.minRadPerSec,
+  precision:
+    angleUnit === "deg"
+      ? JOINT_CONTROL_PARAMS.velocity.degPrecision
+      : JOINT_CONTROL_PARAMS.velocity.radPrecision,
+  step:
+    angleUnit === "deg"
+      ? JOINT_CONTROL_PARAMS.velocity.degStep
+      : JOINT_CONTROL_PARAMS.velocity.radStep,
+  unit: angleUnit === "deg" ? "°/s" : "rad/s",
+});
+
+export const resolveLimitAttributeDisplay = ({
+  attribute,
+  precision,
+  scale = 1,
+}: {
+  attribute: LimitAttributeDebugState;
+  precision: number;
+  scale?: number;
+}): JointLimitAttributeDisplay => ({
+  display:
+    attribute.value === null
+      ? undefined
+      : roundToPrecision(attribute.value * scale, precision),
+  limit: attribute.value,
+  placeholder: attribute.status === "invalid" ? "bad" : "-",
+});
 
 const readJointLimitAttributesFromUrdf = ({
   jointName,
@@ -89,18 +137,7 @@ export const resolveJointDynamicLimitDisplayState = ({
   jointType: string;
   urdfContent?: string;
 }): JointDynamicLimitDisplayState => {
-  const velocityStep =
-    angleUnit === "deg"
-      ? JOINT_CONTROL_PARAMS.velocity.degStep
-      : JOINT_CONTROL_PARAMS.velocity.radStep;
-  const velocityMin =
-    angleUnit === "deg"
-      ? JOINT_CONTROL_PARAMS.velocity.minRadPerSec * RAD_TO_DEG
-      : JOINT_CONTROL_PARAMS.velocity.minRadPerSec;
-  const velocityPrecision =
-    angleUnit === "deg"
-      ? JOINT_CONTROL_PARAMS.velocity.degPrecision
-      : JOINT_CONTROL_PARAMS.velocity.radPrecision;
+  const velocityConfig = resolveVelocityDisplayConfig(angleUnit);
   const metadata = jointInfo as JointLimitMetadata | undefined;
   const urdfAttributes = readJointLimitAttributesFromUrdf({ jointName, urdfContent });
 
@@ -108,38 +145,34 @@ export const resolveJointDynamicLimitDisplayState = ({
     urdfAttributes !== undefined
       ? urdfAttributes.velocity
       : parseLimitAttributeDebugState(metadata?.velocity);
-  const velocityLimit = velocityAttribute.value;
-  const velocityDisplay =
-    velocityLimit === null
-      ? undefined
-      : roundToPrecision(
-          angleUnit === "deg" ? velocityLimit * RAD_TO_DEG : velocityLimit,
-          velocityPrecision
-        );
+  const velocityDisplayState = resolveLimitAttributeDisplay({
+    attribute: velocityAttribute,
+    precision: velocityConfig.precision,
+    scale: angleUnit === "deg" ? RAD_TO_DEG : 1,
+  });
 
   const effortAttribute =
     urdfAttributes !== undefined
       ? urdfAttributes.effort
       : parseLimitAttributeDebugState(metadata?.effort);
-  const effortLimit = effortAttribute.value;
-  const effortDisplay =
-    effortLimit === null
-      ? undefined
-      : roundToPrecision(effortLimit, JOINT_CONTROL_PARAMS.effort.precision);
+  const effortDisplayState = resolveLimitAttributeDisplay({
+    attribute: effortAttribute,
+    precision: JOINT_CONTROL_PARAMS.effort.precision,
+  });
 
   return {
     effortAttribute,
-    effortDisplay,
-    effortLimit,
-    effortPlaceholder: effortAttribute.status === "invalid" ? "bad" : "-",
+    effortDisplay: effortDisplayState.display,
+    effortLimit: effortDisplayState.limit,
+    effortPlaceholder: effortDisplayState.placeholder,
     effortUnit: jointType === "prismatic" ? "N" : "N*m",
     hasEffortLimit: effortAttribute.status !== "missing",
     velocityAttribute,
-    velocityDisplay,
-    velocityLimit,
-    velocityMin,
-    velocityPlaceholder: velocityAttribute.status === "invalid" ? "bad" : "-",
-    velocityStep,
-    velocityUnit: angleUnit === "deg" ? "°/s" : "rad/s",
+    velocityDisplay: velocityDisplayState.display,
+    velocityLimit: velocityDisplayState.limit,
+    velocityMin: velocityConfig.min,
+    velocityPlaceholder: velocityDisplayState.placeholder,
+    velocityStep: velocityConfig.step,
+    velocityUnit: velocityConfig.unit,
   };
 };

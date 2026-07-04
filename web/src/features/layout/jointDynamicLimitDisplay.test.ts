@@ -1,7 +1,11 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 
-import { resolveJointDynamicLimitDisplayState } from "@/features/layout/jointDynamicLimitDisplay";
+import {
+  resolveJointDynamicLimitDisplayState,
+  resolveLimitAttributeDisplay,
+  resolveVelocityDisplayConfig,
+} from "@/features/layout/jointDynamicLimitDisplay";
 import type { JointLimitInfo } from "@/shared/lib/urdfBrowser";
 
 const JOINT_DYNAMIC_LIMIT_FIXTURES = {
@@ -39,6 +43,41 @@ const createJointInfo = (
 });
 
 describe("resolveJointDynamicLimitDisplayState", () => {
+  it("resolves velocity display config from the angle unit", () => {
+    expect(resolveVelocityDisplayConfig("rad")).toMatchObject({
+      min: 0.01,
+      step: 0.05,
+      unit: "rad/s",
+    });
+    expect(resolveVelocityDisplayConfig("deg")).toMatchObject({
+      step: 0.5,
+      unit: "°/s",
+    });
+  });
+
+  it("formats limit attribute display values and invalid placeholders", () => {
+    expect(
+      resolveLimitAttributeDisplay({
+        attribute: { status: "set", value: 1.234 } as never,
+        precision: 100,
+      })
+    ).toEqual({
+      display: 1.23,
+      limit: 1.234,
+      placeholder: "-",
+    });
+    expect(
+      resolveLimitAttributeDisplay({
+        attribute: { status: "invalid", value: null } as never,
+        precision: 100,
+      })
+    ).toEqual({
+      display: undefined,
+      limit: null,
+      placeholder: "bad",
+    });
+  });
+
   it("prefers URDF limit attributes over metadata", () => {
     const state = resolveJointDynamicLimitDisplayState({
       angleUnit: "rad",
