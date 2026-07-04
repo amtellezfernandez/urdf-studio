@@ -4,13 +4,13 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
 import yourdfpy  # type: ignore
 from scipy.spatial.transform import Rotation
 
-from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.models.world_scene_package import WorldScenePackageManifest, WorldScenePayload
 from backend.services.simulator_adapters.camera_conventions import (
     OPENGL_CAMERA_FORWARD_LOCAL_XYZ,
     OPENGL_CAMERA_UP_LOCAL_XYZ,
@@ -127,8 +127,7 @@ def build_sim_camera_specs(
     warnings: list[str] = []
     used_sim_names: set[str] = set()
 
-    for index, camera in enumerate(cameras):
-        camera_record = camera if isinstance(camera, dict) else {}
+    for index, camera_record in enumerate(cameras):
         spec, warning = _build_camera_spec(
             camera_record=camera_record,
             index=index,
@@ -159,7 +158,7 @@ def _camera_transfer_error(warnings: tuple[str, ...]) -> WorldLayoutTransferErro
 
 def _build_camera_spec(
     *,
-    camera_record: dict[str, Any],
+    camera_record: WorldScenePayload,
     index: int,
     link_names: set[str],
     link_transforms: Mapping[str, Transform],
@@ -226,7 +225,7 @@ def _load_robot_for_camera_transfer(robot_urdf_path: Path) -> yourdfpy.URDF:
 
 def _apply_camera_transfer_joint_positions(
     robot: yourdfpy.URDF,
-    joint_positions: Mapping[str, Any],
+    joint_positions: Mapping[str, float],
 ) -> None:
     config = {
         name: _finite_joint_position(joint_positions.get(name, 0.0))
@@ -235,7 +234,7 @@ def _apply_camera_transfer_joint_positions(
     robot.update_cfg(config)
 
 
-def _finite_joint_position(value: Any) -> float:
+def _finite_joint_position(value: object) -> float:
     return float(value) if is_finite_number(value) else 0.0
 
 
@@ -345,7 +344,7 @@ def _find_mujoco_body(worldbody: ET.Element, body_name: str) -> ET.Element | Non
 
 
 def _read_render_camera_local_transform(
-    camera: dict[str, Any],
+    camera: WorldScenePayload,
     name: str,
 ) -> tuple[Transform | None, str | None]:
     pose = camera.get("pose")
@@ -402,9 +401,9 @@ def _compose_transform(parent: Transform, child: Transform) -> Transform:
     )
 
 
-def _read_vector3(value: Any) -> tuple[float, float, float] | None:
+def _read_vector3(value: object) -> tuple[float, float, float] | None:
     if isinstance(value, str):
-        parts: Sequence[Any] = value.split()
+        parts: Sequence[object] = value.split()
     elif isinstance(value, list | tuple):
         parts = value
     else:
@@ -441,7 +440,7 @@ def _format_vector(values: Sequence[float]) -> str:
     return " ".join(f"{float(value):.12g}" for value in values)
 
 
-def _read_string(value: Any) -> str:
+def _read_string(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
