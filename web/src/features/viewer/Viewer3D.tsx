@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
@@ -33,6 +33,7 @@ import { getJointLimits, type JointAxisMap, type JointLimits } from "@/shared/li
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import jointColors from "@/shared/joint_colors.json";
 import { AxisGizmo3D } from "@/features/viewer/AxisGizmo3D";
+import { AssemblyPlacementHelpers } from "@/features/viewer/AssemblyPlacementHelpers";
 import { CustomAxesHelper } from "@/features/viewer/CustomAxesHelper";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBoundary";
@@ -2085,12 +2086,6 @@ const hexToThreeJsHex = (hex: string): number => {
   return parseInt(cleanHex, 16);
 };
 
-const parseContactPair = (pairKey: string): [string, string] | null => {
-  const parts = pairKey.split("::");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-  return [parts[0], parts[1]];
-};
-
 const ASSEMBLY_CONTACT_DETECTION_TOLERANCE_M = 0.008;
 const ASSEMBLY_MESH_CONTACT_DISTANCE_LIMIT_M = 0.45;
 const ASSEMBLY_MAGNETIC_SNAP_TOLERANCE_M = 0.22;
@@ -2138,222 +2133,6 @@ const areSortedStringListsEqual = (
   lhs: readonly string[],
   rhs: readonly string[]
 ): boolean => lhs.length === rhs.length && lhs.every((value, index) => value === rhs[index]);
-
-const AssemblyPlacementHelpers = ({
-  poses,
-  radii,
-  selectedRobotId,
-  contactPairs,
-}: {
-  poses: Record<string, { x: number; y: number; z: number; yaw: number }>;
-  radii: Record<string, number>;
-  selectedRobotId: string | null;
-  contactPairs: string[];
-}) => {
-  const contactMap = useMemo(() => {
-    const next = new Set<string>();
-    contactPairs.forEach((pairKey) => {
-      const parsed = parseContactPair(pairKey);
-      if (!parsed) return;
-      next.add(parsed[0]);
-      next.add(parsed[1]);
-    });
-    return next;
-  }, [contactPairs]);
-
-  const contactSegments = useMemo(() => {
-    return contactPairs
-      .map((pairKey, index) => {
-        const parsed = parseContactPair(pairKey);
-        if (!parsed) return null;
-        const lhs = poses[parsed[0]];
-        const rhs = poses[parsed[1]];
-        if (!lhs || !rhs) return null;
-        return {
-          id: `${pairKey}-${index}`,
-          from: [lhs.x, 0.03, lhs.z] as [number, number, number],
-          to: [rhs.x, 0.03, rhs.z] as [number, number, number],
-        };
-      })
-      .filter((item): item is { id: string; from: [number, number, number]; to: [number, number, number] } =>
-        Boolean(item)
-      );
-  }, [contactPairs, poses]);
-
-  const selectedGuide = useMemo(() => {
-    if (!selectedRobotId) return null;
-    const selectedPose = poses[selectedRobotId];
-    if (!selectedPose) return null;
-    const selectedRadius = Math.max(radii[selectedRobotId] ?? 0.22, 0.08);
-    const candidates = Object.entries(poses).filter(([robotId]) => robotId !== selectedRobotId);
-    if (candidates.length === 0) return null;
-
-    let best:
-      | {
-          robotId: string;
-          pose: { x: number; y: number; z: number; yaw: number };
-          distance: number;
-          targetDistance: number;
-          absGap: number;
-          snapX: number;
-          snapZ: number;
-        }
-      | null = null;
-
-    candidates.forEach(([robotId, pose]) => {
-      const otherRadius = Math.max(radii[robotId] ?? 0.22, 0.08);
-      const dx = selectedPose.x - pose.x;
-      const dz = selectedPose.z - pose.z;
-      const distance = Math.hypot(dx, dz);
-      const targetDistance = selectedRadius + otherRadius;
-      const absGap = Math.abs(distance - targetDistance);
-      const dirX = distance > 1e-6 ? dx / distance : Math.cos(selectedPose.yaw);
-      const dirZ = distance > 1e-6 ? dz / distance : Math.sin(selectedPose.yaw);
-      const snapX = pose.x + dirX * targetDistance;
-      const snapZ = pose.z + dirZ * targetDistance;
-      if (!best || absGap < best.absGap) {
-        best = { robotId, pose, distance, targetDistance, absGap, snapX, snapZ };
-      }
-    });
-
-    if (!best) return null;
-    const axisCorner = [best.pose.x, 0.035, selectedPose.z] as [number, number, number];
-    const nearestPoint = [best.pose.x, 0.035, best.pose.z] as [number, number, number];
-    return {
-      from: [selectedPose.x, 0.035, selectedPose.z] as [number, number, number],
-      to: nearestPoint,
-      snap: [best.snapX, 0.035, best.snapZ] as [number, number, number],
-      axisCorner,
-      axisXAligned: Math.abs(selectedPose.x - best.pose.x) <= 0.03,
-      axisZAligned: Math.abs(selectedPose.z - best.pose.z) <= 0.03,
-      gapMeters: best.absGap,
-      isNearContact: best.absGap <= 0.03,
-    };
-  }, [poses, radii, selectedRobotId]);
-
-  const robotEntries = Object.entries(poses);
-  if (robotEntries.length === 0) return null;
-
-  return (
-    <group>
-      {robotEntries.map(([robotId, pose]) => {
-        const radius = Math.max(radii[robotId] ?? 0.22, 0.08);
-        const innerRadius = Math.max(radius - 0.03, 0.03);
-        const isSelected = selectedRobotId === robotId;
-        const isInContact = contactMap.has(robotId);
-        const color = isSelected ? "#ff63d5" : isInContact ? "#4ade80" : "#8a8a8a";
-        return (
-          <group key={robotId}>
-            <mesh
-              position={[pose.x, 0.006, pose.z]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              renderOrder={5}
-              userData={{ assemblyModelId: robotId }}
-            >
-              <ringGeometry args={[innerRadius, radius, 56]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={isSelected ? 0.72 : isInContact ? 0.52 : 0.3}
-                depthTest={false}
-                depthWrite={false}
-              />
-            </mesh>
-            <mesh position={[pose.x, 0.016, pose.z]} renderOrder={6} userData={{ assemblyModelId: robotId }}>
-              <sphereGeometry args={[0.018, 12, 12]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={isSelected ? 0.95 : 0.65}
-                depthTest={false}
-                depthWrite={false}
-              />
-            </mesh>
-          </group>
-        );
-      })}
-      {contactSegments.map((segment) => (
-        <Line
-          key={segment.id}
-          points={[segment.from, segment.to]}
-          color="#4ade80"
-          transparent
-          opacity={0.85}
-          lineWidth={1.25}
-          depthTest={false}
-          depthWrite={false}
-        />
-      ))}
-      {selectedGuide ? (
-        <>
-          <Line
-            points={[selectedGuide.from, selectedGuide.to]}
-            color={selectedGuide.isNearContact ? "#4ade80" : "#f59e0b"}
-            transparent
-            opacity={0.65}
-            lineWidth={1}
-            depthTest={false}
-            depthWrite={false}
-          />
-          <Line
-            points={[selectedGuide.from, selectedGuide.axisCorner]}
-            color={selectedGuide.axisXAligned ? "#4ade80" : "#a3a3a3"}
-            transparent
-            opacity={0.65}
-            lineWidth={0.95}
-            depthTest={false}
-            depthWrite={false}
-          />
-          <Line
-            points={[selectedGuide.axisCorner, selectedGuide.to]}
-            color={selectedGuide.axisZAligned ? "#4ade80" : "#a3a3a3"}
-            transparent
-            opacity={0.65}
-            lineWidth={0.95}
-            depthTest={false}
-            depthWrite={false}
-          />
-          <Line
-            points={[selectedGuide.from, selectedGuide.snap]}
-            color="#ff63d5"
-            transparent
-            opacity={0.85}
-            lineWidth={1.15}
-            depthTest={false}
-            depthWrite={false}
-          />
-          <Line
-            points={[selectedGuide.snap, selectedGuide.to]}
-            color={selectedGuide.gapMeters <= 0.03 ? "#4ade80" : "#ff63d5"}
-            transparent
-            opacity={0.78}
-            lineWidth={1.05}
-            depthTest={false}
-            depthWrite={false}
-          />
-          <mesh position={selectedGuide.axisCorner} renderOrder={8}>
-            <sphereGeometry args={[0.013, 10, 10]} />
-            <meshBasicMaterial color="#a3a3a3" transparent opacity={0.75} depthTest={false} depthWrite={false} />
-          </mesh>
-          <mesh position={selectedGuide.to} renderOrder={8}>
-            <sphereGeometry args={[0.016, 10, 10]} />
-            <meshBasicMaterial color="#4ade80" transparent opacity={0.86} depthTest={false} depthWrite={false} />
-          </mesh>
-          <mesh position={selectedGuide.snap} renderOrder={8}>
-            <sphereGeometry args={[0.022, 12, 12]} />
-            <meshBasicMaterial
-              color={selectedGuide.gapMeters <= 0.03 ? "#4ade80" : "#ff63d5"}
-              transparent
-              opacity={0.9}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
-        </>
-      ) : null}
-    </group>
-  );
-};
 
 const transformContract = getTransformContract();
 assertTransformContract(transformContract);
