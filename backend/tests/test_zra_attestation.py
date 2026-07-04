@@ -177,3 +177,26 @@ def test_convert_missing_serial_controller_to_actionable_attestation() -> None:
     assert converted.reason == "Motor serial controller is missing from the enrolled USB path."
     assert converted.findings[0].finding_type == "missing_enrolled_component"
     assert converted.metadata["expected_serial_controller"] == "path /dev/ttyACM0, VID:PID 1a86:55d3, serial 5AAF263566"
+
+
+def test_convert_malformed_nested_gateway_sections_to_safe_attestation() -> None:
+    converted = convert_zra_gateway_to_attestation(
+        robot_id="my_kiwi",
+        gateway_decision={
+            "proof_verification": "malformed",
+            "binding_verification": "malformed",
+            "component_appraisal": {
+                "failures": ["malformed"],
+                "warnings": {"malformed": True},
+            },
+            "component_report": {"engine_report": "malformed"},
+            "decision": {
+                "status": "reject",
+                "reason": "binding_expired",
+            },
+        },
+    )
+
+    assert converted.trust_state == AttestationTrustState.STALE
+    assert converted.reason == "Binding freshness window expired."
+    assert converted.findings[0].finding_type == "binding_expired"

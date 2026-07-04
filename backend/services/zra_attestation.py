@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeAlias
 
 from backend.models.attestation import (
+    AttestationGatewayDecisionPayload,
     AttestationFinding,
     AttestationFindingSeverity,
     AttestationStatusUpsertRequest,
     AttestationTrustState,
 )
+
+
+ZraGatewayRecord: TypeAlias = dict[str, Any]
+ZraGatewayComponentReport: TypeAlias = dict[str, Any]
 
 
 _FAILURE_MESSAGES = {
@@ -40,9 +45,11 @@ _FAILURE_MESSAGES = {
 }
 
 
-def _component_specific_message(failure: dict[str, Any]) -> str | None:
+def _component_specific_message(failure: ZraGatewayRecord) -> str | None:
     component = str(failure.get("component") or "")
-    component_class = str(failure.get("component_class") or failure.get("observed_component_class") or "")
+    component_class = str(
+        failure.get("component_class") or failure.get("observed_component_class") or ""
+    )
     if component == "software_runtime_0" or component_class == "software-runtime":
         return _FAILURE_MESSAGES["software_runtime_changed"]
     if component == "uart_device_0" or component_class == "serial-controller":
@@ -50,7 +57,7 @@ def _component_specific_message(failure: dict[str, Any]) -> str | None:
     return None
 
 
-def _format_expected_serial_identity(component: dict[str, Any]) -> str | None:
+def _format_expected_serial_identity(component: ZraGatewayRecord) -> str | None:
     if not isinstance(component, dict):
         return None
     evidence = component.get("evidence") or {}
@@ -59,7 +66,9 @@ def _format_expected_serial_identity(component: dict[str, Any]) -> str | None:
     usb_vendor = str(evidence.get("usb_vendor") or "").strip()
     usb_product = str(evidence.get("usb_product") or "").strip()
     usb_serial = str(evidence.get("usb_serial") or "").strip()
-    requested_path = str(evidence.get("requested_path") or component.get("path") or "").strip()
+    requested_path = str(
+        evidence.get("requested_path") or component.get("path") or ""
+    ).strip()
     if not any([usb_vendor, usb_product, usb_serial, requested_path]):
         return None
     segments = []
@@ -81,12 +90,40 @@ def _parse_datetime(value: Any) -> datetime | None:
         return None
 
 
-def _infer_trust_state(decision: dict[str, Any], binding_verification: dict[str, Any]) -> AttestationTrustState:
+def _record_field(record: ZraGatewayRecord, field_name: str) -> ZraGatewayRecord:
+    value = record.get(field_name) or {}
+    return value if isinstance(value, dict) else {}
+
+
+def _record_list(record: ZraGatewayRecord, field_name: str) -> list[ZraGatewayRecord]:
+    value = record.get(field_name) or []
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _component_report_entries(
+    component_report: ZraGatewayComponentReport,
+) -> list[ZraGatewayRecord]:
+    if not isinstance(component_report, dict):
+        return []
+    return _record_list(_record_field(component_report, "engine_report"), "components")
+
+
+def _infer_trust_state(
+    decision: ZraGatewayRecord,
+    binding_verification: ZraGatewayRecord,
+) -> AttestationTrustState:
     status = decision.get("status")
     reason = decision.get("reason")
     if status == "accept":
         return AttestationTrustState.VERIFIED
-    if reason in {"binding_expired", "binding_not_yet_valid", "binding_not_provided", "binding_inputs_incomplete"}:
+    if reason in {
+        "binding_expired",
+        "binding_not_yet_valid",
+        "binding_not_provided",
+        "binding_inputs_incomplete",
+    }:
         return AttestationTrustState.STALE
     if status == "degrade":
         return AttestationTrustState.STALE
@@ -97,7 +134,7 @@ def _infer_trust_state(decision: dict[str, Any], binding_verification: dict[str,
     return AttestationTrustState.INACTIVE
 
 
-def _human_message(reason: str, failure: dict[str, Any]) -> str:
+def _human_message(reason: str, failure: ZraGatewayRecord) -> str:
     base = _component_specific_message(failure) or _FAILURE_MESSAGES.get(
         reason, reason.replace("_", " ")
     )
@@ -112,13 +149,15 @@ def _human_message(reason: str, failure: dict[str, Any]) -> str:
     return base
 
 
-def _findings_from_gateway(gateway_decision: dict[str, Any]) -> list[AttestationFinding]:
-    appraisal = gateway_decision.get("component_appraisal") or {}
-    decision = gateway_decision.get("decision") or {}
-    component_report = gateway_decision.get("component_report") or {}
+def _findings_from_gateway(
+    gateway_decision: AttestationGatewayDecisionPayload,
+) -> list[AttestationFinding]:
+    appraisal = _record_field(gateway_decision, "component_appraisal")
+    decision = _record_field(gateway_decision, "decision")
+    component_report = _record_field(gateway_decision, "component_report")
     findings: list[AttestationFinding] = []
 
-    for failure in appraisal.get("failures", []):
+    for failure in _record_list(appraisal, "failures"):
         reason = str(failure.get("reason") or "policy_failure")
         findings.append(
             AttestationFinding(
@@ -126,12 +165,13 @@ def _findings_from_gateway(gateway_decision: dict[str, Any]) -> list[Attestation
                 severity=AttestationFindingSeverity.ALERT,
                 message=_human_message(reason, failure),
                 component_id=failure.get("component"),
-                component_class=failure.get("component_class") or failure.get("observed_component_class"),
+                component_class=failure.get("component_class")
+                or failure.get("observed_component_class"),
                 evidence_source="component-policy",
             )
         )
 
-    for warning in appraisal.get("warnings", []):
+    for warning in _record_list(appraisal, "warnings"):
         reason = str(warning.get("reason") or "policy_warning")
         findings.append(
             AttestationFinding(
@@ -139,7 +179,8 @@ def _findings_from_gateway(gateway_decision: dict[str, Any]) -> list[Attestation
                 severity=AttestationFindingSeverity.WARN,
                 message=_human_message(reason, warning),
                 component_id=warning.get("component"),
-                component_class=warning.get("component_class") or warning.get("observed_component_class"),
+                component_class=warning.get("component_class")
+                or warning.get("observed_component_class"),
                 evidence_source="component-policy",
             )
         )
@@ -157,7 +198,13 @@ def _findings_from_gateway(gateway_decision: dict[str, Any]) -> list[Attestation
         reason = str(decision.get("reason"))
         severity = (
             AttestationFindingSeverity.WARN
-            if reason in {"binding_expired", "binding_not_yet_valid", "binding_not_provided", "binding_inputs_incomplete"}
+            if reason
+            in {
+                "binding_expired",
+                "binding_not_yet_valid",
+                "binding_not_provided",
+                "binding_inputs_incomplete",
+            }
             else AttestationFindingSeverity.ALERT
         )
         findings.append(
@@ -169,50 +216,40 @@ def _findings_from_gateway(gateway_decision: dict[str, Any]) -> list[Attestation
             )
         )
 
-    components = ((component_report.get("engine_report") or {}).get("components") or []) if isinstance(component_report, dict) else []
-    if isinstance(components, list):
-        for component in components:
-            if not isinstance(component, dict):
-                continue
-            component_class = str(component.get("component_class") or "")
-            component_id = str(component.get("id") or "")
-            evidence = component.get("evidence") or {}
-            if component_class == "camera-pipeline" and isinstance(evidence, dict):
-                confirmed = bool(evidence.get("confirmed_camera_sensor"))
-                if confirmed:
-                    findings.append(
-                        AttestationFinding(
-                            finding_type="camera_sensor_verified",
-                            severity=AttestationFindingSeverity.INFO,
-                            message="Camera sensor attested and matched the enrolled profile.",
-                            component_id=component_id or None,
-                            component_class=component_class,
-                            evidence_source="component-report",
-                        )
+    for component in _component_report_entries(component_report):
+        component_class = str(component.get("component_class") or "")
+        component_id = str(component.get("id") or "")
+        evidence = component.get("evidence") or {}
+        if component_class == "camera-pipeline" and isinstance(evidence, dict):
+            confirmed = bool(evidence.get("confirmed_camera_sensor"))
+            if confirmed:
+                findings.append(
+                    AttestationFinding(
+                        finding_type="camera_sensor_verified",
+                        severity=AttestationFindingSeverity.INFO,
+                        message="Camera sensor attested and matched the enrolled profile.",
+                        component_id=component_id or None,
+                        component_class=component_class,
+                        evidence_source="component-report",
                     )
-                else:
-                    findings.append(
-                        AttestationFinding(
-                            finding_type="camera_sensor_missing",
-                            severity=AttestationFindingSeverity.WARN,
-                            message="Camera pipeline was expected but no confirmed sensor was observed.",
-                            component_id=component_id or None,
-                            component_class=component_class,
-                            evidence_source="component-report",
-                        )
+                )
+            else:
+                findings.append(
+                    AttestationFinding(
+                        finding_type="camera_sensor_missing",
+                        severity=AttestationFindingSeverity.WARN,
+                        message="Camera pipeline was expected but no confirmed sensor was observed.",
+                        component_id=component_id or None,
+                        component_class=component_class,
+                        evidence_source="component-report",
                     )
+                )
 
     return findings
 
 
-def _serial_controller_metadata(component_report: dict[str, Any]) -> dict[str, str]:
-    components = ((component_report.get("engine_report") or {}).get("components") or []) if isinstance(component_report, dict) else []
-    if not isinstance(components, list):
-        return {}
-
-    for component in components:
-        if not isinstance(component, dict):
-            continue
+def _serial_controller_metadata(component_report: ZraGatewayComponentReport) -> dict[str, str]:
+    for component in _component_report_entries(component_report):
         if str(component.get("component_class") or "") != "serial-controller":
             continue
         expected_identity = _format_expected_serial_identity(component)
@@ -224,11 +261,11 @@ def _serial_controller_metadata(component_report: dict[str, Any]) -> dict[str, s
 def convert_zra_gateway_to_attestation(
     *,
     robot_id: str,
-    gateway_decision: dict[str, Any],
+    gateway_decision: AttestationGatewayDecisionPayload,
 ) -> AttestationStatusUpsertRequest:
-    decision = gateway_decision.get("decision") or {}
-    binding_verification = gateway_decision.get("binding_verification") or {}
-    proof_verification = gateway_decision.get("proof_verification") or {}
+    decision = _record_field(gateway_decision, "decision")
+    binding_verification = _record_field(gateway_decision, "binding_verification")
+    proof_verification = _record_field(gateway_decision, "proof_verification")
     findings = _findings_from_gateway(gateway_decision)
     trust_state = _infer_trust_state(decision, binding_verification)
     expires_at = None
@@ -237,9 +274,9 @@ def convert_zra_gateway_to_attestation(
         expires_at = _parse_datetime(binding.get("expires_at"))
 
     reason_key = str(decision.get("reason") or "")
-    appraisal = gateway_decision.get("component_appraisal") or {}
-    failures = appraisal.get("failures", []) if isinstance(appraisal, dict) else []
-    first_failure = failures[0] if failures and isinstance(failures[0], dict) else {}
+    appraisal = _record_field(gateway_decision, "component_appraisal")
+    failures = _record_list(appraisal, "failures")
+    first_failure = failures[0] if failures else {}
     component_reason = _component_specific_message(first_failure) if first_failure else None
     if component_reason:
         reason = component_reason
@@ -249,7 +286,10 @@ def convert_zra_gateway_to_attestation(
     ):
         reason = findings[0].message
     else:
-        reason = _FAILURE_MESSAGES.get(reason_key, reason_key.replace("_", " ") if reason_key else None)
+        reason = _FAILURE_MESSAGES.get(
+            reason_key,
+            reason_key.replace("_", " ") if reason_key else None,
+        )
 
     metadata = {
         "gateway_decision_status": str(decision.get("status") or ""),
@@ -258,18 +298,15 @@ def convert_zra_gateway_to_attestation(
         "policy_name": str(gateway_decision.get("policy_name") or ""),
         "proof_verification_output": str(proof_verification.get("output") or ""),
     }
-    component_report = gateway_decision.get("component_report") or {}
-    components = ((component_report.get("engine_report") or {}).get("components") or []) if isinstance(component_report, dict) else []
-    if isinstance(components, list):
-        has_camera_sensor = any(
-            isinstance(component, dict)
-            and str(component.get("component_class") or "") == "camera-pipeline"
-            and isinstance(component.get("evidence"), dict)
-            and bool((component.get("evidence") or {}).get("confirmed_camera_sensor"))
-            for component in components
-        )
-        if has_camera_sensor:
-            metadata["sensor_summary"] = "Camera sensor attested."
+    component_report = _record_field(gateway_decision, "component_report")
+    has_camera_sensor = any(
+        str(component.get("component_class") or "") == "camera-pipeline"
+        and isinstance(component.get("evidence"), dict)
+        and bool((component.get("evidence") or {}).get("confirmed_camera_sensor"))
+        for component in _component_report_entries(component_report)
+    )
+    if has_camera_sensor:
+        metadata["sensor_summary"] = "Camera sensor attested."
     metadata.update(_serial_controller_metadata(component_report))
     metadata = {key: value for key, value in metadata.items() if value}
 

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, TypeAlias
 
 from pydantic import BaseModel, Field
+
+AttestationGatewayDecisionPayload: TypeAlias = dict[str, Any]
 
 
 class AttestationTrustState(str, Enum):
@@ -92,7 +94,7 @@ class AttestationScanTriggerRequest(BaseModel):
 
 class ZraGatewayImportRequest(BaseModel):
     robot_id: str = Field(..., min_length=1)
-    gateway_decision: dict[str, Any]
+    gateway_decision: AttestationGatewayDecisionPayload
 
 
 class ZraGatewayPullRequest(BaseModel):
