@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeAlias
 
 from backend.core.app_config import get_config_value, read_app_config
 from backend.services.world_scene_package_params import DEFAULT_WORLD_REGISTRY_FILENAME
@@ -19,27 +21,84 @@ from backend.world_bridge.params import (
     WORLDD_DEFAULT_TIMEOUT_MS,
 )
 
+AppConfig: TypeAlias = Mapping[str, object]
+ConfigPath: TypeAlias = Sequence[str]
 
-def _read_int(key: str, fallback: int) -> int:
+
+def _coerce_int(value: object, default_value: int) -> int:
+    if isinstance(value, bool):
+        return default_value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default_value
+        try:
+            return int(candidate)
+        except ValueError:
+            return default_value
+    return default_value
+
+
+def _coerce_str(value: object, default_value: str) -> str:
+    return value if isinstance(value, str) and value else default_value
+
+
+def _coerce_bool(value: object, default_value: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", ""}
+    return default_value
+
+
+def _read_int(key: str, configured_value: object, default_value: int) -> int:
+    raw = os.getenv(key)
+    config_default = _coerce_int(configured_value, default_value)
+    if raw is None:
+        return config_default
+    return _coerce_int(raw, config_default)
+
+
+def _read_str(key: str, configured_value: object, default_value: str) -> str:
+    raw = os.getenv(key)
+    config_default = _coerce_str(configured_value, default_value)
+    return raw if raw else config_default
+
+
+def _read_bool(key: str, configured_value: object, default_value: bool) -> bool:
     raw = os.getenv(key)
     if raw is None:
-        return fallback
-    try:
-        return int(raw)
-    except ValueError:
-        return fallback
+        return _coerce_bool(configured_value, default_value)
+    return _coerce_bool(raw, _coerce_bool(configured_value, default_value))
 
 
-def _read_str(key: str, fallback: str) -> str:
-    raw = os.getenv(key)
-    return raw if raw else fallback
+def _read_configured_int(
+    config: AppConfig,
+    env_key: str,
+    path: ConfigPath,
+    default_value: int,
+) -> int:
+    return _read_int(env_key, get_config_value(config, path, default_value), default_value)
 
 
-def _read_bool(key: str, fallback: bool) -> bool:
-    raw = os.getenv(key)
-    if raw is None:
-        return fallback
-    return raw.strip().lower() not in {"0", "false", "no", ""}
+def _read_configured_str(
+    config: AppConfig,
+    env_key: str,
+    path: ConfigPath,
+    default_value: str,
+) -> str:
+    return _read_str(env_key, get_config_value(config, path, default_value), default_value)
+
+
+def _read_configured_bool(
+    config: AppConfig,
+    env_key: str,
+    path: ConfigPath,
+    default_value: bool,
+) -> bool:
+    return _read_bool(env_key, get_config_value(config, path, default_value), default_value)
 
 
 def _read_csv_list(key: str) -> list[str]:
@@ -90,94 +149,105 @@ class Settings:
 
 def load_settings() -> Settings:
     config = read_app_config()
-    web_host = _read_str("URDF_WEB_HOST", get_config_value(config, ["web", "host"], "localhost"))
-    web_port = _read_int("URDF_WEB_PORT", get_config_value(config, ["web", "port"], 5173))
-    api_host = _read_str("URDF_API_HOST", get_config_value(config, ["api", "host"], "127.0.0.1"))
+    web_host = _read_configured_str(config, "URDF_WEB_HOST", ["web", "host"], "localhost")
+    web_port = _read_configured_int(config, "URDF_WEB_PORT", ["web", "port"], 5173)
+    api_host = _read_configured_str(config, "URDF_API_HOST", ["api", "host"], "127.0.0.1")
     api_bind_host = _read_str(
         "URDF_API_BIND_HOST",
         get_config_value(config, ["api", "bindHost"], api_host),
+        api_host,
     )
-    api_port = _read_int("URDF_API_PORT", get_config_value(config, ["api", "port"], 8000))
-    worldd_host = _read_str(
+    api_port = _read_configured_int(config, "URDF_API_PORT", ["api", "port"], 8000)
+    worldd_host = _read_configured_str(
+        config,
         "URDF_WORLDD_HOST",
-        get_config_value(config, ["ikd", "host"], WORLDD_DEFAULT_HOST),
+        ["ikd", "host"],
+        WORLDD_DEFAULT_HOST,
     )
-    worldd_port = _read_int(
+    worldd_port = _read_configured_int(
+        config,
         "URDF_WORLDD_PORT",
-        get_config_value(config, ["ikd", "port"], WORLDD_DEFAULT_PORT),
+        ["ikd", "port"],
+        WORLDD_DEFAULT_PORT,
     )
-    worldd_timeout_ms = _read_int(
+    worldd_timeout_ms = _read_configured_int(
+        config,
         "URDF_WORLDD_TIMEOUT_MS",
-        get_config_value(config, ["ikd", "requestTimeoutMs"], WORLDD_DEFAULT_TIMEOUT_MS),
+        ["ikd", "requestTimeoutMs"],
+        WORLDD_DEFAULT_TIMEOUT_MS,
     )
-    world_bridge_use_worldd_proxy = _read_bool(
+    world_bridge_use_worldd_proxy = _read_configured_bool(
+        config,
         "URDF_WORLD_BRIDGE_USE_WORLDD_PROXY",
-        get_config_value(config, ["ikd", "enabled"], True),
+        ["ikd", "enabled"],
+        True,
     )
-    world_registry_path = _read_str(
+    world_registry_path = _read_configured_str(
+        config,
         "URDF_WORLD_REGISTRY_PATH",
-        get_config_value(config, ["worldRegistry", "path"], DEFAULT_WORLD_REGISTRY_FILENAME),
+        ["worldRegistry", "path"],
+        DEFAULT_WORLD_REGISTRY_FILENAME,
     )
-    simulator_api_token = _read_str("URDF_SIMULATOR_API_TOKEN", "").strip() or None
-    zra_orchestrator_enabled = _read_bool(
+    simulator_api_token = _read_str("URDF_SIMULATOR_API_TOKEN", "", "").strip() or None
+    zra_orchestrator_enabled = _read_configured_bool(
+        config,
         "URDF_ZRA_ORCHESTRATOR_ENABLED",
-        get_config_value(config, ["zraOrchestrator", "enabled"], False),
+        ["zraOrchestrator", "enabled"],
+        False,
     )
-    zra_orchestrator_poll_interval_seconds = _read_int(
+    zra_orchestrator_poll_interval_seconds = _read_configured_int(
+        config,
         "URDF_ZRA_ORCHESTRATOR_POLL_INTERVAL_SECONDS",
-        get_config_value(config, ["zraOrchestrator", "pollIntervalSeconds"], 15),
+        ["zraOrchestrator", "pollIntervalSeconds"],
+        15,
     )
-    zra_orchestrator_inactive_after_seconds = _read_int(
+    zra_orchestrator_inactive_after_seconds = _read_configured_int(
+        config,
         "URDF_ZRA_ORCHESTRATOR_INACTIVE_AFTER_SECONDS",
-        get_config_value(config, ["zraOrchestrator", "inactiveAfterSeconds"], 60),
+        ["zraOrchestrator", "inactiveAfterSeconds"],
+        60,
     )
-    zra_orchestrator_devices_path = _read_str(
+    zra_orchestrator_devices_path = _read_configured_str(
+        config,
         "URDF_ZRA_ORCHESTRATOR_DEVICES_PATH",
-        get_config_value(config, ["zraOrchestrator", "devicesPath"], ""),
+        ["zraOrchestrator", "devicesPath"],
+        "",
     ).strip() or None
-    world_rollout_cli_path = _read_str(
+    world_rollout_cli_path = _read_configured_str(
+        config,
         "URDF_WORLD_ROLLOUT_CLI",
-        get_config_value(config, ["worldRollouts", "cliPath"], ""),
+        ["worldRollouts", "cliPath"],
+        "",
     ).strip() or None
-    world_rollout_workspace_root = _read_str(
+    world_rollout_workspace_root = _read_configured_str(
+        config,
         "URDF_WORLD_ROLLOUT_WORKSPACE_ROOT",
-        get_config_value(
-            config,
-            ["worldRollouts", "workspaceRoot"],
-            DEFAULT_WORLD_ROLLOUT_WORKSPACE_ROOT,
-        ),
+        ["worldRollouts", "workspaceRoot"],
+        DEFAULT_WORLD_ROLLOUT_WORKSPACE_ROOT,
     )
-    world_rollout_timeout_seconds = _read_int(
+    world_rollout_timeout_seconds = _read_configured_int(
+        config,
         "URDF_WORLD_ROLLOUT_TIMEOUT_SECONDS",
-        get_config_value(
-            config,
-            ["worldRollouts", "timeoutSeconds"],
-            DEFAULT_WORLD_ROLLOUT_TIMEOUT_SECONDS,
-        ),
+        ["worldRollouts", "timeoutSeconds"],
+        DEFAULT_WORLD_ROLLOUT_TIMEOUT_SECONDS,
     )
-    world_rollout_max_output_chars = _read_int(
+    world_rollout_max_output_chars = _read_configured_int(
+        config,
         "URDF_WORLD_ROLLOUT_MAX_OUTPUT_CHARS",
-        get_config_value(
-            config,
-            ["worldRollouts", "maxOutputChars"],
-            DEFAULT_WORLD_ROLLOUT_MAX_OUTPUT_CHARS,
-        ),
+        ["worldRollouts", "maxOutputChars"],
+        DEFAULT_WORLD_ROLLOUT_MAX_OUTPUT_CHARS,
     )
-    world_rollout_max_workers = _read_int(
+    world_rollout_max_workers = _read_configured_int(
+        config,
         "URDF_WORLD_ROLLOUT_MAX_WORKERS",
-        get_config_value(
-            config,
-            ["worldRollouts", "maxWorkers"],
-            DEFAULT_WORLD_ROLLOUT_MAX_WORKERS,
-        ),
+        ["worldRollouts", "maxWorkers"],
+        DEFAULT_WORLD_ROLLOUT_MAX_WORKERS,
     )
-    world_rollout_max_queued_jobs = _read_int(
+    world_rollout_max_queued_jobs = _read_configured_int(
+        config,
         "URDF_WORLD_ROLLOUT_MAX_QUEUED_JOBS",
-        get_config_value(
-            config,
-            ["worldRollouts", "maxQueuedJobs"],
-            DEFAULT_WORLD_ROLLOUT_MAX_QUEUED_JOBS,
-        ),
+        ["worldRollouts", "maxQueuedJobs"],
+        DEFAULT_WORLD_ROLLOUT_MAX_QUEUED_JOBS,
     )
     cors_origins = list(
         dict.fromkeys(
@@ -185,7 +255,7 @@ def load_settings() -> Settings:
             + _read_csv_list("URDF_CORS_ORIGINS")
         )
     )
-    enable_metrics = _read_bool("URDF_STUDIO_METRICS", False)
+    enable_metrics = _read_bool("URDF_STUDIO_METRICS", False, False)
     return Settings(
         web_host=web_host,
         web_port=web_port,
