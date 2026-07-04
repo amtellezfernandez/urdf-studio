@@ -23,13 +23,10 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/ui/collapsible";
 import { cn } from "@/shared/lib/utils";
 import { useJointStore } from "@/shared/store/useJointStore";
-import { analyzeUrdf } from "@/shared/lib/urdfCore";
 import { OriginRows } from "@/features/urdf/editor/link-editor/OriginRows";
-import { parseVector3, updateVector3Value } from "@/features/urdf/editor/link-editor/sizeUtils";
+import { updateVector3Value } from "@/features/urdf/editor/link-editor/sizeUtils";
 import {
   getJointLinks,
-  getUrdfElementByName,
-  parseUrdfDocument,
   type JointAxisInfo,
   type JointLimitInfo,
   type UrdfAnalysis,
@@ -46,6 +43,14 @@ import {
   parsePositiveScalar,
   type LimitAttributeDebugState,
 } from "@/features/layout/jointLimitDebugState";
+import {
+  parseAxisValue,
+  parseJointNumericInput,
+  resolveAxisComponents,
+  resolveJointAvailableLinks,
+  resolveJointAxisPresetLabel,
+  resolveJointOriginSnapshot,
+} from "@/features/layout/jointControlHelpers";
 import { resolveJointDynamicLimitDisplayState } from "@/features/layout/jointDynamicLimitDisplay";
 import { useJointValueInteraction } from "@/features/layout/jointValueInteraction";
 import type { URDFRobot } from "urdf-loader";
@@ -294,31 +299,19 @@ export const JointControl = ({
   }, [urdfContent, jointName]);
 
   const jointOrigin = useMemo(() => {
-    if (!urdfContent) {
-      return { xyz: [0, 0, 0] as [number, number, number], rpy: [0, 0, 0] as [number, number, number] };
-    }
-    const xmlDoc = parseUrdfDocument(urdfContent, JOINT_CONTROL_URDF_PARSE_OPTIONS);
-    if (!xmlDoc) {
-      return { xyz: [0, 0, 0] as [number, number, number], rpy: [0, 0, 0] as [number, number, number] };
-    }
-    const joint = getUrdfElementByName(xmlDoc, "joint", jointName, {
-      label: "joint",
-      onMissing: () => {},
+    return resolveJointOriginSnapshot({
+      jointName,
+      parseOptions: JOINT_CONTROL_URDF_PARSE_OPTIONS,
+      urdfContent,
     });
-    const origin = joint?.querySelector("origin");
-    return {
-      xyz: parseVector3(origin?.getAttribute("xyz") || "", [0, 0, 0]),
-      rpy: parseVector3(origin?.getAttribute("rpy") || "", [0, 0, 0]),
-    };
   }, [jointName, urdfContent]);
 
   // Get all available links for selection
   const availableLinks = useMemo(() => {
-    if (urdfAnalysis?.isValid) return [...urdfAnalysis.linkNames].sort();
-    if (!urdfContent) return [];
-    const analysis = analyzeUrdf(urdfContent);
-    if (!analysis.isValid) return [];
-    return [...analysis.linkNames].sort();
+    return resolveJointAvailableLinks({
+      urdfAnalysis,
+      urdfContent,
+    });
   }, [urdfAnalysis, urdfContent]);
 
   const parentLinkOptions = useMemo(
@@ -340,37 +333,22 @@ export const JointControl = ({
   }, [jointAxis?.xyz]);
   
   // Find matching preset for current axis
-  const parseAxisValue = useCallback((value: string): number | null => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, []);
-
-  const resolveAxisComponents = useCallback(() => {
-    const fallback = jointAxis?.xyz ?? [0, 0, 1];
-    const x = parseAxisValue(localAxisX);
-    const y = parseAxisValue(localAxisY);
-    const z = parseAxisValue(localAxisZ);
-    return [
-      x ?? fallback[0],
-      y ?? fallback[1],
-      z ?? fallback[2],
-    ] as [number, number, number];
-  }, [jointAxis?.xyz, localAxisX, localAxisY, localAxisZ, parseAxisValue]);
+  const resolveAxisTuple = useCallback(
+    () =>
+      resolveAxisComponents({
+        fallbackAxis: jointAxis?.xyz ?? [0, 0, 1],
+        localAxisX,
+        localAxisY,
+        localAxisZ,
+      }),
+    [jointAxis?.xyz, localAxisX, localAxisY, localAxisZ]
+  );
 
   const getAxisPreset = useCallback((): string => {
-    if (!jointAxis?.xyz) return "Custom";
-    const [x, y, z] = jointAxis.xyz;
-    const tolerance = 0.001;
-    for (const [label, preset] of Object.entries(AXIS_PRESETS)) {
-      if (
-        Math.abs(preset.axis[0] - x) < tolerance &&
-        Math.abs(preset.axis[1] - y) < tolerance &&
-        Math.abs(preset.axis[2] - z) < tolerance
-      ) {
-        return label;
-      }
-    }
-    return "Custom";
+    return resolveJointAxisPresetLabel({
+      axis: jointAxis?.xyz,
+      axisPresets: AXIS_PRESETS,
+    });
   }, [jointAxis?.xyz]);
 
   const [selectedPreset, setSelectedPreset] = useState<string>(getAxisPreset());
@@ -403,9 +381,9 @@ export const JointControl = ({
   };
 
   const handleAxisCommit = useCallback(() => {
-    const [x, y, z] = resolveAxisComponents();
+    const [x, y, z] = resolveAxisTuple();
     commitAxisChange([x, y, z]);
-  }, [commitAxisChange, resolveAxisComponents]);
+  }, [commitAxisChange, resolveAxisTuple]);
 
   // Name editing handlers
   const handleNameDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -457,13 +435,6 @@ export const JointControl = ({
   );
   const [localOriginXyz, setLocalOriginXyz] = useState<[number, number, number]>(jointOrigin.xyz);
   const [localOriginRpy, setLocalOriginRpy] = useState<[number, number, number]>(jointOrigin.rpy);
-  const parseLimitInput = useCallback((value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return undefined;
-    const parsed = Number.parseFloat(trimmed);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }, []);
-
   // State for showing/hiding advanced options
   const [isExpanded, setIsExpanded] = useState(alwaysExpanded);
   
@@ -779,7 +750,7 @@ export const JointControl = ({
                         const radValue = angleUnit === "deg" ? nextLimitDisplayValue * DEG_TO_RAD : nextLimitDisplayValue;
                         setLocalLowerLimit(String(radValue));
                         if (onLimitsChange) {
-                          const currentUpper = parseLimitInput(localUpperLimit);
+                          const currentUpper = parseJointNumericInput(localUpperLimit);
                           const error = getJointLimitsError(radValue, currentUpper);
                           if (error) {
                             toast.error(error);
@@ -791,8 +762,8 @@ export const JointControl = ({
                       onBlur={() => {
                         if (!onLimitsChange) return;
                         if (localLowerLimit.trim() !== "" && localUpperLimit.trim() !== "") return;
-                        const currentLower = parseLimitInput(localLowerLimit);
-                        const currentUpper = parseLimitInput(localUpperLimit);
+                        const currentLower = parseJointNumericInput(localLowerLimit);
+                        const currentUpper = parseJointNumericInput(localUpperLimit);
                         if (
                           currentType === "prismatic" &&
                           currentLower === undefined &&
@@ -832,7 +803,7 @@ export const JointControl = ({
                         const radValue = angleUnit === "deg" ? nextLimitDisplayValue * DEG_TO_RAD : nextLimitDisplayValue;
                         setLocalUpperLimit(String(radValue));
                         if (onLimitsChange) {
-                          const currentLower = parseLimitInput(localLowerLimit);
+                          const currentLower = parseJointNumericInput(localLowerLimit);
                           const error = getJointLimitsError(currentLower, radValue);
                           if (error) {
                             toast.error(error);
@@ -844,8 +815,8 @@ export const JointControl = ({
                       onBlur={() => {
                         if (!onLimitsChange) return;
                         if (localLowerLimit.trim() !== "" && localUpperLimit.trim() !== "") return;
-                        const currentLower = parseLimitInput(localLowerLimit);
-                        const currentUpper = parseLimitInput(localUpperLimit);
+                        const currentLower = parseJointNumericInput(localLowerLimit);
+                        const currentUpper = parseJointNumericInput(localUpperLimit);
                         if (
                           currentType === "prismatic" &&
                           currentLower === undefined &&
