@@ -4,14 +4,22 @@ import hashlib
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Sequence
 
 import numpy as np
 from fastapi import HTTPException
 
 import yourdfpy  # type: ignore
 
-from backend.models.kinematics import FKLink, FKRequest, FKResponse
+from backend.models.kinematics import (
+    FKLink,
+    FKRequest,
+    FKResponse,
+    JointValueMap,
+    KinematicsMetadata,
+    QuaternionWxyz,
+    Vector3,
+)
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
 
 
@@ -22,7 +30,7 @@ class KinematicsEntry:
     urdf: yourdfpy.URDF
 
 
-_KINEMATICS_CACHE: Dict[str, KinematicsEntry] = {}
+_KINEMATICS_CACHE: dict[str, KinematicsEntry] = {}
 
 
 def _hash_urdf(urdf_xml: str) -> str:
@@ -64,16 +72,16 @@ def _get_or_create_entry(urdf_xml: str) -> KinematicsEntry:
     return entry
 
 
-def _build_joint_values(
-    robot_model: yourdfpy.URDF, joint_values: Dict[str, float]
-) -> Dict[str, float]:
+def _build_actuated_joint_values(
+    robot_model: yourdfpy.URDF, requested_joint_values: JointValueMap
+) -> JointValueMap:
     return {
-        joint_name: float(joint_values.get(joint_name, 0.0))
+        joint_name: float(requested_joint_values.get(joint_name, 0.0))
         for joint_name in robot_model.actuated_joint_names
     }
 
 
-def _quaternion_from_rotation_matrix(rotation: np.ndarray) -> List[float]:
+def _quaternion_from_rotation_matrix(rotation: np.ndarray) -> QuaternionWxyz:
     trace = float(rotation[0, 0] + rotation[1, 1] + rotation[2, 2])
     if trace > 0.0:
         scale = np.sqrt(trace + 1.0) * 2.0
@@ -105,10 +113,10 @@ def _quaternion_from_rotation_matrix(rotation: np.ndarray) -> List[float]:
     if not np.isfinite(norm) or norm <= 0.0:
         return [1.0, 0.0, 0.0, 0.0]
     quaternion /= norm
-    return [float(value) for value in quaternion]
+    return [float(component) for component in quaternion]
 
 
-def rotation_matrix_to_wxyz(rotation: List[List[float]]) -> List[float]:
+def rotation_matrix_to_wxyz(rotation: Sequence[Sequence[float]]) -> QuaternionWxyz:
     rotation_matrix = np.asarray(rotation, dtype=np.float64)
     if rotation_matrix.shape != (3, 3):
         raise HTTPException(
@@ -119,8 +127,8 @@ def rotation_matrix_to_wxyz(rotation: List[List[float]]) -> List[float]:
 
 
 def compute_link_pose(
-    urdf_xml: str, joint_values: Dict[str, float], target_link: str
-) -> Tuple[List[float], List[float]]:
+    urdf_xml: str, joint_values: JointValueMap, target_link: str
+) -> tuple[Vector3, QuaternionWxyz]:
     entry = _get_or_create_entry(urdf_xml)
     robot_model = entry.urdf
     if target_link not in robot_model.link_map:
@@ -130,7 +138,7 @@ def compute_link_pose(
         )
 
     try:
-        robot_model.update_cfg(_build_joint_values(robot_model, joint_values))
+        robot_model.update_cfg(_build_actuated_joint_values(robot_model, joint_values))
         transform = np.asarray(
             robot_model.get_transform(target_link),
             dtype=np.float64,
@@ -152,7 +160,7 @@ def forward_kinematics(fk_request: FKRequest) -> FKResponse:
 
     try:
         robot_model.update_cfg(
-            _build_joint_values(robot_model, fk_request.joint_values)
+            _build_actuated_joint_values(robot_model, fk_request.joint_values)
         )
     except Exception as exc:
         raise HTTPException(
@@ -160,7 +168,7 @@ def forward_kinematics(fk_request: FKRequest) -> FKResponse:
             detail=f"Forward kinematics failed: {exc}",
         ) from exc
 
-    links: List[FKLink] = []
+    links: list[FKLink] = []
     for link_name in robot_model.link_map.keys():
         try:
             transform = np.asarray(
@@ -180,7 +188,7 @@ def forward_kinematics(fk_request: FKRequest) -> FKResponse:
             )
         )
 
-    metadata: Dict[str, Any] = {
+    metadata: KinematicsMetadata = {
         "urdf_hash": entry.urdf_hash,
         "actuated_joint_names": list(robot_model.actuated_joint_names),
         "all_link_names": list(robot_model.link_map.keys()),

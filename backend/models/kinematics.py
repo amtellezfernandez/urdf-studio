@@ -1,14 +1,22 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, TypeAlias
 
 from pydantic import BaseModel, Field
 
 from backend.models.ik_tasks import IkConstraint, IkTask
 
+
+JointValueMap: TypeAlias = dict[str, float]
+KinematicsMetadata: TypeAlias = dict[str, Any]
+QuaternionWxyz: TypeAlias = list[float]
+RotationMatrix3x3: TypeAlias = list[list[float]]
+Vector3: TypeAlias = list[float]
+
+
 class FKRequest(BaseModel):
     urdf: str = Field(..., description="URDF XML as a string.")
-    joint_values: Dict[str, float] = Field(
+    joint_values: JointValueMap = Field(
         default_factory=dict,
         description="Mapping joint_name -> value (radians).",
     )
@@ -16,50 +24,50 @@ class FKRequest(BaseModel):
 
 class FKLink(BaseModel):
     name: str
-    position: List[float]  # [x, y, z]
-    quaternion_wxyz: List[float]  # [w, x, y, z]
+    position: Vector3  # [x, y, z]
+    quaternion_wxyz: QuaternionWxyz  # [w, x, y, z]
 
 
 class FKResponse(BaseModel):
-    links: List[FKLink]
-    metadata: Dict[str, Any]
+    links: list[FKLink]
+    metadata: KinematicsMetadata
 
 
 class IKRequest(BaseModel):
     urdf: str = Field(..., description="URDF XML as a string.")
-    joint_values: Dict[str, float] = Field(
+    joint_values: JointValueMap = Field(
         default_factory=dict, description="Mapping joint_name -> value (radians)."
     )
     target_link: str = Field(..., description="End-effector link name.")
-    target_position: List[float] = Field(
+    target_position: Vector3 = Field(
         ..., description="Target position [x, y, z] in meters."
     )
-    target_wxyz: Optional[List[float]] = Field(
+    target_wxyz: QuaternionWxyz | None = Field(
         default=None, description="Target orientation [w, x, y, z]. Defaults to identity."
     )
-    target_rotation: Optional[List[List[float]]] = Field(
+    target_rotation: RotationMatrix3x3 | None = Field(
         default=None,
         description="Target orientation as 3x3 rotation matrix (row-major). Overrides target_wxyz when provided.",
     )
-    position_weight: Optional[float] = Field(
+    position_weight: float | None = Field(
         default=None, description="Optional position weight override for the solve."
     )
-    orientation_weight: Optional[float] = Field(
+    orientation_weight: float | None = Field(
         default=None, description="Optional orientation weight override for the solve."
     )
-    limit_weight: Optional[float] = Field(
+    limit_weight: float | None = Field(
         default=None, description="Optional joint-limit penalty weight override."
     )
-    posture_weight: Optional[float] = Field(
+    posture_weight: float | None = Field(
         default=None, description="Optional posture regularization weight override."
     )
-    posture_joint_values: Optional[Dict[str, float]] = Field(
+    posture_joint_values: JointValueMap | None = Field(
         default=None, description="Optional posture target for regularization."
     )
-    position_tolerance: Optional[float] = Field(
+    position_tolerance: float | None = Field(
         default=None, description="Optional position tolerance for solve success."
     )
-    orientation_tolerance: Optional[float] = Field(
+    orientation_tolerance: float | None = Field(
         default=None, description="Optional orientation tolerance for solve success."
     )
 
@@ -69,31 +77,31 @@ class IkSolveRequest(IKRequest):
         default="amik",
         description="Solver id to use (e.g., amik, placo).",
     )
-    solver_chain: Optional[List[str]] = Field(
+    solver_chain: list[str] | None = Field(
         default=None,
         description="Ordered list of solver ids to try. Overrides solver_id when provided.",
     )
-    orientation_mode: Optional[str] = Field(
+    orientation_mode: str | None = Field(
         default=None,
         description=(
             "Orientation policy: required, optional, prefer, ignore, or position_first."
         ),
     )
-    mode: Optional[str] = Field(
+    mode: str | None = Field(
         default=None,
         description="Solve mode hint (e.g., tracking, single_shot, batch).",
     )
-    tasks: Optional[List[IkTask]] = Field(
+    tasks: list[IkTask] | None = Field(
         default=None, description="Optional task IR to drive IK solves."
     )
-    constraints: Optional[List[IkConstraint]] = Field(
+    constraints: list[IkConstraint] | None = Field(
         default=None, description="Optional constraint IR for IK solves."
     )
 
 
 class IKDiagnostics(BaseModel):
     termination_reason: str
-    termination_flags: List[bool]
+    termination_flags: list[bool]
     iterations: int
     cost: float
     lambda_final: float
@@ -103,16 +111,16 @@ class IKDiagnostics(BaseModel):
     branch_maybe: bool
     branch_metric: float
     branch_message: str
-    solver_id: Optional[str] = None
-    seed_source: Optional[str] = None
-    continuity_penalty: Optional[float] = None
-    residual_position: Optional[float] = None
-    residual_orientation: Optional[float] = None
-    position_error: Optional[float] = None
-    escalation_blocked_reason: Optional[str] = None
+    solver_id: str | None = None
+    seed_source: str | None = None
+    continuity_penalty: float | None = None
+    residual_position: float | None = None
+    residual_orientation: float | None = None
+    position_error: float | None = None
+    escalation_blocked_reason: str | None = None
 
 
 class IKResponse(BaseModel):
-    solution: Dict[str, float]
+    solution: JointValueMap
     diagnostics: IKDiagnostics
-    metadata: Dict[str, Any]
+    metadata: KinematicsMetadata
