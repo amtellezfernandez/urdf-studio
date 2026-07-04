@@ -38,6 +38,10 @@ def _is_process_alive(process: subprocess.Popen | None) -> bool:
     return process is not None and process.poll() is None
 
 
+def _record_matches_target(record: _WorkspaceLaunchRecord, target_id: str) -> bool:
+    return record.target_id in {"", target_id}
+
+
 def _prune_locked(now: float) -> None:
     stale_launch_ids = [
         launch_id
@@ -54,7 +58,7 @@ def begin_workspace_launch(launch_id: str, target_id: str) -> bool:
     with _launches_lock:
         _prune_locked(now)
         record = _launches.get(launch_id)
-        if record is not None and record.cancelled:
+        if record is not None:
             return False
         _launches[launch_id] = _WorkspaceLaunchRecord(
             launch_id=launch_id,
@@ -103,6 +107,7 @@ def cancel_workspace_launch(
     target_id: str,
 ) -> WorkspaceLaunchCancelResult:
     process_to_stop: subprocess.Popen | None = None
+    target_mismatch = False
     with _launches_lock:
         now = time.monotonic()
         _prune_locked(now)
@@ -116,9 +121,18 @@ def cancel_workspace_launch(
             )
             _launches[launch_id] = record
         else:
-            record.cancelled = True
-            record.target_id = target_id
-            process_to_stop = record.process
+            if not _record_matches_target(record, target_id):
+                target_mismatch = True
+            else:
+                record.cancelled = True
+                record.target_id = target_id
+                process_to_stop = record.process
+
+    if target_mismatch:
+        return WorkspaceLaunchCancelResult(
+            launch_id=launch_id,
+            cancelled=False,
+        )
 
     process_stopped = False
     pid = process_to_stop.pid if process_to_stop is not None else None

@@ -11,9 +11,8 @@ from backend.services.simulator_adapters.workspace_launches import (
 )
 
 
-def test_cancel_workspace_launch_stops_attached_process() -> None:
-    launch_id = f"test-{uuid.uuid4().hex}"
-    process = subprocess.Popen(
+def _start_sleep_process() -> subprocess.Popen:
+    return subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(30)"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -21,9 +20,61 @@ def test_cancel_workspace_launch_stops_attached_process() -> None:
         start_new_session=True,
         close_fds=True,
     )
+
+
+def test_cancel_workspace_launch_stops_attached_process() -> None:
+    launch_id = f"test-{uuid.uuid4().hex}"
+    process = _start_sleep_process()
     try:
         assert begin_workspace_launch(launch_id, "genesis")
         assert attach_workspace_launch_process(launch_id, process)
+
+        result = cancel_workspace_launch(launch_id, target_id="genesis")
+
+        assert result.cancelled is True
+        assert result.process_stopped is True
+        assert result.pid == process.pid
+        assert process.poll() is not None
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def test_cancel_workspace_launch_ignores_different_target_process() -> None:
+    launch_id = f"test-{uuid.uuid4().hex}"
+    process = _start_sleep_process()
+    try:
+        assert begin_workspace_launch(launch_id, "genesis")
+        assert attach_workspace_launch_process(launch_id, process)
+
+        wrong_target_result = cancel_workspace_launch(launch_id, target_id="pybullet")
+
+        assert wrong_target_result.cancelled is False
+        assert wrong_target_result.process_stopped is False
+        assert wrong_target_result.pid is None
+        assert process.poll() is None
+
+        correct_target_result = cancel_workspace_launch(launch_id, target_id="genesis")
+
+        assert correct_target_result.cancelled is True
+        assert correct_target_result.process_stopped is True
+        assert correct_target_result.pid == process.pid
+        assert process.poll() is not None
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def test_duplicate_workspace_launch_cannot_replace_attached_process() -> None:
+    launch_id = f"test-{uuid.uuid4().hex}"
+    process = _start_sleep_process()
+    try:
+        assert begin_workspace_launch(launch_id, "genesis")
+        assert attach_workspace_launch_process(launch_id, process)
+
+        assert begin_workspace_launch(launch_id, "genesis") is False
 
         result = cancel_workspace_launch(launch_id, target_id="genesis")
 
