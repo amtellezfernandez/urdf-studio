@@ -1,33 +1,15 @@
+import {
+  DEFAULT_STRUCTURE_GROUP_LABEL,
+  normalizeStructureGroupDisplayLabel,
+  parseStructureGroupLabel,
+  resolveStructureGroupLabelForName,
+  STRUCTURE_GROUP_ORDER,
+} from "@/features/layout/structureGroupHelpers";
+
 export type StructureGroupSection = {
   id: string;
   label: string;
   items: string[];
-};
-
-const STRUCTURE_GROUP_ORDER: Record<string, number> = {
-  base: 0,
-  body: 1,
-  arm: 2,
-  leg: 3,
-  wheel: 4,
-  other: 5,
-};
-
-const DEFAULT_GROUP_LABEL = "other";
-const GROUP_LABEL_PATTERN = /^([a-z]+)(\d+)?$/i;
-const DEFAULT_GROUP_INDEX = Number.POSITIVE_INFINITY;
-
-const parseStructureGroupLabel = (label: string): { kind: string; index: number } => {
-  const match = label.match(GROUP_LABEL_PATTERN);
-  if (!match) return { kind: DEFAULT_GROUP_LABEL, index: DEFAULT_GROUP_INDEX };
-
-  const kind = (match[1] || DEFAULT_GROUP_LABEL).toLowerCase();
-  const indexRaw = match[2];
-  const index = indexRaw ? Number(indexRaw) : 0;
-  return {
-    kind: STRUCTURE_GROUP_ORDER[kind] === undefined ? DEFAULT_GROUP_LABEL : kind,
-    index: Number.isFinite(index) ? index : DEFAULT_GROUP_INDEX,
-  };
 };
 
 export const sortStructureGroupLabels = (lhs: string, rhs: string): number => {
@@ -42,8 +24,7 @@ export const sortStructureGroupLabels = (lhs: string, rhs: string): number => {
 };
 
 export const toGroupDisplayLabel = (label: string): string => {
-  if (!label) return "Other";
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  return normalizeStructureGroupDisplayLabel(label);
 };
 
 export const buildStructureGroupSections = (
@@ -52,8 +33,10 @@ export const buildStructureGroupSections = (
 ): StructureGroupSection[] => {
   const byLabel = new Map<string, string[]>();
   for (const name of names) {
-    const rawLabel = labelsByName[name];
-    const label = rawLabel && rawLabel.trim().length > 0 ? rawLabel : DEFAULT_GROUP_LABEL;
+    const label = resolveStructureGroupLabelForName({
+      labelsByName,
+      name,
+    });
     const existing = byLabel.get(label);
     if (existing) {
       existing.push(name);
