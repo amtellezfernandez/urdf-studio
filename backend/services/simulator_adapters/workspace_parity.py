@@ -26,6 +26,13 @@ PARITY_REPORT_FIELDS = (
     "joint_position_count",
     "joint_positions",
 )
+PARITY_REQUIRED_REPORT_FIELDS = (
+    *PARITY_REPORT_FIELDS,
+    "warnings",
+    "objects",
+    "cameras",
+    "artifacts",
+)
 
 
 @dataclass(frozen=True)
@@ -114,6 +121,14 @@ def _load_report(path: Path) -> ParityReportPayload:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
+    missing_fields = [
+        field for field in PARITY_REQUIRED_REPORT_FIELDS if field not in payload
+    ]
+    if missing_fields:
+        raise ValueError(
+            "missing parity report field(s): "
+            f"{', '.join(missing_fields)}"
+        )
     return cast(ParityReportPayload, payload)
 
 
@@ -238,7 +253,9 @@ def _camera_image_manifest(
             f"{label} camera_images validation report has no camera_screenshot_dir",
         )
     directory = Path(directory_raw)
-    image_paths = sorted(directory.glob("*.png")) if directory.exists() else []
+    if not directory.is_dir():
+        return label, f"{label} camera_images directory is not a directory: {directory}"
+    image_paths = sorted(directory.glob("*.png"))
     if not image_paths:
         return label, f"{label} camera_images has no PNG artifacts in {directory}"
     actual_names = sorted(path.name for path in image_paths)

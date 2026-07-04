@@ -57,6 +57,39 @@ def test_simulator_workspace_parity_rejects_report_mismatch(tmp_path: Path) -> N
     assert "report.objects" in result.detail
 
 
+def test_simulator_workspace_parity_rejects_missing_required_report_fields(
+    tmp_path: Path,
+) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    invalid_report = tmp_path / "invalid" / "report.json"
+    invalid_report.parent.mkdir(parents=True)
+    invalid_report.write_text(
+        json.dumps(
+            {
+                "package_id": "demo",
+                "version": "1.0.0",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("Invalid", invalid_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "could not read Invalid validation report" in result.detail
+    assert "missing parity report field(s): requested_frame_map" in result.detail
+
+
 def test_simulator_workspace_parity_rejects_joint_position_mismatch(tmp_path: Path) -> None:
     genesis_report = _write_parity_report(
         tmp_path / "genesis",
@@ -157,6 +190,37 @@ def test_simulator_workspace_parity_rejects_camera_image_name_mismatch(tmp_path:
     assert result is not None
     assert result.passed is False
     assert "PNG names do not match report cameras" in result.detail
+
+
+def test_simulator_workspace_parity_rejects_camera_artifact_file_path(
+    tmp_path: Path,
+) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+    )
+    camera_file = tmp_path / "not-a-directory"
+    camera_file.write_text("not a directory\n", encoding="utf-8")
+    payload = json.loads(mujoco_report.read_text(encoding="utf-8"))
+    payload["artifacts"]["camera_screenshot_dir"] = str(camera_file)
+    mujoco_report.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert f"MuJoCo camera_images directory is not a directory: {camera_file}" in result.detail
 
 
 def test_simulator_workspace_parity_uses_sanitized_camera_image_names(tmp_path: Path) -> None:
