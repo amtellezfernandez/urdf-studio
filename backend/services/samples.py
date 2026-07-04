@@ -5,7 +5,6 @@ import mimetypes
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from fastapi import HTTPException
 
@@ -78,19 +77,23 @@ def _is_safe_sample_definition(repo_path: object, urdf_path: object) -> tuple[st
     return normalized_repo_path, normalized_urdf_path
 
 
-def _load_samples_config() -> tuple[Optional[str], Dict[str, SampleDefinition]]:
+def _normalize_sample_label(value: object, fallback: str) -> str:
+    return value.strip() if isinstance(value, str) and value.strip() else fallback
+
+
+def _load_samples_config() -> tuple[str | None, dict[str, SampleDefinition]]:
     config = read_app_config()
     quickstart_id = get_config_value(config, ["samples", "quickStartId"], None)
-    items = get_config_value(config, ["samples", "items"], {})
-    if not isinstance(items, dict):
-        items = {}
-    definitions: Dict[str, SampleDefinition] = {}
-    for sample_id, payload in items.items():
-        if not isinstance(payload, dict):
+    raw_sample_configs = get_config_value(config, ["samples", "items"], {})
+    if not isinstance(raw_sample_configs, dict):
+        raw_sample_configs = {}
+    definitions: dict[str, SampleDefinition] = {}
+    for sample_id, sample_config in raw_sample_configs.items():
+        if not isinstance(sample_config, dict):
             continue
-        label = payload.get("label") or sample_id
-        repo_path = payload.get("repoPath")
-        urdf_path = payload.get("urdfPath")
+        label = _normalize_sample_label(sample_config.get("label"), sample_id)
+        repo_path = sample_config.get("repoPath")
+        urdf_path = sample_config.get("urdfPath")
         safe_paths = _is_safe_sample_definition(repo_path, urdf_path)
         if safe_paths is None:
             continue
@@ -107,7 +110,7 @@ def _load_samples_config() -> tuple[Optional[str], Dict[str, SampleDefinition]]:
     return resolved_quickstart_id, definitions
 
 
-def list_samples() -> tuple[Optional[str], List[SampleEntry]]:
+def list_samples() -> tuple[str | None, list[SampleEntry]]:
     quickstart_id, definitions = _load_samples_config()
     entries = [
         SampleEntry(id=sample.id, label=sample.label, urdf_path=sample.urdf_path)
@@ -171,9 +174,9 @@ def _resolve_mesh_reference(filename: str, urdf_dir: Path, repo_root: Path) -> P
     return None
 
 
-def _collect_mesh_files(urdf_path: Path, repo_root: Path) -> List[Path]:
+def _collect_mesh_files(urdf_path: Path, repo_root: Path) -> list[Path]:
     urdf_dir = urdf_path.parent
-    mesh_files: List[Path] = []
+    mesh_files: list[Path] = []
     seen: set[Path] = set()
     try:
         root = ET.parse(urdf_path).getroot()
@@ -206,11 +209,11 @@ def load_sample_files(sample_id: str) -> SampleFilesResponse:
         raise HTTPException(status_code=404, detail=f"Sample '{sample_id}' not configured.")
 
     repo_root, urdf_path = _resolve_sample_path(sample)
-    files: List[SampleFile] = []
+    files: list[SampleFile] = []
     files.append(_encode_file(urdf_path, repo_root))
 
-    for mesh in _collect_mesh_files(urdf_path, repo_root):
-        files.append(_encode_file(mesh, repo_root))
+    for mesh_path in _collect_mesh_files(urdf_path, repo_root):
+        files.append(_encode_file(mesh_path, repo_root))
 
     return SampleFilesResponse(
         id=sample.id,

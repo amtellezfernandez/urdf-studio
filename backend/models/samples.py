@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 from pydantic import BaseModel
 
 
@@ -21,9 +19,9 @@ class SampleFilesResponse(BaseModel):
     id: str
     label: str
     urdf_path: str
-    files: List[SampleFile]
+    files: list[SampleFile]
 
 
 class SamplesResponse(BaseModel):
-    quickstart_id: Optional[str] = None
-    samples: List[SampleEntry]
+    quickstart_id: str | None = None
+    samples: list[SampleEntry]

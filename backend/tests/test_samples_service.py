@@ -125,6 +125,31 @@ def test_list_samples_drops_quickstart_when_configured_sample_is_unsafe(
     assert entries == []
 
 
+def test_list_samples_uses_sample_id_when_label_is_not_a_non_empty_string(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    install_sample_root(monkeypatch, tmp_path)
+    install_config(
+        monkeypatch,
+        {
+            TEST_SAMPLE_ID: {
+                "label": "  ",
+                "repoPath": TEST_REPO_PATH,
+                "urdfPath": TEST_URDF_PATH,
+            },
+            "numeric-label": {
+                "label": 42,
+                "repoPath": TEST_REPO_PATH,
+                "urdfPath": TEST_URDF_PATH,
+            },
+        },
+    )
+
+    _quickstart_id, entries = list_samples()
+
+    assert [entry.label for entry in entries] == [TEST_SAMPLE_ID, "numeric-label"]
+
+
 def test_load_sample_files_rejects_symlink_escape(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repo_root = install_sample_root(monkeypatch, tmp_path)
     escaped_root = tmp_path / "escaped"
