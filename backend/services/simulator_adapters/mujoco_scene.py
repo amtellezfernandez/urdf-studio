@@ -82,7 +82,7 @@ def configure_mujoco_passive_viewer(
     return bounds
 
 
-def _finite_positive_float(value: Any) -> float | None:
+def _finite_positive_float(value: object) -> float | None:
     try:
         parsed = float(value)
     except (TypeError, ValueError):
@@ -119,11 +119,11 @@ def _geom_half_extent(mujoco: Any, model: Any, data: Any, geom_id: int) -> np.nd
 
     radius = _finite_positive_float(model.geom_rbound[geom_id])
     if radius is None:
-        radius = _fallback_geom_radius(model, geom_id)
+        radius = _geom_size_radius_estimate(model, geom_id)
     return np.full(3, radius, dtype=float) if radius is not None else None
 
 
-def _rotated_half_extent(rotation: np.ndarray, local_half_extent: Any) -> np.ndarray | None:
+def _rotated_half_extent(rotation: np.ndarray, local_half_extent: object) -> np.ndarray | None:
     half_extent = np.asarray(local_half_extent, dtype=float)
     if (
         half_extent.shape != (3,)
@@ -134,7 +134,7 @@ def _rotated_half_extent(rotation: np.ndarray, local_half_extent: Any) -> np.nda
     return np.abs(rotation) @ half_extent
 
 
-def _fallback_geom_radius(model: Any, geom_id: int) -> float | None:
+def _geom_size_radius_estimate(model: Any, geom_id: int) -> float | None:
     size = np.asarray(model.geom_size[geom_id], dtype=float)
     if size.size == 0:
         return None
