@@ -2,12 +2,10 @@ import { COMMON_MESH_FOLDERS } from "@/features/layout/page/constants";
 import { isSupportedMeshExtension } from "@/shared/lib/urdfCore";
 import type { FileWithPath } from "@/shared/types/file";
 import type { MeshFiles } from "@/shared/types/feature";
-import { formatMeshRegistrationDebugLine } from "@/features/urdf/loader/urdfLoaderDiagnostics";
 import type { IndexedMeshAsset } from "@/features/urdf/loader/urdfMeshDebugInfo";
 
 type IndexMeshResourcesOptions = {
   logFailures?: boolean;
-  logRegistrations?: boolean;
 };
 
 export const getFileRelativePath = (file: File): string => {
@@ -112,20 +110,9 @@ export const indexMeshResources = async (
       files.map(async (file): Promise<IndexedMeshAsset | null> => {
         try {
           const relativePath = getFileRelativePath(file);
-          const normalizedPath = relativePath.replace(/^\/+|\/+$/g, "");
           const blob = new Blob([await file.arrayBuffer()]);
 
           registerMeshFilePaths(meshes, collisionKeys, relativePath, file.name, blob);
-
-          if (import.meta.env.DEV && options.logRegistrations) {
-            console.debug(
-              formatMeshRegistrationDebugLine({
-                filename: file.name,
-                normalizedPath,
-                relativePath,
-              })
-            );
-          }
 
           return isSupportedMeshExtension(file.name)
             ? {

@@ -8,17 +8,6 @@ type FormatUrdfMeshLoadDiagnosticsParams = {
   urdfMeshReferenceCount: number;
 };
 
-export const formatMeshRegistrationDebugLine = ({
-  filename,
-  normalizedPath,
-  relativePath,
-}: {
-  filename: string;
-  normalizedPath: string;
-  relativePath: string;
-}): string =>
-  `Mesh ${filename} registered with webkitRelativePath: "${relativePath}" (normalized: "${normalizedPath}")`;
-
 export const formatUrdfMeshLoadDiagnostics = ({
   debugMeshInfo,
   loadedMeshAssetCount,

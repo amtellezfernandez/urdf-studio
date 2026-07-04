@@ -80,6 +80,11 @@ const JointListItemBase = ({
   const velocityDisplay = formatMetricValue(jointInfo?.velocity);
   const effortDisplay = formatMetricValue(effortLimit);
   const isFixedJoint = jointInfo?.type === "fixed";
+  const metricGridWidthClassName = compact
+    ? JOINT_LIST_ITEM_PARAMS.compactMetricGridWidthClassName
+    : JOINT_LIST_ITEM_PARAMS.metricGridWidthClassName;
+  const metricLabelClassName = JOINT_LIST_ITEM_PARAMS.metricLabelClassName;
+  const metricValueClassName = JOINT_LIST_ITEM_PARAMS.metricValueClassName;
 
   const valueColor = getJointValueColor(resolvedValue, min, max, hasBothLimits);
   const {
@@ -141,7 +146,7 @@ const JointListItemBase = ({
       )}
       <div
         className={cn(
-          "flex min-w-0 items-center flex-1 rounded-sm transition-colors",
+          "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center rounded-sm transition-colors",
           compact ? "gap-1 px-1 py-1" : "gap-1.5 px-2 py-1.5",
           !isFixedJoint && "cursor-pointer hover:bg-muted/30",
           !isFixedJoint && isHighlighted && "hover:bg-muted/40",
@@ -162,7 +167,7 @@ const JointListItemBase = ({
         <span
           className={cn(
             compact ? "text-[10px]" : "text-xs",
-            "font-medium truncate flex-1 min-w-0 text-left",
+            "block min-w-0 truncate text-left font-medium",
             isFixedJoint && "text-muted-foreground/55",
             isDeleted && "text-muted-foreground/50",
             !isDeleted && !isHighlighted && !isSelected && !isFixedJoint && "text-foreground",
@@ -186,7 +191,12 @@ const JointListItemBase = ({
             </span>
           )}
         </span>
-      <div className="grid w-[112px] shrink-0 grid-cols-3 gap-1 text-right leading-tight">
+      <div
+        className={cn(
+          "grid shrink-0 grid-cols-3 gap-[2px] text-right leading-none",
+          metricGridWidthClassName
+        )}
+      >
         <span
           ref={valueDisplayRef}
           tabIndex={isFixedJoint ? -1 : 0}
@@ -207,7 +217,7 @@ const JointListItemBase = ({
               : undefined
           }
           aria-valuenow={angleDisplayValue}
-          className="blender-number whitespace-nowrap text-[10px]"
+          className={cn("blender-number min-w-0", metricValueClassName)}
           style={{ color: valueColor }}
           title={`Angle ${angleDisplay}${angleUnit === "deg" ? " deg" : " rad"}`}
           onFocus={() => setIsValueFocused(true)}
@@ -216,21 +226,21 @@ const JointListItemBase = ({
           onWheel={handleValueWheel}
           onKeyDown={handleValueKeyDown}
         >
-          <span className="block text-[8px] uppercase text-muted-foreground/70">Angle</span>
+          <span className={metricLabelClassName}>Angle</span>
           {angleDisplay}
         </span>
         <span
-          className="blender-number whitespace-nowrap text-[10px] text-muted-foreground"
+          className={cn("blender-number min-w-0 text-muted-foreground", metricValueClassName)}
           title={`Velocity ${velocityDisplay}`}
         >
-          <span className="block text-[8px] uppercase text-muted-foreground/70">Vel</span>
+          <span className={metricLabelClassName}>Vel</span>
           {velocityDisplay}
         </span>
         <span
-          className="blender-number whitespace-nowrap text-[10px] text-muted-foreground"
+          className={cn("blender-number min-w-0 text-muted-foreground", metricValueClassName)}
           title={`Tau ${effortDisplay}`}
         >
-          <span className="block text-[8px] uppercase text-muted-foreground/70">Tau</span>
+          <span className={metricLabelClassName}>Tau</span>
           {effortDisplay}
         </span>
       </div>

@@ -261,7 +261,6 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         const resourceFiles = allFiles.filter((file) => isSupportedMeshResource(file.name));
         const { meshAssets, meshes } = await indexMeshResources(resourceFiles, {}, {
           logFailures: true,
-          logRegistrations: true,
         });
 
         const runtimeMeshFiles = aliasRepeatedLinkMeshFiles(originalContent, meshes);
@@ -346,7 +345,6 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
       const resourceFiles = allFiles.filter((file) => isSupportedMeshResource(file.name));
       const { meshAssets, meshes } = await indexMeshResources(resourceFiles, {}, {
         logFailures: true,
-        logRegistrations: true,
       });
 
       const { analysis, issueSummary } = analyzeLoadedUrdfContent({

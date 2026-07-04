@@ -10,9 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
-import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
-import { Settings, Trash2, ChevronRight } from "lucide-react";
+import { BlenderPropertyRow } from "@/shared/ui/blender-panel";
+import { Trash2, ChevronRight, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +44,7 @@ import { LimitAttributeStatusBadge } from "@/features/layout/jointLimitDebug";
 import {
   getLimitAttributeInputTitle,
   parsePositiveScalar,
+  type LimitAttributeDebugState,
 } from "@/features/layout/jointLimitDebugState";
 import { resolveJointDynamicLimitDisplayState } from "@/features/layout/jointDynamicLimitDisplay";
 import { useJointValueInteraction } from "@/features/layout/jointValueInteraction";
@@ -89,6 +89,76 @@ const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
   onXacroDetected: () => {},
   onOversize: () => {},
   onDepthExceeded: () => {},
+};
+
+type JointDynamicLimitFieldProps = {
+  attributeName: "effort" | "velocity";
+  ariaLabel: string;
+  disabled: boolean;
+  label: string;
+  min: number;
+  onClear?: () => void;
+  onValueChange: (value: number) => void;
+  placeholder: string;
+  state: LimitAttributeDebugState;
+  step: number;
+  title: string;
+  unit: string;
+  value: number | undefined;
+};
+
+const JointDynamicLimitField = ({
+  attributeName,
+  ariaLabel,
+  disabled,
+  label,
+  min,
+  onClear,
+  onValueChange,
+  placeholder,
+  state,
+  step,
+  title,
+  unit,
+  value,
+}: JointDynamicLimitFieldProps) => {
+  const layout = JOINT_CONTROL_PARAMS.dynamicLimitField;
+
+  return (
+    <div className="min-w-0">
+      <div className="mb-0.5 flex min-w-0 items-center justify-between gap-1">
+        <span className={layout.labelClassName}>{label}</span>
+        <LimitAttributeStatusBadge attributeName={attributeName} state={state} />
+      </div>
+      <div className="flex min-w-0 items-center gap-1">
+        <NumberInput
+          value={value}
+          onValueChange={onValueChange}
+          step={step}
+          min={min}
+          compact
+          allowEmpty
+          className={layout.inputClassName}
+          aria-label={ariaLabel}
+          placeholder={placeholder}
+          title={title}
+          disabled={disabled}
+        />
+        <span className={layout.unitClassName}>{unit}</span>
+        {onClear ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={layout.clearButtonClassName}
+            onClick={onClear}
+            title={`Clear ${attributeName} limit`}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
 };
 
 export const JointControl = ({
@@ -163,6 +233,7 @@ export const JointControl = ({
       }),
     [angleUnit, currentType, jointInfo, jointName, urdfContent]
   );
+  const hasVelocityLimit = velocityAttribute.status !== "missing";
 
   const handleJointVelocityChange = useCallback(
     (value: number) => {
@@ -182,6 +253,11 @@ export const JointControl = ({
     },
     [effortLimit, onEffortChange]
   );
+
+  const handleClearVelocity = useCallback(() => {
+    if (velocityAttribute.status === "missing") return;
+    onVelocityChange?.(null);
+  }, [onVelocityChange, velocityAttribute.status]);
 
   const handleClearEffort = useCallback(() => {
     if (effortAttribute.status === "missing") return;
@@ -650,64 +726,40 @@ export const JointControl = ({
             </div>
           </BlenderPropertyRow>
 
-          <div className="grid min-w-0 grid-cols-2 gap-x-2 gap-y-0.5">
-            <BlenderPropertyRow
-              label="Vel"
-              labelWidth="w-8"
-            >
-              <div className="flex min-w-0 flex-wrap items-center gap-1">
-                <NumberInput
-                  value={velocityDisplay}
-                  onValueChange={handleJointVelocityChange}
-                  step={velocityStep}
-                  min={velocityMin}
-                  compact
-                  allowEmpty
-                  className="w-10"
-                  aria-label="Max joint velocity"
-                  placeholder={velocityPlaceholder}
-                  title={getLimitAttributeInputTitle("velocity", velocityAttribute)}
-                  disabled={!onVelocityChange}
-                />
-                <span className="text-[8px] text-muted-foreground">{velocityUnit}</span>
-                <LimitAttributeStatusBadge attributeName="velocity" state={velocityAttribute} />
-              </div>
-            </BlenderPropertyRow>
-
-            <BlenderPropertyRow
-              label="Tau"
-              labelWidth="w-8"
-            >
-              <div className="flex min-w-0 flex-wrap items-center gap-1">
-                <NumberInput
-                  value={effortDisplay}
-                  onValueChange={handleJointEffortChange}
-                  step={JOINT_CONTROL_PARAMS.effort.step}
-                  min={JOINT_CONTROL_PARAMS.effort.min}
-                  compact
-                  allowEmpty
-                  className="w-10"
-                  aria-label="Joint effort limit"
-                  placeholder={effortPlaceholder}
-                  title={getLimitAttributeInputTitle("effort", effortAttribute)}
-                  disabled={!onEffortChange}
-                />
-                <span className="text-[8px] text-muted-foreground">{effortUnit}</span>
-                <LimitAttributeStatusBadge attributeName="effort" state={effortAttribute} />
-                {hasEffortLimit && onEffortChange && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 px-1 text-[9px] flex-shrink-0"
-                    onClick={handleClearEffort}
-                    title="Clear effort limit"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-            </BlenderPropertyRow>
-          </div>
+          <BlenderPropertyRow label="Motion" labelWidth="w-12" className="items-start">
+            <div className={JOINT_CONTROL_PARAMS.dynamicLimitField.gridClassName}>
+              <JointDynamicLimitField
+                attributeName="velocity"
+                ariaLabel="Max joint velocity"
+                disabled={!onVelocityChange}
+                label="Vel"
+                min={velocityMin}
+                onClear={hasVelocityLimit && onVelocityChange ? handleClearVelocity : undefined}
+                onValueChange={handleJointVelocityChange}
+                placeholder={velocityPlaceholder}
+                state={velocityAttribute}
+                step={velocityStep}
+                title={getLimitAttributeInputTitle("velocity", velocityAttribute)}
+                unit={velocityUnit}
+                value={velocityDisplay}
+              />
+              <JointDynamicLimitField
+                attributeName="effort"
+                ariaLabel="Joint effort limit"
+                disabled={!onEffortChange}
+                label="Tau"
+                min={JOINT_CONTROL_PARAMS.effort.min}
+                onClear={hasEffortLimit && onEffortChange ? handleClearEffort : undefined}
+                onValueChange={handleJointEffortChange}
+                placeholder={effortPlaceholder}
+                state={effortAttribute}
+                step={JOINT_CONTROL_PARAMS.effort.step}
+                title={getLimitAttributeInputTitle("effort", effortAttribute)}
+                unit={effortUnit}
+                value={effortDisplay}
+              />
+            </div>
+          </BlenderPropertyRow>
 
           {/* Limits for Revolute/Prismatic - Single line */}
           {needsLimits && (

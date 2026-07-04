@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DebugMeshInfo } from "@/shared/types/feature";
-import {
-  formatMeshRegistrationDebugLine,
-  formatUrdfMeshLoadDiagnostics,
-} from "@/features/urdf/loader/urdfLoaderDiagnostics";
+import { formatUrdfMeshLoadDiagnostics } from "@/features/urdf/loader/urdfLoaderDiagnostics";
 
 const meshInfo = ({
   filename,
@@ -24,18 +21,6 @@ const meshInfo = ({
   }) as DebugMeshInfo;
 
 describe("urdfLoaderDiagnostics", () => {
-  it("formats mesh registration debug lines", () => {
-    expect(
-      formatMeshRegistrationDebugLine({
-        filename: "wheel.stl",
-        normalizedPath: "robot/meshes/wheel.stl",
-        relativePath: "/robot/meshes/wheel.stl",
-      })
-    ).toBe(
-      'Mesh wheel.stl registered with webkitRelativePath: "/robot/meshes/wheel.stl" (normalized: "robot/meshes/wheel.stl")'
-    );
-  });
-
   it("formats compact URDF mesh load diagnostics", () => {
     const lines = formatUrdfMeshLoadDiagnostics({
       debugMeshInfo: [
