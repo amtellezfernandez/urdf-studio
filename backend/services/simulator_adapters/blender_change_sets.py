@@ -4,7 +4,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, TypeGuard
 
 from scipy.spatial.transform import Rotation
 
@@ -352,12 +352,16 @@ def _validate_change_set_source(
 
 def _validate_source_frame_map(value: str | None) -> ConcreteWorldLayoutFrameMap:
     frame_map = value or "identity"
-    if frame_map not in BLENDER_APPLY_FRAME_MAPS:
+    if not _is_blender_apply_frame_map(frame_map):
         raise ValueError(
             "Blender change-set source frame_map is not supported for direct apply. "
             f"Supported frame maps: {', '.join(sorted(BLENDER_APPLY_FRAME_MAPS))}."
         )
-    return frame_map  # type: ignore[return-value]
+    return frame_map
+
+
+def _is_blender_apply_frame_map(value: str) -> TypeGuard[ConcreteWorldLayoutFrameMap]:
+    return value in BLENDER_APPLY_FRAME_MAPS
 
 
 def _validate_change_set_source_coverage(

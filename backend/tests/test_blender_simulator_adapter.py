@@ -1099,6 +1099,18 @@ def test_blender_change_set_rejects_stale_world_snapshot_source(tmp_path: Path) 
         apply_blender_layout_change_set(world_package, change_set)
 
 
+def test_blender_change_set_rejects_unsupported_frame_map_source(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        frame_map="sideways",
+        changes=[],
+    )
+
+    with pytest.raises(ValueError, match="source frame_map is not supported"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
 def test_blender_change_set_applies_non_identity_frame_map_source(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
 
