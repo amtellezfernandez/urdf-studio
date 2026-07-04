@@ -1,11 +1,11 @@
 import * as THREE from "three";
+import { computeEigenDecompositionSymmetric3x3 } from "@/features/viewer/inertialEigen";
 import { composeUrdfPoseMatrix } from "@/shared/lib/spatialFrame";
 import type {
   GeometryReferencePoint,
   GeometryReferenceSource,
 } from "@/features/viewer/inertiaGeometryReference";
 import {
-  INERTIA_EIGEN_MAX_ITERATIONS,
   INERTIA_INERTIAL_FRAME_MISMATCH_PENALTY,
   INERTIA_LOW_MASS_MAX_RADIUS_METERS,
   INERTIA_LOW_MASS_THRESHOLD_KG,
@@ -21,6 +21,8 @@ import {
   INERTIA_REFERENCE_MIN_SIZE_METERS,
 } from "@/features/viewer/inertialMathParams";
 
+export { computeEigenDecompositionSymmetric3x3 };
+
 export type InertiaTensor = {
   ixx: number;
   ixy: number;
@@ -30,177 +32,8 @@ export type InertiaTensor = {
   izz: number;
 };
 
-type EigenDecomposition = {
-  values: [number, number, number];
-  vectors: [THREE.Vector3, THREE.Vector3, THREE.Vector3];
-};
-
 const EPS = INERTIA_NUMERICAL_EPSILON;
 const MIN_EIGEN_TOL = INERTIA_MIN_EIGEN_TOLERANCE;
-
-const clampSmall = (value: number): number => (Math.abs(value) < EPS ? 0 : value);
-
-const sortEigenPairs = (eigen: EigenDecomposition): EigenDecomposition => {
-  const pairs = [
-    { value: eigen.values[0], vector: eigen.vectors[0] },
-    { value: eigen.values[1], vector: eigen.vectors[1] },
-    { value: eigen.values[2], vector: eigen.vectors[2] },
-  ].sort((a, b) => b.value - a.value);
-
-  const v0 = pairs[0].vector.clone();
-  const v1 = pairs[1].vector.clone();
-  const v2 = pairs[2].vector.clone();
-
-  // Ensure right-handed basis
-  const det = v0.clone().cross(v1).dot(v2);
-  if (det < 0) {
-    v2.multiplyScalar(-1);
-  }
-
-  return {
-    values: [pairs[0].value, pairs[1].value, pairs[2].value],
-    vectors: [v0, v1, v2],
-  };
-};
-
-export const computeEigenDecompositionSymmetric3x3 = (
-  matrix: THREE.Matrix3
-): EigenDecomposition => {
-  const m = matrix.elements;
-
-  let a00 = m[0];
-  let a01 = m[1];
-  let a02 = m[2];
-  let a11 = m[4];
-  let a12 = m[5];
-  let a22 = m[8];
-
-  let v00 = 1, v01 = 0, v02 = 0;
-  let v10 = 0, v11 = 1, v12 = 0;
-  let v20 = 0, v21 = 0, v22 = 1;
-
-  const maxIterations = INERTIA_EIGEN_MAX_ITERATIONS;
-  for (let iter = 0; iter < maxIterations; iter += 1) {
-    let maxVal = Math.abs(a01);
-    let p = 0;
-    let q = 1;
-
-    if (Math.abs(a02) > maxVal) {
-      maxVal = Math.abs(a02);
-      p = 0;
-      q = 2;
-    }
-    if (Math.abs(a12) > maxVal) {
-      maxVal = Math.abs(a12);
-      p = 1;
-      q = 2;
-    }
-
-    if (maxVal < EPS) break;
-
-    let apq: number;
-    let app: number;
-    let aqq: number;
-    if (p === 0 && q === 1) {
-      apq = a01;
-      app = a00;
-      aqq = a11;
-    } else if (p === 0 && q === 2) {
-      apq = a02;
-      app = a00;
-      aqq = a22;
-    } else {
-      apq = a12;
-      app = a11;
-      aqq = a22;
-    }
-
-    const tau = (aqq - app) / (2 * apq);
-    const tauSign = tau >= 0 ? 1 : -1;
-    const t = tauSign / (Math.abs(tau) + Math.sqrt(1 + tau * tau));
-    const c = 1 / Math.sqrt(1 + t * t);
-    const s = t * c;
-
-    if (p === 0 && q === 1) {
-      const temp00 = a00;
-      const temp01 = a01;
-      const temp02 = a02;
-      const temp11 = a11;
-      const temp12 = a12;
-
-      a00 = c * c * temp00 - 2 * c * s * temp01 + s * s * temp11;
-      a11 = s * s * temp00 + 2 * c * s * temp01 + c * c * temp11;
-      a01 = 0;
-      a02 = c * temp02 - s * temp12;
-      a12 = s * temp02 + c * temp12;
-
-      const tv00 = v00, tv01 = v01, tv02 = v02;
-      const tv10 = v10, tv11 = v11, tv12 = v12;
-
-      v00 = c * tv00 - s * tv10;
-      v01 = c * tv01 - s * tv11;
-      v02 = c * tv02 - s * tv12;
-      v10 = s * tv00 + c * tv10;
-      v11 = s * tv01 + c * tv11;
-      v12 = s * tv02 + c * tv12;
-    } else if (p === 0 && q === 2) {
-      const temp00 = a00;
-      const temp01 = a01;
-      const temp02 = a02;
-      const temp12 = a12;
-      const temp22 = a22;
-
-      a00 = c * c * temp00 - 2 * c * s * temp02 + s * s * temp22;
-      a22 = s * s * temp00 + 2 * c * s * temp02 + c * c * temp22;
-      a02 = 0;
-      a01 = c * temp01 - s * temp12;
-      a12 = s * temp01 + c * temp12;
-
-      const tv00 = v00, tv01 = v01, tv02 = v02;
-      const tv20 = v20, tv21 = v21, tv22 = v22;
-
-      v00 = c * tv00 - s * tv20;
-      v01 = c * tv01 - s * tv21;
-      v02 = c * tv02 - s * tv22;
-      v20 = s * tv00 + c * tv20;
-      v21 = s * tv01 + c * tv21;
-      v22 = s * tv02 + c * tv22;
-    } else {
-      const temp11 = a11;
-      const temp01 = a01;
-      const temp12 = a12;
-      const temp02 = a02;
-      const temp22 = a22;
-
-      a11 = c * c * temp11 - 2 * c * s * temp12 + s * s * temp22;
-      a22 = s * s * temp11 + 2 * c * s * temp12 + c * c * temp22;
-      a12 = 0;
-      a01 = c * temp01 - s * temp02;
-      a02 = s * temp01 + c * temp02;
-
-      const tv10 = v10, tv11 = v11, tv12 = v12;
-      const tv20 = v20, tv21 = v21, tv22 = v22;
-
-      v10 = c * tv10 - s * tv20;
-      v11 = c * tv11 - s * tv21;
-      v12 = c * tv12 - s * tv22;
-      v20 = s * tv10 + c * tv20;
-      v21 = s * tv11 + c * tv21;
-      v22 = s * tv12 + c * tv22;
-    }
-  }
-
-  const eigen: EigenDecomposition = {
-    values: [clampSmall(a00), clampSmall(a11), clampSmall(a22)],
-    vectors: [
-      new THREE.Vector3(v00, v01, v02),
-      new THREE.Vector3(v10, v11, v12),
-      new THREE.Vector3(v20, v21, v22),
-    ],
-  };
-
-  return sortEigenPairs(eigen);
-};
 
 export type InertiaBox = {
   size: [number, number, number];
