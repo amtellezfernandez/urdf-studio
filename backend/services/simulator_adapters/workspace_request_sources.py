@@ -37,19 +37,19 @@ from backend.services.world_scene_package_digest import (
 
 JsonObject: TypeAlias = dict[str, object]
 JsonObjectRecord: TypeAlias = Mapping[str, object]
+_workspace_simulator_ids: tuple[SimulatorId, ...] | None = None
 
 
 def get_workspace_simulators() -> tuple[SimulatorId, ...]:
-    cached = globals().get("WORKSPACE_SIMULATORS")
-    if isinstance(cached, tuple):
-        return cached
+    global _workspace_simulator_ids
+    if _workspace_simulator_ids is not None:
+        return _workspace_simulator_ids
     from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
-    result: tuple[SimulatorId, ...] = tuple(
-        p.simulator_id for p in get_workspace_plugins()
+    _workspace_simulator_ids = tuple(
+        plugin.simulator_id for plugin in get_workspace_plugins()
     )
-    globals()["WORKSPACE_SIMULATORS"] = result
-    return result
+    return _workspace_simulator_ids
 
 
 def __getattr__(name: str) -> object:
@@ -425,29 +425,29 @@ def _load_workspace_asset_uploads(
     *,
     skip_paths: Sequence[Path] = (),
 ) -> list[SimulatorMeshAssetUpload]:
-    skipped = {path.resolve() for path in skip_paths}
-    content_by_path: dict[str, bytes] = {}
+    skipped_resolved_paths = {path.resolve() for path in skip_paths}
+    content_by_relative_path: dict[str, bytes] = {}
     for root in asset_roots:
         resolved_root = root.resolve()
         for source_path in sorted(path for path in resolved_root.rglob("*") if path.is_file()):
             resolved_source_path = source_path.resolve()
-            if resolved_source_path in skipped:
+            if resolved_source_path in skipped_resolved_paths:
                 continue
             relative_path = resolved_source_path.relative_to(resolved_root).as_posix()
             if not _is_workspace_transfer_asset_path(relative_path):
                 continue
-            content = resolved_source_path.read_bytes()
-            existing = content_by_path.get(relative_path)
-            if existing is not None and existing != content:
+            asset_content = resolved_source_path.read_bytes()
+            existing_content = content_by_relative_path.get(relative_path)
+            if existing_content is not None and existing_content != asset_content:
                 raise ValueError(f"Conflicting asset path across asset roots: {relative_path}")
-            content_by_path[relative_path] = content
+            content_by_relative_path[relative_path] = asset_content
     return [
         SimulatorMeshAssetUpload(
             path=relative_path,
             aliases=[],
-            content_base64=base64.b64encode(content).decode("ascii"),
+            content_base64=base64.b64encode(asset_content).decode("ascii"),
         )
-        for relative_path, content in sorted(content_by_path.items())
+        for relative_path, asset_content in sorted(content_by_relative_path.items())
     ]
 
 
