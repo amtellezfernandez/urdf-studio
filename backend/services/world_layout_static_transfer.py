@@ -12,6 +12,7 @@ from typing import Any, Literal, Sequence, TypeAlias, TypedDict, TypeGuard, cast
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+from backend.models.json_payload import JsonObject
 from backend.services.world_layout_transfer_constants import (
     COLOR_TOLERANCE,
     POSITION_TOLERANCE_M,
@@ -59,8 +60,9 @@ STATIC_SCENARIO_TIME_MS = 0
 STATIC_SCENARIO_DURATION_MS = 0
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
 _WorldLayoutSourceKind: TypeAlias = Literal["world_layout", "world_snapshot"]
-WorldLayoutPayloadRecord: TypeAlias = dict[str, Any]
-PrimitiveSimulationFields: TypeAlias = dict[str, Any]
+WorldLayoutPayloadRecord: TypeAlias = JsonObject
+PrimitiveSimulationFieldValue: TypeAlias = bool | float | str | tuple[float, float, float] | None
+PrimitiveSimulationFields: TypeAlias = dict[str, PrimitiveSimulationFieldValue]
 
 
 class BackendTransferErrorReport(TypedDict):
