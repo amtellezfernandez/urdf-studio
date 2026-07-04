@@ -6,7 +6,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any
 
 from fastapi import WebSocket
 
@@ -18,8 +17,10 @@ from backend.services.collaboration_journal import (
 from backend.models.collaboration import (
     CollaborationAccessUpdateRequest,
     CollaborationAccessUpdateResponse,
+    CollaborationEventPayload,
     CollaborationEventRequest,
     CollaborationEventSnapshot,
+    CollaborationJournalDetails,
     CollaborationSessionCreateRequest,
     CollaborationSessionCreateResponse,
     CollaborationSessionRole,
@@ -134,7 +135,7 @@ class CollaborationService:
         event_type: str,
         session_id: str,
         occurred_at: str,
-        details: dict[str, Any],
+        details: CollaborationJournalDetails,
     ) -> None:
         self._journal.append(
             event_type=event_type,
@@ -189,7 +190,9 @@ class CollaborationService:
             )
         return normalized
 
-    def _validate_payload_size(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _validate_payload_size(
+        self, payload: CollaborationEventPayload
+    ) -> CollaborationEventPayload:
         try:
             encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         except (TypeError, ValueError) as exc:
@@ -202,7 +205,7 @@ class CollaborationService:
             )
         return payload
 
-    def _client_sequence(self, payload: dict[str, Any]) -> int | None:
+    def _client_sequence(self, payload: CollaborationEventPayload) -> int | None:
         if COLLABORATION_CLIENT_SEQUENCE_FIELD not in payload:
             return None
         value = payload[COLLABORATION_CLIENT_SEQUENCE_FIELD]
@@ -224,7 +227,7 @@ class CollaborationService:
         session: _CollaborationSession,
         *,
         client_id: str,
-        payload: dict[str, Any],
+        payload: CollaborationEventPayload,
     ) -> None:
         try:
             client_sequence = self._client_sequence(payload)

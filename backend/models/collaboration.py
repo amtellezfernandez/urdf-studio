@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
 CollaborationSessionRole = Literal["owner", "editor", "viewer"]
+CollaborationEventPayload: TypeAlias = dict[str, Any]
+CollaborationJournalDetails: TypeAlias = dict[str, Any]
 
 
 class CollaborationSessionCreateRequest(BaseModel):
@@ -59,7 +61,7 @@ class CollaborationAccessUpdateResponse(BaseModel):
 class CollaborationEventRequest(BaseModel):
     client_id: str = ""
     event_type: str
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: CollaborationEventPayload = Field(default_factory=dict)
 
 
 class CollaborationEventSnapshot(BaseModel):
@@ -67,7 +69,7 @@ class CollaborationEventSnapshot(BaseModel):
     session_id: str
     client_id: str
     event_type: str
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: CollaborationEventPayload = Field(default_factory=dict)
     occurred_at: str
     server_received_at_ms: int
 

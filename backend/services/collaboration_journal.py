@@ -6,7 +6,9 @@ import logging
 import os
 from pathlib import Path
 from threading import Lock
-from typing import Any, Protocol
+from typing import Protocol
+
+from backend.models.collaboration import CollaborationJournalDetails
 
 from backend.services.collaboration_params import (
     COLLABORATION_JOURNAL_PATH_ENV,
@@ -25,7 +27,7 @@ class CollaborationJournal(Protocol):
         event_type: str,
         session_id: str,
         occurred_at: str,
-        details: dict[str, Any],
+        details: CollaborationJournalDetails,
     ) -> None:
         pass
 
@@ -37,7 +39,7 @@ class NoopCollaborationJournal:
         event_type: str,
         session_id: str,
         occurred_at: str,
-        details: dict[str, Any],
+        details: CollaborationJournalDetails,
     ) -> None:
         return
 
@@ -54,7 +56,7 @@ class CollaborationFileJournal:
         event_type: str,
         session_id: str,
         occurred_at: str,
-        details: dict[str, Any],
+        details: CollaborationJournalDetails,
     ) -> None:
         record = {
             "schema_version": COLLABORATION_JOURNAL_SCHEMA_VERSION,
