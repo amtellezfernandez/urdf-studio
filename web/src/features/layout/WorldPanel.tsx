@@ -7,6 +7,10 @@ import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarPar
 import { resolveTrackingReference } from "@/features/viewer/trackingTarget";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { cn } from "@/shared/lib/utils";
+import {
+  buildWorldObjectGroups,
+  toWorldObjectDisplayName,
+} from "@/features/layout/worldPanelHelpers";
 
 type WorldPanelProps = {
   robot?: URDFRobot | null;
@@ -19,21 +23,6 @@ const WORLD_OBJECT_SOURCE_ORDER: ReadonlyArray<NonNullable<CreatedObject["source
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceOrder;
 const WORLD_OBJECT_SOURCE_LABELS: Record<NonNullable<CreatedObject["source"]>, string> =
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceLabels;
-
-const toReadableWorldSourceLabel = (source: string): string =>
-  source
-    .split(/[-_]/g)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(" ");
-
-const toWorldObjectDisplayName = (worldObject: CreatedObject): string => {
-  const generatedObjectIdPrefix = "object-";
-  const objectOrdinal = worldObject.id.startsWith(generatedObjectIdPrefix)
-    ? worldObject.id.slice(generatedObjectIdPrefix.length)
-    : worldObject.id;
-  const objectTypeLabel = worldObject.type.charAt(0).toUpperCase() + worldObject.type.slice(1);
-  return `${objectTypeLabel} ${objectOrdinal}`;
-};
 
 export const WorldPanel = ({
   robot,
@@ -65,32 +54,11 @@ export const WorldPanel = ({
   }, [setObjectHidden]);
 
   const objectGroups = useMemo(() => {
-    const groupedBySource = new Map<string, CreatedObject[]>();
-    objects.forEach((object) => {
-      const source = object.source ?? "user";
-      const existing = groupedBySource.get(source);
-      if (existing) {
-        existing.push(object);
-      } else {
-        groupedBySource.set(source, [object]);
-      }
+    return buildWorldObjectGroups({
+      objects,
+      sourceOrder: WORLD_OBJECT_SOURCE_ORDER,
+      sourceLabels: WORLD_OBJECT_SOURCE_LABELS,
     });
-
-    const sourceOrder = new Map(WORLD_OBJECT_SOURCE_ORDER.map((source, index) => [source, index]));
-
-    return [...groupedBySource.entries()]
-      .sort(([sourceA], [sourceB]) => {
-        const sourceAIndex = sourceOrder.get(sourceA as NonNullable<CreatedObject["source"]>);
-        const sourceBIndex = sourceOrder.get(sourceB as NonNullable<CreatedObject["source"]>);
-        return (sourceAIndex ?? Number.MAX_SAFE_INTEGER) - (sourceBIndex ?? Number.MAX_SAFE_INTEGER);
-      })
-      .map(([source, sourceObjects]) => ({
-        source,
-        label:
-          WORLD_OBJECT_SOURCE_LABELS[source as NonNullable<CreatedObject["source"]>] ??
-          `${toReadableWorldSourceLabel(source)} Objects`,
-        objects: [...sourceObjects].sort((a, b) => a.id.localeCompare(b.id)),
-      }));
   }, [objects]);
 
   const hasWorldItems = objects.length > 0 || cameras.length > 0;
