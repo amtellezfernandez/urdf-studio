@@ -5,6 +5,7 @@ import os
 import shutil
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -26,6 +27,7 @@ from backend.services.simulator_adapters.genesis_camera import (
 )
 from backend.services.simulator_adapters.genesis_robot import (
     attachment_links_from_urdf,
+    joint_dof_indices_by_name,
     links_to_keep_for_camera_attachment,
     links_to_keep_for_workspace_attachments,
     robot_urdf_morph_kwargs,
@@ -116,6 +118,17 @@ def test_genesis_camera_attachment_links_are_unique_and_stable() -> None:
     )
 
     assert links_to_keep_for_camera_attachment(cameras) == ("base_link", "wrist_link")
+
+
+def test_genesis_joint_dof_indices_ignore_boolean_values() -> None:
+    robot_entity = SimpleNamespace(
+        joints=[
+            SimpleNamespace(name="valid", dofs_idx_local=[[2]]),
+            SimpleNamespace(name="boolean", dofs_idx_local=True),
+        ]
+    )
+
+    assert joint_dof_indices_by_name(robot_entity) == {"valid": 2}
 
 
 def test_genesis_attachment_links_include_terminal_tool_links(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
 
 
-def to_float_list(value: Any) -> list[float]:
+def _flatten_finite_floats(value: Any) -> list[float]:
     if hasattr(value, "detach"):
         value = value.detach()
     if hasattr(value, "cpu"):
@@ -19,16 +19,16 @@ def to_float_list(value: Any) -> list[float]:
         value = value.numpy()
     if hasattr(value, "tolist"):
         value = value.tolist()
-    if isinstance(value, int | float):
+    if is_finite_number(value):
         return [float(value)]
     if not isinstance(value, list | tuple):
         return []
     flattened: list[float] = []
-    for item in value:
-        if isinstance(item, list | tuple):
-            flattened.extend(to_float_list(item))
-        elif is_finite_number(item):
-            flattened.append(float(item))
+    for component in value:
+        if isinstance(component, list | tuple):
+            flattened.extend(_flatten_finite_floats(component))
+        elif is_finite_number(component):
+            flattened.append(float(component))
     return flattened
 
 
@@ -39,7 +39,7 @@ def joint_dof_indices_by_name(robot_entity: Any) -> dict[str, int]:
         dof_indices = getattr(joint, "dofs_idx_local", None)
         if not isinstance(name, str) or not name:
             continue
-        local_indices = to_float_list(dof_indices)
+        local_indices = _flatten_finite_floats(dof_indices)
         if len(local_indices) != 1:
             continue
         indices[name] = int(local_indices[0])
