@@ -10,6 +10,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJLAB_ID,
+    SIMULATOR_MJX_ID,
     SIMULATOR_PYBULLET_ID,
     SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
@@ -24,11 +25,13 @@ from backend.scripts.simulator_workspace_check import (
     _module_command,
     _prepare_blender_command,
     _prepare_genesis_command,
+    _prepare_mjx_command,
     _prepare_mujoco_command,
     _prepare_pybullet_command,
     _print_human_results,
     _report_has_camera_artifacts,
     _selected_simulator_ids_from_args,
+    _selected_targets,
     _validate_file_artifacts,
     _workspace_request_from_args,
     main,
@@ -97,6 +100,14 @@ def test_workspace_check_selected_simulator_ids_deduplicates_flag_and_positional
         SIMULATOR_BLENDER_ID,
         SIMULATOR_GENESIS_ID,
     )
+
+
+def test_workspace_check_default_targets_include_registered_workspace_plugins() -> None:
+    target_ids = {target.simulator_id for target in _selected_targets(None)}
+
+    assert SIMULATOR_GENESIS_ID in target_ids
+    assert SIMULATOR_MJX_ID in target_ids
+    assert SIMULATOR_PYBULLET_ID in target_ids
 
 
 def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:
@@ -533,6 +544,47 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
     assert command.expected_report_artifact_file_keys == ("mjcf_path",)
     assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
+
+
+def test_mjx_workspace_check_requests_validation_report(monkeypatch, tmp_path) -> None:
+    request = build_demo_workspace_request()
+    expectations = WorkspaceExpectations(
+        object_count=3,
+        camera_count=2,
+        duration_sec=0.02,
+        frame_map="auto",
+        resolved_frame_map="identity",
+        object_positions_xyz={},
+        object_sizes_xyz={},
+        object_asset_refs={},
+        object_contracts={},
+        joint_positions={},
+        camera_ids=(),
+        camera_contracts={},
+    )
+
+    class _PreparedShared:
+        workspace_dir = tmp_path
+        world_package_path = tmp_path / "world-package.json"
+        robot_urdf_path = tmp_path / "robot" / "robot.urdf"
+
+    class _Prepared:
+        shared_workspace = _PreparedShared()
+        mjcf_path = tmp_path / "robot" / "robot.xml"
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.prepare_mujoco_workspace",
+        lambda *args, **kwargs: _Prepared(),
+    )
+
+    command = _prepare_mjx_command(request, expectations)
+
+    assert command.expected_simulator_id == SIMULATOR_MJX_ID
+    assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
+    assert command.expected_object_marker == "world_objects=3"
+    assert command.expected_camera_log_marker == "cameras=2"
+    assert "--robot-mjcf" in command.command
+    assert "--robot-urdf" in command.command
 
 
 def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tmp_path) -> None:

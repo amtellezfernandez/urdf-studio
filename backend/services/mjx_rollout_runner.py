@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -11,6 +13,7 @@ from backend.services.ilu_urdf import convert_urdf_to_mjcf
 
 _PD_GAIN = 20.0
 _PD_DAMPING = 2.0
+_MJX_CONTACT_DISABLED_SUFFIX = ".mjx"
 
 
 def _validate_positive_int(name: str, value: int) -> None:
@@ -38,7 +41,8 @@ def _validate_scale_range(name: str, value: tuple[float, float]) -> None:
 
 @dataclass(frozen=True)
 class MjxRolloutBatchConfig:
-    urdf_xml: str
+    urdf_xml: str = ""
+    model_xml_path: Path | None = None
     episode_count: int = 4
     steps_per_episode: int = 50
     seed: int = 0
@@ -50,8 +54,9 @@ class MjxRolloutBatchConfig:
     trace_id_prefix: str = "mjx-rollout"
 
     def __post_init__(self) -> None:
-        if not self.urdf_xml.strip():
-            raise ValueError("urdf_xml must not be empty.")
+        has_urdf_xml = bool(self.urdf_xml.strip())
+        if not has_urdf_xml and self.model_xml_path is None:
+            raise ValueError("urdf_xml or model_xml_path must be provided.")
         if not self.trace_id_prefix.strip():
             raise ValueError("trace_id_prefix must not be empty.")
         _validate_positive_int("episode_count", self.episode_count)
@@ -71,14 +76,47 @@ class MjxRolloutEpisode:
     wall_time_ms: float
 
 
+def _disable_mjcf_contacts(mjcf_content: str) -> str:
+    root = ET.fromstring(mjcf_content)
+    for geom in root.iter("geom"):
+        geom.set("contype", "0")
+        geom.set("conaffinity", "0")
+    contact_node = root.find("contact")
+    if contact_node is not None:
+        root.remove(contact_node)
+    return ET.tostring(root, encoding="unicode")
+
+
+def _write_mjx_compatible_model_xml(source_path: Path) -> Path:
+    compatible_path = source_path.with_name(
+        f"{source_path.stem}{_MJX_CONTACT_DISABLED_SUFFIX}{source_path.suffix}"
+    )
+    compatible_path.write_text(
+        _disable_mjcf_contacts(source_path.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
+    return compatible_path
+
+
+def _finite_vector(values: np.ndarray, expected_length: int) -> list[float] | None:
+    vector = np.asarray(values, dtype=float).reshape(-1)
+    if vector.shape != (expected_length,) or not np.all(np.isfinite(vector)):
+        return None
+    return vector.tolist()
+
+
 def run_mjx_rollout_batch(config: MjxRolloutBatchConfig) -> list[MjxRolloutEpisode]:
     import jax
     import jax.numpy as jnp
     import mujoco
     from mujoco import mjx
 
-    conversion = convert_urdf_to_mjcf(config.urdf_xml)
-    mj_model = mujoco.MjModel.from_xml_string(conversion.mjcf_content)
+    if config.model_xml_path is not None:
+        model_xml_path = _write_mjx_compatible_model_xml(config.model_xml_path)
+        mj_model = mujoco.MjModel.from_xml_path(str(model_xml_path.resolve()))
+    else:
+        conversion = convert_urdf_to_mjcf(config.urdf_xml)
+        mj_model = mujoco.MjModel.from_xml_string(_disable_mjcf_contacts(conversion.mjcf_content))
     if config.timestep_seconds is not None:
         mj_model.opt.timestep = config.timestep_seconds
     dt = float(mj_model.opt.timestep)
@@ -142,18 +180,33 @@ def run_mjx_rollout_batch(config: MjxRolloutBatchConfig) -> list[MjxRolloutEpiso
 
     episodes: list[MjxRolloutEpisode] = []
     for episode_index in range(config.episode_count):
+        diverged = not (
+            bool(np.all(np.isfinite(qpos_np[episode_index])))
+            and bool(np.all(np.isfinite(xpos_np[episode_index])))
+        )
         frames: list[PhysicalStateFrame] = []
         for step_index in range(step_count):
-            entities = [
-                PhysicalEntity(
-                    entity_id=body_names[body_index],
-                    entity_type="robot",
-                    geometry_type="unknown",
-                    position_xyz=xpos_np[episode_index, step_index, body_index].tolist(),
-                    quat_wxyz=xquat_np[episode_index, step_index, body_index].tolist(),
+            entities: list[PhysicalEntity] = []
+            for body_index in range(1, mj_model.nbody):
+                position_xyz = _finite_vector(
+                    xpos_np[episode_index, step_index, body_index],
+                    3,
                 )
-                for body_index in range(1, mj_model.nbody)
-            ]
+                quat_wxyz = _finite_vector(
+                    xquat_np[episode_index, step_index, body_index],
+                    4,
+                )
+                if position_xyz is None or quat_wxyz is None:
+                    continue
+                entities.append(
+                    PhysicalEntity(
+                        entity_id=body_names[body_index],
+                        entity_type="robot",
+                        geometry_type="unknown",
+                        position_xyz=position_xyz,
+                        quat_wxyz=quat_wxyz,
+                    )
+                )
             frames.append(
                 PhysicalStateFrame(
                     frame_id=f"{config.trace_id_prefix}-{episode_index:04d}:{step_index}",
@@ -172,10 +225,6 @@ def run_mjx_rollout_batch(config: MjxRolloutBatchConfig) -> list[MjxRolloutEpiso
             )
             for step_index in range(step_count)
         ]
-        diverged = not (
-            bool(np.all(np.isfinite(qpos_np[episode_index])))
-            and bool(np.all(np.isfinite(xpos_np[episode_index])))
-        )
         trace = PhysicalRolloutTrace(
             trace_id=f"{config.trace_id_prefix}-{episode_index:04d}",
             frames=frames,

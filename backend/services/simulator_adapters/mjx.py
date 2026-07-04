@@ -13,7 +13,7 @@ from backend.models.simulator_runtime import (
 )
 from backend.services.simulator_adapters.base import SimulatorAdapterError
 from backend.services.simulator_adapters.plugin import SimulatorPlugin
-from backend.services.simulator_adapters.workspace_package import prepare_simulator_workspace_package
+from backend.services.simulator_adapters.mujoco import prepare_mujoco_workspace
 
 _MJX_WORKSPACE_ROOT = BASE_DIR / ".cache" / "simulator-workspaces" / "mjx"
 _MJX_INSPECTION_STEPS = 20
@@ -41,32 +41,30 @@ class MjxPlugin(SimulatorPlugin):
     ) -> SimulatorWorkspacePrepareResponse:
         from backend.services.mjx_rollout_runner import MjxRolloutBatchConfig, run_mjx_rollout_batch
 
-        def error(message: str) -> MjxWorkspaceError:
-            return MjxWorkspaceError(message)
-
-        prepared = prepare_simulator_workspace_package(
+        prepared = prepare_mujoco_workspace(
             request,
+            simulator_id=SIMULATOR_MJX_ID,
             workspace_root=_MJX_WORKSPACE_ROOT,
-            error=error,
         )
 
-        report_path = prepared.workspace_dir / "artifacts" / "report.json"
+        report_path = prepared.shared_workspace.workspace_dir / "artifacts" / "report.json"
         try:
             config = MjxRolloutBatchConfig(
-                urdf_xml=prepared.robot_urdf_xml,
+                model_xml_path=prepared.mjcf_path,
                 episode_count=1,
                 steps_per_episode=_MJX_INSPECTION_STEPS,
             )
             episode = run_mjx_rollout_batch(config)[0]
         except Exception as exc:
-            raise error(f"MJX inspection rollout failed: {exc}") from exc
+            raise MjxWorkspaceError(f"MJX inspection rollout failed: {exc}") from exc
 
         report = {
             "simulator": {"id": self.simulator_id, "label": self.label},
-            "world_package_path": str(prepared.world_package_path),
-            "robot_urdf_path": str(prepared.robot_urdf_path),
-            "world_object_count": prepared.world_object_count,
-            "camera_count": prepared.camera_count,
+            "world_package_path": str(prepared.shared_workspace.world_package_path),
+            "robot_urdf_path": str(prepared.shared_workspace.robot_urdf_path),
+            "robot_mjcf_path": str(prepared.mjcf_path),
+            "world_object_count": prepared.shared_workspace.world_object_count,
+            "camera_count": prepared.shared_workspace.camera_count,
             "rollout": {
                 "steps": _MJX_INSPECTION_STEPS,
                 "diverged": episode.diverged,
@@ -84,17 +82,17 @@ class MjxPlugin(SimulatorPlugin):
             command=[],
             launch_mode="headless_check",
             log_path=None,
-            world_package_path=str(prepared.world_package_path),
-            robot_urdf_path=str(prepared.robot_urdf_path),
+            world_package_path=str(prepared.shared_workspace.world_package_path),
+            robot_urdf_path=str(prepared.shared_workspace.robot_urdf_path),
             simulator_asset_path=None,
             simulator_asset_format=None,
-            bundled_mesh_count=prepared.bundle_result.copied_files,
-            unresolved_mesh_refs=list(prepared.bundle_result.unresolved),
+            bundled_mesh_count=prepared.shared_workspace.bundle_result.copied_files,
+            unresolved_mesh_refs=list(prepared.shared_workspace.bundle_result.unresolved),
             workspace_warnings=[
                 f"MJX runs a {_MJX_INSPECTION_STEPS}-step in-process inspection rollout; "
                 "use backend.services.mjx_rollout_runner.run_mjx_rollout_batch directly "
                 "for batch synthetic-data generation."
             ],
-            world_object_count=prepared.world_object_count,
-            camera_count=prepared.camera_count,
+            world_object_count=prepared.shared_workspace.world_object_count,
+            camera_count=prepared.shared_workspace.camera_count,
         )

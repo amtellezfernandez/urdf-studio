@@ -90,17 +90,23 @@ Implementation: `web/src/features/world-share/worldScenePackageTypes.ts` (fronte
 A `mesh` object's file extension decides how it loads — no separate format flag, the same
 convention Blender import already uses.
 
-| Extension | Viewer rendering | Simulator transfer |
-|---|---|---|
-| `.glb` / `.gltf` | drei `useGLTF` | MuJoCo, Genesis, PyBullet |
-| `.stl` | three-stdlib `STLLoader` | MuJoCo, Genesis, PyBullet, Blender |
-| `.dae` / `.obj` | — | Blender import only |
-| `.ply` | three-stdlib `PLYLoader` | Blender import only |
-| `.spz` (Gaussian splat) | **deferred** | — |
+This repo's mesh-asset pipeline stages files into each simulator workspace; staging means the file
+is packaged for a target, not that the target can load or render that extension.
+
+| Extension | Viewer (this app) | MuJoCo / MJLab / MJX | PyBullet | Genesis | Blender |
+|---|---|---|---|---|---|
+| `.stl` | yes | yes | yes | yes | yes |
+| `.obj` | no | no (compiler rejects) | yes | unverified | yes |
+| `.glb` / `.gltf` | yes | no (compiler rejects) | no (native loader rejects) | unverified | yes |
+| `.dae` | no | no | no | unverified | yes |
+| `.ply` | yes | no | no | unverified | yes |
+| `.usd` / `.usda` / `.usdc` | no | no | no | no | yes |
+| `.spz` (Gaussian splat) | deferred | no | no | no | no |
 
 Splat rendering (`@sparkjsdev/spark`) requires bumping `three` to `^0.180.0`. That version change
-is a separate, deliberate decision — not bundled into the World format itself. Everything else in
-the table ships today.
+is a separate, deliberate decision — not bundled into the World format itself. Entries marked
+`unverified` must be validated against the target runtime before they are treated as release
+support.
 
 Implementation: `web/src/features/viewer/components/MeshAssetBody.tsx` (viewer),
 `backend/services/simulator_adapters/{mujoco,genesis,pybullet}_scene.py` and

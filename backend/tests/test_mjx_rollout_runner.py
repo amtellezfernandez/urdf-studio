@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.services.executability_audit import audit_physical_rollout_trace
@@ -66,6 +68,33 @@ def test_run_mjx_rollout_batch_produces_shaped_traces() -> None:
             assert frame.frame_convention == "mujoco-z-up"
             entity_ids = {entity.entity_id for entity in frame.entities}
             assert entity_ids == {"base_link", "arm_link"}
+
+
+def test_run_mjx_rollout_batch_loads_model_xml_path(tmp_path: Path) -> None:
+    model_path = tmp_path / "robot.xml"
+    model_path.write_text(
+        """<mujoco>
+  <worldbody>
+    <body name="base_link" pos="0 0 0">
+      <joint name="shoulder" type="hinge" axis="0 1 0"/>
+      <geom type="box" size="0.05 0.05 0.05"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    config = MjxRolloutBatchConfig(
+        model_xml_path=model_path,
+        episode_count=1,
+        steps_per_episode=3,
+    )
+
+    episode = run_mjx_rollout_batch(config)[0]
+
+    assert episode.diverged is False
+    assert len(episode.trace.frames) == 3
+    assert {entity.entity_id for entity in episode.trace.frames[0].entities} == {"base_link"}
 
 
 def test_run_mjx_rollout_batch_output_passes_executability_audit() -> None:

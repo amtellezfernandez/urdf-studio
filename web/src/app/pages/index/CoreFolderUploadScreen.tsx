@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -33,22 +32,16 @@ import {
   SourcePanel,
 } from "@/app/pages/index/coreFolderUploadScreenParts";
 import {
-  buildWorldLayoutFolderAssetMap,
-  splitWorldLayoutFolderFiles,
-} from "@/app/pages/index/worldLayoutFolderImport";
-import {
-  addRecentValue,
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
   deriveLocalSourceLabel,
   deriveSourceLabel,
   fileListToArray,
-  readStoredJsonArray,
   readStoredString,
-  removeRecentValue,
   writeStoredString,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
 import { useCameraConfigSourceController } from "@/app/pages/index/useCameraConfigSourceController";
+import { useWorldLayoutSourceController } from "@/app/pages/index/useWorldLayoutSourceController";
 
 type CoreFolderUploadScreenProps = SourceEntryActions;
 
@@ -72,7 +65,6 @@ export const CoreFolderUploadScreen = ({
   const worldLayoutFolderInputRef = useRef<HTMLInputElement | null>(null);
   const cameraConfigFileInputRef = useRef<HTMLInputElement | null>(null);
   const stagedRobotRef = useRef<StagedRobotSource | null>(null);
-  const objectUrlsRef = useRef<string[]>([]);
   const { gpuMode, setGPUMode } = useGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const loadCameras = useCameraStore((state) => state.loadCameras);
@@ -81,24 +73,14 @@ export const CoreFolderUploadScreen = ({
   const [githubUrl, setGithubUrl] = useState("");
   const [githubUrdfPath, setGithubUrdfPath] = useState("");
   const [urlSource, setUrlSource] = useState("");
-  const [worldLayoutUrl, setWorldLayoutUrl] = useState("");
   const [robotSourceDropActive, setRobotSourceDropActive] = useState(false);
-  const [worldSourceDropActive, setWorldSourceDropActive] = useState(false);
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
-  const [isLoadingWorldLayout, setIsLoadingWorldLayout] = useState(false);
   const [isLoadingSetup, setIsLoadingSetup] = useState(false);
   const [loadedRobotName, setLoadedRobotName] = useState<string | null>(null);
-  const [loadedWorldLayoutName, setLoadedWorldLayoutName] = useState<string | null>(null);
   const [stagedRobot, setStagedRobot] = useState<StagedRobotSource | null>(null);
   const [lastLocalFolder, setLastLocalFolder] = useState<string | null>(() =>
     readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey)
-  );
-  const [lastLocalWorldLayout, setLastLocalWorldLayout] = useState<string | null>(() =>
-    readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey)
-  );
-  const [recentWorldLayouts, setRecentWorldLayouts] = useState<string[]>(() =>
-    readStoredJsonArray(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey)
   );
   const {
     cameraConfigUrl,
@@ -114,6 +96,21 @@ export const CoreFolderUploadScreen = ({
     setCameraConfigUrl,
     setCameraSourceDropActive,
   } = useCameraConfigSourceController({ loadCameras });
+  const {
+    clearLastLocalWorldLayout,
+    handleWorldLayoutFileSelect,
+    handleWorldSourceDrop,
+    isLoadingWorldLayout,
+    lastLocalWorldLayout,
+    loadWorldLayoutFromUrl,
+    loadedWorldLayoutName,
+    recentWorldLayouts,
+    removeRecentWorldLayout,
+    setWorldLayoutUrl,
+    setWorldSourceDropActive,
+    worldLayoutUrl,
+    worldSourceDropActive,
+  } = useWorldLayoutSourceController({ onImportWorldLayout });
 
   const logoUrl = `${import.meta.env.BASE_URL}assets/urdf-studio-logo.png`;
   const entryLoadInteractionsDisabled = isLoadingSetup;
@@ -121,14 +118,6 @@ export const CoreFolderUploadScreen = ({
   const loadedCameraSummary = useMemo(
     () => (cameras.length === 1 ? "1 camera" : `${cameras.length} cameras`),
     [cameras.length]
-  );
-
-  useEffect(
-    () => () => {
-      objectUrlsRef.current.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
-      objectUrlsRef.current = [];
-    },
-    []
   );
 
   const stageRobot = useCallback((source: StagedRobotSource): void => {
@@ -240,89 +229,6 @@ export const CoreFolderUploadScreen = ({
       });
     },
     [onUrlSelected, stageRobot, urlSource]
-  );
-
-  const loadWorldLayoutFromUrl = useCallback(
-    async (inputUrl: string): Promise<boolean> => {
-      const normalizedUrl = inputUrl.trim();
-      if (!normalizedUrl) {
-        toast.error("Please enter a world layout link.");
-        return false;
-      }
-      setIsLoadingWorldLayout(true);
-      try {
-        await onImportWorldLayout(normalizedUrl);
-        setRecentWorldLayouts(addRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey, normalizedUrl));
-        setWorldLayoutUrl(normalizedUrl);
-        setLoadedWorldLayoutName(deriveSourceLabel(normalizedUrl, "world-layout.json"));
-        toast.success("Loaded world layout.");
-        return true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to import world layout.";
-        toast.error(message);
-        return false;
-      } finally {
-        setIsLoadingWorldLayout(false);
-      }
-    },
-    [onImportWorldLayout]
-  );
-
-  const processWorldLayoutFiles = useCallback(
-    async (files: File[]): Promise<void> => {
-      const { assetFiles, layoutFile } = splitWorldLayoutFolderFiles(files);
-      if (!layoutFile) {
-        toast.error("Select a world layout JSON file.");
-        return;
-      }
-      const layoutObjectUrl = URL.createObjectURL(layoutFile);
-      objectUrlsRef.current.push(layoutObjectUrl);
-      setIsLoadingWorldLayout(true);
-      try {
-        const assetMapResult = await buildWorldLayoutFolderAssetMap(assetFiles);
-        objectUrlsRef.current.push(...assetMapResult.objectUrls);
-        await onImportWorldLayout(layoutObjectUrl, {
-          meshUriAssetMap: assetMapResult.assetMap,
-        });
-        setLastLocalWorldLayout(layoutFile.name);
-        writeStoredString(
-          CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey,
-          layoutFile.name
-        );
-        setLoadedWorldLayoutName(layoutFile.name);
-        toast.success(`Loaded world layout from ${layoutFile.name}.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to import world layout.";
-        toast.error(message);
-      } finally {
-        setIsLoadingWorldLayout(false);
-      }
-    },
-    [onImportWorldLayout]
-  );
-
-  const handleWorldLayoutFileSelect = useCallback(
-    (event: ChangeEvent<HTMLInputElement>): void => {
-      const files = fileListToArray(event.currentTarget.files);
-      if (files.length > 0) void processWorldLayoutFiles(files);
-      event.currentTarget.value = "";
-    },
-    [processWorldLayoutFiles]
-  );
-
-  const handleWorldSourceDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>): void => {
-      event.preventDefault();
-      event.stopPropagation();
-      setWorldSourceDropActive(false);
-      const files = fileListToArray(event.dataTransfer.files);
-      if (files.length === 0) {
-        toast.error("No local file was dropped.");
-        return;
-      }
-      void processWorldLayoutFiles(files);
-    },
-    [processWorldLayoutFiles]
   );
 
   const handleLoadSetup = useCallback(async (): Promise<void> => {
@@ -612,15 +518,10 @@ export const CoreFolderUploadScreen = ({
           onLoadUrl={(url) => {
             void loadWorldLayoutFromUrl(url);
           }}
-          onRemoveUrl={(url) => {
-            setRecentWorldLayouts(removeRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey, url));
-          }}
+          onRemoveUrl={removeRecentWorldLayout}
           lastLocalLabel={lastLocalWorldLayout}
           onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
-          onClearLocal={() => {
-            setLastLocalWorldLayout(null);
-            writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey, null);
-          }}
+          onClearLocal={clearLastLocalWorldLayout}
         />
       )}
     </SourcePanel>

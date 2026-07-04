@@ -293,10 +293,11 @@ def prepare_mujoco_workspace(
     request: SimulatorWorkspacePrepareRequest,
     *,
     simulator_id: SimulatorId,
+    workspace_root: Path | None = None,
 ) -> PreparedMujocoWorkspace:
     prepared = prepare_simulator_workspace_package(
         request,
-        workspace_root=MUJOCO_WORKSPACE_PROCESS_PARAMS.workspace_root / simulator_id,
+        workspace_root=workspace_root or MUJOCO_WORKSPACE_PROCESS_PARAMS.workspace_root / simulator_id,
         error=_mujoco_error,
     )
     try:
