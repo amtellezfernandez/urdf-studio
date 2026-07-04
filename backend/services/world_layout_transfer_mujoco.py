@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 import re
 from pathlib import Path
 from typing import Any, TypeAlias
@@ -33,7 +33,7 @@ def _format_float(value: float) -> str:
     return f"{value:.12g}"
 
 
-def _format_vec(values: Sequence[float]) -> str:
+def _format_vec(values: Iterable[float]) -> str:
     return " ".join(_format_float(value) for value in values)
 
 
@@ -143,8 +143,14 @@ def _set_mujoco_offscreen_size(root: ET.Element, offscreen_size: tuple[int, int]
     global_visual = visual.find("global")
     if global_visual is None:
         global_visual = ET.SubElement(visual, "global")
-    global_visual.set("offwidth", str(max(int(offscreen_size[0]), 1)))
-    global_visual.set("offheight", str(max(int(offscreen_size[1]), 1)))
+    global_visual.attrib.update(_mujoco_offscreen_attrs(offscreen_size))
+
+
+def _mujoco_offscreen_attrs(offscreen_size: tuple[int, int]) -> MujocoXmlAttributes:
+    return {
+        "offwidth": str(max(int(offscreen_size[0]), 1)),
+        "offheight": str(max(int(offscreen_size[1]), 1)),
+    }
 
 
 def append_primitives_to_mujoco_mjcf(
@@ -188,14 +194,7 @@ def export_primitives_to_mujoco_mjcf(
     ET.SubElement(root, "option", {"timestep": "0.01", "gravity": "0 0 -9.81"})
     if offscreen_size is not None:
         visual = ET.SubElement(root, "visual")
-        ET.SubElement(
-            visual,
-            "global",
-            {
-                "offwidth": str(max(int(offscreen_size[0]), 1)),
-                "offheight": str(max(int(offscreen_size[1]), 1)),
-            },
-        )
+        ET.SubElement(visual, "global", _mujoco_offscreen_attrs(offscreen_size))
     worldbody = ET.SubElement(root, "worldbody")
     if include_floor:
         _add_mujoco_floor(worldbody)

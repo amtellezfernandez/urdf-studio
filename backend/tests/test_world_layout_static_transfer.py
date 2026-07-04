@@ -534,6 +534,24 @@ def test_appends_world_primitives_to_robot_mjcf_for_mujoco() -> None:
     assert report["compiled_geom_count"] == 3
 
 
+def test_mujoco_offscreen_size_is_written_consistently() -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+    primitives, _warnings = build_sim_primitives(layout)
+
+    exported_mjcf = export_primitives_to_mujoco_mjcf(primitives, offscreen_size=(0, 720))
+    appended_mjcf = append_primitives_to_mujoco_mjcf(
+        "<mujoco model=\"robot\"><worldbody /></mujoco>",
+        primitives,
+        offscreen_size=(0, 720),
+    )
+
+    for mjcf_text in (exported_mjcf, appended_mjcf):
+        global_visual = ET.fromstring(mjcf_text).find("./visual/global")
+        assert global_visual is not None
+        assert global_visual.get("offwidth") == "1"
+        assert global_visual.get("offheight") == "720"
+
+
 def test_mujoco_gate_fails_on_substantial_size_mismatch() -> None:
     pytest.importorskip("mujoco")
     layout = parse_static_world_layout_payload(_layout_payload())
