@@ -14,6 +14,7 @@ import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjec
 import { WORLD_OBJECT_RENDER_PARAMS } from "@/features/objects/worldObjectRenderParams";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 import { createLinkObjectResolver } from "@/features/viewer/linkObjectResolver";
+import { MeshAssetBody } from "@/features/viewer/components/MeshAssetBody";
 import { OrbitVisualization } from "@/features/viewer/components/OrbitVisualization";
 import { WorldObjectEditHandles } from "@/features/viewer/components/WorldObjectEditHandles";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
@@ -112,7 +113,7 @@ function CreatedObjectBody({
     );
   }
 
-  return (
+  const primitiveFallback = (
     <mesh position={objectPosition} rotation={objectRotation} {...pointerHandlers}>
       {object.type === "sphere" ? (
         <sphereGeometry args={[object.size.x * 0.5, 24, 18]} />
@@ -132,6 +133,20 @@ function CreatedObjectBody({
       />
     </mesh>
   );
+
+  if (object.type === "mesh") {
+    return (
+      <MeshAssetBody
+        object={object}
+        objectPosition={objectPosition}
+        objectRotation={objectRotation}
+        pointerHandlers={pointerHandlers}
+        fallback={primitiveFallback}
+      />
+    );
+  }
+
+  return primitiveFallback;
 }
 
 export const CreatedObjects = ({

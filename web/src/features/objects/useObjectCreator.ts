@@ -2,7 +2,7 @@ import { create } from "zustand";
 import * as THREE from "three";
 import type { WorldObjectPrimitiveType } from "./worldObjectGeometry";
 
-export type ObjectCreatorType = WorldObjectPrimitiveType;
+export type ObjectCreatorType = Exclude<WorldObjectPrimitiveType, "mesh">;
 
 interface ObjectCreatorState {
   isOpen: boolean;
