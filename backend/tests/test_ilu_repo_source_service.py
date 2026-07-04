@@ -136,6 +136,24 @@ def test_list_repo_candidates_uses_ilu_bridge(monkeypatch) -> None:
     assert payload["candidates"][0]["path"] == "robots/demo/demo.urdf"
 
 
+def test_run_bridge_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout="[]",
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(GitHubPublicProxyError) as exc_info:
+        ilu_repo_source._run_bridge("repo-contents", {"owner": "acme", "repo": "robot"})
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "ilu bridge returned an invalid JSON object."
+
+
 def test_list_repo_contents_falls_back_to_public_archive(monkeypatch) -> None:
     monkeypatch.setattr(
         "backend.services.ilu_repo_source._run_bridge",

@@ -4,6 +4,7 @@ import base64
 import json
 import mimetypes
 import os
+import re
 import subprocess
 import time
 import urllib.error
@@ -11,12 +12,14 @@ import urllib.parse
 import urllib.request
 import zipfile
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from io import BytesIO
+from typing import TypeAlias
 from urllib.parse import urlencode
-import re
 
 from backend.core.paths import SCRIPTS_DIR
+from backend.models.json_payload import JsonObject
 from backend.services.github_auth import resolve_server_github_token
 from backend.services.github_public_params import (
     GITHUB_PUBLIC_ARCHIVE_MAX_DOWNLOAD_BYTES,
@@ -37,6 +40,10 @@ HTTP_USER_AGENT = os.getenv("URDF_STUDIO_HTTP_USER_AGENT", "urdf-studio/1.0")
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
 
+BridgePayload: TypeAlias = Mapping[str, object]
+RepositoryFileEntry: TypeAlias = dict[str, object]
+RepositoryCandidate: TypeAlias = dict[str, object]
+
 
 @dataclass(frozen=True)
 class GitHubPublicProxyError(RuntimeError):
@@ -47,7 +54,7 @@ class GitHubPublicProxyError(RuntimeError):
 @dataclass(frozen=True)
 class _ArchiveSnapshot:
     resolved_ref: str
-    files: list[dict]
+    files: list[RepositoryFileEntry]
     file_bytes_by_path: dict[str, bytes]
 
 
@@ -57,7 +64,7 @@ class _ArchiveCacheEntry:
     snapshot: _ArchiveSnapshot
 
 
-_archive_cache: "OrderedDict[tuple[str, str, str], _ArchiveCacheEntry]" = OrderedDict()
+_archive_cache: OrderedDict[tuple[str, str, str], _ArchiveCacheEntry] = OrderedDict()
 
 
 def _map_bridge_error(detail: str) -> GitHubPublicProxyError:
@@ -71,9 +78,9 @@ def _map_bridge_error(detail: str) -> GitHubPublicProxyError:
     return GitHubPublicProxyError(status_code=502, detail=detail)
 
 
-def _run_bridge(command: str, payload: dict) -> dict:
+def _run_bridge(command: str, payload: BridgePayload) -> JsonObject:
     try:
-        process = subprocess.run(
+        completed_process = subprocess.run(
             [NODE_BIN, str(BRIDGE_SCRIPT), command],
             input=json.dumps(payload),
             capture_output=True,
@@ -87,20 +94,26 @@ def _run_bridge(command: str, payload: dict) -> dict:
             detail=f"Failed to execute ilu bridge: {error}",
         ) from error
 
-    stdout = process.stdout.strip()
-    stderr = process.stderr.strip()
+    stdout = completed_process.stdout.strip()
+    stderr = completed_process.stderr.strip()
 
-    if process.returncode != 0:
+    if completed_process.returncode != 0:
         detail = stderr or stdout or f"ilu bridge command failed: {command}"
         raise _map_bridge_error(detail)
 
     try:
-        return json.loads(stdout or "{}")
+        response = json.loads(stdout or "{}")
     except json.JSONDecodeError as error:
         raise GitHubPublicProxyError(
             status_code=502,
             detail="ilu bridge returned invalid JSON.",
         ) from error
+    if not isinstance(response, dict):
+        raise GitHubPublicProxyError(
+            status_code=502,
+            detail="ilu bridge returned an invalid JSON object.",
+        )
+    return response
 
 
 def _build_backend_file_url(
@@ -155,9 +168,9 @@ def _has_path_segment(path: str, expected_segment: str) -> bool:
     return any(segment.lower() == expected_segment.lower() for segment in path.split("/") if segment)
 
 
-def _is_ignorable_repository_metadata_file(file: dict) -> bool:
-    name = str(file.get("name", "")).lower()
-    path = str(file.get("path", ""))
+def _is_ignorable_repository_metadata_file(entry: RepositoryFileEntry) -> bool:
+    name = str(entry.get("name", "")).lower()
+    path = str(entry.get("path", ""))
     return name.startswith("._") or name == ".ds_store" or _has_path_segment(path, "__macosx")
 
 
@@ -192,24 +205,27 @@ def _build_candidate_file_base(candidate_path: str) -> str:
     return f"{slug}--{_hash_repository_path(normalized)}"
 
 
-def _find_mesh_folder(files: list[dict], dir_path: str) -> str | None:
+def _find_mesh_folder(files: list[RepositoryFileEntry], dir_path: str) -> str | None:
     normalized_dir = dir_path.lower().strip("/")
-    for file in files:
-        if str(file.get("type")) != "dir":
+    for entry in files:
+        if str(entry.get("type")) != "dir":
             continue
-        file_path = str(file.get("path", "")).lower().strip("/")
-        file_name = str(file.get("name", "")).lower()
+        file_path = str(entry.get("path", "")).lower().strip("/")
+        file_name = str(entry.get("name", "")).lower()
         if file_name not in {"meshes", "assets"}:
             continue
         if file_path in {
             f"{normalized_dir}/meshes".strip("/"),
             f"{normalized_dir}/assets".strip("/"),
         }:
-            return str(file.get("path", "")).strip("/")
+            return str(entry.get("path", "")).strip("/")
     return None
 
 
-def _find_meshes_folder_for_candidate(files: list[dict], candidate_path: str) -> str | None:
+def _find_meshes_folder_for_candidate(
+    files: list[RepositoryFileEntry],
+    candidate_path: str,
+) -> str | None:
     path_parts = _normalize_repository_path(candidate_path).split("/")
     urdf_dir = "/".join(path_parts[:-1])
     same_dir = _find_mesh_folder(files, urdf_dir)
@@ -238,7 +254,7 @@ def _repository_basename(path: str) -> str:
     return (parts[-1] if parts else "").lower()
 
 
-def _score_repository_candidate(candidate: dict) -> int:
+def _score_repository_candidate(candidate: RepositoryCandidate) -> int:
     path_lower = str(candidate.get("path", "")).lower()
     name_lower = str(candidate.get("name", "")).lower()
     candidate_stem = _strip_candidate_extension(name_lower)
@@ -307,20 +323,22 @@ def _score_repository_candidate(candidate: dict) -> int:
     return score
 
 
-def _find_repo_candidates_from_files(files: list[dict]) -> list[dict]:
-    candidates: list[dict] = []
-    for file in files:
-        if str(file.get("type")) != "file":
+def _find_repo_candidates_from_files(
+    files: list[RepositoryFileEntry],
+) -> list[RepositoryCandidate]:
+    candidates: list[RepositoryCandidate] = []
+    for entry in files:
+        if str(entry.get("type")) != "file":
             continue
-        if _is_ignorable_repository_metadata_file(file):
+        if _is_ignorable_repository_metadata_file(entry):
             continue
-        file_name = str(file.get("name", ""))
+        file_name = str(entry.get("name", ""))
         lowered_name = file_name.lower()
         if _is_support_xacro_file(lowered_name):
             continue
         if not (lowered_name.endswith(".urdf") or _is_xacro_path(lowered_name)):
             continue
-        candidate_path = _normalize_repository_path(str(file.get("path", "")))
+        candidate_path = _normalize_repository_path(str(entry.get("path", "")))
         meshes_folder = _find_meshes_folder_for_candidate(files, candidate_path)
         candidates.append(
             {
@@ -438,7 +456,11 @@ def _build_github_api_headers(access_token: str | None = None) -> dict[str, str]
     return headers
 
 
-def _load_public_git_tree_files(owner: str, repo: str, branch: str | None = None) -> tuple[str, list[dict]]:
+def _load_public_git_tree_files(
+    owner: str,
+    repo: str,
+    branch: str | None = None,
+) -> tuple[str, list[RepositoryFileEntry]]:
     resolved_ref = branch or _resolve_default_branch_from_html(owner, repo)
     quoted_ref = urllib.parse.quote(resolved_ref, safe="")
     tree_url = f"{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/git/trees/{quoted_ref}?recursive=1"
@@ -459,8 +481,8 @@ def _load_public_git_tree_files(owner: str, repo: str, branch: str | None = None
     if not isinstance(raw_tree, list):
         raise GitHubPublicProxyError(502, "GitHub tree listing returned an invalid payload.")
 
-    directories: dict[str, dict] = {}
-    files: dict[str, dict] = {}
+    directories: dict[str, RepositoryFileEntry] = {}
+    files: dict[str, RepositoryFileEntry] = {}
     for raw_entry in raw_tree:
         if not isinstance(raw_entry, dict):
             continue
@@ -571,7 +593,7 @@ def _load_public_archive_snapshot(
             if not members:
                 raise GitHubPublicProxyError(502, "GitHub archive returned no files.")
             root_prefix = members[0].filename.split("/", 1)[0]
-            files: list[dict] = []
+            files: list[RepositoryFileEntry] = []
             file_bytes_by_path: dict[str, bytes] = {}
             directories = set()
             file_count = 0
@@ -648,12 +670,15 @@ def _load_public_archive_snapshot(
     return snapshot
 
 
-def _filter_archive_files(snapshot: _ArchiveSnapshot, path: str) -> list[dict]:
+def _filter_archive_files(
+    snapshot: _ArchiveSnapshot,
+    path: str,
+) -> list[RepositoryFileEntry]:
     normalized_prefix = _normalize_repository_path(path)
     if not normalized_prefix:
         return [dict(item) for item in snapshot.files]
 
-    filtered: list[dict] = []
+    filtered: list[RepositoryFileEntry] = []
     for item in snapshot.files:
         item_path = str(item.get("path", ""))
         if item_path == normalized_prefix or item_path.startswith(f"{normalized_prefix}/"):
@@ -666,7 +691,7 @@ def _list_repo_candidates_from_archive(
     repo: str,
     path: str = "",
     branch: str | None = None,
-) -> dict:
+) -> JsonObject:
     snapshot = _load_public_archive_snapshot(owner, repo, branch)
     files = _filter_archive_files(snapshot, path)
     if path and not files:
@@ -683,7 +708,7 @@ def _list_repo_candidates_from_git_tree(
     repo: str,
     path: str = "",
     branch: str | None = None,
-) -> dict:
+) -> JsonObject:
     resolved_ref, files = _load_public_git_tree_files(owner, repo, branch)
     filtered_files = _filter_archive_files(
         _ArchiveSnapshot(resolved_ref=resolved_ref, files=files, file_bytes_by_path={}),
@@ -695,7 +720,12 @@ def _list_repo_candidates_from_git_tree(
     }
 
 
-def list_repo_contents(owner: str, repo: str, path: str = "", branch: str | None = None) -> list[dict]:
+def list_repo_contents(
+    owner: str,
+    repo: str,
+    path: str = "",
+    branch: str | None = None,
+) -> list[RepositoryFileEntry]:
     resolved_ref = branch
     try:
         access_token = resolve_server_github_token()
@@ -730,11 +760,11 @@ def list_repo_contents(owner: str, repo: str, path: str = "", branch: str | None
             files = _filter_archive_files(snapshot, path)
         resolved_ref = snapshot.resolved_ref
 
-    output: list[dict] = []
-    for file in files:
-        if not isinstance(file, dict):
+    output: list[RepositoryFileEntry] = []
+    for entry in files:
+        if not isinstance(entry, dict):
             continue
-        normalized = dict(file)
+        normalized = dict(entry)
         if normalized.get("type") == "file":
             raw_sha = normalized.get("sha")
             normalized["download_url"] = _build_backend_file_url(
@@ -755,7 +785,7 @@ def list_repo_candidates(
     repo: str,
     path: str = "",
     branch: str | None = None,
-) -> dict:
+) -> JsonObject:
     resolved_ref = branch
     try:
         access_token = resolve_server_github_token()
