@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import type { JointHierarchyNode, RobotStructureLabels } from "@/shared/lib/urdfCore";
 import {
   applyCommentLabelOverrides,
+  applyJointCommentLabelOverrides,
   applyLabelToBranchFromJoint,
+  applyLinkCommentLabelOverrides,
   buildParentToJointsMap,
 } from "@/features/layout/robotStructureLabelOverrides";
 
@@ -87,5 +89,44 @@ describe("robotStructureLabelOverrides", () => {
     expect(labels.jointByName.wrist_joint).toBe("arm9");
     expect(labels.linkByName.shoulder_link).toBe("arm9");
     expect(labels.linkByName.tool_link).toBe("arm9");
+  });
+
+  it("applies explicit link comment labels only to known links", () => {
+    const labels = createEmptyLabels();
+    applyLinkCommentLabelOverrides({
+      labels,
+      commentHints: {
+        jointLabelByName: {},
+        linkLabelByName: {
+          base_link: "base",
+          missing_link: "ignored",
+        },
+      },
+      linkNames: ["base_link", "tool_link"],
+    });
+
+    expect(labels.linkByName.base_link).toBe("base");
+    expect(labels.linkByName.missing_link).toBeUndefined();
+  });
+
+  it("applies explicit joint comment labels to matching branches only", () => {
+    const labels = createEmptyLabels();
+    applyJointCommentLabelOverrides({
+      labels,
+      commentHints: {
+        jointLabelByName: {
+          shoulder_joint: "arm8",
+          missing_joint: "ignored",
+        },
+        linkLabelByName: {},
+      },
+      orderedJoints,
+      parentToJoints: buildParentToJointsMap(orderedJoints),
+    });
+
+    expect(labels.jointByName.shoulder_joint).toBe("arm8");
+    expect(labels.jointByName.wrist_joint).toBe("arm8");
+    expect(labels.linkByName.shoulder_link).toBe("arm8");
+    expect(labels.linkByName.tool_link).toBe("arm8");
   });
 });

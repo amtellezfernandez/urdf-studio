@@ -2,6 +2,7 @@ import type {
   JointHierarchyNode,
   RobotStructureLabels,
 } from "@/shared/lib/urdfCore";
+import type { StructureCommentHints } from "@/features/layout/urdfStructureCommentHints";
 import { parseUrdfStructureCommentHints } from "@/features/layout/urdfStructureCommentHints";
 
 export const buildParentToJointsMap = (
@@ -48,6 +49,56 @@ export const applyLabelToBranchFromJoint = ({
   }
 };
 
+const buildJointsByName = (
+  orderedJoints: readonly JointHierarchyNode[]
+): Map<string, JointHierarchyNode> =>
+  new Map(orderedJoints.map((joint) => [joint.jointName, joint] as const));
+
+export const applyLinkCommentLabelOverrides = ({
+  labels,
+  commentHints,
+  linkNames,
+}: {
+  labels: RobotStructureLabels;
+  commentHints: StructureCommentHints;
+  linkNames: readonly string[];
+}): void => {
+  const linkNameSet = new Set(linkNames);
+
+  Object.entries(commentHints.linkLabelByName).forEach(([linkName, label]) => {
+    if (linkNameSet.has(linkName)) {
+      labels.linkByName[linkName] = label;
+    }
+  });
+};
+
+export const applyJointCommentLabelOverrides = ({
+  labels,
+  commentHints,
+  orderedJoints,
+  parentToJoints,
+}: {
+  labels: RobotStructureLabels;
+  commentHints: StructureCommentHints;
+  orderedJoints: readonly JointHierarchyNode[];
+  parentToJoints: Map<string, JointHierarchyNode[]>;
+}): void => {
+  const jointsByName = buildJointsByName(orderedJoints);
+
+  Object.entries(commentHints.jointLabelByName).forEach(([jointName, label]) => {
+    const rootJoint = jointsByName.get(jointName);
+    if (!rootJoint) {
+      return;
+    }
+    applyLabelToBranchFromJoint({
+      labels,
+      parentToJoints,
+      rootJoint,
+      label,
+    });
+  });
+};
+
 export const applyCommentLabelOverrides = ({
   labels,
   orderedJoints,
@@ -62,25 +113,15 @@ export const applyCommentLabelOverrides = ({
   urdfContent: string | null | undefined;
 }): void => {
   const commentHints = parseUrdfStructureCommentHints(urdfContent);
-  const jointsByName = new Map(orderedJoints.map((joint) => [joint.jointName, joint] as const));
-  const linkNameSet = new Set(linkNames);
-
-  Object.entries(commentHints.linkLabelByName).forEach(([linkName, label]) => {
-    if (linkNameSet.has(linkName)) {
-      labels.linkByName[linkName] = label;
-    }
+  applyLinkCommentLabelOverrides({
+    labels,
+    commentHints,
+    linkNames,
   });
-
-  Object.entries(commentHints.jointLabelByName).forEach(([jointName, label]) => {
-    const rootJoint = jointsByName.get(jointName);
-    if (!rootJoint) {
-      return;
-    }
-    applyLabelToBranchFromJoint({
-      labels,
-      parentToJoints,
-      rootJoint,
-      label,
-    });
+  applyJointCommentLabelOverrides({
+    labels,
+    commentHints,
+    orderedJoints,
+    parentToJoints,
   });
 };
