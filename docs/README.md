@@ -15,5 +15,6 @@ This index is for product documentation: how to install, launch, operate, and un
 
 ## Reference Specs
 
+- [The World Format](specs/WORLD_FORMAT.md) - what a World scene manifest accepts, and cross-simulator adoption status.
 - [World Scene Package v0.1](specs/WSP_v0.1.md)
 - [ROS Viz Stream v1](specs/ROSVIZ_STREAM_V1.md)

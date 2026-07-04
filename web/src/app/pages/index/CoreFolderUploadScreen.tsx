@@ -441,6 +441,14 @@ export const CoreFolderUploadScreen = ({
       icon={Bot}
       title="Robot"
       description="Load a URDF package folder, loose robot files, GitHub repository, or direct URDF/Xacro URL."
+      infoContent={
+        <>
+          For a GitHub repository, paste the repo link and, if the URDF isn't at the root, its path
+          within the repo (e.g. <code>robots/arm/robot.urdf</code>). Sibling mesh files
+          (.stl/.dae/.obj/.glb/.gltf) referenced by the URDF are resolved automatically from the same
+          repository - you don't need to list them separately.
+        </>
+      }
       isDropActive={robotSourceDropActive}
       onDropActiveChange={setRobotSourceDropActive}
       onDrop={handleRobotSourceDrop}
@@ -637,6 +645,16 @@ export const CoreFolderUploadScreen = ({
       icon={Globe}
       title="World"
       description="Paste a world link, or load a folder containing the world layout JSON plus any mesh, splat, or texture assets it references. Public and GitHub file links are supported."
+      infoContent={
+        <>
+          A World is one JSON file describing scene objects, camera(s), and robot pose - plus,
+          when a scene needs them, any <code>.glb</code>/<code>.gltf</code>/<code>.stl</code>/
+          <code>.dae</code>/<code>.obj</code>/<code>.ply</code> files it references. Pick
+          <strong> Local Folder</strong> to load the JSON and its assets together; each asset
+          reference resolves by relative path, so nothing needs to be hosted anywhere. Full schema:{" "}
+          <code>docs/specs/WORLD_FORMAT.md</code>.
+        </>
+      }
       isDropActive={worldSourceDropActive}
       onDropActiveChange={setWorldSourceDropActive}
       onDrop={handleWorldSourceDrop}

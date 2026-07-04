@@ -74,11 +74,6 @@ import {
   useInitialCollaborationSession,
   useRepeatedInertiaSymmetryLinkCentersLocal,
   useStudioIssueReportUrl,
-  type CanonicalSynthesisPreviewSession,
-  type InertialSynthesisSession,
-  type RepeatedInertiaGroupActionState,
-  type RepeatedInertiaGroupOutcome,
-  type RepeatedInertiaSymmetryOutcome,
 } from "@/app/pages/index/indexPageRuntimeHelpers";
 import {
   buildBakeDraftFingerprint,
@@ -88,11 +83,9 @@ import {
 } from "@/app/pages/index/simulationPrepDerivations";
 import {
   createDefaultInertialVisualizationSettings,
-  buildRepeatedInertiaSymmetryFamilyOutcomeKey,
   buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey,
   collectRepeatedInertiaSymmetryFamilyLinkNames,
   mergeDisplayedRepeatedInertiaSymmetryChains,
-  type SimulationPrepVisualizationPreview,
 } from "@/features/layout/page/simulationPrepViewerState";
 import { IndexModeGate } from "@/app/pages/index/IndexModeGate";
 import { useIluCalibrationFocus } from "@/app/pages/index/useIluCalibrationFocus";
@@ -135,16 +128,15 @@ import {
   applyRobotMirrorParallelFix,
   applyRobotMirrorSymmetryFix,
   type RobotMirrorFixMode,
-  type RobotMirrorOutcome,
 } from "@/features/layout/page/robotMirrorSymmetryFix";
 import { buildRobotMirrorSelectionLinks } from "@/features/layout/page/robotMirrorSymmetrySelection";
-import {
-  REPEATED_INERTIA_SYMMETRY_DEFAULT_CENTER_MODE,
-  type RepeatedInertiaSymmetryCenterMode,
-} from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
 import { useSimulationPrepVisualizationController } from "@/app/pages/index/useSimulationPrepVisualizationController";
+import {
+  useSimulationPrepReviewState,
+  type SimulationPrepAcceptedUrdfReviewState,
+} from "@/app/pages/index/useSimulationPrepReviewState";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -370,40 +362,46 @@ const Index = () => {
   });
   const playbackHandlers = useViewerPlaybackStore((state) => state.handlers);
   const [inertiaReliability, setInertiaReliability] = useState<InertiaReliabilityEntry[]>([]);
-  const [activeInertiaVisualizationScopeKey, setActiveInertiaVisualizationScopeKey] = useState<string | null>(null);
-  const [hoveredInertiaVisualizationPreview, setHoveredInertiaVisualizationPreview] =
-    useState<SimulationPrepVisualizationPreview | null>(null);
-  const [repeatedInertiaSymmetryCenterMode, setRepeatedInertiaSymmetryCenterMode] =
-    useState<RepeatedInertiaSymmetryCenterMode>(
-      REPEATED_INERTIA_SYMMETRY_DEFAULT_CENTER_MODE
-    );
-  const [repeatedInertiaSymmetryActingChainKey, setRepeatedInertiaSymmetryActingChainKey] =
-    useState<string | null>(null);
-  const [repeatedInertiaSymmetryActingProgress, setRepeatedInertiaSymmetryActingProgress] =
-    useState<{
-      chainKey: string;
-      appliedStepCount: number;
-      totalStepCount: number;
-    } | null>(null);
-  const [pinnedRepeatedInertiaSymmetryChains, setPinnedRepeatedInertiaSymmetryChains] = useState<
-    RepeatedInertiaSymmetryChain[]
-  >([]);
-  const [repeatedInertiaSymmetryOutcomeByChainKey, setRepeatedInertiaSymmetryOutcomeByChainKey] =
-    useState<Record<string, RepeatedInertiaSymmetryOutcome>>({});
-  const [repeatedInertiaGroupAction, setRepeatedInertiaGroupAction] =
-    useState<RepeatedInertiaGroupActionState | null>(null);
-  const [repeatedInertiaResolvedGroupKeys, setRepeatedInertiaResolvedGroupKeys] = useState<string[]>(
-    []
-  );
-  const [simulationPrepReviewResetRevision, setSimulationPrepReviewResetRevision] = useState(0);
-  const [isRobotMirrorActing, setIsRobotMirrorActing] = useState(false);
-  const [activeRobotMirrorAction, setActiveRobotMirrorAction] = useState<RobotMirrorFixMode | null>(
-    null
-  );
-  const [robotMirrorOutcome, setRobotMirrorOutcome] = useState<RobotMirrorOutcome | null>(null);
-  const [repeatedInertiaOutcomeByGroupKey, setRepeatedInertiaOutcomeByGroupKey] = useState<
-    Record<string, RepeatedInertiaGroupOutcome>
-  >({});
+  const {
+    activeInertiaVisualizationScopeKey,
+    activeRobotMirrorAction,
+    applyAcceptedUrdfReviewState,
+    bakePreviewSession,
+    canonicalSynthesisPreview,
+    hasExternalSimulationPrepFixActionInFlight,
+    hoveredInertiaVisualizationPreview,
+    inertialSynthesisSession,
+    isRobotMirrorActing,
+    pinnedRepeatedInertiaSymmetryChains,
+    repeatedInertiaGroupAction,
+    repeatedInertiaOutcomeByGroupKey,
+    repeatedInertiaResolvedGroupKeys,
+    repeatedInertiaSymmetryActingChainKey,
+    repeatedInertiaSymmetryActingProgress,
+    repeatedInertiaSymmetryCenterMode,
+    repeatedInertiaSymmetryOutcomeByChainKey,
+    resetSimulationPrepReviewState: resetSimulationPrepReviewSessionState,
+    robotMirrorOutcome,
+    setActiveInertiaVisualizationScopeKey,
+    setActiveRobotMirrorAction,
+    setBakePreviewSession,
+    setCanonicalSynthesisPreview,
+    setHoveredInertiaVisualizationPreview,
+    setInertialSynthesisSession,
+    setIsRobotMirrorActing,
+    setRepeatedInertiaGroupAction,
+    setRepeatedInertiaOutcomeByGroupKey,
+    setRepeatedInertiaResolvedGroupKeys,
+    setRepeatedInertiaSymmetryActingChainKey,
+    setRepeatedInertiaSymmetryActingProgress,
+    setRepeatedInertiaSymmetryCenterMode,
+    setRobotMirrorOutcome,
+    setShowHealthActionPanel,
+    setSimulationPrepResetPoseRequestKey,
+    showHealthActionPanel,
+    simulationPrepResetPoseRequestKey,
+    simulationPrepReviewResetRevision,
+  } = useSimulationPrepReviewState();
   const {
     setIsPlaying,
     setHasAnimationFrames,
@@ -434,29 +432,9 @@ const Index = () => {
   } = useLayout();
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
-  const hasExternalSimulationPrepFixActionInFlight = useMemo(
-    () =>
-      repeatedInertiaGroupAction !== null ||
-      repeatedInertiaSymmetryActingChainKey !== null ||
-      isRobotMirrorActing,
-    [
-      isRobotMirrorActing,
-      repeatedInertiaGroupAction,
-      repeatedInertiaSymmetryActingChainKey,
-    ]
-  );
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
-  const [bakePreviewSession, setBakePreviewSession] = useState<UrdfBakePreviewSession | null>(null);
-  const [canonicalSynthesisPreview, setCanonicalSynthesisPreview] =
-    useState<CanonicalSynthesisPreviewSession | null>(null);
-  const [inertialSynthesisSession, setInertialSynthesisSession] =
-    useState<InertialSynthesisSession | null>(null);
-  const [showHealthActionPanel, setShowHealthActionPanel] = useState(false);
-  const [simulationPrepResetPoseRequestKey, setSimulationPrepResetPoseRequestKey] = useState<
-    string | null
-  >(null);
   const {
     clearSimulationPrepViewerHighlights,
     closeSimulationPrepPanel,
@@ -859,7 +837,7 @@ const Index = () => {
   });
   const handleClearInertialSynthesisSession = useCallback(() => {
     setInertialSynthesisSession(null);
-  }, []);
+  }, [setInertialSynthesisSession]);
   const applySimulationPrepUrdfUpdate = useCallback(
     async ({
       nextUrdfContent,
@@ -869,39 +847,13 @@ const Index = () => {
       successMessage,
     }: {
       nextUrdfContent: string;
-      pinnedSymmetryChain?: RepeatedInertiaSymmetryChain | null;
-      pinnedSymmetryOutcome?: RepeatedInertiaSymmetryOutcome | null;
-      robotMirrorOutcome?: RobotMirrorOutcome | null;
       successMessage: string;
-    }) => {
-      setBakePreviewSession(null);
-      setCanonicalSynthesisPreview(null);
-      setInertialSynthesisSession(null);
-      setRepeatedInertiaResolvedGroupKeys([]);
-      setRepeatedInertiaOutcomeByGroupKey({});
-      setPinnedRepeatedInertiaSymmetryChains(
-        pinnedSymmetryChain
-          ? [
-              {
-                ...pinnedSymmetryChain,
-                recommendedRepair: null,
-              },
-            ]
-          : []
-      );
-      setRepeatedInertiaSymmetryOutcomeByChainKey(
-        pinnedSymmetryChain && pinnedSymmetryOutcome
-          ? {
-              [buildRepeatedInertiaSymmetryFamilyOutcomeKey(pinnedSymmetryChain)]:
-                pinnedSymmetryOutcome,
-              [buildRepeatedInertiaSymmetryChainKey({
-                symmetryRootLinkName: pinnedSymmetryChain.symmetryRootLinkName,
-                outlierBranchRootLinkName: pinnedSymmetryChain.outlierBranchRootLinkName,
-              })]: pinnedSymmetryOutcome,
-            }
-          : {}
-      );
-      setRobotMirrorOutcome(robotMirrorOutcome ?? null);
+    } & SimulationPrepAcceptedUrdfReviewState) => {
+      applyAcceptedUrdfReviewState({
+        pinnedSymmetryChain,
+        pinnedSymmetryOutcome,
+        robotMirrorOutcome,
+      });
       updateUrdfFileWithCollaboration(nextUrdfContent);
       setUrdfContentVersion((currentVersion) => currentVersion + 1);
       const preparationRefresh = await refreshSimulationPrepPreparation({ sourceUrdf: nextUrdfContent });
@@ -915,15 +867,8 @@ const Index = () => {
       }
     },
     [
+      applyAcceptedUrdfReviewState,
       refreshSimulationPrepPreparation,
-      setBakePreviewSession,
-      setCanonicalSynthesisPreview,
-      setInertialSynthesisSession,
-      setPinnedRepeatedInertiaSymmetryChains,
-      setRobotMirrorOutcome,
-      setRepeatedInertiaOutcomeByGroupKey,
-      setRepeatedInertiaResolvedGroupKeys,
-      setRepeatedInertiaSymmetryOutcomeByChainKey,
       setUrdfContentVersion,
       updateUrdfFileWithCollaboration,
     ]
@@ -942,21 +887,13 @@ const Index = () => {
 
   const resetSimulationPrepReviewState = useCallback(() => {
     discardSimulationPrepViewerHighlightSnapshot();
-    setShowHealthActionPanel(false);
-    setHoveredInertiaVisualizationPreview(null);
-    setActiveInertiaVisualizationScopeKey(null);
     setInertialVisualization(createDefaultInertialVisualizationSettings());
-    setRepeatedInertiaResolvedGroupKeys([]);
-    setRepeatedInertiaOutcomeByGroupKey({});
-    setPinnedRepeatedInertiaSymmetryChains([]);
-    setRepeatedInertiaSymmetryOutcomeByChainKey({});
-    setRepeatedInertiaSymmetryActingChainKey(null);
-    setRepeatedInertiaSymmetryActingProgress(null);
-    setSimulationPrepReviewResetRevision((revision) => revision + 1);
-    setRobotMirrorOutcome(null);
-    setActiveRobotMirrorAction(null);
-    setIsRobotMirrorActing(false);
-  }, [discardSimulationPrepViewerHighlightSnapshot, setInertialVisualization]);
+    resetSimulationPrepReviewSessionState();
+  }, [
+    discardSimulationPrepViewerHighlightSnapshot,
+    resetSimulationPrepReviewSessionState,
+    setInertialVisualization,
+  ]);
 
   useEffect(() => {
     if (urdfLoadRevision === 0 || !originalUrdfContent.trim()) {
@@ -1179,14 +1116,14 @@ const Index = () => {
     setRepeatedInertiaResolvedGroupKeys((current) =>
       current.filter((groupKey) => repeatedInertiaDiagnosticsByKey.has(groupKey))
     );
-  }, [repeatedInertiaDiagnosticsByKey]);
+  }, [repeatedInertiaDiagnosticsByKey, setRepeatedInertiaResolvedGroupKeys]);
   useEffect(() => {
     setRepeatedInertiaOutcomeByGroupKey((current) =>
       Object.fromEntries(
         Object.entries(current).filter(([groupKey]) => repeatedInertiaDiagnosticsByKey.has(groupKey))
       )
     );
-  }, [repeatedInertiaDiagnosticsByKey]);
+  }, [repeatedInertiaDiagnosticsByKey, setRepeatedInertiaOutcomeByGroupKey]);
   const {
     activeRobotMirrorVisualization: activeSimulationPrepRobotMirrorVisualization,
     activeSymmetryVisualization: activeSimulationPrepSymmetryVisualization,
@@ -1316,9 +1253,11 @@ const Index = () => {
     [
       applySimulationPrepUrdfUpdate,
       hasSimulationPrepFixActionInFlight,
-      setRepeatedInertiaResolvedGroupKeys,
       meshFiles,
       packageRoots,
+      setRepeatedInertiaGroupAction,
+      setRepeatedInertiaOutcomeByGroupKey,
+      setRepeatedInertiaResolvedGroupKeys,
       urdfAnalysis,
       urdfBasePath,
       vizUrdfContent,
@@ -1396,6 +1335,7 @@ const Index = () => {
       setRepeatedInertiaSymmetryActingProgress,
       repeatedInertiaSymmetryLinkCentersLocal,
       setActiveInertiaVisualizationScopeKey,
+      setRepeatedInertiaSymmetryActingChainKey,
       setShowHealthActionPanel,
       vizUrdfContent,
     ]
@@ -1486,6 +1426,9 @@ const Index = () => {
     packageRoots,
     selectedRobotMirrorLinkNames,
     setActiveInertiaVisualizationScopeKey,
+    setActiveRobotMirrorAction,
+    setIsRobotMirrorActing,
+    setRobotMirrorOutcome,
     setShowHealthActionPanel,
     urdfBasePath,
     vizUrdfContent,

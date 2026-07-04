@@ -14,6 +14,12 @@ import {
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/shared/ui/tooltip";
+import {
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
   deriveSourceLabel,
 } from "@/app/pages/index/coreFolderUploadScreenState";
@@ -22,6 +28,7 @@ export const SourcePanel = ({
   children,
   description,
   icon: Icon,
+  infoContent,
   isDropActive,
   onDrop,
   onDropActiveChange,
@@ -30,6 +37,7 @@ export const SourcePanel = ({
   children: ReactNode;
   description: ReactNode;
   icon: LucideIcon;
+  infoContent?: ReactNode;
   isDropActive: boolean;
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
   onDropActiveChange: (isActive: boolean) => void;
@@ -60,7 +68,30 @@ export const SourcePanel = ({
         <p className="text-sm font-medium text-foreground">{title}</p>
       </div>
       <div className="flex items-start gap-2 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+        {infoContent ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`What ${title} accepts`}
+                  className="mt-0.5 shrink-0 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                align="start"
+                className="max-w-xs text-xs leading-relaxed"
+              >
+                {infoContent}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+        )}
         <p>{description}</p>
       </div>
       {children}
