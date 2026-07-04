@@ -6,11 +6,12 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import TypeAlias, cast
 from urllib.parse import quote, urlparse
 
 from pydantic import ValidationError
 
+from backend.models.json_payload import JsonObject
 from backend.models.ilu_session import (
     IluSessionAssetManifestFile,
     IluSessionAssetManifestResponse,
@@ -58,7 +59,7 @@ MEDIA_TYPE_BY_EXTENSION = {
     ".webp": "image/webp",
 }
 
-IluSessionMetadataPayload: TypeAlias = dict[str, Any]
+IluSessionMetadataPayload: TypeAlias = JsonObject
 
 
 @dataclass(frozen=True)
@@ -121,17 +122,35 @@ def _read_session_payload(session_id: str) -> IluSessionMetadataPayload:
         raise IluSessionError(status_code=500, detail="Failed to read ilu session metadata.") from exc
     if not isinstance(payload, dict):
         raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
-    return payload
+    return cast(IluSessionMetadataPayload, payload)
+
+
+def _metadata_string(
+    payload: IluSessionMetadataPayload,
+    field_name: str,
+    fallback: str = "",
+) -> str:
+    value = payload.get(field_name)
+    return value if isinstance(value, str) else fallback
 
 
 def _required_metadata_string(
     payload: IluSessionMetadataPayload,
     field_name: str,
 ) -> str:
-    value = payload.get(field_name)
-    if not isinstance(value, str):
+    value = _metadata_string(payload, field_name)
+    if not value:
         raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
     return value
+
+
+def _is_supported_schema_version(payload: IluSessionMetadataPayload) -> bool:
+    version = payload.get("schemaVersion")
+    return (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and version == ILU_SESSION_SCHEMA_VERSION
+    )
 
 
 def _coerce_loaded_source(raw: object) -> IluSessionLoadedSource | None:
@@ -291,11 +310,9 @@ def _read_working_urdf(working_urdf_path: Path) -> str:
 def get_ilu_session_snapshot(session_id: str) -> IluSessionSnapshotResponse:
     payload = _read_session_payload(session_id)
 
-    schema = payload.get("schema")
-    schema_version = payload.get("schemaVersion")
     if (
-        schema != ILU_SESSION_SCHEMA
-        or schema_version != ILU_SESSION_SCHEMA_VERSION
+        _metadata_string(payload, "schema") != ILU_SESSION_SCHEMA
+        or not _is_supported_schema_version(payload)
     ):
         raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
     working_urdf_path = _required_metadata_string(payload, "workingUrdfPath")
@@ -307,9 +324,9 @@ def get_ilu_session_snapshot(session_id: str) -> IluSessionSnapshotResponse:
     return IluSessionSnapshotResponse(
         session_schema=ILU_SESSION_SCHEMA,
         schema_version=ILU_SESSION_SCHEMA_VERSION,
-        session_id=str(payload.get("sessionId") or session_id),
-        created_at=str(payload.get("createdAt") or ""),
-        updated_at=str(payload.get("updatedAt") or ""),
+        session_id=_metadata_string(payload, "sessionId", session_id),
+        created_at=_metadata_string(payload, "createdAt"),
+        updated_at=_metadata_string(payload, "updatedAt"),
         working_urdf_path=working_urdf_path,
         last_urdf_path=last_urdf_path,
         urdf_xml=urdf_xml,
