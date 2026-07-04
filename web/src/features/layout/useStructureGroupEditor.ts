@@ -11,21 +11,18 @@ import {
 import {
   moveStructureItemToGroup,
   normalizeStructureGroupLabel,
-  type StructureMoveSourceType,
 } from "@/features/layout/structureGroupAssignments";
-import {
-  STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX,
-  STRUCTURE_DRAG_AUTOSCROLL_MAX_STEP_PX,
-} from "@/features/layout/structureDragParams";
 import { resolveStructureDropGroupLabelFromPoint } from "@/features/layout/structureDragDrop";
-
-export type StructureGroupViewMode = "links" | "flat" | "hierarchy";
-
-export type StructureDragState = {
-  sourceType: StructureMoveSourceType;
-  sourceName: string;
-  sourceGroupLabel: string;
-};
+import {
+  canDropInStructureGroup,
+  parseStructureDragPayload,
+  resolveStructureDragAutoScrollDelta,
+  shouldIgnoreStructureDragStart,
+  STRUCTURE_DRAG_DATA_KEY,
+  STRUCTURE_SUBGROUP_SUPPORTED_VIEWS,
+  type StructureDragState,
+  type StructureGroupViewMode,
+} from "@/features/layout/structureGroupEditorHelpers";
 
 export type StructureGroupDragHandlers = {
   onStructureDragEnd: () => void;
@@ -88,34 +85,6 @@ type UseStructureGroupEditorResult = {
     scrollContainer: HTMLDivElement | null
   ) => void;
   handleStructureDragEnd: () => void;
-};
-
-const STRUCTURE_SUBGROUP_SUPPORTED_VIEWS = new Set<StructureGroupViewMode>(["links", "flat"]);
-const STRUCTURE_DRAG_DATA_KEY = "application/x-urdf-studio-structure-drag";
-
-const parseStructureDragPayload = (payloadRaw: string): StructureDragState | null => {
-  if (!payloadRaw) return null;
-  try {
-    const parsed = JSON.parse(payloadRaw) as Partial<StructureDragState>;
-    if (!parsed || (parsed.sourceType !== "joint" && parsed.sourceType !== "link")) {
-      return null;
-    }
-    if (
-      typeof parsed.sourceName !== "string" ||
-      parsed.sourceName.length === 0 ||
-      typeof parsed.sourceGroupLabel !== "string" ||
-      parsed.sourceGroupLabel.length === 0
-    ) {
-      return null;
-    }
-    return {
-      sourceType: parsed.sourceType,
-      sourceName: parsed.sourceName,
-      sourceGroupLabel: parsed.sourceGroupLabel,
-    };
-  } catch {
-    return null;
-  }
 };
 
 export const useStructureGroupEditor = ({
@@ -216,22 +185,16 @@ export const useStructureGroupEditor = ({
     },
     [activeStructureDrag]
   );
-  const canDropInStructureGroup = useCallback(
-    (dragState: StructureDragState | null, targetGroupLabel: string) => {
-      if (!canReassignStructureGroups || !dragState) return false;
-      return Boolean(targetGroupLabel);
-    },
-    [canReassignStructureGroups]
-  );
-
   const handleStructureDragStart = useCallback(
     (event: React.DragEvent<HTMLElement>, dragState: StructureDragState) => {
-      if (!canReassignStructureGroups) {
-        event.preventDefault();
-        return;
-      }
       const targetElement = event.target instanceof HTMLElement ? event.target : null;
-      if (dragState.sourceType === "link" && targetElement?.closest("button")) {
+      if (
+        shouldIgnoreStructureDragStart({
+          canReassignStructureGroups,
+          dragState,
+          targetElement,
+        })
+      ) {
         event.preventDefault();
         return;
       }
@@ -249,7 +212,15 @@ export const useStructureGroupEditor = ({
   const handleStructureGroupDragOver = useCallback(
     (event: React.DragEvent<HTMLElement>, targetGroupLabel: string) => {
       const dragState = resolveDragStateFromEvent(event);
-      if (!canDropInStructureGroup(dragState, targetGroupLabel)) return;
+      if (
+        !canDropInStructureGroup({
+          canReassignStructureGroups,
+          dragState,
+          targetGroupLabel,
+        })
+      ) {
+        return;
+      }
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
       setActiveStructureDropGroup(targetGroupLabel);
@@ -257,7 +228,7 @@ export const useStructureGroupEditor = ({
         setActiveStructureDrag(dragState);
       }
     },
-    [activeStructureDrag, canDropInStructureGroup, resolveDragStateFromEvent]
+    [activeStructureDrag, canReassignStructureGroups, resolveDragStateFromEvent]
   );
   const handleStructureGroupDragLeave = useCallback(
     (event: React.DragEvent<HTMLElement>, targetGroupLabel: string) => {
@@ -272,7 +243,15 @@ export const useStructureGroupEditor = ({
   );
   const moveDraggedStructureItemToGroup = useCallback(
     (dragState: StructureDragState, targetGroupLabel: string) => {
-      if (!canDropInStructureGroup(dragState, targetGroupLabel)) return;
+      if (
+        !canDropInStructureGroup({
+          canReassignStructureGroups,
+          dragState,
+          targetGroupLabel,
+        })
+      ) {
+        return;
+      }
       if (!urdfContent || !onUrdfChange) return;
       if (dragState.sourceGroupLabel === targetGroupLabel) {
         return;
@@ -297,7 +276,7 @@ export const useStructureGroupEditor = ({
     },
     [
       analysis,
-      canDropInStructureGroup,
+      canReassignStructureGroups,
       onUrdfChange,
       urdfContent,
     ]
@@ -305,14 +284,23 @@ export const useStructureGroupEditor = ({
   const handleStructureGroupDrop = useCallback(
     (event: React.DragEvent<HTMLElement>, targetGroupLabel: string) => {
       const dragState = resolveDragStateFromEvent(event);
-      if (!canDropInStructureGroup(dragState, targetGroupLabel) || !dragState) return;
+      if (
+        !canDropInStructureGroup({
+          canReassignStructureGroups,
+          dragState,
+          targetGroupLabel,
+        }) ||
+        !dragState
+      ) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       moveDraggedStructureItemToGroup(dragState, targetGroupLabel);
       clearStructureDragState();
     },
     [
-      canDropInStructureGroup,
+      canReassignStructureGroups,
       clearStructureDragState,
       moveDraggedStructureItemToGroup,
       resolveDragStateFromEvent,
@@ -339,27 +327,11 @@ export const useStructureGroupEditor = ({
       event.dataTransfer.dropEffect = hoveredDropGroupLabel ? "move" : "none";
 
       const rect = scrollContainer.getBoundingClientRect();
-      const pointerDistanceToTop = event.clientY - rect.top;
-      const pointerDistanceToBottom = rect.bottom - event.clientY;
-      let scrollDelta = 0;
-
-      if (
-        pointerDistanceToTop >= 0 &&
-        pointerDistanceToTop < STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX
-      ) {
-        const ratio =
-          (STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX - pointerDistanceToTop) /
-          STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX;
-        scrollDelta = -STRUCTURE_DRAG_AUTOSCROLL_MAX_STEP_PX * ratio;
-      } else if (
-        pointerDistanceToBottom >= 0 &&
-        pointerDistanceToBottom < STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX
-      ) {
-        const ratio =
-          (STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX - pointerDistanceToBottom) /
-          STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX;
-        scrollDelta = STRUCTURE_DRAG_AUTOSCROLL_MAX_STEP_PX * ratio;
-      }
+      const scrollDelta = resolveStructureDragAutoScrollDelta({
+        clientY: event.clientY,
+        containerTop: rect.top,
+        containerBottom: rect.bottom,
+      });
 
       if (scrollDelta !== 0) {
         scrollContainer.scrollTop += scrollDelta;
