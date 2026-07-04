@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import math
 
 import pytest
@@ -9,8 +10,6 @@ from backend.services.wsp_lerobot_hf_ingest import (
     fk_ee_from_degrees,
     joint_dict_from_degrees,
 )
-
-# ── FK helpers (no network) ───────────────────────────────────────────────────
 
 # First frame of episode 0 from lerobot/svla_so101_pickplace (hardcoded for offline tests).
 _FRAME0_DEG = [1.9560878, -98.74372, 98.92424, 74.81983, -51.45299, 1.40939]
@@ -43,17 +42,16 @@ def test_fk_ee_from_degrees_is_in_plausible_workspace() -> None:
 
 def test_fk_ee_pan_sweeps_y_axis() -> None:
     # SO-101 faces +X at pan=0; shoulder_pan sweeps the Y axis.
-    # Negative pan → +Y; positive pan → −Y.
     pos_neg = fk_ee_from_degrees([-60.0] + _FRAME0_DEG[1:])
     pos_pos = fk_ee_from_degrees([60.0] + _FRAME0_DEG[1:])
     assert pos_neg[1] > 0, "negative pan should move EE toward +Y"
-    assert pos_pos[1] < 0, "positive pan should move EE toward −Y"
+    assert pos_pos[1] < 0, "positive pan should move EE toward -Y"
     assert pos_neg[1] > pos_pos[1], "pan sweep must be monotone in Y"
 
 
-# ── Integration test (requires HuggingFace network access) ───────────────────
-
-def _hf_available() -> bool:
+def _hf_integration_available() -> bool:
+    if importlib.util.find_spec("datasets") is None:
+        return False
     try:
         import requests
         return requests.head("https://huggingface.co", timeout=3).ok
@@ -61,7 +59,10 @@ def _hf_available() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _hf_available(), reason="HuggingFace not reachable")
+@pytest.mark.skipif(
+    not _hf_integration_available(),
+    reason="HuggingFace integration requires network access and the optional datasets package",
+)
 def test_load_lerobot_hf_episode_compiles_real_trace() -> None:
     from backend.services.wsp_lerobot_hf_ingest import load_lerobot_hf_episode
     from backend.services.world_model_dataset import validate_world_model_dataset_samples
@@ -94,6 +95,6 @@ def test_load_lerobot_hf_episode_compiles_real_trace() -> None:
         episode_indices=[0],
         max_frames_per_episode=10,
     )
-    assert len(samples) == 9  # 10 frames → 9 transitions
+    assert len(samples) == 9
     readiness = validate_world_model_dataset_samples(samples)
     assert readiness.ready is True

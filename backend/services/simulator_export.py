@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -23,6 +23,7 @@ from backend.services.world_layout_static_transfer import (
 
 INVALID_MJCF_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]")
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
+SimulatorExportTarget = Literal["mujoco", "genesis"]
 
 
 @dataclass(frozen=True)
@@ -192,7 +193,7 @@ def _to_static_transfer_primitives(primitives: Sequence[ExportPrimitive]) -> tup
 def _collect_export_primitives(
     trace: PhysicalRolloutTrace,
     *,
-    target: str,
+    target: SimulatorExportTarget,
     output_path: Path | None,
     branch_id: str | None,
 ) -> tuple[list[ExportPrimitive], str, int, list[str], SimulatorExportState | None]:
@@ -200,7 +201,7 @@ def _collect_export_primitives(
     if not report.success:
         return [], "identity", 0, [], SimulatorExportState(
             success=False,
-            target=target,  # type: ignore[arg-type]
+            target=target,
             branch_id=branch_id,
             output_path=str(output_path) if output_path else None,
             smoke_passed=False,
@@ -210,7 +211,7 @@ def _collect_export_primitives(
     if not trace.frames:
         return [], "identity", 0, [], SimulatorExportState(
             success=False,
-            target=target,  # type: ignore[arg-type]
+            target=target,
             branch_id=branch_id,
             output_path=str(output_path) if output_path else None,
             smoke_passed=False,
@@ -223,7 +224,7 @@ def _collect_export_primitives(
     except ValueError as exc:
         return [], "identity", 0, [], SimulatorExportState(
             success=False,
-            target=target,  # type: ignore[arg-type]
+            target=target,
             branch_id=branch_id,
             output_path=str(output_path) if output_path else None,
             smoke_passed=False,

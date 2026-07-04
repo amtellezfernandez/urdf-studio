@@ -1,7 +1,7 @@
 """Generic URDF-backed robot rollout generator for the WSP pipeline.
 
 Produces PhysicalRolloutTrace objects from any serial-chain robot defined
-in URDF format, using yourdfpy for FK — no hardcoded link lengths or limits.
+in URDF format, using yourdfpy for FK without hardcoded link lengths or limits.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import random
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import yourdfpy  # type: ignore
@@ -25,8 +24,6 @@ from backend.models.physical_state import (
     PhysicalStateFrame,
 )
 
-
-# ── URDF loading and caching ──────────────────────────────────────────────────
 
 @dataclass
 class UrdfEntry:
@@ -83,13 +80,11 @@ def fk_position(
     return [round(float(v), 5) for v in transform[:3, 3]]
 
 
-# ── Configuration dataclasses ─────────────────────────────────────────────────
-
 @dataclass
 class WorldObject:
     object_id: str
-    position_xyz: list[float]    # [x, y, z] centre
-    size_xyz: list[float]        # [w, d, h]
+    position_xyz: list[float]
+    size_xyz: list[float]
     mass_kg: float = 1.0
     friction: float = 0.5
     movable: bool = True
@@ -105,27 +100,22 @@ class WorkSurface:
 @dataclass
 class RobotRolloutConfig:
     urdf_xml: str
-    end_effector_link: str           # link name used as gripper / TCP
-    entity_id: str                   # entity_id for the robot in trace frames
+    end_effector_link: str
+    entity_id: str
     work_surface: WorkSurface
     world_objects: list[WorldObject] = field(default_factory=list)
-    # Named joint overrides for the collision scenario (must give EE z < surface top)
     collision_injection_joints: dict[str, float] = field(default_factory=dict)
-    # Optional sampling bounds per joint: {name: (lo, hi)}, overrides URDF limits
     workspace_bounds: dict[str, tuple[float, float]] = field(default_factory=dict)
-    min_ee_z: float = 0.02           # reject waypoints where EE z is below this
-    contact_dist_m: float = 0.07     # gripper centre distance for contact detection
-    robot_half_size_m: float = 0.015 # half-size of the robot AABB bounding box
-    frame_dt_ms: int = 100           # simulation time step in ms
-    max_effort_n: float = 35.0       # max push force (used in contact instability check)
+    min_ee_z: float = 0.02
+    contact_dist_m: float = 0.07
+    robot_half_size_m: float = 0.015
+    frame_dt_ms: int = 100
+    max_effort_n: float = 35.0
 
-
-# ── Scenario labels ────────────────────────────────────────────────────────────
-
-SCENARIO_VALID               = "valid"
-SCENARIO_JOINT_LIMIT         = "joint_limit_violation"
+SCENARIO_VALID = "valid"
+SCENARIO_JOINT_LIMIT = "joint_limit_violation"
 SCENARIO_CONTACT_INSTABILITY = "contact_instability"
-SCENARIO_COLLISION           = "collision"
+SCENARIO_COLLISION = "collision"
 ALL_SCENARIOS = [
     SCENARIO_VALID,
     SCENARIO_JOINT_LIMIT,
@@ -134,13 +124,11 @@ ALL_SCENARIOS = [
 ]
 
 DEFAULT_FRAME_COUNT = 20
-DEFAULT_SEED        = 42
+DEFAULT_SEED = 42
 
 _CONTACT_INSTABILITY_MASS_KG = 45.0
-_VEL_DECAY                   = 0.60
+_VEL_DECAY = 0.60
 
-
-# ── Trajectory generation ──────────────────────────────────────────────────────
 
 def _effective_bounds(
     entry: UrdfEntry,
@@ -174,7 +162,7 @@ def generate_joint_trajectory_dicts(
     filters out waypoints where the EE is below min_ee_z, then interpolates.
     """
     bounds = _effective_bounds(entry, config.workspace_bounds)
-    rest   = _midpoint_pose(bounds)
+    rest = _midpoint_pose(bounds)
 
     def _random_waypoint() -> dict[str, float]:
         for _ in range(30):
@@ -186,8 +174,8 @@ def generate_joint_trajectory_dicts(
                 return q
         return dict(rest)
 
-    n_waypoints  = 3
-    waypoints    = [dict(rest)] + [_random_waypoint() for _ in range(n_waypoints)]
+    n_waypoints = 3
+    waypoints = [dict(rest)] + [_random_waypoint() for _ in range(n_waypoints)]
     frames_per_seg = max(1, frame_count // n_waypoints)
 
     trajectory: list[dict[str, float]] = []
@@ -205,7 +193,6 @@ def generate_joint_trajectory_dicts(
                 name: round(q_start[name] + t * (q_end[name] - q_start[name]), 5)
                 for name in entry.joint_names
             }
-            # Clamp to URDF limits (not workspace bounds — valid rollouts stay in bounds)
             for i, name in enumerate(entry.joint_names):
                 q[name] = max(entry.joint_lower[i], min(entry.joint_upper[i], q[name]))
             trajectory.append(q)
@@ -217,7 +204,6 @@ def generate_joint_trajectory_dicts(
     if inject_joint_violation_at is not None and 0 <= inject_joint_violation_at < frame_count:
         frame = dict(trajectory[inject_joint_violation_at])
         first_joint = entry.joint_names[0]
-        # Push the first actuated joint 10% above its URDF upper limit
         frame[first_joint] = round(entry.joint_upper[0] * 1.10, 4)
         trajectory[inject_joint_violation_at] = frame
 
@@ -232,8 +218,6 @@ def generate_joint_trajectory_dicts(
 
     return trajectory
 
-
-# ── Box dynamics ───────────────────────────────────────────────────────────────
 
 @dataclass
 class _BoxState:
@@ -263,8 +247,6 @@ class _BoxState:
     def snapshot(self) -> tuple[list[float], list[float]]:
         return self.pos[:], self.vel[:]
 
-
-# ── Entity / action builders ──────────────────────────────────────────────────
 
 def _robot_entity(
     config: RobotRolloutConfig,
@@ -369,8 +351,6 @@ def _contact_relation(robot_entity_id: str, object_id: str) -> PhysicalRelation:
     )
 
 
-# ── Trace assembler ────────────────────────────────────────────────────────────
-
 def generate_rollout_trace(
     config: RobotRolloutConfig,
     entry: UrdfEntry,
@@ -381,9 +361,9 @@ def generate_rollout_trace(
     rng: random.Random,
 ) -> PhysicalRolloutTrace:
     """Build a multi-frame PhysicalRolloutTrace for one robot rollout."""
-    inject_jlim_at  = frame_count // 2 if scenario == SCENARIO_JOINT_LIMIT         else None
-    collision_frame = frame_count // 2 if scenario == SCENARIO_COLLISION            else None
-    first_obj_mass  = (
+    inject_jlim_at = frame_count // 2 if scenario == SCENARIO_JOINT_LIMIT else None
+    collision_frame = frame_count // 2 if scenario == SCENARIO_COLLISION else None
+    first_obj_mass = (
         _CONTACT_INSTABILITY_MASS_KG
         if scenario == SCENARIO_CONTACT_INSTABILITY
         else (config.world_objects[0].mass_kg if config.world_objects else 0.3)
@@ -397,7 +377,7 @@ def generate_rollout_trace(
 
     box_states = [_BoxState(pos=list(obj.position_xyz)) for obj in config.world_objects]
 
-    dt_s    = config.frame_dt_ms / 1000.0
+    dt_s = config.frame_dt_ms / 1000.0
     frames: list[PhysicalStateFrame] = []
     actions: list[ActionToken] = []
 
@@ -409,9 +389,8 @@ def generate_rollout_trace(
         is_collision_frame = scenario == SCENARIO_COLLISION and frame_idx == collision_frame
 
         constraints: list[ConstraintToken] = []
-        relations:   list[PhysicalRelation] = []
+        relations: list[PhysicalRelation] = []
 
-        # Annotate joint limit violation
         if scenario == SCENARIO_JOINT_LIMIT and frame_idx == inject_jlim_at:
             first_joint = entry.joint_names[0]
             constraints.append(_joint_limit_constraint(
@@ -420,12 +399,11 @@ def generate_rollout_trace(
                 config.entity_id,
             ))
 
-        # Box contact and dynamics
         box_entities: list[PhysicalEntity] = []
         contacted_any = False
         for i, (obj, box) in enumerate(zip(config.world_objects, box_states)):
-            obj_mass   = first_obj_mass if i == 0 else obj.mass_kg
-            contacted  = box.apply_contact(ee, ee_vel, config.contact_dist_m)
+            obj_mass = first_obj_mass if i == 0 else obj.mass_kg
+            contacted = box.apply_contact(ee, ee_vel, config.contact_dist_m)
             box_pos, box_vel = box.snapshot()
             box.step(dt_s)
             if contacted:
@@ -434,8 +412,6 @@ def generate_rollout_trace(
                     frame_idx, config.entity_id, obj.object_id,
                     ee_vel, config.max_effort_n, config.frame_dt_ms,
                 ))
-                # Declare contact relation so AABB overlap grades WARN not REJECT —
-                # except on the collision injection frame where we want REJECT.
                 if not is_collision_frame:
                     relations.append(_contact_relation(config.entity_id, obj.object_id))
             box_entities.append(_world_object_entity(obj, box_pos, box_vel, obj_mass))
@@ -484,15 +460,15 @@ def generate_rollout_batch(
     scenario_weights: dict[str, float] | None = None,
 ) -> list[PhysicalRolloutTrace]:
     """Generate a mixed batch of rollout traces for the given robot config."""
-    rng     = random.Random(seed)
+    rng = random.Random(seed)
     weights = scenario_weights or {
-        SCENARIO_VALID:               0.40,
-        SCENARIO_JOINT_LIMIT:         0.20,
+        SCENARIO_VALID: 0.40,
+        SCENARIO_JOINT_LIMIT: 0.20,
         SCENARIO_CONTACT_INSTABILITY: 0.20,
-        SCENARIO_COLLISION:           0.20,
+        SCENARIO_COLLISION: 0.20,
     }
     population = list(weights.keys())
-    w_values   = [weights[k] for k in population]
+    w_values = [weights[k] for k in population]
     traces: list[PhysicalRolloutTrace] = []
     for i in range(count):
         scenario = rng.choices(population, weights=w_values, k=1)[0]

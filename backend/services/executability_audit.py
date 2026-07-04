@@ -5,6 +5,7 @@ import math
 from backend.models.physical_state import (
     ActionToken,
     CorrectionBranch,
+    ExecutabilityDecision,
     ExecutabilityCheckResult,
     ExecutabilityReport,
     PhysicalEntity,
@@ -23,7 +24,7 @@ DEFAULT_BATTERY_RESERVE = 0.1
 def _check(
     check_id: str,
     passed: bool,
-    decision: str,
+    decision: ExecutabilityDecision,
     message: str,
     *,
     subject_ref: str | None = None,
@@ -32,7 +33,7 @@ def _check(
     return ExecutabilityCheckResult(
         check_id=check_id,
         passed=passed,
-        decision=decision,  # type: ignore[arg-type]
+        decision=decision,
         subject_ref=subject_ref,
         message=message,
         metrics=metrics or {},
@@ -341,7 +342,7 @@ def _audit_collision_clearance(frame: PhysicalStateFrame, margin_m: float) -> li
     return checks
 
 
-def _summarize(checks: list[ExecutabilityCheckResult]) -> tuple[str, int, int, int]:
+def _summarize(checks: list[ExecutabilityCheckResult]) -> tuple[ExecutabilityDecision, int, int, int]:
     stop_count = sum(1 for check in checks if check.decision == "stop")
     reject_count = sum(1 for check in checks if check.decision == "reject")
     warn_count = sum(1 for check in checks if check.decision == "warn")
@@ -354,7 +355,14 @@ def _summarize(checks: list[ExecutabilityCheckResult]) -> tuple[str, int, int, i
     return "allow", reject_count, warn_count, stop_count
 
 
-def _build_correction_branches(decision: str, actions: list[ActionToken]) -> list[CorrectionBranch]:
+def _score_from_counts(*, reject_count: int, warn_count: int, stop_count: int) -> float:
+    return max(0.0, 1.0 - (reject_count * 0.25) - (warn_count * 0.05) - (stop_count * 0.5))
+
+
+def _build_correction_branches(
+    decision: ExecutabilityDecision,
+    actions: list[ActionToken],
+) -> list[CorrectionBranch]:
     if decision not in {"reject", "stop"}:
         return []
     original = actions[0] if actions else None
@@ -397,10 +405,14 @@ def audit_physical_state_frame(
         *_audit_collision_clearance(frame, collision_margin_m),
     ]
     decision, reject_count, warn_count, stop_count = _summarize(checks)
-    score = max(0.0, 1.0 - (reject_count * 0.25) - (warn_count * 0.05) - (stop_count * 0.5))
+    score = _score_from_counts(
+        reject_count=reject_count,
+        warn_count=warn_count,
+        stop_count=stop_count,
+    )
     return ExecutabilityReport(
         success=decision == "allow",
-        decision=decision,  # type: ignore[arg-type]
+        decision=decision,
         score=score,
         check_count=len(checks),
         reject_count=reject_count,
@@ -438,10 +450,14 @@ def audit_physical_rollout_trace(
                 )
             )
     decision, reject_count, warn_count, stop_count = _summarize(checks)
-    score = max(0.0, 1.0 - (reject_count * 0.25) - (warn_count * 0.05) - (stop_count * 0.5))
+    score = _score_from_counts(
+        reject_count=reject_count,
+        warn_count=warn_count,
+        stop_count=stop_count,
+    )
     return ExecutabilityReport(
         success=decision == "allow",
-        decision=decision,  # type: ignore[arg-type]
+        decision=decision,
         score=score,
         check_count=len(checks),
         reject_count=reject_count,
