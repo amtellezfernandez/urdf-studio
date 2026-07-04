@@ -7,7 +7,7 @@ import math
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Literal, Sequence, TypeAlias, TypedDict, TypeGuard, cast
+from typing import Literal, Sequence, TypeAlias, TypedDict, TypeGuard, cast
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -140,11 +140,11 @@ class _WorldLayoutSnapshotEnvelope:
     frame_map_hint: ConcreteWorldLayoutFrameMap | None
 
 
-def _is_record(value: Any) -> TypeGuard[WorldLayoutPayloadRecord]:
+def _is_record(value: object) -> TypeGuard[WorldLayoutPayloadRecord]:
     return isinstance(value, dict)
 
 
-def _read_finite_number(value: Any, field: str) -> float:
+def _read_finite_number(value: object, field: str) -> float:
     if isinstance(value, bool):
         raise WorldLayoutTransferError(f"{field} must be a finite number")
     try:
@@ -157,7 +157,7 @@ def _read_finite_number(value: Any, field: str) -> float:
 
 
 def _read_optional_finite_number(
-    value: Any,
+    value: object,
     field: str,
     *,
     minimum: float | None = None,
@@ -173,7 +173,7 @@ def _read_optional_finite_number(
     return parsed
 
 
-def _read_optional_bool(value: Any, default: bool, field: str) -> bool:
+def _read_optional_bool(value: object, default: bool, field: str) -> bool:
     if value is None:
         return default
     if isinstance(value, bool):
@@ -181,7 +181,7 @@ def _read_optional_bool(value: Any, default: bool, field: str) -> bool:
     raise WorldLayoutTransferError(f"{field} must be a boolean")
 
 
-def _read_vector3(value: Any, field: str, *, positive: bool = False) -> tuple[float, float, float]:
+def _read_vector3(value: object, field: str, *, positive: bool = False) -> tuple[float, float, float]:
     if not isinstance(value, list | tuple) or len(value) != 3:
         raise WorldLayoutTransferError(f"{field} must be an array of 3 finite numbers")
     parsed = tuple(
@@ -211,7 +211,7 @@ def _read_static_timing(snapshot: WorldLayoutPayloadRecord) -> tuple[int, int]:
     return scenario_time_ms, scenario_duration_ms
 
 
-def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
+def _read_world_object(value: object, index: int) -> WorldLayoutObject:
     if not _is_record(value):
         raise WorldLayoutTransferError(f"objects[{index}] must be an object")
     raw_id = value.get("id")
@@ -287,7 +287,7 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
     )
 
 
-def _read_optional_string(value: Any) -> str | None:
+def _read_optional_string(value: object) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
@@ -394,7 +394,7 @@ def _read_frame_convention(
 
 
 def _read_snapshot_from_payload(
-    payload: Any,
+    payload: object,
 ) -> _WorldLayoutSnapshotEnvelope:
     if not _is_record(payload):
         raise WorldLayoutTransferError("World layout payload must be a JSON object")
@@ -425,7 +425,7 @@ def _read_snapshot_from_payload(
     raise WorldLayoutTransferError("Payload must contain world_layout, world_snapshot, or manifest")
 
 
-def parse_static_world_layout_payload(payload: Any) -> StaticWorldLayout:
+def parse_static_world_layout_payload(payload: object) -> StaticWorldLayout:
     envelope = _read_snapshot_from_payload(payload)
     raw_objects = envelope.snapshot.get("objects")
     if not isinstance(raw_objects, list):
