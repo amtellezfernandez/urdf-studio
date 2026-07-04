@@ -20,7 +20,7 @@ from backend.services.world_layout_transfer_types import (
 )
 
 _GENESIS_INITIALIZED = False
-GenesisEntityEntry: TypeAlias = tuple[SimPrimitive, Any]
+GenesisEntityEntry: TypeAlias = tuple[SimPrimitive, object]
 
 
 def _ensure_genesis_initialized(gs: Any) -> None:
@@ -116,7 +116,7 @@ def check_genesis_transfer(
     return report
 
 
-def _genesis_morph_type_name(morph: Any) -> str | None:
+def _genesis_morph_type_name(morph: object) -> str | None:
     class_name = type(morph).__name__.lower()
     if class_name == "box":
         return "box"
@@ -127,7 +127,7 @@ def _genesis_morph_type_name(morph: Any) -> str | None:
     return None
 
 
-def _genesis_morph_full_size(morph: Any) -> tuple[float, float, float] | None:
+def _genesis_morph_full_size(morph: object) -> tuple[float, float, float] | None:
     morph_type = _genesis_morph_type_name(morph)
     if morph_type == "box":
         return tuple(float(value) for value in morph.size)
@@ -140,7 +140,7 @@ def _genesis_morph_full_size(morph: Any) -> tuple[float, float, float] | None:
     return None
 
 
-def _genesis_entity_rgba(entity: Any) -> tuple[float, float, float, float] | None:
+def _genesis_entity_rgba(entity: object) -> tuple[float, float, float, float] | None:
     surface = getattr(entity, "surface", None)
     diffuse = _genesis_texture_color(getattr(surface, "diffuse_texture", None))
     if diffuse is None or len(diffuse) < 3:
@@ -150,11 +150,11 @@ def _genesis_entity_rgba(entity: Any) -> tuple[float, float, float, float] | Non
     return (float(diffuse[0]), float(diffuse[1]), float(diffuse[2]), float(alpha))
 
 
-def _genesis_texture_color(texture: Any) -> tuple[float, ...] | None:
+def _genesis_texture_color(texture: object) -> tuple[float, ...] | None:
     color = getattr(texture, "color", None)
     if color is None:
         return None
     try:
         return tuple(float(value) for value in color)
-    except TypeError:
+    except (TypeError, ValueError):
         return None
