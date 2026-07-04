@@ -41,6 +41,20 @@ def test_strategy_ordering() -> None:
     ]
 
 
+def test_strategy_ordering_accepts_single_pass_iterables() -> None:
+    chain = (solver_id for solver_id in ["placo", "amik"])
+    strategies = build_strategies(chain, "optional", True)
+
+    assert strategies == [
+        ("placo", False, 1.0, "strict"),
+        ("amik", False, 1.0, "strict"),
+        ("placo", False, 0.2, "relaxed"),
+        ("amik", False, 0.2, "relaxed"),
+        ("placo", True, 0.0, "ignore"),
+        ("amik", True, 0.0, "ignore"),
+    ]
+
+
 def test_seed_ordering() -> None:
     base = {"joint_a": 0.1, "joint_b": -0.2}
     cached = {"joint_a": 0.2}
