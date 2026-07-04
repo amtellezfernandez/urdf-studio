@@ -1,4 +1,8 @@
 import type { StructureGroupSection } from "@/features/layout/structureGroups";
+import {
+  areStringSetsEqual,
+  filterStringSetMembers,
+} from "@/features/layout/stringSetHelpers";
 
 type ReconcileCollapsedSectionIdsArgs = {
   previousCollapsedSectionIds: Set<string>;
@@ -14,25 +18,7 @@ type ReconcileCollapsedSectionIdsResult = {
   knownSectionIds: Set<string>;
 };
 
-const filterSetByMembership = (values: Set<string>, allowedValues: Set<string>): Set<string> => {
-  const filtered = new Set<string>();
-  values.forEach((value) => {
-    if (allowedValues.has(value)) {
-      filtered.add(value);
-    }
-  });
-  return filtered;
-};
-
-export const areStringSetsEqual = (lhs: Set<string>, rhs: Set<string>): boolean => {
-  if (lhs.size !== rhs.size) return false;
-  for (const value of lhs) {
-    if (!rhs.has(value)) {
-      return false;
-    }
-  }
-  return true;
-};
+export { areStringSetsEqual } from "@/features/layout/stringSetHelpers";
 
 export const resolveSectionsContainingItem = (
   sections: StructureGroupSection[],
@@ -77,7 +63,7 @@ export const reconcileCollapsedSectionIds = ({
   const nextKnownSectionIds = new Set(availableSectionIds);
   const nextCollapsedSectionIds = collapseAllSections
     ? new Set(availableSectionIds)
-    : filterSetByMembership(previousCollapsedSectionIds, availableSectionIds);
+    : filterStringSetMembers(previousCollapsedSectionIds, availableSectionIds);
 
   if (!collapseAllSections && collapseNewSectionsByDefault) {
     availableSectionIds.forEach((sectionId) => {
