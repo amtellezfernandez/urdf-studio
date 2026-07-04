@@ -8,6 +8,7 @@ import {
   getSimulationPrepPanelWidthPx,
   type SimulationPrepPanelPosition,
 } from "@/features/layout/page/simulationPrepPanelParams";
+import { lockDocumentBodyInteraction } from "@/features/layout/documentBodyInteractionLock";
 
 type DragState = {
   originLeft: number;
@@ -98,10 +99,10 @@ export const useSimulationPrepPanelDrag = (
       return;
     }
 
-    const previousUserSelect = document.body.style.userSelect;
-    const previousCursor = document.body.style.cursor;
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "grabbing";
+    const releaseDocumentBodyInteraction = lockDocumentBodyInteraction({
+      cursor: "grabbing",
+      userSelect: "none",
+    });
 
     const handleMouseMove = (event: MouseEvent) => {
       const dragState = dragStateRef.current;
@@ -137,8 +138,7 @@ export const useSimulationPrepPanelDrag = (
     window.addEventListener("mouseup", stopDragging);
 
     return () => {
-      document.body.style.userSelect = previousUserSelect;
-      document.body.style.cursor = previousCursor;
+      releaseDocumentBodyInteraction();
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", stopDragging);
     };

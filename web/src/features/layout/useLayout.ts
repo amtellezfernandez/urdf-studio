@@ -18,6 +18,7 @@ import {
   resolveResizeDoubleClick,
   type ResizePointerDown,
 } from "@/features/layout/layoutResizeHelpers";
+import { lockDocumentBodyInteraction } from "@/features/layout/documentBodyInteractionLock";
 
 const consumeResizeDoubleClick = (
   event: ReactPointerEvent<HTMLDivElement>,
@@ -50,15 +51,13 @@ const bindWindowResizeDrag = ({
   event.preventDefault();
   event.stopPropagation();
 
-  const originalCursor = document.body.style.cursor;
-  const originalUserSelect = document.body.style.userSelect;
-
-  document.body.style.cursor = cursor;
-  document.body.style.userSelect = "none";
+  const releaseDocumentBodyInteraction = lockDocumentBodyInteraction({
+    cursor,
+    userSelect: "none",
+  });
 
   const handlePointerUp = () => {
-    document.body.style.cursor = originalCursor;
-    document.body.style.userSelect = originalUserSelect;
+    releaseDocumentBodyInteraction();
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", handlePointerUp);
   };
