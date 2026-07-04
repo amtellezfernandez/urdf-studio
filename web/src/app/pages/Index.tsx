@@ -88,18 +88,11 @@ import {
 } from "@/app/pages/index/simulationPrepDerivations";
 import {
   createDefaultInertialVisualizationSettings,
-  buildRepeatedInertiaVisualizationScopeKey,
   buildRepeatedInertiaSymmetryFamilyOutcomeKey,
   buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey,
   collectRepeatedInertiaSymmetryFamilyLinkNames,
   mergeDisplayedRepeatedInertiaSymmetryChains,
-  resolveActiveSimulationPrepRobotMirrorVisualization,
-  resolveActiveSimulationPrepSymmetryVisualization,
-  resolveSimulationPrepVisualizationScope,
-  syncSimulationPrepInertiaVisualizationScope,
   type SimulationPrepVisualizationPreview,
-  SIMULATION_PREP_PSD_REGULARIZE_SCOPE_KEY,
-  SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY,
 } from "@/features/layout/page/simulationPrepViewerState";
 import { IndexModeGate } from "@/app/pages/index/IndexModeGate";
 import { useIluCalibrationFocus } from "@/app/pages/index/useIluCalibrationFocus";
@@ -151,6 +144,7 @@ import {
 } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
+import { useSimulationPrepVisualizationController } from "@/app/pages/index/useSimulationPrepVisualizationController";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -1193,177 +1187,28 @@ const Index = () => {
       )
     );
   }, [repeatedInertiaDiagnosticsByKey]);
-  const voxelRecoveryScopeLinkNames = useMemo(
-    () =>
-      (resolvedPhysicsPlausibilitySummary?.excludedLinks ?? [])
-        .filter((entry) => entry.recoveryDisposition === "recover")
-        .map((entry) => entry.linkName),
-    [resolvedPhysicsPlausibilitySummary]
-  );
-  const psdRegularizeScopeLinkNames = useMemo(
-    () =>
-      (resolvedPhysicsPlausibilitySummary?.excludedLinks ?? [])
-        .filter((entry) => entry.recoveryDisposition === "regularize")
-        .map((entry) => entry.linkName),
-    [resolvedPhysicsPlausibilitySummary]
-  );
-  const previewableInertiaVisualizationLinkNamesByScopeKey = useMemo(() => {
-    const scopeLinkNamesByKey = new Map<string, readonly string[]>();
-    repeatedInertiaDiagnostics.forEach((group) => {
-      scopeLinkNamesByKey.set(
-        buildRepeatedInertiaVisualizationScopeKey(group.groupKey),
-        group.linkEntries.map((entry) => entry.linkName)
-      );
-    });
-    displayedRepeatedInertiaSymmetryChains.forEach((chain) => {
-      scopeLinkNamesByKey.set(
-        buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain),
-        collectRepeatedInertiaSymmetryFamilyLinkNames(chain)
-      );
-    });
-    if (
-      robotMirrorScopeKey &&
-      robotMirrorVisualizationState.visualizationLinkNames.length > 0
-    ) {
-      scopeLinkNamesByKey.set(
-        robotMirrorScopeKey,
-        robotMirrorVisualizationState.visualizationLinkNames
-      );
-    }
-    if (voxelRecoveryScopeLinkNames.length > 0) {
-      scopeLinkNamesByKey.set(SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY, voxelRecoveryScopeLinkNames);
-    }
-    if (psdRegularizeScopeLinkNames.length > 0) {
-      scopeLinkNamesByKey.set(SIMULATION_PREP_PSD_REGULARIZE_SCOPE_KEY, psdRegularizeScopeLinkNames);
-    }
-    return scopeLinkNamesByKey;
-  }, [
-    displayedRepeatedInertiaSymmetryChains,
-    psdRegularizeScopeLinkNames,
-    repeatedInertiaDiagnostics,
-    robotMirrorScopeKey,
-    robotMirrorVisualizationState,
-    voxelRecoveryScopeLinkNames,
-  ]);
   const {
+    activeRobotMirrorVisualization: activeSimulationPrepRobotMirrorVisualization,
+    activeSymmetryVisualization: activeSimulationPrepSymmetryVisualization,
     effectiveScopeKey: effectiveInertiaVisualizationScopeKey,
-    effectiveScopedLinkNames: effectiveInertiaVisualizationScopedLinkNames,
-  } = useMemo(
-    () =>
-      resolveSimulationPrepVisualizationScope({
-        activeScopeKey: activeInertiaVisualizationScopeKey,
-        hoveredPreview: hoveredInertiaVisualizationPreview,
-        scopeLinkNamesByKey: previewableInertiaVisualizationLinkNamesByScopeKey,
-      }),
-    [
-      activeInertiaVisualizationScopeKey,
-      hoveredInertiaVisualizationPreview,
-      previewableInertiaVisualizationLinkNamesByScopeKey,
-    ]
-  );
-  const activeSimulationPrepSymmetryVisualization = useMemo(
-    () =>
-      resolveActiveSimulationPrepSymmetryVisualization({
-        activeScopeKey: effectiveInertiaVisualizationScopeKey,
-        repeatedInertiaSymmetryChains: displayedRepeatedInertiaSymmetryChains,
-      }),
-    [displayedRepeatedInertiaSymmetryChains, effectiveInertiaVisualizationScopeKey]
-  );
-  const activeSimulationPrepRobotMirrorVisualization = useMemo(
-    () =>
-      resolveActiveSimulationPrepRobotMirrorVisualization({
-        activeScopeKey: effectiveInertiaVisualizationScopeKey,
-        robotMirrorSymmetryCheck,
-      }),
-    [effectiveInertiaVisualizationScopeKey, robotMirrorSymmetryCheck]
-  );
-  const validInertiaVisualizationScopeKeys = useMemo(() => {
-    const keys = new Set(
-      repeatedInertiaDiagnostics.map((group) =>
-        buildRepeatedInertiaVisualizationScopeKey(group.groupKey)
-      )
-    );
-    displayedRepeatedInertiaSymmetryChains.forEach((chain) => {
-      keys.add(buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain));
-    });
-    if (robotMirrorScopeKey) {
-      keys.add(robotMirrorScopeKey);
-    }
-    if (voxelRecoveryScopeLinkNames.length > 0) {
-      keys.add(SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY);
-    }
-    if (psdRegularizeScopeLinkNames.length > 0) {
-      keys.add(SIMULATION_PREP_PSD_REGULARIZE_SCOPE_KEY);
-    }
-    return keys;
-  }, [
-    psdRegularizeScopeLinkNames.length,
+    handleClearInertiaVisualizationPreview,
+    handlePreviewInertiaVisualizationScope,
+    handleToggleInertiaVisualizationScope,
+  } = useSimulationPrepVisualizationController({
+    activeScopeKey: activeInertiaVisualizationScopeKey,
+    displayedSymmetryChains: displayedRepeatedInertiaSymmetryChains,
+    hoveredPreview: hoveredInertiaVisualizationPreview,
+    inertialVisualization,
+    physicsExcludedLinks: resolvedPhysicsPlausibilitySummary?.excludedLinks ?? [],
     repeatedInertiaDiagnostics,
-    displayedRepeatedInertiaSymmetryChains,
     robotMirrorScopeKey,
-    voxelRecoveryScopeLinkNames.length,
-  ]);
-  useEffect(() => {
-    setInertialVisualization((current) => {
-      const currentScopedLinkNames = current.scopedLinkNames ?? null;
-      const hasSameScopedLinkNames =
-        currentScopedLinkNames === null
-          ? effectiveInertiaVisualizationScopedLinkNames === null
-          : effectiveInertiaVisualizationScopedLinkNames !== null &&
-            currentScopedLinkNames.length === effectiveInertiaVisualizationScopedLinkNames.length &&
-            currentScopedLinkNames.every(
-              (linkName, index) => linkName === effectiveInertiaVisualizationScopedLinkNames[index]
-            );
-      if (hasSameScopedLinkNames) {
-        return current;
-      }
-      return syncSimulationPrepInertiaVisualizationScope(
-        current,
-        effectiveInertiaVisualizationScopedLinkNames
-      );
-    });
-  }, [effectiveInertiaVisualizationScopedLinkNames, setInertialVisualization]);
-  useEffect(() => {
-    if (!activeInertiaVisualizationScopeKey) {
-      return;
-    }
-    if (validInertiaVisualizationScopeKeys.has(activeInertiaVisualizationScopeKey)) {
-      return;
-    }
-
-    setActiveInertiaVisualizationScopeKey(null);
-    setInertialVisualization((current) => syncSimulationPrepInertiaVisualizationScope(current));
-  }, [
-    activeInertiaVisualizationScopeKey,
+    robotMirrorSymmetryCheck,
+    robotMirrorVisualizationLinkNames: robotMirrorVisualizationState.visualizationLinkNames,
+    setActiveScopeKey: setActiveInertiaVisualizationScopeKey,
+    setHoveredPreview: setHoveredInertiaVisualizationPreview,
     setInertialVisualization,
-    validInertiaVisualizationScopeKeys,
-  ]);
-  useEffect(() => {
-    if (!hoveredInertiaVisualizationPreview) {
-      return;
-    }
-    if (validInertiaVisualizationScopeKeys.has(hoveredInertiaVisualizationPreview.scopeKey)) {
-      return;
-    }
-    setHoveredInertiaVisualizationPreview(null);
-  }, [hoveredInertiaVisualizationPreview, validInertiaVisualizationScopeKeys]);
-
-  useEffect(() => {
-    if (inertialVisualization.scopedLinkNames !== null) {
-      return;
-    }
-    if (activeInertiaVisualizationScopeKey === null) {
-      return;
-    }
-    if (effectiveInertiaVisualizationScopeKey !== null) {
-      return;
-    }
-    setActiveInertiaVisualizationScopeKey(null);
-  }, [
-    activeInertiaVisualizationScopeKey,
-    effectiveInertiaVisualizationScopeKey,
-    inertialVisualization.scopedLinkNames,
-  ]);
+    setShowHealthActionPanel,
+  });
   const frameIssueSummary = orientationNeedsAttention ? orientationSummary : null;
 
   const collisionMeshStats = useMemo(
@@ -1397,54 +1242,6 @@ const Index = () => {
   });
 
   const worldHubEnabled = isWorldHubConfigured();
-  const handleToggleInertiaVisualizationScope = useCallback(
-    (
-      scopeKey: string,
-      linkNames: readonly string[],
-      _symmetryChain: RepeatedInertiaSymmetryChain | null = null
-    ) => {
-      void _symmetryChain;
-      const hasTargetLinks = linkNames.length > 0;
-      setHoveredInertiaVisualizationPreview(null);
-      setActiveInertiaVisualizationScopeKey((current) =>
-        current === scopeKey || !hasTargetLinks ? null : scopeKey
-      );
-      setShowHealthActionPanel(true);
-    },
-    []
-  );
-  const handlePreviewInertiaVisualizationScope = useCallback(
-    (
-      scopeKey: string,
-      linkNames: readonly string[],
-      _symmetryChain: RepeatedInertiaSymmetryChain | null = null
-    ) => {
-      void _symmetryChain;
-      if (linkNames.length === 0) {
-        return;
-      }
-      const scopedLinkNames = [...linkNames].sort((left, right) => left.localeCompare(right));
-      setHoveredInertiaVisualizationPreview((current) => {
-        if (
-          current &&
-          current.scopeKey === scopeKey &&
-          current.scopedLinkNames.length === scopedLinkNames.length &&
-          current.scopedLinkNames.every((linkName, index) => linkName === scopedLinkNames[index])
-        ) {
-          return current;
-        }
-        return {
-          scopeKey,
-          scopedLinkNames,
-        };
-      });
-      setShowHealthActionPanel(true);
-    },
-    []
-  );
-  const handleClearInertiaVisualizationPreview = useCallback(() => {
-    setHoveredInertiaVisualizationPreview(null);
-  }, []);
   const handleFixRepeatedInertiaGroup = useCallback(
     async (groupKey: string) => {
       if (hasSimulationPrepFixActionInFlight) {
