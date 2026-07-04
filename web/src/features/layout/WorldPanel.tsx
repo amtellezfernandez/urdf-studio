@@ -1,16 +1,20 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { Box, Camera as CameraIcon, Eye, EyeOff } from "lucide-react";
 import type { URDFRobot } from "urdf-loader";
 
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
-import { resolveTrackingReference } from "@/features/viewer/trackingTarget";
+import {
+  resolveTrackingReference,
+  type TrackingReference,
+} from "@/features/viewer/trackingTarget";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { cn } from "@/shared/lib/utils";
 import {
   buildWorldObjectGroups,
   toWorldObjectDisplayName,
 } from "@/features/layout/worldPanelHelpers";
+import type { Camera } from "@/shared/types/camera";
 
 type WorldPanelProps = {
   robot?: URDFRobot | null;
@@ -23,6 +27,141 @@ const WORLD_OBJECT_SOURCE_ORDER: ReadonlyArray<NonNullable<CreatedObject["source
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceOrder;
 const WORLD_OBJECT_SOURCE_LABELS: Record<NonNullable<CreatedObject["source"]>, string> =
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceLabels;
+const WORLD_PANEL_ROW_CLASS_NAME =
+  "group cursor-pointer border-b border-border/20 px-1.5 py-1 transition-colors last:border-b-0";
+const WORLD_PANEL_SECTION_HEADER_CLASS_NAME =
+  "flex items-center justify-between px-0.5 text-[9px] uppercase tracking-wide text-muted-foreground";
+const WORLD_PANEL_SECTION_BODY_CLASS_NAME =
+  "overflow-hidden rounded-sm border border-border/20 bg-background/20";
+
+type WorldSectionProps = {
+  children: ReactNode;
+  count: number;
+  title: string;
+};
+
+type WorldCameraRowProps = {
+  camera: Camera;
+  isSelected: boolean;
+  onSelect: (cameraId: string) => void;
+};
+
+type WorldObjectRowProps = {
+  endEffectorLink?: string | null;
+  isSelected: boolean;
+  onSelect: (objectId: string) => void;
+  onToggleVisibility: (objectId: string, isHidden: boolean) => void;
+  robot?: URDFRobot | null;
+  worldObject: CreatedObject;
+};
+
+const WorldSection = ({ children, count, title }: WorldSectionProps) => (
+  <div className="space-y-1">
+    <div className={WORLD_PANEL_SECTION_HEADER_CLASS_NAME}>
+      <span>{title}</span>
+      <span className="tabular-nums">{count}</span>
+    </div>
+    <div className={WORLD_PANEL_SECTION_BODY_CLASS_NAME}>{children}</div>
+  </div>
+);
+
+const WorldCameraRow = ({ camera, isSelected, onSelect }: WorldCameraRowProps) => (
+  <div
+    data-world-camera-id={camera.id}
+    className={cn(
+      WORLD_PANEL_ROW_CLASS_NAME,
+      isSelected ? "bg-muted/35" : "hover:bg-muted/20"
+    )}
+    onClick={() => onSelect(camera.id)}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <CameraIcon className="h-3 w-3 shrink-0 text-muted-foreground/80" />
+        <span className="truncate text-[9.5px] font-medium text-foreground/95">
+          {camera.name}
+        </span>
+      </div>
+    </div>
+    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[8.5px] text-muted-foreground">
+      <span className="truncate">{camera.parent_joint}</span>
+    </div>
+  </div>
+);
+
+const resolveTrackingDistanceMeters = (
+  worldObject: CreatedObject,
+  trackingReference: TrackingReference | null
+): number | null => {
+  if (!trackingReference?.position) {
+    return null;
+  }
+  return worldObject.position.distanceTo(trackingReference.position);
+};
+
+const WorldObjectRow = ({
+  endEffectorLink,
+  isSelected,
+  onSelect,
+  onToggleVisibility,
+  robot,
+  worldObject,
+}: WorldObjectRowProps) => {
+  const isHidden = worldObject.isHidden === true;
+  const trackingReference = resolveTrackingReference({
+    robot,
+    trackedName: worldObject.trackedJointName,
+    endEffectorLink,
+  });
+  const liveDistanceMeters = resolveTrackingDistanceMeters(worldObject, trackingReference);
+
+  return (
+    <div
+      data-world-object-id={worldObject.id}
+      className={cn(
+        WORLD_PANEL_ROW_CLASS_NAME,
+        isSelected ? "bg-muted/35" : "hover:bg-muted/20",
+        isHidden && "opacity-70"
+      )}
+      onClick={() => onSelect(worldObject.id)}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Box className="h-3 w-3 shrink-0 text-muted-foreground/80" />
+          <span className="truncate text-[9.5px] font-medium text-foreground/95">
+            {toWorldObjectDisplayName(worldObject)}
+          </span>
+          {isHidden ? (
+            <span className="shrink-0 text-[8px] uppercase tracking-[0.05em] text-muted-foreground/80">
+              Hidden
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {liveDistanceMeters !== null ? (
+            <span className="text-[8.5px] font-mono text-muted-foreground tabular-nums">
+              {liveDistanceMeters.toFixed(3)} m
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleVisibility(worldObject.id, isHidden);
+            }}
+            title={isHidden ? "Show object" : "Hide object"}
+            aria-label={isHidden ? "Show object" : "Hide object"}
+            className="text-muted-foreground/70 transition-colors hover:text-foreground"
+          >
+            {isHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          </button>
+        </div>
+      </div>
+      <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[8.5px] text-muted-foreground">
+        <span className="truncate">{trackingReference?.label ?? "No reference"}</span>
+      </div>
+    </div>
+  );
+};
 
 export const WorldPanel = ({
   robot,
@@ -37,18 +176,21 @@ export const WorldPanel = ({
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const selectCamera = useCameraStore((state) => state.selectCamera);
+
   const selectWorldObject = useCallback((objectId: string) => {
     setSelectedObject(objectId);
     onJointSelect?.(null);
     setSelectedLink?.(null);
-    useCameraStore.getState().selectCamera(null);
-  }, [onJointSelect, setSelectedLink, setSelectedObject]);
+    selectCamera(null);
+  }, [onJointSelect, selectCamera, setSelectedLink, setSelectedObject]);
+
   const selectWorldCamera = useCallback((cameraId: string) => {
     selectCamera(cameraId);
     setSelectedObject(null);
     onJointSelect?.(null);
     setSelectedLink?.(null);
   }, [onJointSelect, selectCamera, setSelectedLink, setSelectedObject]);
+
   const toggleWorldObjectVisibility = useCallback((objectId: string, isHidden: boolean) => {
     setObjectHidden(objectId, !isHidden);
   }, [setObjectHidden]);
@@ -74,112 +216,35 @@ export const WorldPanel = ({
   return (
     <div className="space-y-1.5">
       {cameras.length > 0 ? (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between px-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-            <span>Cameras</span>
-            <span className="tabular-nums">{cameras.length}</span>
-          </div>
-          <div className="overflow-hidden rounded-sm border border-border/20 bg-background/20">
-            {cameras.map((camera) => {
-              const isSelected = camera.id === selectedCameraId;
-              return (
-                <div
-                  key={camera.id}
-                  className={cn(
-                    "group cursor-pointer border-b border-border/20 px-1.5 py-1 transition-colors last:border-b-0",
-                    isSelected ? "bg-muted/35" : "hover:bg-muted/20"
-                  )}
-                  onClick={() => selectWorldCamera(camera.id)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <CameraIcon className="h-3 w-3 shrink-0 text-muted-foreground/80" />
-                      <span className="truncate text-[9.5px] font-medium text-foreground/95">
-                        {camera.name}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[8.5px] text-muted-foreground">
-                    <span className="truncate">{camera.parent_joint}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <WorldSection title="Cameras" count={cameras.length}>
+          {cameras.map((camera) => (
+            <WorldCameraRow
+              key={camera.id}
+              camera={camera}
+              isSelected={camera.id === selectedCameraId}
+              onSelect={selectWorldCamera}
+            />
+          ))}
+        </WorldSection>
       ) : null}
 
       {objectGroups.length > 0 ? (
         <div className="space-y-1">
           {objectGroups.map((objectGroup) => (
             <div key={objectGroup.source} className="space-y-0.5">
-              <div className="flex items-center justify-between px-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                <span>{objectGroup.label}</span>
-                <span className="tabular-nums">{objectGroup.objects.length}</span>
-              </div>
-              <div className="overflow-hidden rounded-sm border border-border/20 bg-background/20">
-                {objectGroup.objects.map((worldObject) => {
-                  const isHidden = worldObject.isHidden === true;
-                  const isSelected = worldObject.id === selectedObjectId;
-                  const trackingReference = resolveTrackingReference({
-                    robot,
-                    trackedName: worldObject.trackedJointName,
-                    endEffectorLink,
-                  });
-                  const liveDistance =
-                    trackingReference?.position !== null && trackingReference?.position !== undefined
-                      ? worldObject.position.distanceTo(trackingReference.position)
-                      : null;
-
-                  return (
-                    <div
-                      key={worldObject.id}
-                      className={cn(
-                        "group cursor-pointer border-b border-border/20 px-1.5 py-1 transition-colors last:border-b-0",
-                        isSelected ? "bg-muted/35" : "hover:bg-muted/20",
-                        isHidden && "opacity-70"
-                      )}
-                      onClick={() => selectWorldObject(worldObject.id)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <Box className="h-3 w-3 shrink-0 text-muted-foreground/80" />
-                          <span className="truncate text-[9.5px] font-medium text-foreground/95">
-                            {toWorldObjectDisplayName(worldObject)}
-                          </span>
-                          {isHidden ? (
-                            <span className="shrink-0 text-[8px] uppercase tracking-[0.05em] text-muted-foreground/80">
-                              Hidden
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {liveDistance !== null ? (
-                            <span className="text-[8.5px] font-mono text-muted-foreground tabular-nums">
-                              {liveDistance.toFixed(3)} m
-                            </span>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleWorldObjectVisibility(worldObject.id, isHidden);
-                            }}
-                            title={isHidden ? "Show object" : "Hide object"}
-                            aria-label={isHidden ? "Show object" : "Hide object"}
-                            className="text-muted-foreground/70 transition-colors hover:text-foreground"
-                          >
-                            {isHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[8.5px] text-muted-foreground">
-                        <span className="truncate">{trackingReference?.label ?? "No reference"}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <WorldSection title={objectGroup.label} count={objectGroup.objects.length}>
+                {objectGroup.objects.map((worldObject) => (
+                  <WorldObjectRow
+                    key={worldObject.id}
+                    endEffectorLink={endEffectorLink}
+                    isSelected={worldObject.id === selectedObjectId}
+                    onSelect={selectWorldObject}
+                    onToggleVisibility={toggleWorldObjectVisibility}
+                    robot={robot}
+                    worldObject={worldObject}
+                  />
+                ))}
+              </WorldSection>
             </div>
           ))}
         </div>
