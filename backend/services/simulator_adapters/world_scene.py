@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import NotRequired, TypeAlias, TypedDict, cast
 
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters.camera_transfer import (
@@ -26,6 +27,74 @@ from backend.services.world_layout_transfer_types import (
     StaticWorldLayout,
     WorldLayoutFrameMap,
 )
+
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+JsonFloatVector: TypeAlias = list[float]
+
+
+class PrimitiveSceneReport(TypedDict):
+    source_id: str
+    source_name: str
+    sim_name: str
+    source_type: str
+    sim_type: str
+    position_xyz: JsonFloatVector
+    quat_wxyz: JsonFloatVector
+    size_xyz: JsonFloatVector
+    rgba: JsonFloatVector
+    collision: bool
+    fixed: bool
+    mass_kg: float | None
+    friction: float | None
+    restitution: float | None
+    semantic_role: str | None
+    asset_ref: str | None
+    asset_scale_xyz: JsonFloatVector | None
+
+
+class CameraIntrinsicsReport(TypedDict):
+    matrix: list[JsonFloatVector]
+
+
+class CameraSceneReport(TypedDict):
+    camera_id: str
+    name: str
+    sim_name: str
+    parent_joint: str
+    parent_link: str
+    position_xyz: JsonFloatVector
+    quat_wxyz: JsonFloatVector
+    width: int
+    height: int
+    fov_deg: float
+    intrinsics: CameraIntrinsicsReport | None
+
+
+class SimulatorDescriptorReport(TypedDict):
+    id: str
+    label: str
+    runtime: JsonValue
+
+
+class SimulatorValidationReport(TypedDict):
+    package_id: str
+    version: str
+    requested_frame_map: WorldLayoutFrameMap
+    frame_map: ConcreteWorldLayoutFrameMap
+    frame_convention: str | None
+    object_count: int
+    primitive_count: int
+    camera_count: int
+    joint_position_count: int
+    joint_positions: dict[str, float]
+    robot_urdf_path: str
+    asset_roots: list[str]
+    warnings: list[str]
+    objects: list[PrimitiveSceneReport]
+    cameras: list[CameraSceneReport]
+    simulator: NotRequired[SimulatorDescriptorReport]
+    artifacts: NotRequired[JsonValue]
 
 
 @dataclass(frozen=True)
@@ -55,7 +124,7 @@ class SimulatorSceneSpec:
     cameras: tuple[SimCameraSpec, ...]
     warnings: tuple[str, ...]
 
-    def validation_report(self) -> dict[str, Any]:
+    def validation_report(self) -> SimulatorValidationReport:
         return {
             "package_id": self.world_package.package_id,
             "version": self.world_package.version,
@@ -83,9 +152,9 @@ def build_simulator_validation_report(
     *,
     simulator_id: str,
     simulator_label: str,
-    runtime: Mapping[str, Any] | None = None,
-    artifacts: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+    runtime: Mapping[str, object] | None = None,
+    artifacts: Mapping[str, object] | None = None,
+) -> SimulatorValidationReport:
     report = scene.validation_report()
     report["simulator"] = {
         "id": simulator_id,
@@ -102,9 +171,9 @@ def write_simulator_validation_report(
     *,
     simulator_id: str,
     simulator_label: str,
-    runtime: Mapping[str, Any] | None = None,
-    artifacts: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+    runtime: Mapping[str, object] | None = None,
+    artifacts: Mapping[str, object] | None = None,
+) -> SimulatorValidationReport:
     report = build_simulator_validation_report(
         scene,
         simulator_id=simulator_id,
@@ -186,7 +255,7 @@ def prepare_simulator_scene(
     )
 
 
-def _primitive_report(primitive: SimPrimitive) -> dict[str, Any]:
+def _primitive_report(primitive: SimPrimitive) -> PrimitiveSceneReport:
     return {
         "source_id": primitive.source_id,
         "source_name": primitive.source_name,
@@ -208,7 +277,7 @@ def _primitive_report(primitive: SimPrimitive) -> dict[str, Any]:
     }
 
 
-def _camera_report(camera: SimCameraSpec) -> dict[str, Any]:
+def _camera_report(camera: SimCameraSpec) -> CameraSceneReport:
     return {
         "camera_id": camera.camera_id,
         "name": camera.name,
@@ -228,11 +297,11 @@ def _camera_report(camera: SimCameraSpec) -> dict[str, Any]:
     }
 
 
-def _json_safe(value: Any) -> Any:
+def _json_safe(value: object) -> JsonValue:
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, Mapping):
         return {str(key): _json_safe(item) for key, item in value.items()}
     if isinstance(value, tuple | list):
         return [_json_safe(item) for item in value]
-    return value
+    return cast(JsonValue, value)
