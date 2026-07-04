@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, TypeAlias
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -24,7 +24,7 @@ from backend.services.world_rollout_params import (
 )
 from backend.services.world_scene_package_params import SHA256_HEX_LENGTH
 
-WorldRolloutPayload = dict[str, Any]
+WorldRolloutPayload: TypeAlias = dict[str, Any]
 
 
 def _utc_now() -> datetime:
