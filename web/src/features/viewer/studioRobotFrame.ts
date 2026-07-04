@@ -18,15 +18,12 @@ import {
   FLAT_GROUND_HEIGHT_FN,
   type PlanarClampResult,
 } from "@/features/locomotion/safety/planarClamp";
+import { STUDIO_ROBOT_FRAME_PARAMS } from "@/features/viewer/studioRobotFrameParams";
 
 const STUDIO_WORLD_UP_AXIS = new THREE.Vector3(0, 0, 1);
 export const ROBOT_FRONT_LOCAL_FORWARD = new THREE.Vector3(1, 0, 0);
 
-const DOMINANT_AXIS_THRESHOLD = 0.9;
-const STUDIO_PLANAR_EPSILON = 1e-6;
-const ROBOT_FRONT_CAMERA_DIRECTION_EPSILON = 1e-10;
 const CAMERA_LIKE_LINK_NAME_PATTERN = /(camera|cam)/i;
-const ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH = 4;
 
 type DominantAxisName = "x" | "y" | "z";
 
@@ -54,10 +51,13 @@ export const clampStudioPlanarPose = (
   runtimeUp = cloneStudioUpAxis()
 ): PlanarClampResult => {
   const dominantAxis = getDominantAxis(runtimeUp);
-  if (dominantAxis === "y" && Math.abs(runtimeUp.y) >= DOMINANT_AXIS_THRESHOLD) {
+  if (
+    dominantAxis === "y" &&
+    Math.abs(runtimeUp.y) >= STUDIO_ROBOT_FRAME_PARAMS.dominantAxisThreshold
+  ) {
     const clampResult = enforcePlanarBasePose(targetRobot, {
       groundHeightFn: FLAT_GROUND_HEIGHT_FN,
-      epsilon: STUDIO_PLANAR_EPSILON,
+      epsilon: STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon,
       lockRollPitch: true,
       updateMatrixWorld: false,
     });
@@ -69,28 +69,28 @@ export const clampStudioPlanarPose = (
 
   const reasons: PlanarClampResult["reasons"] = [];
   if (dominantAxis === "z") {
-    if (Math.abs(targetRobot.position.z) > STUDIO_PLANAR_EPSILON) {
+    if (Math.abs(targetRobot.position.z) > STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon) {
       targetRobot.position.z = 0;
       reasons.push("y");
     }
-    if (Math.abs(targetRobot.rotation.x) > STUDIO_PLANAR_EPSILON) {
+    if (Math.abs(targetRobot.rotation.x) > STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon) {
       targetRobot.rotation.x = 0;
       reasons.push("roll");
     }
-    if (Math.abs(targetRobot.rotation.y) > STUDIO_PLANAR_EPSILON) {
+    if (Math.abs(targetRobot.rotation.y) > STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon) {
       targetRobot.rotation.y = 0;
       reasons.push("pitch");
     }
   } else {
-    if (Math.abs(targetRobot.position.x) > STUDIO_PLANAR_EPSILON) {
+    if (Math.abs(targetRobot.position.x) > STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon) {
       targetRobot.position.x = 0;
       reasons.push("y");
     }
-    if (Math.abs(targetRobot.rotation.y) > STUDIO_PLANAR_EPSILON) {
+    if (Math.abs(targetRobot.rotation.y) > STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon) {
       targetRobot.rotation.y = 0;
       reasons.push("roll");
     }
-    if (Math.abs(targetRobot.rotation.z) > STUDIO_PLANAR_EPSILON) {
+    if (Math.abs(targetRobot.rotation.z) > STUDIO_ROBOT_FRAME_PARAMS.planarEpsilon) {
       targetRobot.rotation.z = 0;
       reasons.push("pitch");
     }
@@ -164,7 +164,7 @@ export const resolveBaseCameraForwardLocal = ({
     if (!parentLinkName) return;
     const linkDepth = depthByLinkName.get(parentLinkName);
     if (typeof linkDepth !== "number") return;
-    if (linkDepth > ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH) return;
+    if (linkDepth > STUDIO_ROBOT_FRAME_PARAMS.baseCameraMaxLinkDepth) return;
     const { position: cameraWorldPosition } = getCameraWorldPose(robot, camera, {
       updateRobotWorld: false,
     });
@@ -175,7 +175,7 @@ export const resolveBaseCameraForwardLocal = ({
       ROBOT_FRONT_LOCAL_FORWARD.clone()
     );
     let planarLengthSq = planarDirection.lengthSq();
-    if (planarLengthSq <= ROBOT_FRONT_CAMERA_DIRECTION_EPSILON) {
+    if (planarLengthSq <= STUDIO_ROBOT_FRAME_PARAMS.frontCameraDirectionEpsilon) {
       const parentLinkObject =
         (robot.links?.[parentLinkName] as THREE.Object3D | undefined) ??
         robot.getObjectByName?.(parentLinkName) ??
@@ -193,7 +193,7 @@ export const resolveBaseCameraForwardLocal = ({
         )
       );
       planarLengthSq = planarDirection.lengthSq();
-      if (planarLengthSq <= ROBOT_FRONT_CAMERA_DIRECTION_EPSILON) return;
+      if (planarLengthSq <= STUDIO_ROBOT_FRAME_PARAMS.frontCameraDirectionEpsilon) return;
     }
     planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
     const score = planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD);
@@ -227,7 +227,7 @@ export const resolveBaseCameraLikeLinkForwardLocal = ({
 
   depthByLinkName.forEach((linkDepth, linkName) => {
     if (linkName === rootLinkName) return;
-    if (linkDepth > ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH) return;
+    if (linkDepth > STUDIO_ROBOT_FRAME_PARAMS.baseCameraMaxLinkDepth) return;
     if (!CAMERA_LIKE_LINK_NAME_PATTERN.test(linkName)) return;
     const linkObject =
       (robot.links?.[linkName] as THREE.Object3D | undefined) ??
@@ -250,7 +250,7 @@ export const resolveBaseCameraLikeLinkForwardLocal = ({
       ROBOT_FRONT_LOCAL_FORWARD.clone()
     );
     const planarLengthSq = planarDirection.lengthSq();
-    if (planarLengthSq <= ROBOT_FRONT_CAMERA_DIRECTION_EPSILON) return;
+    if (planarLengthSq <= STUDIO_ROBOT_FRAME_PARAMS.frontCameraDirectionEpsilon) return;
     planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
     const score = planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD);
     if (linkDepth > bestDepth) return;
