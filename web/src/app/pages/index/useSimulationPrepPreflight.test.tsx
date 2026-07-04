@@ -42,7 +42,9 @@ type RenderedHarness = {
   unmount: () => Promise<void>;
 };
 
-const TEST_URDF = "<robot name=\"test\"><link name=\"base\" /></robot>";
+const PREFLIGHT_TEST_FIXTURES = {
+  urdf: "<robot name=\"test\"><link name=\"base\" /></robot>",
+} as const;
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -68,9 +70,10 @@ const renderPreflightHook = async (initialProps: HarnessProps = {}): Promise<Ren
       meshFilesCacheKey: "empty-meshes",
       packageRoots: {},
       packageRootsCacheKey: "empty-roots",
-      physicsGenerationSourceContent: props.physicsGenerationSourceContent ?? TEST_URDF,
+      physicsGenerationSourceContent:
+        props.physicsGenerationSourceContent ?? PREFLIGHT_TEST_FIXTURES.urdf,
       urdfBasePath: "/workspace",
-      vizUrdfContent: props.vizUrdfContent ?? TEST_URDF,
+      vizUrdfContent: props.vizUrdfContent ?? PREFLIGHT_TEST_FIXTURES.urdf,
     });
     return null;
   };
@@ -130,7 +133,9 @@ describe("useSimulationPrepPreflight", () => {
     });
     expect(firstResult).toBe("success");
     expect(framePreflightViaBackendMock).toHaveBeenCalledOnce();
-    expect(harness.getHook().framePreflightSession?.sourceContent).toBe(TEST_URDF);
+    expect(harness.getHook().framePreflightSession?.sourceContent).toBe(
+      PREFLIGHT_TEST_FIXTURES.urdf
+    );
 
     let secondResult: string | null = null;
     await act(async () => {
@@ -170,7 +175,9 @@ describe("useSimulationPrepPreflight", () => {
     });
 
     expect(firstResult).toBe("success");
-    expect(harness.getHook().physicsPreflightSession?.sourceContent).toBe(TEST_URDF);
+    expect(harness.getHook().physicsPreflightSession?.sourceContent).toBe(
+      PREFLIGHT_TEST_FIXTURES.urdf
+    );
 
     await harness.unmount();
   });
@@ -181,7 +188,9 @@ describe("useSimulationPrepPreflight", () => {
     await act(async () => {
       await harness.getHook().loadPhysicsPreflight();
     });
-    expect(harness.getHook().physicsPreflightSession?.sourceContent).toBe(TEST_URDF);
+    expect(harness.getHook().physicsPreflightSession?.sourceContent).toBe(
+      PREFLIGHT_TEST_FIXTURES.urdf
+    );
 
     await harness.rerender({
       hasLoadedFiles: false,
