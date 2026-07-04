@@ -8,6 +8,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DEG_TO_RAD } from "@/shared/lib/angleConversions";
+import { lockDocumentBodyInteraction } from "@/features/layout/documentBodyInteractionLock";
 import {
   isJointResetShortcut,
   resolveJointDragCursor,
@@ -37,7 +38,6 @@ interface JointValueDragState {
   startX: number;
   startY: number;
   startValue: number;
-  originalCursor: string;
 }
 
 interface JointValueInteractionOptions {
@@ -111,11 +111,11 @@ export const useJointValueInteraction = ({
   const [isValueFocused, setIsValueFocused] = useState(false);
   const isDraggingValue = useRef(false);
   const dragDirection = useRef<DragDirection>("undecided");
+  const releaseDocumentBodyInteractionRef = useRef<(() => void) | null>(null);
   const dragState = useRef<JointValueDragState>({
     startX: 0,
     startY: 0,
     startValue: resolvedValue,
-    originalCursor: "",
   });
 
   const clampValue = useCallback(
@@ -154,7 +154,10 @@ export const useJointValueInteraction = ({
       if (nextDirection !== dragDirection.current) {
         dragDirection.current = nextDirection;
         if (nextDirection !== "undecided") {
-          document.body.style.cursor = resolveJointDragCursor(nextDirection);
+          releaseDocumentBodyInteractionRef.current?.();
+          releaseDocumentBodyInteractionRef.current = lockDocumentBodyInteraction({
+            cursor: resolveJointDragCursor(nextDirection),
+          });
         }
       }
 
@@ -179,7 +182,8 @@ export const useJointValueInteraction = ({
       }
       window.removeEventListener("mousemove", handleValueMouseMove);
       window.removeEventListener("mouseup", handleValueMouseUp);
-      document.body.style.cursor = dragState.current.originalCursor;
+      releaseDocumentBodyInteractionRef.current?.();
+      releaseDocumentBodyInteractionRef.current = null;
       isDraggingValue.current = false;
       dragDirection.current = "undecided";
     },
@@ -191,7 +195,8 @@ export const useJointValueInteraction = ({
       window.removeEventListener("mousemove", handleValueMouseMove);
       window.removeEventListener("mouseup", handleValueMouseUp);
       if (isDraggingValue.current) {
-        document.body.style.cursor = dragState.current.originalCursor;
+        releaseDocumentBodyInteractionRef.current?.();
+        releaseDocumentBodyInteractionRef.current = null;
         isDraggingValue.current = false;
         dragDirection.current = "undecided";
       }
@@ -218,10 +223,12 @@ export const useJointValueInteraction = ({
         startX: event.clientX,
         startY: event.clientY,
         startValue: resolvedValue,
-        originalCursor: document.body.style.cursor,
       };
 
-      document.body.style.cursor = JOINT_VALUE_INTERACTION_PARAMS.drag.initialCursor;
+      releaseDocumentBodyInteractionRef.current?.();
+      releaseDocumentBodyInteractionRef.current = lockDocumentBodyInteraction({
+        cursor: JOINT_VALUE_INTERACTION_PARAMS.drag.initialCursor,
+      });
       window.addEventListener("mousemove", handleValueMouseMove);
       window.addEventListener("mouseup", handleValueMouseUp);
     },
