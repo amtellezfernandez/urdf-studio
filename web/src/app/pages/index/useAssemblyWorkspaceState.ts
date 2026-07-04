@@ -10,6 +10,7 @@ import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
 import { normalizeMeshPathForMatch } from "@/shared/lib/urdfBrowser";
 import { parseUrdfDocument } from "@/shared/lib/urdfCore";
 import { getAssemblyReportBaseUrl } from "@/shared/config/support";
+import type { AssemblySubstitutionSession } from "@/features/assembly/workspace/assemblyWorkspaceTypes";
 
 type UseAssemblyWorkspaceStateParams = {
   activeUrdfPath: string | null;
@@ -22,21 +23,6 @@ type UseAssemblyWorkspaceStateParams = {
   packageRoots?: PackageRootMap;
   urdfDocuments: Record<string, string>;
   vizUrdfContent: string;
-};
-
-export type AssemblySubstitutionSession = {
-  hostRobotId: string;
-  hostRobotName: string;
-  hostUrdfPath: string;
-  hostUrdfContent: string;
-  hostLinkOptions: string[];
-  replacementRobotId: string;
-  replacementRobotName: string;
-  replacementUrdfPath: string;
-  replacementUrdfContent: string;
-  replacementLinkOptions: string[];
-  replacementRootLinkOptions: string[];
-  packageRoots?: PackageRootMap;
 };
 
 const normalizeAssemblyUrdfPath = (urdfPath: string): string =>

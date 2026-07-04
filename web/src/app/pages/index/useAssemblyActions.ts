@@ -11,11 +11,11 @@ import {
   buildAssemblyExportModels,
   resolveAssemblyExportPrimaryRobotId,
 } from "@/app/pages/index/assemblyExportDerivations";
-import type { AssemblySubstitutionSession } from "@/app/pages/index/useAssemblyWorkspaceState";
 import type { AssemblyPose } from "@/features/assembly/store/useAssemblyPlacementStore";
 import type { AssemblyRobotInstance } from "@/features/assembly/store/useAssemblyStore";
 import { resolveSubstitutionReplacement } from "@/features/assembly/substitution/substitutionApply";
 import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
+import type { AssemblySubstitutionSession } from "@/features/assembly/workspace/assemblyWorkspaceTypes";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import type { MeshFiles } from "@/shared/types/feature";
