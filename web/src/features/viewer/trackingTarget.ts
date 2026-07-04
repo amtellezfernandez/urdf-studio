@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
-import { safeDecode } from "@/features/viewer/viewer-helpers";
+import { resolveRobotObjectByName } from "@/features/viewer/viewer-helpers";
 
 export type TrackingReference = {
   name: string;
@@ -26,10 +26,7 @@ const getJointWorldPosition = (robot: URDFRobot | null | undefined, jointName: s
 const getLinkWorldPosition = (robot: URDFRobot | null | undefined, linkName: string) => {
   if (!robot || !linkName) return null;
   try {
-    const link =
-      robot.links?.[linkName] ??
-      robot.getObjectByName?.(linkName) ??
-      robot.getObjectByName?.(safeDecode(linkName));
+    const link = resolveRobotObjectByName(robot, linkName);
     if (!link) return null;
     link.updateMatrixWorld?.(true);
     const pos = new THREE.Vector3();

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
+import { resolveRobotObjectByName } from "@/features/viewer/viewer-helpers";
 import type { IkSolvePayload, IkSolveResponse, IkSolveStrategy } from "./types";
 
 type SolveResult = {
@@ -30,25 +31,8 @@ const clamp = (value: number, min: number, max: number) =>
 const readJointValue = (joint: URDFJoint) =>
   Array.isArray(joint.jointValue) ? (joint.jointValue[0] ?? 0) : 0;
 
-const resolveLink = (robot: URDFRobot, linkName: string) => {
-  const robotAny = robot as URDFRobot & {
-    links?: Record<string, THREE.Object3D>;
-    getObjectByName?: (name: string) => THREE.Object3D | undefined;
-  };
-  const safeDecode = (value: string) => {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  };
-  return (
-    robotAny?.links?.[linkName] ??
-    robotAny?.getObjectByName?.(linkName) ??
-    robotAny?.getObjectByName?.(safeDecode(linkName)) ??
-    null
-  );
-};
+const resolveLink = (robot: URDFRobot, linkName: string) =>
+  resolveRobotObjectByName(robot, linkName);
 
 const getRobot = (urdf: string) => {
   const cached = ROBOT_CACHE.get(urdf);

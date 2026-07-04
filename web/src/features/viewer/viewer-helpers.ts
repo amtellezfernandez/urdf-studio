@@ -62,13 +62,25 @@ export const resolveJointScalarValue = (joint?: URDFJoint | null) => {
   return typeof value === "number" ? value : undefined;
 };
 
+export const resolveRobotObjectByName = (
+  robot: URDFRobot | null | undefined,
+  objectName: string
+): THREE.Object3D | null => {
+  if (!robot || !objectName) return null;
+  const robotAny = robot as URDFRobot & {
+    links?: Record<string, THREE.Object3D>;
+    getObjectByName?: (name: string) => THREE.Object3D | undefined;
+  };
+  return (
+    robotAny.links?.[objectName] ??
+    robotAny.getObjectByName?.(objectName) ??
+    robotAny.getObjectByName?.(safeDecode(objectName)) ??
+    null
+  );
+};
+
 export const extractLinkPose = (robot: URDFRobot | null, linkName: string): LinkPose | null => {
-  if (!robot) return null;
-  const robotAny = robot;
-  const link =
-    robotAny?.links?.[linkName] ??
-    robotAny?.getObjectByName?.(linkName) ??
-    robotAny?.getObjectByName?.(safeDecode(linkName));
+  const link = resolveRobotObjectByName(robot, linkName);
 
   if (!link || !link.matrixWorld) return null;
   if (typeof link.updateMatrixWorld === "function") {
