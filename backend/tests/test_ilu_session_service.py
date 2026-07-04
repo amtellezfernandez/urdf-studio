@@ -67,6 +67,22 @@ def test_save_request_accepts_previous_and_camel_case_payloads() -> None:
     assert IluSessionSaveRequest.model_validate({"urdfContent": "<robot />"}).urdf_xml == "<robot />"
 
 
+def test_session_snapshot_rejects_non_object_metadata(monkeypatch, tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    session_dir = session_root / "session-1"
+    session_dir.mkdir(parents=True)
+    (session_dir / "session.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(ilu_session_service, "ILU_SESSION_ROOT", session_root)
+
+    try:
+        ilu_session_service.get_ilu_session_snapshot("session-1")
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 500
+        assert exc.detail == "ilu session metadata is incomplete."
+    else:
+        raise AssertionError("Expected non-object session metadata to be rejected.")
+
+
 def test_local_session_manifest_exposes_working_urdf_and_filtered_assets(
     monkeypatch, tmp_path: Path
 ) -> None:

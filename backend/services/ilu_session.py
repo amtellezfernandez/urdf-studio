@@ -6,11 +6,11 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, TypeAlias
 from urllib.parse import quote, urlparse
 
 from pydantic import ValidationError
 
-from backend.services.ilu_repo_source import GitHubPublicProxyError, list_repo_contents
 from backend.models.ilu_session import (
     IluSessionAssetManifestFile,
     IluSessionAssetManifestResponse,
@@ -18,6 +18,7 @@ from backend.models.ilu_session import (
     IluSessionSaveResponse,
     IluSessionSnapshotResponse,
 )
+from backend.services.ilu_repo_source import GitHubPublicProxyError, list_repo_contents
 
 
 ILU_SESSION_ROOT = Path.home() / ".i-love-urdf" / "sessions"
@@ -57,6 +58,8 @@ MEDIA_TYPE_BY_EXTENSION = {
     ".webp": "image/webp",
 }
 
+IluSessionMetadataPayload: TypeAlias = dict[str, Any]
+
 
 @dataclass(frozen=True)
 class IluSessionError(RuntimeError):
@@ -84,6 +87,14 @@ class IluSessionLocalUrdfSourceContext:
     extra_search_roots: tuple[Path, ...]
 
 
+@dataclass(frozen=True)
+class IluSessionGitHubSourceContext:
+    owner: str
+    repo: str
+    revision: str | None
+    repository_urdf_path: str
+
+
 def _validate_session_id(session_id: str) -> str:
     normalized = session_id.strip()
     if not normalized or not SESSION_ID_PATTERN.match(normalized):
@@ -100,14 +111,27 @@ def _get_session_metadata_path(session_id: str) -> Path:
     return _get_session_dir(session_id) / ILU_SESSION_METADATA
 
 
-def _read_session_payload(session_id: str) -> dict:
+def _read_session_payload(session_id: str) -> IluSessionMetadataPayload:
     metadata_path = _get_session_metadata_path(session_id)
     if not metadata_path.exists():
         raise IluSessionError(status_code=404, detail=f"ilu session not found: {session_id}")
     try:
-        return json.loads(metadata_path.read_text(encoding="utf-8"))
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         raise IluSessionError(status_code=500, detail="Failed to read ilu session metadata.") from exc
+    if not isinstance(payload, dict):
+        raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
+    return payload
+
+
+def _required_metadata_string(
+    payload: IluSessionMetadataPayload,
+    field_name: str,
+) -> str:
+    value = payload.get(field_name)
+    if not isinstance(value, str):
+        raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
+    return value
 
 
 def _coerce_loaded_source(raw: object) -> IluSessionLoadedSource | None:
@@ -197,9 +221,7 @@ def _read_asset_source_context(
     session_id: str,
 ) -> tuple[str, Path, IluSessionLocalAssetContext]:
     payload = _read_session_payload(session_id)
-    working_urdf_path = payload.get("workingUrdfPath")
-    if not isinstance(working_urdf_path, str):
-        raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
+    working_urdf_path = _required_metadata_string(payload, "workingUrdfPath")
     working_file = Path(working_urdf_path).expanduser()
     local_context = _resolve_local_asset_context(
         _coerce_loaded_source(payload.get("loadedSource")),
@@ -212,7 +234,7 @@ def _read_asset_source_context(
 
 def _resolve_github_source_context(
     loaded_source: IluSessionLoadedSource | None,
-) -> tuple[str, str, str | None, str] | None:
+) -> IluSessionGitHubSourceContext | None:
     if loaded_source is None or loaded_source.source != "github":
         return None
 
@@ -234,7 +256,12 @@ def _resolve_github_source_context(
         raise IluSessionError(status_code=500, detail="ilu session GitHub source is invalid.")
 
     revision = (loaded_source.github_revision or "").strip() or None
-    return owner, repo, revision, repository_urdf_path
+    return IluSessionGitHubSourceContext(
+        owner=owner,
+        repo=repo,
+        revision=revision,
+        repository_urdf_path=repository_urdf_path,
+    )
 
 
 def _iter_local_session_assets(
@@ -266,15 +293,13 @@ def get_ilu_session_snapshot(session_id: str) -> IluSessionSnapshotResponse:
 
     schema = payload.get("schema")
     schema_version = payload.get("schemaVersion")
-    working_urdf_path = payload.get("workingUrdfPath")
-    last_urdf_path = payload.get("lastUrdfPath")
     if (
         schema != ILU_SESSION_SCHEMA
         or schema_version != ILU_SESSION_SCHEMA_VERSION
-        or not isinstance(working_urdf_path, str)
-        or not isinstance(last_urdf_path, str)
     ):
         raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
+    working_urdf_path = _required_metadata_string(payload, "workingUrdfPath")
+    last_urdf_path = _required_metadata_string(payload, "lastUrdfPath")
 
     loaded_source = _coerce_loaded_source(payload.get("loadedSource"))
     urdf_xml = _read_working_urdf(Path(working_urdf_path))
@@ -295,16 +320,16 @@ def get_ilu_session_snapshot(session_id: str) -> IluSessionSnapshotResponse:
 def get_ilu_session_asset_manifest(session_id: str) -> IluSessionAssetManifestResponse:
     payload = _read_session_payload(session_id)
     normalized_session_id = _validate_session_id(session_id)
-    working_urdf_path = payload.get("workingUrdfPath")
-    if not isinstance(working_urdf_path, str):
-        raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
+    working_urdf_path = _required_metadata_string(payload, "workingUrdfPath")
 
     working_file = Path(working_urdf_path).expanduser()
     loaded_source = _coerce_loaded_source(payload.get("loadedSource"))
     github_context = _resolve_github_source_context(loaded_source)
     if github_context is not None:
-        owner, repo, revision, repository_urdf_path = github_context
-        working_asset_path = _normalize_working_asset_path(repository_urdf_path, working_file.name)
+        working_asset_path = _normalize_working_asset_path(
+            github_context.repository_urdf_path,
+            working_file.name,
+        )
         files = [
             IluSessionAssetManifestFile(
                 path=working_asset_path,
@@ -317,7 +342,12 @@ def get_ilu_session_asset_manifest(session_id: str) -> IluSessionAssetManifestRe
         ]
         seen_paths = {working_asset_path.casefold()}
         try:
-            repo_files = list_repo_contents(owner=owner, repo=repo, path="", branch=revision)
+            repo_files = list_repo_contents(
+                owner=github_context.owner,
+                repo=github_context.repo,
+                path="",
+                branch=github_context.revision,
+            )
         except GitHubPublicProxyError as exc:
             raise IluSessionError(status_code=exc.status_code, detail=exc.detail) from exc
         for entry in repo_files:
@@ -438,9 +468,7 @@ def save_ilu_session_urdf(session_id: str, urdf_xml: str) -> IluSessionSaveRespo
     metadata_path = _get_session_metadata_path(normalized_session_id)
     payload = _read_session_payload(normalized_session_id)
 
-    working_urdf_path = payload.get("workingUrdfPath")
-    if not isinstance(working_urdf_path, str):
-        raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
+    working_urdf_path = _required_metadata_string(payload, "workingUrdfPath")
 
     working_file = Path(working_urdf_path)
     try:
@@ -452,8 +480,9 @@ def save_ilu_session_urdf(session_id: str, urdf_xml: str) -> IluSessionSaveRespo
     updated_at = datetime.now(timezone.utc).isoformat()
     payload["updatedAt"] = updated_at
     payload["lastUrdfPath"] = working_urdf_path
-    if isinstance(payload.get("loadedSource"), dict):
-        payload["loadedSource"]["urdfPath"] = working_urdf_path
+    loaded_source_payload = payload.get("loadedSource")
+    if isinstance(loaded_source_payload, dict):
+        loaded_source_payload["urdfPath"] = working_urdf_path
 
     try:
         metadata_path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
