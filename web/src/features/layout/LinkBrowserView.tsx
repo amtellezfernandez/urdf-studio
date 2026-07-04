@@ -6,6 +6,13 @@ import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarPar
 import { StructureSectionShell } from "@/features/layout/StructureSectionShell";
 import type { StructureGroupSection } from "@/features/layout/structureGroups";
 import type { StructureGroupDragHandlers } from "@/features/layout/useStructureGroupEditor";
+import {
+  canAddMeshCollisionForLink,
+  isEntireLinkSectionBatchSelected,
+  resolveLinkBrowserEmptyState,
+  resolveLinkStatusSummary,
+  resolveVisibleLinkNames,
+} from "@/features/layout/linkBrowserViewHelpers";
 
 type LinkBrowserViewProps = StructureGroupDragHandlers & {
   activeStructureDropGroup: string | null;
@@ -65,13 +72,6 @@ const BatchSelectionTick = ({
   </span>
 );
 
-const linkHasMeshVisual = (linkData: LinkData | null | undefined): boolean =>
-  Boolean(
-    linkData?.visuals.some(
-      (visual) => visual.geometry.type === "mesh" && Boolean(visual.geometry.params.filename)
-    )
-  );
-
 export const LinkBrowserView = ({
   activeStructureDropGroup,
   areAllFilteredLinksSelected,
@@ -108,7 +108,7 @@ export const LinkBrowserView = ({
   if (displayedLinkSections.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-        {searchQuery ? "No links match the search" : "No links available"}
+        {resolveLinkBrowserEmptyState(searchQuery)}
       </div>
     );
   }
@@ -137,11 +137,11 @@ export const LinkBrowserView = ({
       {displayedLinkSections.map((section) => {
         const isCollapsed = collapsedLinkSectionIds.has(section.id);
         const sectionDisplayLabel = formatSectionLabel(section.label);
-        const visibleLinkNames = isCollapsed
-          ? effectiveEndEffectorLink && section.items.includes(effectiveEndEffectorLink)
-            ? [effectiveEndEffectorLink]
-            : []
-          : section.items;
+        const visibleLinkNames = resolveVisibleLinkNames({
+          effectiveEndEffectorLink,
+          isCollapsed,
+          sectionItemNames: section.items,
+        });
         return (
           <StructureSectionShell
             key={section.id}
@@ -182,10 +182,10 @@ export const LinkBrowserView = ({
                   title={`Select all links in ${sectionDisplayLabel}`}
                 >
                   <BatchSelectionTick
-                    selected={
-                      section.items.length > 0 &&
-                      section.items.every((linkName) => selectedBatchLinks.has(linkName))
-                    }
+                    selected={isEntireLinkSectionBatchSelected({
+                      sectionItemNames: section.items,
+                      selectedBatchLinks,
+                    })}
                     squareClassName={LINK_TICK_SIZE_CLASS}
                   />
                   <span className="truncate">{sectionDisplayLabel}</span>
@@ -203,23 +203,15 @@ export const LinkBrowserView = ({
               const hasEeStatus = effectiveEndEffectorLink === linkName;
               const hasVoxelDerivedInertial = voxelDerivedInertialLinkSet.has(linkName);
               const linkData = linkDataByName?.[linkName] ?? null;
-              const canAddMeshCollision = !hasUrdfCollision && linkHasMeshVisual(linkData);
-              const statusSummaryLabel = [
-                isCollisionMerged ? "Mrg" : isCollisionSimplified ? "Simp" : null,
-                hasEeStatus ? "EE" : null,
-              ]
-                .filter((value): value is string => value !== null)
-                .join("+");
-              const statusSummaryTitle = [
-                isCollisionMerged
-                  ? "Merged collision active"
-                  : isCollisionSimplified
-                    ? "Collision simplification enabled"
-                    : null,
-                hasEeStatus ? "Marked as end effector" : null,
-              ]
-                .filter((value): value is string => value !== null)
-                .join(" • ");
+              const canAddMeshCollision = canAddMeshCollisionForLink({
+                hasUrdfCollision,
+                linkData,
+              });
+              const statusSummary = resolveLinkStatusSummary({
+                hasEeStatus,
+                isCollisionMerged,
+                isCollisionSimplified,
+              });
 
               return (
                 <div
@@ -304,15 +296,15 @@ export const LinkBrowserView = ({
                         Add Col
                       </button>
                     ) : null}
-                    {statusSummaryLabel ? (
+                    {statusSummary.label ? (
                       <span
                         className={cn(
                           LINK_STATUS_CHIP_CLASS,
                           "border-cyan-500/40 bg-cyan-500/15 text-cyan-200"
                         )}
-                        title={statusSummaryTitle}
+                        title={statusSummary.title}
                       >
-                        {statusSummaryLabel}
+                        {statusSummary.label}
                       </span>
                     ) : null}
                     {hasVoxelDerivedInertial ? (
