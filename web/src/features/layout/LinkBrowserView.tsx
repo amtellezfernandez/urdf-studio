@@ -10,9 +10,9 @@ import {
   canAddMeshCollisionForLink,
   isEntireLinkSectionBatchSelected,
   resolveLinkBrowserEmptyState,
-  resolveLinkStatusSummary,
   resolveVisibleLinkNames,
 } from "@/features/layout/linkBrowserViewHelpers";
+import { resolveLinkBrowserRowState } from "@/features/layout/linkBrowserRowState";
 
 type LinkBrowserViewProps = StructureGroupDragHandlers & {
   activeStructureDropGroup: string | null;
@@ -197,20 +197,20 @@ export const LinkBrowserView = ({
               const isBatchSelected = selectedBatchLinks.has(linkName);
               const isLinkSelected = selectedLink === linkName;
               const isLinkHighlighted = highlightedLinkName === linkName;
-              const hasUrdfCollision = linksWithCollisionSet.has(linkName);
-              const isCollisionSimplified = hasUrdfCollision && simplifiedLinkSet.has(linkName);
-              const isCollisionMerged = hasUrdfCollision && mergedLinkSet.has(linkName);
-              const hasEeStatus = effectiveEndEffectorLink === linkName;
-              const hasVoxelDerivedInertial = voxelDerivedInertialLinkSet.has(linkName);
               const linkData = linkDataByName?.[linkName] ?? null;
-              const canAddMeshCollision = canAddMeshCollisionForLink({
+              const {
+                canAddMeshCollision,
                 hasUrdfCollision,
+                hasVoxelDerivedInertial,
+                statusSummary,
+              } = resolveLinkBrowserRowState({
+                effectiveEndEffectorLink,
                 linkData,
-              });
-              const statusSummary = resolveLinkStatusSummary({
-                hasEeStatus,
-                isCollisionMerged,
-                isCollisionSimplified,
+                linkName,
+                linksWithCollisionSet,
+                mergedLinkSet,
+                simplifiedLinkSet,
+                voxelDerivedInertialLinkSet,
               });
 
               return (
