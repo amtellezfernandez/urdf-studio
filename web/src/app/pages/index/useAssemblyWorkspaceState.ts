@@ -24,6 +24,21 @@ type UseAssemblyWorkspaceStateParams = {
   vizUrdfContent: string;
 };
 
+export type AssemblySubstitutionSession = {
+  hostRobotId: string;
+  hostRobotName: string;
+  hostUrdfPath: string;
+  hostUrdfContent: string;
+  hostLinkOptions: string[];
+  replacementRobotId: string;
+  replacementRobotName: string;
+  replacementUrdfPath: string;
+  replacementUrdfContent: string;
+  replacementLinkOptions: string[];
+  replacementRootLinkOptions: string[];
+  packageRoots?: PackageRootMap;
+};
+
 const normalizeAssemblyUrdfPath = (urdfPath: string): string =>
   normalizeMeshPathForMatch(urdfPath) || urdfPath;
 
@@ -131,7 +146,7 @@ export const useAssemblyWorkspaceState = ({
     };
   }, [assemblySelectedRobots, isAssemblyWorkspace]);
 
-  const substitutionSession = useMemo(() => {
+  const substitutionSession = useMemo<AssemblySubstitutionSession | null>(() => {
     if (!isAssemblyWorkspace) return null;
     const hostRobot = assemblySelectedRobots.find((robot) => robot.role === "host") ?? null;
     const replacementRobot =

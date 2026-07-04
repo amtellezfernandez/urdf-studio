@@ -35,19 +35,11 @@ import { useIkConfigSync } from "@/features/ik/useIkConfigSync";
 import { useIkdRuntimeAuto } from "@/features/ik/useIkdRuntimeAuto";
 import { useIkRegistrySync } from "@/features/ik/useIkRegistrySync";
 import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
-import {
-  buildAssemblyUrdf,
-  createAssemblySpec,
-  validateAssemblySpec,
-} from "@/shared/lib/urdfCore";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
 import { parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
-import {
-  buildAssemblyExportModels,
-  resolveAssemblyExportPrimaryRobotId,
-} from "@/app/pages/index/assemblyExportDerivations";
+import { useAssemblyActions } from "@/app/pages/index/useAssemblyActions";
 import { useWorldSceneManager, downloadTextDocument } from "@/app/pages/index/useWorldSceneManager";
 import { useCameraRuntimeOrchestration } from "@/app/pages/index/useCameraRuntimeOrchestration";
 import type { DemoManifestPreferencesLoad } from "@/app/pages/index/useDemoMotionFlow";
@@ -116,8 +108,6 @@ import { useIluCalibrationFocus } from "@/app/pages/index/useIluCalibrationFocus
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
 import { useUrdfCollaboration } from "@/features/collaboration/useUrdfCollaboration";
 import { useCollaborationInviteActions } from "@/app/pages/index/useCollaborationInviteActions";
-import { resolveSubstitutionReplacement } from "@/features/assembly/substitution/substitutionApply";
-import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
 import type { RobotFrameLintResult } from "@/features/urdf/lint/robotFrameLinter";
 import {
   buildUrdfBakePreviewStats,
@@ -707,122 +697,28 @@ const Index = () => {
     originalUrdfContent,
   });
 
-  const handleExportAssemblyUrdf = useCallback(() => {
-    if (isAssemblyWorkspace && !assemblyHasPhysicalContact) {
-      toast.error("Assembly export requires at least one physical robot contact.");
-      return;
-    }
-    const models = buildAssemblyExportModels({
-      activeUrdfPath,
-      assemblySelectedRobots,
-      fallbackUrdfFileName: urdfFile?.name,
-      urdfDocuments,
-      vizUrdfContent,
-    });
-
-    if (models.length === 0) {
-      toast.error("No assembly robots available for export.");
-      return;
-    }
-
-    try {
-      const spec = createAssemblySpec(
-        models,
-        {
-          robotName: "assembled_robot",
-          poses: assemblyPoses,
-          primaryRobotId: resolveAssemblyExportPrimaryRobotId(assemblySelectedRobots),
-        }
-      );
-      const validation = validateAssemblySpec(spec);
-      if (!validation.isValid) {
-        toast.error(validation.errors[0] || "Assembly export is invalid.");
-        return;
-      }
-      const urdf = buildAssemblyUrdf(spec);
-      downloadTextDocument(urdf, "assembled_robot.urdf", "application/xml");
-      toast.success(`Exported assembly URDF (${models.length} robot${models.length > 1 ? "s" : ""})`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export assembly URDF");
-    }
-  }, [
+  const {
+    handleApplySubstitution,
+    handleDuplicateAssemblyRobot,
+    handleExportAssemblyUrdf,
+  } = useAssemblyActions({
     activeUrdfPath,
     assemblyHasPhysicalContact,
     assemblyPoses,
     assemblySelectedRobots,
-    isAssemblyWorkspace,
-    urdfFile?.name,
-    urdfDocuments,
-    vizUrdfContent,
-  ]);
-  const handleDuplicateAssemblyRobot = useCallback(
-    (instanceId: string) => {
-      duplicateAssemblyRobot(instanceId);
-      toast.success("Duplicated robot instance in assembly.");
-    },
-    [duplicateAssemblyRobot]
-  );
-  const handleApplySubstitution = useCallback((hostRootLink: string, replacementRootLink: string) => {
-    if (!substitutionSession) {
-      toast.error("Substitution session is not active.");
-      return;
-    }
-    if (!hostRootLink || !replacementRootLink) {
-      toast.error("Choose both a host target link and a replacement root link.");
-      return;
-    }
-
-    try {
-      const {
-        hostFilename,
-        nextUrdfDocuments,
-        replacementContent,
-      } = resolveSubstitutionReplacement({
-        hostUrdfPath: substitutionSession.hostUrdfPath,
-        replacementUrdfPath: substitutionSession.replacementUrdfPath,
-        activeUrdfPath,
-        urdfDocuments,
-        vizUrdfContent,
-      });
-      const nextHostUrdf = applySubstitutionSubtree({
-        hostUrdfContent: substitutionSession.hostUrdfContent,
-        replacementUrdfContent: replacementContent,
-        hostRootLink,
-        replacementRootLink,
-        replacementUrdfPath: substitutionSession.replacementUrdfPath,
-        packageRoots: substitutionSession.packageRoots,
-      });
-      loadUrdfText(nextHostUrdf.urdfContent, {
-        filename: hostFilename,
-        activePath: substitutionSession.hostUrdfPath,
-        urdfDocuments: {
-          ...nextUrdfDocuments,
-          [substitutionSession.hostUrdfPath]: nextHostUrdf.urdfContent,
-        },
-        meshFiles,
-        packageRoots,
-      });
-      clearAssemblySelection();
-      clearAssemblyPlacement();
-      workspaceController.setMode("studio");
-      toast.success(
-        `Replaced ${hostRootLink} on ${substitutionSession.hostRobotName} with ${replacementRootLink} from ${substitutionSession.replacementRobotName}.`
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to apply substitution.");
-    }
-  }, [
-    activeUrdfPath,
     clearAssemblyPlacement,
     clearAssemblySelection,
+    duplicateAssemblyRobot,
+    fallbackUrdfFileName: urdfFile?.name,
+    isAssemblyWorkspace,
     loadUrdfText,
     meshFiles,
     packageRoots,
+    setWorkspaceMode: workspaceController.setMode,
     substitutionSession,
     urdfDocuments,
     vizUrdfContent,
-    workspaceController,
-  ]);
+  });
   // Camera creation state
   const {
     isCameraCreatorOpen,
