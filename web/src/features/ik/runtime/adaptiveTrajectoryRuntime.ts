@@ -36,6 +36,18 @@ const clamp = (value: number, min: number, max: number) =>
 const computeQuinticEaseInOut = (t: number): number =>
   t * t * t * (t * (t * 6 - 15) + 10);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const readFiniteNumber = (
+  source: Record<string, unknown>,
+  key: keyof AdaptiveTrajectoryProfile,
+  fallback: number
+): number => {
+  const value = source[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+};
+
 const resolveMotionDirection = (startValue: number, targetValue: number): number => {
   if (targetValue > startValue) return 1;
   if (targetValue < startValue) return -1;
@@ -59,23 +71,36 @@ const clampMonotonicProgress = (
 };
 
 const sanitizeProfile = (
-  profile: AdaptiveTrajectoryProfile | null | undefined
+  profile: unknown
 ): AdaptiveTrajectoryProfile => {
-  if (!profile) return { ...DEFAULT_ADAPTIVE_TRAJECTORY_PROFILE };
+  if (!isRecord(profile)) return { ...DEFAULT_ADAPTIVE_TRAJECTORY_PROFILE };
   return {
     speedScale: clamp(
-      Number.isFinite(profile.speedScale) ? profile.speedScale : 1,
+      readFiniteNumber(profile, "speedScale", 1),
       0.8,
       1.5
     ),
     accelerationScale: clamp(
-      Number.isFinite(profile.accelerationScale) ? profile.accelerationScale : 1,
+      readFiniteNumber(profile, "accelerationScale", 1),
       0.8,
       1.8
     ),
-    completedRuns: Math.max(0, Math.trunc(profile.completedRuns ?? 0)),
-    updatedAtMs: Number.isFinite(profile.updatedAtMs) ? profile.updatedAtMs : 0,
+    completedRuns: Math.max(0, Math.trunc(readFiniteNumber(profile, "completedRuns", 0))),
+    updatedAtMs: readFiniteNumber(profile, "updatedAtMs", 0),
   };
+};
+
+const normalizeStoredProfiles = (value: unknown): Record<string, AdaptiveTrajectoryProfile> => {
+  if (!isRecord(value)) return {};
+
+  return Object.entries(value).reduce<Record<string, AdaptiveTrajectoryProfile>>(
+    (profiles, [contextKey, profile]) => {
+      if (!isRecord(profile)) return profiles;
+      profiles[contextKey] = sanitizeProfile(profile);
+      return profiles;
+    },
+    {}
+  );
 };
 
 export const createLocalStorageAdaptiveTrajectoryRepository = (
@@ -86,8 +111,7 @@ export const createLocalStorageAdaptiveTrajectoryRepository = (
     try {
       const raw = readBrowserStorageItem(storageKey);
       if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, AdaptiveTrajectoryProfile>;
-      return parsed && typeof parsed === "object" ? parsed : {};
+      return normalizeStoredProfiles(JSON.parse(raw) as unknown);
     } catch {
       return {};
     }

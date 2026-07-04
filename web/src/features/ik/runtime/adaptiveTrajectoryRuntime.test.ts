@@ -1,7 +1,10 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from "vitest";
 import {
   AdaptiveTrajectoryRuntime,
   createInMemoryAdaptiveTrajectoryRepository,
+  createLocalStorageAdaptiveTrajectoryRepository,
 } from "./adaptiveTrajectoryRuntime";
 
 const FORWARD_TARGET = 1.4;
@@ -88,6 +91,33 @@ describe("AdaptiveTrajectoryRuntime", () => {
     const restored = repository.load("robot-b::arm");
     expect(restored?.completedRuns).toBe(1);
     expect(restored?.speedScale).toBeCloseTo(updated.speedScale, 6);
+  });
+
+  it("sanitizes persisted local storage profiles before loading", () => {
+    const storageKey = "adaptive-trajectory-runtime-test";
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        "robot-b::arm": {
+          speedScale: 2.5,
+          accelerationScale: 0.2,
+          completedRuns: 3.8,
+          updatedAtMs: 42,
+        },
+        "invalid::arm": "not-a-profile",
+      })
+    );
+
+    const repository = createLocalStorageAdaptiveTrajectoryRepository(storageKey);
+    const profile = repository.load("robot-b::arm");
+
+    expect(profile).toEqual({
+      speedScale: 1.5,
+      accelerationScale: 0.8,
+      completedRuns: 3,
+      updatedAtMs: 42,
+    });
+    expect(repository.load("invalid::arm")).toBeNull();
   });
 
   it("keeps monotonic forward progress under variable frame dt", () => {
