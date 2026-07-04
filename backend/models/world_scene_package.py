@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias, TypeGuard
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -39,7 +39,7 @@ class WorldRuntimeTarget(BaseModel):
 
     @field_validator("min_version", mode="before")
     @classmethod
-    def _validate_min_version_is_not_null(cls, value: Any) -> Any:
+    def _validate_min_version_is_not_null(cls, value: object) -> object:
         if value is None:
             raise ValueError("min_version must be omitted or a string.")
         return value
@@ -91,7 +91,7 @@ class WorldSnapshot(BaseModel):
 
     @field_validator("joint_positions", mode="before")
     @classmethod
-    def _validate_joint_positions_are_numbers(cls, value: Any) -> Any:
+    def _validate_joint_positions_are_numbers(cls, value: object) -> object:
         if not isinstance(value, dict):
             return value
         for joint_name, joint_position in value.items():
@@ -109,7 +109,7 @@ class WorldSnapshot(BaseModel):
 
     @field_validator("scenario_time_ms", "scenario_duration_ms", mode="before")
     @classmethod
-    def _validate_scenario_timing_is_integer(cls, value: Any) -> Any:
+    def _validate_scenario_timing_is_integer(cls, value: object) -> object:
         if not isinstance(value, int) or isinstance(value, bool):
             raise ValueError("must be an integer millisecond value.")
         return value
@@ -135,7 +135,7 @@ class WorldSnapshot(BaseModel):
         return value
 
 
-def _raise_for_non_finite_payload_numbers(value: Any, path: str = "") -> None:
+def _raise_for_non_finite_payload_numbers(value: object, path: str = "") -> None:
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError(f"{path or 'payload'} must not contain non-finite numbers.")
     if isinstance(value, list):
@@ -148,34 +148,34 @@ def _raise_for_non_finite_payload_numbers(value: Any, path: str = "") -> None:
             _raise_for_non_finite_payload_numbers(item, field_path)
 
 
-def _is_record(value: Any) -> bool:
+def _is_record(value: object) -> TypeGuard[WorldScenePayload]:
     return isinstance(value, dict)
 
 
-def _is_non_empty_string(value: Any) -> bool:
+def _is_non_empty_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _is_finite_number(value: Any) -> bool:
+def _is_finite_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def _is_positive_integer_number(value: Any) -> bool:
+def _is_positive_integer_number(value: object) -> bool:
     if not _is_finite_number(value):
         return False
     parsed = float(value)
     return parsed >= 1.0 and parsed.is_integer()
 
 
-def _is_positive_number(value: Any) -> bool:
+def _is_positive_number(value: object) -> bool:
     return _is_finite_number(value) and float(value) > 0.0
 
 
-def _is_valid_fov_deg(value: Any) -> bool:
+def _is_valid_fov_deg(value: object) -> bool:
     return _is_finite_number(value) and 1.0 <= float(value) <= 179.0
 
 
-def _is_boolean(value: Any) -> bool:
+def _is_boolean(value: object) -> bool:
     return isinstance(value, bool)
 
 
@@ -197,7 +197,7 @@ def _raise_for_invalid_camera_payload(camera: WorldScenePayload, index: int) -> 
     _raise_for_invalid_camera_intrinsics(camera.get("intrinsics"), f"{camera_path}.intrinsics")
 
 
-def _raise_for_invalid_camera_pose(value: Any, path: str) -> None:
+def _raise_for_invalid_camera_pose(value: object, path: str) -> None:
     if not _is_record(value):
         raise ValueError(f"{path} must be an object.")
     _raise_for_extra_fields(value, {"xyz", "rpy"}, path)
@@ -205,7 +205,7 @@ def _raise_for_invalid_camera_pose(value: Any, path: str) -> None:
     _raise_for_invalid_vector3(value.get("rpy"), f"{path}.rpy")
 
 
-def _raise_for_invalid_camera_intrinsics(value: Any, path: str) -> None:
+def _raise_for_invalid_camera_intrinsics(value: object, path: str) -> None:
     if not _is_record(value):
         raise ValueError(f"{path} must be an object.")
     _raise_for_extra_fields(
@@ -231,7 +231,7 @@ def _raise_for_invalid_camera_intrinsics(value: Any, path: str) -> None:
         raise ValueError(f"{path}.distortion must be an object.")
 
 
-def _raise_for_invalid_vector3(value: Any, path: str) -> None:
+def _raise_for_invalid_vector3(value: object, path: str) -> None:
     if not isinstance(value, list | tuple) or len(value) != 3:
         raise ValueError(f"{path} must be an array of 3 finite numbers.")
     for axis, component in enumerate(value):
@@ -318,7 +318,7 @@ def _raise_for_invalid_object_optional_fields(
                 raise ValueError(f"{object_path}.orbit_target_point must be one of: {allowed}.")
 
 
-def _raise_for_invalid_object_simulation(value: Any, object_path: str) -> None:
+def _raise_for_invalid_object_simulation(value: object, object_path: str) -> None:
     if value is None:
         return
     if not _is_record(value):
@@ -388,7 +388,7 @@ def _has_wsp_mesh_asset_ref(world_object: WorldScenePayload) -> bool:
     )
 
 
-def _is_portable_asset_ref(value: Any) -> bool:
+def _is_portable_asset_ref(value: object) -> bool:
     if not _is_non_empty_string(value):
         return False
     try:
@@ -398,27 +398,27 @@ def _is_portable_asset_ref(value: Any) -> bool:
     return True
 
 
-def _raise_for_portable_asset_ref(value: Any, path: str) -> None:
+def _raise_for_portable_asset_ref(value: object, path: str) -> None:
     if not _is_non_empty_string(value):
         raise ValueError(f"{path} must be a non-empty string.")
     if not _is_portable_asset_ref(value):
         raise ValueError(f"{path} must be a portable relative asset reference.")
 
 
-def _raise_for_positive_vector3(value: Any, path: str) -> None:
+def _raise_for_positive_vector3(value: object, path: str) -> None:
     _raise_for_invalid_vector3(value, path)
     for axis, component in enumerate(value):
         if component <= 0:
             raise ValueError(f"{path}[{axis}] must be > 0.")
 
 
-def _raise_for_positive_number_field(value: Any, path: str) -> None:
+def _raise_for_positive_number_field(value: object, path: str) -> None:
     if not _is_positive_number(value):
         raise ValueError(f"{path} must be a finite number > 0.")
 
 
 def _raise_for_optional_finite_number(
-    value: Any,
+    value: object,
     path: str,
     *,
     minimum: float | None = None,
@@ -460,7 +460,7 @@ class WorldScenePackageManifest(BaseModel):
 
     @field_validator("description", mode="before")
     @classmethod
-    def _validate_description_is_not_null(cls, value: Any) -> Any:
+    def _validate_description_is_not_null(cls, value: object) -> object:
         if value is None:
             raise ValueError("description must be omitted or a string.")
         return value
