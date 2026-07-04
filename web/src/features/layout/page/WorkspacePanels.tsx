@@ -1,15 +1,14 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyNamedComponent } from "@/features/layout/page/workspacePanelsHelpers";
 
-const DisplaysPanel = lazy(() =>
-  import("@/features/layout/panels/DisplaysPanel").then((module) => ({
-    default: module.DisplaysPanel,
-  }))
+const DisplaysPanel = lazyNamedComponent(
+  () => import("@/features/layout/panels/DisplaysPanel"),
+  "DisplaysPanel"
 );
 
-const RuntimeHealthPanel = lazy(() =>
-  import("@/features/layout/panels/RuntimeHealthPanel").then((module) => ({
-    default: module.RuntimeHealthPanel,
-  }))
+const RuntimeHealthPanel = lazyNamedComponent(
+  () => import("@/features/layout/panels/RuntimeHealthPanel"),
+  "RuntimeHealthPanel"
 );
 
 export const WorkspacePanels = () => (
