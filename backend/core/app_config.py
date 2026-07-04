@@ -1,25 +1,40 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import TypeAlias, TypeVar, cast
+
+JsonConfig: TypeAlias = dict[str, object]
+DefaultValue = TypeVar("DefaultValue")
 
 
-def read_app_config() -> dict:
-    root_dir = Path(__file__).resolve().parents[2]
-    config_path = root_dir / "config" / "app.config.json"
-    if not config_path.exists():
+def read_app_config(config_path: Path | None = None) -> JsonConfig:
+    path = config_path or _default_app_config_path()
+    if not path.exists():
         return {}
     try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
+        decoded = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
+    if not isinstance(decoded, dict):
+        return {}
+    return cast(JsonConfig, decoded)
 
 
-def get_config_value(config: dict, path: list[str], fallback: Any) -> Any:
-    current: Any = config
+def _default_app_config_path() -> Path:
+    root_dir = Path(__file__).resolve().parents[2]
+    return root_dir / "config" / "app.config.json"
+
+
+def get_config_value(
+    config: Mapping[str, object],
+    path: Sequence[str],
+    default_value: DefaultValue,
+) -> object | DefaultValue:
+    current: object = config
     for key in path:
-        if not isinstance(current, dict) or key not in current:
-            return fallback
+        if not isinstance(current, Mapping) or key not in current:
+            return default_value
         current = current[key]
-    return current if current is not None else fallback
+    return current if current is not None else default_value
