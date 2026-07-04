@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { LinkData } from "@/shared/lib/urdfBrowser";
 
 import {
+  buildLinkStatusLabelSegments,
+  buildLinkStatusTitleSegments,
   canAddMeshCollisionForLink,
   isEntireLinkSectionBatchSelected,
   linkHasMeshVisual,
@@ -70,6 +72,20 @@ describe("linkBrowserViewHelpers", () => {
   });
 
   it("builds the compact status summary", () => {
+    expect(
+      buildLinkStatusLabelSegments({
+        hasEeStatus: true,
+        isCollisionMerged: false,
+        isCollisionSimplified: true,
+      })
+    ).toEqual(["Simp", "EE"]);
+    expect(
+      buildLinkStatusTitleSegments({
+        hasEeStatus: true,
+        isCollisionMerged: false,
+        isCollisionSimplified: true,
+      })
+    ).toEqual(["Collision simplification enabled", "Marked as end effector"]);
     expect(
       resolveLinkStatusSummary({
         hasEeStatus: true,

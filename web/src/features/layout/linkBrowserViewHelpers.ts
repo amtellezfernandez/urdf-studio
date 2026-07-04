@@ -1,5 +1,8 @@
 import type { LinkData } from "@/shared/lib/urdfBrowser";
 
+const LINK_STATUS_SEGMENT_SEPARATOR = "+";
+const LINK_STATUS_TITLE_SEPARATOR = " • ";
+
 export const resolveLinkBrowserEmptyState = (searchQuery: string): string =>
   searchQuery ? "No links match the search" : "No links available";
 
@@ -46,6 +49,38 @@ export const canAddMeshCollisionForLink = ({
   linkData: LinkData | null | undefined;
 }): boolean => !hasUrdfCollision && linkHasMeshVisual(linkData);
 
+export const buildLinkStatusLabelSegments = ({
+  hasEeStatus,
+  isCollisionMerged,
+  isCollisionSimplified,
+}: {
+  hasEeStatus: boolean;
+  isCollisionMerged: boolean;
+  isCollisionSimplified: boolean;
+}): string[] =>
+  [
+    isCollisionMerged ? "Mrg" : isCollisionSimplified ? "Simp" : null,
+    hasEeStatus ? "EE" : null,
+  ].filter((value): value is string => value !== null);
+
+export const buildLinkStatusTitleSegments = ({
+  hasEeStatus,
+  isCollisionMerged,
+  isCollisionSimplified,
+}: {
+  hasEeStatus: boolean;
+  isCollisionMerged: boolean;
+  isCollisionSimplified: boolean;
+}): string[] =>
+  [
+    isCollisionMerged
+      ? "Merged collision active"
+      : isCollisionSimplified
+        ? "Collision simplification enabled"
+        : null,
+    hasEeStatus ? "Marked as end effector" : null,
+  ].filter((value): value is string => value !== null);
+
 export const resolveLinkStatusSummary = ({
   hasEeStatus,
   isCollisionMerged,
@@ -58,23 +93,17 @@ export const resolveLinkStatusSummary = ({
   label: string;
   title: string;
 } => {
-  const label = [
-    isCollisionMerged ? "Mrg" : isCollisionSimplified ? "Simp" : null,
-    hasEeStatus ? "EE" : null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join("+");
+  const label = buildLinkStatusLabelSegments({
+    hasEeStatus,
+    isCollisionMerged,
+    isCollisionSimplified,
+  }).join(LINK_STATUS_SEGMENT_SEPARATOR);
 
-  const title = [
-    isCollisionMerged
-      ? "Merged collision active"
-      : isCollisionSimplified
-        ? "Collision simplification enabled"
-        : null,
-    hasEeStatus ? "Marked as end effector" : null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join(" • ");
+  const title = buildLinkStatusTitleSegments({
+    hasEeStatus,
+    isCollisionMerged,
+    isCollisionSimplified,
+  }).join(LINK_STATUS_TITLE_SEPARATOR);
 
   return { label, title };
 };
