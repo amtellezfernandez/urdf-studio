@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TypeAlias
 
 from backend.services.simulator_adapters.numeric import is_finite_number
+
+CameraIntrinsicsRecord: TypeAlias = Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -17,8 +20,17 @@ class PinholeCameraIntrinsics:
     matrix: tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]
 
 
-def pinhole_camera_intrinsics_from_record(value: Any) -> PinholeCameraIntrinsics | None:
-    if not isinstance(value, dict):
+class _InvalidOptionalNumber:
+    pass
+
+
+OptionalFloatRead: TypeAlias = float | None | _InvalidOptionalNumber
+
+_INVALID_OPTIONAL_NUMBER = _InvalidOptionalNumber()
+
+
+def pinhole_camera_intrinsics_from_record(value: object) -> PinholeCameraIntrinsics | None:
+    if not isinstance(value, Mapping):
         return None
     width = _read_camera_dimension(value.get("width"))
     height = _read_camera_dimension(value.get("height"))
@@ -61,9 +73,6 @@ def pinhole_camera_intrinsics_from_record(value: Any) -> PinholeCameraIntrinsics
     )
 
 
-_INVALID_OPTIONAL_NUMBER = object()
-
-
 def focal_length_px_from_vertical_fov_deg(fov_deg: float, height_px: int) -> float:
     half_fov_rad = math.radians(fov_deg) * 0.5
     return height_px / (2.0 * math.tan(half_fov_rad))
@@ -74,7 +83,7 @@ def vertical_fov_deg_from_focal_length_px(fy_px: float, height_px: int) -> float
     return math.degrees(half_fov_rad) * 2.0
 
 
-def _read_camera_dimension(value: Any) -> int | None:
+def _read_camera_dimension(value: object) -> int | None:
     if not is_finite_number(value):
         return None
     parsed = float(value)
@@ -83,7 +92,7 @@ def _read_camera_dimension(value: Any) -> int | None:
     return int(parsed)
 
 
-def _read_camera_fov_deg(value: Any) -> float | None:
+def _read_camera_fov_deg(value: object) -> float | None:
     if not is_finite_number(value):
         return None
     parsed = float(value)
@@ -92,25 +101,25 @@ def _read_camera_fov_deg(value: Any) -> float | None:
     return None
 
 
-def _read_positive_float(value: Any) -> float | None:
+def _read_positive_float(value: object) -> float | None:
     if not is_finite_number(value):
         return None
     parsed = float(value)
     return parsed if parsed > 0.0 else None
 
 
-def _read_optional_positive_float(record: dict[str, Any], key: str) -> float | None | object:
+def _read_optional_positive_float(record: CameraIntrinsicsRecord, key: str) -> OptionalFloatRead:
     if key not in record:
         return None
     return _read_positive_float(record.get(key)) or _INVALID_OPTIONAL_NUMBER
 
 
 def _read_optional_finite_float(
-    record: dict[str, Any],
+    record: CameraIntrinsicsRecord,
     key: str,
     *,
     fallback: float,
-) -> float | object:
+) -> float | _InvalidOptionalNumber:
     if key not in record:
         return fallback
     value = record.get(key)
