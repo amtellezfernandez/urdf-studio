@@ -45,6 +45,7 @@ import { ViewerCameraToolbar } from "@/features/viewer/components/ViewerCameraTo
 import { ViewerEndEffectorSummary } from "@/features/viewer/components/ViewerEndEffectorSummary";
 import { ViewerInertiaLegend } from "@/features/viewer/components/ViewerInertiaLegend";
 import { ViewerJointTypesPanel } from "@/features/viewer/components/ViewerJointTypesPanel";
+import { ViewerTopTools } from "@/features/viewer/components/ViewerTopTools";
 import {
   JointAxisIndicator,
   RotationPlane,
@@ -68,7 +69,6 @@ import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderStat
 import {
   extractLinkPose,
   extractRobotBasePose,
-  getDragModeDisplayName,
   resolveJointScalarValue,
   setEmissiveColor,
   type DragMode,
@@ -180,7 +180,6 @@ import {
 import {
   computeStudioWheelDriveAuthority,
   extractStudioDriveJointHintsFromUrdf,
-  getStudioWheelRoleLabel,
   isStudioWheelLikeLabel,
   persistStudioDriveJointHintsToUrdf,
   resolveStudioActiveDriveJointNames,
@@ -312,12 +311,6 @@ const shouldHideCameraInReadOnlyRuntime = (camera: RobotCamera) => {
 
 const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
 const IK_APPLY_INPUT_SOURCE = "ik_apply";
-
-const WORLD_OBJECT_EDIT_MODE_LABELS = {
-  move: "Move",
-  rotate: "Rotate",
-  resize: "Transform",
-} as const;
 
 const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) {
@@ -5224,260 +5217,35 @@ export const Viewer3D = ({
 
         {/* Runtime preview keeps only reset; full studio keeps the extended toolset. */}
         {viewerUi.showTopRightTools && (
-          <div className="absolute left-48 top-4 right-24 z-20 flex flex-nowrap items-center justify-end gap-2 overflow-x-auto overflow-y-hidden [&>*]:shrink-0">
-            {!readOnlyMode && (
-              <div className="relative">
-                <button
-                  type="button"
-                  className={cn(
-                    "px-3 py-1 text-xs rounded border border-border/60 bg-background/90 shadow-sm transition-colors flex items-center gap-1",
-                    robot ? "text-foreground hover:bg-muted" : "text-muted-foreground opacity-70 cursor-not-allowed"
-                  )}
-                  disabled={!robot}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (canOpenDragModeMenu) {
-                      setIsDragModeMenuOpen((prev) => !prev);
-                    }
-                  }}
-                >
-                  <span className="text-muted-foreground text-[10px]">Utils:</span>
-                  {getDragModeDisplayName(effectiveDragMode)}
-                  {canOpenDragModeMenu ? (
-                    <span className="text-[10px] text-muted-foreground">▼</span>
-                  ) : null}
-                </button>
-                {isDragModeMenuOpen && (
-                  <div
-                    className="absolute right-0 mt-1 w-48 bg-background/95 border border-border/70 rounded shadow-md text-xs"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className={cn(
-                        "w-full text-left px-3 py-1.5 hover:bg-muted transition-colors",
-                        effectiveDragMode === "move-joints" && "bg-muted/70 font-medium"
-                      )}
-                      onClick={() => selectDragMode("move-joints")}
-                    >
-                      Move Joints
-                    </button>
-                    {canUseDragHandleMode ? (
-                      <button
-                        className={cn(
-                          "w-full text-left px-3 py-1.5 hover:bg-muted transition-colors",
-                          effectiveDragMode === "drag-handle" && "bg-muted/70 font-medium"
-                        )}
-                        onClick={() => selectDragMode("drag-handle")}
-                      >
-                        Drag Handle
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className={cn(
-                "px-3 py-1 text-xs rounded border border-border/60 bg-background/90 shadow-sm transition-colors",
-                robot ? "text-foreground hover:bg-muted" : "text-muted-foreground opacity-70 cursor-not-allowed"
-              )}
-              disabled={!robot}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleResetPoseWithGlobalView();
-              }}
-            >
-              Reset Pose
-            </button>
-
-            {!readOnlyMode && (
-              <div
-                className="relative"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className={cn(
-                    "px-2 py-1 text-[11px] rounded border border-border/60 bg-background/90 shadow-sm transition-colors",
-                    selectedWorldObject
-                      ? "text-foreground hover:bg-muted"
-                      : "text-muted-foreground opacity-70 cursor-not-allowed"
-                  )}
-                  disabled={!selectedWorldObject}
-                  onClick={toggleObjectTools}
-                  aria-expanded={isObjectToolsOpen}
-                  title="Selected object tools"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <span>
-                      {selectedWorldObject
-                        ? WORLD_OBJECT_EDIT_MODE_LABELS[objectEditMode]
-                        : "Object"}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground">
-                      {selectedWorldObject ? (isObjectToolsOpen ? "▲" : "▼") : ""}
-                    </span>
-                  </span>
-                </button>
-                {selectedWorldObject && isObjectToolsOpen && (
-                  <div className="absolute right-0 mt-1 z-30 w-48 rounded border border-border/70 bg-background/95 p-1 shadow-md">
-                    <div className="grid grid-cols-2 gap-1">
-                      {(["move", "rotate", "resize"] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => selectWorldObjectEditMode(mode)}
-                          className={cn(
-                            "rounded border border-border/60 bg-background/85 px-2 py-1 text-left text-[9px] leading-none transition-colors hover:bg-muted",
-                            objectEditMode === mode && "bg-muted text-foreground"
-                          )}
-                          title={
-                            mode === "move"
-                              ? "Move (G)"
-                              : mode === "rotate"
-                                ? "Rotate (R)"
-                                : "Transform (S)"
-                          }
-                        >
-                          {WORLD_OBJECT_EDIT_MODE_LABELS[mode]}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={duplicateSelectedWorldObject}
-                        className="rounded border border-border/60 bg-background/85 px-2 py-1 text-left text-[9px] leading-none transition-colors hover:bg-muted"
-                        title="Duplicate selected (Shift+D)"
-                      >
-                        Duplicate
-                      </button>
-                      <button
-                        type="button"
-                        onClick={deleteSelectedWorldObject}
-                        className="rounded border border-border/60 bg-background/85 px-2 py-1 text-left text-[9px] leading-none transition-colors hover:bg-muted"
-                        title="Delete selected (Delete)"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <div className="mt-1 px-0.5 text-[8px] leading-none text-muted-foreground/80">
-                      G move • R rotate • S transform • Shift+D duplicate • Del delete
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!readOnlyMode && hasStudioWheelDrive && studioWheelRoleDisplayEntries.length > 0 && (
-              <div
-                className="relative"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className="px-2 py-1 text-[11px] rounded border border-border/60 bg-background/90 text-foreground shadow-sm transition-colors hover:bg-muted"
-                  onClick={toggleWheelRoles}
-                  aria-expanded={isWheelRolesOpen}
-                  title="Wheel drive mode and per-wheel role toggles."
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        wheelDriveEnabled ? "bg-emerald-500" : "bg-muted-foreground/45"
-                      )}
-                    />
-                    <span>Wheels {activeStudioWheelDriveCount}/{studioWheelRoleDisplayEntries.length}</span>
-                    <span className="text-[9px] text-muted-foreground">
-                      {isWheelRolesOpen ? "▲" : "▼"}
-                    </span>
-                  </span>
-                </button>
-                {isWheelRolesOpen && (
-                  <div className="absolute right-0 mt-1 z-30 w-48 rounded border border-border/70 bg-background/95 p-1 shadow-md">
-                    <div className="mb-1 flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between rounded border border-border/60 bg-background/85 px-2 py-1 text-[9px] text-foreground transition-colors hover:bg-muted"
-                        onClick={toggleWheelDriveMode}
-                        title={wheelDriveEnabled ? "Set wheels to brake" : "Enable wheel drive"}
-                      >
-                        <span className="inline-flex items-center gap-1.5 uppercase tracking-[0.08em] text-muted-foreground">
-                          <span
-                            className={cn(
-                              "h-1.5 w-1.5 rounded-full",
-                              wheelDriveEnabled ? "bg-emerald-500" : "bg-muted-foreground/45"
-                            )}
-                          />
-                          Motion
-                        </span>
-                        <span className="font-mono text-[8px] uppercase text-muted-foreground">
-                          {wheelDriveEnabled ? "On" : "Brake"}
-                        </span>
-                      </button>
-                    </div>
-                    <div className="grid gap-1">
-                      {studioWheelRoleDisplayEntries.map((entry) => (
-                        <button
-                          key={entry.jointName}
-                          type="button"
-                          onClick={() => handleToggleWheelDriveJoint(entry.jointName)}
-                          aria-pressed={entry.driveEnabled}
-                          title={`${entry.jointName} • ${entry.driveEnabled ? "On" : "Off"}`}
-                          className={cn(
-                            "w-full rounded border border-border/60 bg-background/85 px-1.5 py-1 text-[9px] text-foreground transition-colors hover:bg-muted",
-                            "flex items-center justify-between gap-2",
-                            !entry.driveEnabled && "text-muted-foreground"
-                          )}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "inline-flex h-4 min-w-4 items-center justify-center rounded border px-1 font-mono text-[8px] font-semibold leading-none",
-                                "border-border/70 bg-background/85 text-foreground"
-                              )}
-                            >
-                              {entry.wheelNumber}
-                            </span>
-                            <span className="text-[8px] uppercase tracking-[0.08em]">
-                              {entry.side}
-                            </span>
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full",
-                                entry.driveEnabled && wheelDriveEnabled
-                                  ? "bg-emerald-500"
-                                  : "bg-muted-foreground/45"
-                              )}
-                            />
-                            <span className="text-[8px] uppercase tracking-[0.08em] text-muted-foreground/80">
-                              {getStudioWheelRoleLabel(entry.role)}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!readOnlyMode && isFollowingOrbit && (
-              <button
-                type="button"
-                className="px-3 py-1 text-xs rounded border border-orange-500/60 bg-orange-500/10 text-orange-600 shadow-sm hover:bg-orange-500/20 transition-colors flex items-center gap-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  stopOrbitFollow();
-                }}
-              >
-                Stop Orbit ({orbitFollowProgress.toFixed(0)}%)
-              </button>
-            )}
-          </div>
+          <ViewerTopTools
+            activeWheelDriveCount={activeStudioWheelDriveCount}
+            canOpenDragModeMenu={canOpenDragModeMenu}
+            canUseDragHandleMode={canUseDragHandleMode}
+            dragMode={effectiveDragMode}
+            hasSelectedWorldObject={Boolean(selectedWorldObject)}
+            hasStudioWheelDrive={hasStudioWheelDrive}
+            isDragModeMenuOpen={isDragModeMenuOpen}
+            isFollowingOrbit={isFollowingOrbit}
+            isObjectToolsOpen={isObjectToolsOpen}
+            isReadOnly={readOnlyMode}
+            isRobotLoaded={Boolean(robot)}
+            isWheelDriveEnabled={wheelDriveEnabled}
+            isWheelRolesOpen={isWheelRolesOpen}
+            objectEditMode={objectEditMode}
+            orbitFollowProgress={orbitFollowProgress}
+            studioWheelRoleDisplayEntries={studioWheelRoleDisplayEntries}
+            onDeleteSelectedWorldObject={deleteSelectedWorldObject}
+            onDragModeSelect={selectDragMode}
+            onDuplicateSelectedWorldObject={duplicateSelectedWorldObject}
+            onObjectEditModeSelect={selectWorldObjectEditMode}
+            onObjectToolsToggle={toggleObjectTools}
+            onResetPose={handleResetPoseWithGlobalView}
+            onStopOrbitFollow={stopOrbitFollow}
+            onToggleDragModeMenu={() => setIsDragModeMenuOpen((previous) => !previous)}
+            onToggleWheelDriveMode={toggleWheelDriveMode}
+            onToggleWheelRoles={toggleWheelRoles}
+            onWheelDriveJointToggle={handleToggleWheelDriveJoint}
+          />
         )}
 
         {robot ? (
