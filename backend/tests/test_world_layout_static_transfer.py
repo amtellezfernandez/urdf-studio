@@ -21,6 +21,8 @@ from backend.services.world_layout_static_transfer import (
     resolve_world_layout_asset_path,
     resolve_world_layout_frame_map,
 )
+from backend.services.world_layout_transfer_report import build_primitive_check_report
+from backend.services.world_layout_transfer_types import LoadedPrimitive
 
 
 def _layout_payload() -> dict:
@@ -511,6 +513,41 @@ def test_mujoco_gate_fails_on_substantial_size_mismatch() -> None:
     assert report["ok"] is False
     assert report["max_size_error_m"] > 1e-6
     assert report["objects"][0]["size_error_m"] > 1e-6
+
+
+def test_primitive_check_report_rejects_duplicate_loaded_sim_names() -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+    primitives, _warnings = build_sim_primitives(layout)
+    loaded = [
+        LoadedPrimitive(
+            source_id=primitive.source_id,
+            sim_name=primitive.sim_name,
+            sim_type=primitive.sim_type,
+            position_xyz=primitive.position_xyz,
+            quat_wxyz=primitive.quat_wxyz,
+            size_xyz=primitive.size_xyz,
+            collision=primitive.collision,
+            rgba=primitive.rgba,
+        )
+        for primitive in primitives
+    ]
+    loaded.append(
+        LoadedPrimitive(
+            source_id="duplicate",
+            sim_name=primitives[0].sim_name,
+            sim_type=primitives[0].sim_type,
+            position_xyz=primitives[0].position_xyz,
+            quat_wxyz=primitives[0].quat_wxyz,
+            size_xyz=primitives[0].size_xyz,
+            collision=primitives[0].collision,
+            rgba=primitives[0].rgba,
+        )
+    )
+
+    report = build_primitive_check_report(primitives, loaded)
+
+    assert report["ok"] is False
+    assert report["duplicate_loaded_sim_names"] == [primitives[0].sim_name]
 
 
 @pytest.mark.skipif(

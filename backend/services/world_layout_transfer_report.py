@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections import Counter
+from typing import Any, Sequence, TypeAlias
 
 import numpy as np
 
@@ -10,6 +11,10 @@ from backend.services.world_layout_transfer_constants import (
     QUATERNION_TOLERANCE,
     SIZE_TOLERANCE_M,
 )
+from backend.services.world_layout_transfer_types import LoadedPrimitive, SimPrimitive
+
+PrimitiveCheckObjectReport: TypeAlias = dict[str, Any]
+PrimitiveCheckReport: TypeAlias = dict[str, Any]
 
 
 def _quat_error(lhs: Sequence[float] | None, rhs: Sequence[float]) -> float | None:
@@ -41,17 +46,25 @@ def _rgba_error(
     return float(np.linalg.norm(np.array(lhs, dtype=float) - np.array(rhs, dtype=float)))
 
 
+def _optional_vector(values: Sequence[float] | None) -> list[float] | None:
+    return list(values) if values is not None else None
+
+
 def build_primitive_check_report(
-    primitives: Sequence[Any],
-    loaded: Sequence[Any],
+    primitives: Sequence[SimPrimitive],
+    loaded: Sequence[LoadedPrimitive],
     *,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
-) -> dict[str, Any]:
+) -> PrimitiveCheckReport:
+    loaded_name_counts = Counter(item.sim_name for item in loaded)
+    duplicate_loaded_sim_names = sorted(
+        sim_name for sim_name, count in loaded_name_counts.items() if count > 1
+    )
     loaded_by_name = {item.sim_name: item for item in loaded}
-    objects: list[dict[str, Any]] = []
+    objects: list[PrimitiveCheckObjectReport] = []
     max_position_error = 0.0
     max_size_error = 0.0
     max_quat_error = 0.0
@@ -98,19 +111,13 @@ def build_primitive_check_report(
                 "loaded_position_xyz": list(loaded_primitive.position_xyz),
                 "position_error_m": position_error,
                 "expected_quat_wxyz": list(primitive.quat_wxyz),
-                "loaded_quat_wxyz": (
-                    list(loaded_primitive.quat_wxyz) if loaded_primitive.quat_wxyz is not None else None
-                ),
+                "loaded_quat_wxyz": _optional_vector(loaded_primitive.quat_wxyz),
                 "quat_error": quat_error,
                 "expected_size_xyz": list(primitive.size_xyz),
-                "loaded_size_xyz": (
-                    list(loaded_primitive.size_xyz) if loaded_primitive.size_xyz is not None else None
-                ),
+                "loaded_size_xyz": _optional_vector(loaded_primitive.size_xyz),
                 "size_error_m": size_error,
                 "expected_rgba": list(primitive.rgba),
-                "loaded_rgba": (
-                    list(loaded_primitive.rgba) if loaded_primitive.rgba is not None else None
-                ),
+                "loaded_rgba": _optional_vector(loaded_primitive.rgba),
                 "color_error": color_error,
                 "collision": primitive.collision,
                 "loaded_collision": loaded_primitive.collision,
@@ -124,6 +131,7 @@ def build_primitive_check_report(
         and len(type_mismatches) == 0
         and len(collision_mismatches) == 0
         and len(color_mismatches) == 0
+        and len(duplicate_loaded_sim_names) == 0
         and len(loaded) == len(primitives)
         and max_position_error <= position_tolerance_m
         and max_size_error <= size_tolerance_m
@@ -138,6 +146,7 @@ def build_primitive_check_report(
         "type_mismatch_source_ids": type_mismatches,
         "collision_mismatch_source_ids": collision_mismatches,
         "color_mismatch_source_ids": color_mismatches,
+        "duplicate_loaded_sim_names": duplicate_loaded_sim_names,
         "max_position_error_m": max_position_error,
         "max_size_error_m": max_size_error,
         "max_quat_error": max_quat_error,
