@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Sequence, TypeAlias
 
 from backend.services.world_layout_transfer_constants import (
     COLOR_TOLERANCE,
@@ -8,7 +8,10 @@ from backend.services.world_layout_transfer_constants import (
     QUATERNION_TOLERANCE,
     SIZE_TOLERANCE_M,
 )
-from backend.services.world_layout_transfer_report import build_primitive_check_report
+from backend.services.world_layout_transfer_report import (
+    PrimitiveCheckReport,
+    build_primitive_check_report,
+)
 from backend.services.world_layout_transfer_types import (
     LoadedPrimitive,
     SimPrimitive,
@@ -16,6 +19,7 @@ from backend.services.world_layout_transfer_types import (
 )
 
 _GENESIS_INITIALIZED = False
+GenesisEntityEntry: TypeAlias = tuple[SimPrimitive, Any]
 
 
 def _ensure_genesis_initialized(gs: Any) -> None:
@@ -37,12 +41,12 @@ def check_genesis_transfer(
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
-) -> dict[str, Any]:
+) -> PrimitiveCheckReport:
     import genesis as gs
 
     _ensure_genesis_initialized(gs)
     scene = gs.Scene(show_viewer=False)
-    entities: list[tuple[SimPrimitive, Any]] = []
+    entities: list[GenesisEntityEntry] = []
     for primitive in primitives:
         if primitive.sim_type == "box":
             morph = gs.morphs.Box(
@@ -70,7 +74,9 @@ def check_genesis_transfer(
                 collision=primitive.collision,
             )
         else:
-            raise WorldLayoutTransferError(f"Unsupported Genesis primitive type: {primitive.sim_type}")
+            raise WorldLayoutTransferError(
+                f"Unsupported Genesis primitive type: {primitive.sim_type}"
+            )
         surface = gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3])
         entity = scene.add_entity(morph, surface=surface, name=primitive.sim_name)
         entities.append((primitive, entity))
@@ -91,7 +97,7 @@ def check_genesis_transfer(
                 rgba=_genesis_entity_rgba(entity),
             )
         )
-    report = build_primitive_check_report(
+    report: PrimitiveCheckReport = build_primitive_check_report(
         primitives,
         loaded,
         position_tolerance_m=position_tolerance_m,

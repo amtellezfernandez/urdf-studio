@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Sequence, TypeAlias
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -20,7 +20,12 @@ from backend.services.world_layout_transfer_types import (
     SimPrimitive,
     WorldLayoutTransferError,
 )
-from backend.services.world_layout_transfer_report import build_primitive_check_report
+from backend.services.world_layout_transfer_report import (
+    PrimitiveCheckReport,
+    build_primitive_check_report,
+)
+
+MujocoXmlAttributes: TypeAlias = dict[str, str]
 
 
 def _format_float(value: float) -> str:
@@ -40,7 +45,11 @@ def _mujoco_mesh_name(primitive: SimPrimitive) -> str:
     return _safe_xml_token(f"{primitive.sim_name}_mesh")
 
 
-def _mujoco_geom_attrs(primitive: SimPrimitive, *, mesh_name: str | None = None) -> dict[str, str]:
+def _mujoco_geom_attrs(
+    primitive: SimPrimitive,
+    *,
+    mesh_name: str | None = None,
+) -> MujocoXmlAttributes:
     attrs = {
         "name": primitive.sim_name,
         "type": "mesh" if mesh_name is not None else primitive.sim_type,
@@ -83,7 +92,7 @@ def _append_mujoco_mesh_asset(
 ) -> str:
     mesh_name = _mujoco_mesh_name(primitive)
     asset = _mujoco_asset_root(root)
-    attrs = {
+    attrs: MujocoXmlAttributes = {
         "name": mesh_name,
         "file": str(asset_path),
     }
@@ -204,7 +213,7 @@ def check_mujoco_transfer(
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
-) -> dict[str, Any]:
+) -> PrimitiveCheckReport:
     import mujoco
 
     compiled_mjcf = mjcf_text or export_primitives_to_mujoco_mjcf(primitives)
@@ -224,11 +233,14 @@ def check_mujoco_transfer(
                 position_xyz=tuple(float(value) for value in data.geom_xpos[geom_id]),
                 quat_wxyz=_matrix9_to_quat_wxyz(data.geom_xmat[geom_id]),
                 size_xyz=_mujoco_geom_full_size(mujoco, model, geom_id),
-                collision=bool(model.geom_contype[geom_id] != 0 or model.geom_conaffinity[geom_id] != 0),
+                collision=bool(
+                    model.geom_contype[geom_id] != 0
+                    or model.geom_conaffinity[geom_id] != 0
+                ),
                 rgba=tuple(float(value) for value in model.geom_rgba[geom_id]),
             )
         )
-    report = build_primitive_check_report(
+    report: PrimitiveCheckReport = build_primitive_check_report(
         primitives,
         loaded,
         position_tolerance_m=position_tolerance_m,
