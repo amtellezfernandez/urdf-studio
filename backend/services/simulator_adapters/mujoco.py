@@ -103,12 +103,19 @@ def _parse_full_inertia(inertial: ET.Element) -> tuple[float, float, float, floa
     if not fullinertia:
         return None
     try:
-        values = tuple(float(value) for value in fullinertia.split())
+        values = [float(value) for value in fullinertia.split()]
     except ValueError:
         return None
     if len(values) != 6:
         return None
-    return values  # type: ignore[return-value]
+    return (
+        values[0],
+        values[1],
+        values[2],
+        values[3],
+        values[4],
+        values[5],
+    )
 
 
 def _regularize_full_inertia(
