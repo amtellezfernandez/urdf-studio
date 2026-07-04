@@ -1,5 +1,4 @@
 import React from "react";
-import * as THREE from "three";
 import { Link2 } from "lucide-react";
 import type { URDFRobot } from "urdf-loader";
 import { hexToRgba } from "@/shared/lib/color";
@@ -54,6 +53,46 @@ type HierarchyLinkRowProps = {
   onSelect: () => void;
   onToggleEndEffector?: () => void;
   structureLabel: string | null;
+};
+
+type HierarchyJointRowProps = {
+  angleUnit: "rad" | "deg";
+  availableJoints: string[];
+  colorJointNames: string[];
+  deletedJoints: Set<string>;
+  hoveredJoint?: string | null;
+  jointEffortLimits: Record<string, number | null>;
+  jointInfo: JointLimits[string] | undefined;
+  jointName: string;
+  onSelect: (jointName: string) => void;
+  onVisibilityToggle: (jointName: string) => void;
+  selectedJoint?: string | null;
+  structureLabel: string | null;
+  visibleJoints: Set<string>;
+};
+
+type HierarchyTreeBranchProps = {
+  angleUnit: "rad" | "deg";
+  availableJoints: string[];
+  colorJointNames: string[];
+  deletedJoints: Set<string>;
+  endEffectorLink?: string | null;
+  hoveredJoint?: string | null;
+  jointEffortLimits: Record<string, number | null>;
+  jointLimits: JointLimits;
+  linkName: string;
+  onMarkAsEndEffector?: (linkName: string | null) => void;
+  onSelectJoint: (jointName: string) => void;
+  onSelectLink: (linkName: string) => void;
+  onVisibilityToggle: (jointName: string) => void;
+  robot?: URDFRobot | null;
+  selectedJoint?: string | null;
+  selectedLink?: string | null;
+  structureLabels: RobotStructureLabels;
+  tree: JointHierarchyTreeModel;
+  visibleJoints: Set<string>;
+  visitedLinks: Set<string>;
+  depth: number;
 };
 
 const HIERARCHY_TREE_PARAMS = JOINT_LIST_SIDEBAR_PARAMS.hierarchyTree;
@@ -125,6 +164,7 @@ function HierarchyLinkRow({
 }: HierarchyLinkRowProps) {
   return (
     <div
+      data-hierarchy-link-row={linkName}
       className={cn(
         "px-1.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
         isSelected && "hover:bg-muted/30",
@@ -220,6 +260,193 @@ function HierarchyLinkRow({
   );
 }
 
+function HierarchyJointRow({
+  angleUnit,
+  availableJoints,
+  colorJointNames,
+  deletedJoints,
+  hoveredJoint,
+  jointEffortLimits,
+  jointInfo,
+  jointName,
+  onSelect,
+  onVisibilityToggle,
+  selectedJoint,
+  structureLabel,
+  visibleJoints,
+}: HierarchyJointRowProps) {
+  return (
+    <JointListItem
+      jointName={jointName}
+      jointInfo={jointInfo}
+      effortLimit={jointEffortLimits[jointName] ?? null}
+      onValueChange={() => {}}
+      isDeleted={deletedJoints.has(jointName)}
+      isSelected={selectedJoint === jointName}
+      isHighlighted={hoveredJoint === jointName}
+      angleUnit={angleUnit}
+      onClick={() => onSelect(jointName)}
+      onHover={undefined}
+      availableJoints={availableJoints}
+      colorJointNames={colorJointNames}
+      isVisible={visibleJoints.has(jointName)}
+      onVisibilityToggle={onVisibilityToggle}
+      hideColorSquare={false}
+      groupLabel={structureLabel}
+      compact
+    />
+  );
+}
+
+function HierarchyTreeBranch({
+  angleUnit,
+  availableJoints,
+  colorJointNames,
+  deletedJoints,
+  depth,
+  endEffectorLink,
+  hoveredJoint,
+  jointEffortLimits,
+  jointLimits,
+  linkName,
+  onMarkAsEndEffector,
+  onSelectJoint,
+  onSelectLink,
+  onVisibilityToggle,
+  robot,
+  selectedJoint,
+  selectedLink,
+  structureLabels,
+  tree,
+  visibleJoints,
+  visitedLinks,
+}: HierarchyTreeBranchProps) {
+  if (visitedLinks.has(linkName) || depth > 100) {
+    return null;
+  }
+
+  const branchVisitedLinks = new Set(visitedLinks);
+  branchVisitedLinks.add(linkName);
+
+  const isSelected = selectedLink === linkName;
+  const isEndEffector = endEffectorLink === linkName;
+  const structureLabel = structureLabels.linkByName[linkName] ?? null;
+  const childJoints = tree.linkToJoints.get(linkName) ?? [];
+  const isLeaf = childJoints.length === 0;
+  const linkCoordinates =
+    isEndEffector && robot ? extractLinkWorldPose(robot, linkName) : null;
+  const toggleEndEffector =
+    onMarkAsEndEffector
+      ? () =>
+          onMarkAsEndEffector(
+            resolveNextEndEffectorLink({
+              currentEndEffectorLink: endEffectorLink,
+              linkName,
+            })
+          )
+      : undefined;
+
+  if (isLeaf) {
+    return (
+      <TreeIndentedFrame
+        paddingDepth={depth}
+        connectorDepth={depth > 0 ? depth - 1 : undefined}
+        connectorBottom={depth > 0 ? "50%" : undefined}
+      >
+        <HierarchyLinkRow
+          linkName={linkName}
+          isSelected={isSelected}
+          isEndEffector={isEndEffector}
+          isLeaf={true}
+          structureLabel={structureLabel}
+          linkCoordinates={linkCoordinates}
+          onSelect={() => onSelectLink(linkName)}
+          onToggleEndEffector={toggleEndEffector}
+        />
+      </TreeIndentedFrame>
+    );
+  }
+
+  return (
+    <div data-hierarchy-branch={linkName}>
+      <TreeIndentedFrame
+        paddingDepth={depth}
+        connectorDepth={depth > 0 ? depth - 1 : undefined}
+        connectorBottom={depth > 0 ? "0" : undefined}
+      >
+        <HierarchyLinkRow
+          linkName={linkName}
+          isSelected={isSelected}
+          isEndEffector={isEndEffector}
+          isLeaf={false}
+          structureLabel={structureLabel}
+          linkCoordinates={null}
+          onSelect={() => onSelectLink(linkName)}
+          onToggleEndEffector={toggleEndEffector}
+        />
+      </TreeIndentedFrame>
+      {childJoints.map((joint, jointIndex) => {
+        if (!joint?.jointName || !joint.childLink) {
+          return null;
+        }
+
+        const isLastJoint = jointIndex === childJoints.length - 1;
+        const grandchildJoints = tree.linkToJoints.get(joint.childLink) ?? [];
+        const hasGrandchildJoints = grandchildJoints.length > 0;
+
+        return (
+          <div key={`joint-${joint.jointName}`}>
+            <TreeIndentedFrame
+              paddingDepth={depth + 1}
+              connectorDepth={depth}
+              connectorBottom={hasGrandchildJoints || !isLastJoint ? "0" : "50%"}
+            >
+              <HierarchyJointRow
+                angleUnit={angleUnit}
+                availableJoints={availableJoints}
+                colorJointNames={colorJointNames}
+                deletedJoints={deletedJoints}
+                hoveredJoint={hoveredJoint}
+                jointEffortLimits={jointEffortLimits}
+                jointInfo={jointLimits[joint.jointName]}
+                jointName={joint.jointName}
+                onSelect={onSelectJoint}
+                onVisibilityToggle={onVisibilityToggle}
+                selectedJoint={selectedJoint}
+                structureLabel={structureLabels.jointByName[joint.jointName] ?? null}
+                visibleJoints={visibleJoints}
+              />
+            </TreeIndentedFrame>
+            <HierarchyTreeBranch
+              angleUnit={angleUnit}
+              availableJoints={availableJoints}
+              colorJointNames={colorJointNames}
+              deletedJoints={deletedJoints}
+              depth={depth + 1}
+              endEffectorLink={endEffectorLink}
+              hoveredJoint={hoveredJoint}
+              jointEffortLimits={jointEffortLimits}
+              jointLimits={jointLimits}
+              linkName={joint.childLink}
+              onMarkAsEndEffector={onMarkAsEndEffector}
+              onSelectJoint={onSelectJoint}
+              onSelectLink={onSelectLink}
+              onVisibilityToggle={onVisibilityToggle}
+              robot={robot}
+              selectedJoint={selectedJoint}
+              selectedLink={selectedLink}
+              structureLabels={structureLabels}
+              tree={tree}
+              visibleJoints={visibleJoints}
+              visitedLinks={branchVisitedLinks}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export const HierarchyTreeView = React.memo(({
   hierarchyTree,
   jointLimits,
@@ -251,15 +478,6 @@ export const HierarchyTreeView = React.memo(({
     );
   }
 
-  const toggleEndEffectorForLink = (linkName: string) => {
-    if (!onMarkAsEndEffector) return;
-    onMarkAsEndEffector(
-      resolveNextEndEffectorLink({
-        currentEndEffectorLink: endEffectorLink,
-        linkName,
-      })
-    );
-  };
   const selectHierarchyLink = (linkName: string) => {
     onLinkSelect?.(linkName);
     onJointSelect?.(null);
@@ -269,130 +487,6 @@ export const HierarchyTreeView = React.memo(({
     onJointSelect?.(jointName);
   };
 
-  const renderLinkNode = (linkName: string, depth: number = 0, visitedLinks: Set<string> = new Set()): React.ReactNode => {
-    if (visitedLinks.has(linkName) || depth > 100) {
-      return null;
-    }
-
-    const branchVisitedLinks = new Set(visitedLinks);
-    branchVisitedLinks.add(linkName);
-
-    const isSelected = selectedLink === linkName;
-    const structureLabel = structureLabels.linkByName[linkName] ?? null;
-
-    try {
-      const joints = hierarchyTree.linkToJoints.get(linkName) || [];
-      const isEE = endEffectorLink === linkName;
-
-      let linkCoordinates: LinkWorldPose | null = null;
-      if (isEE && robot) {
-        try {
-          linkCoordinates = extractLinkWorldPose(robot, linkName);
-        } catch (error) {
-          console.error("Error getting link coordinates:", error);
-        }
-      }
-
-      if (joints.length === 0) {
-        return (
-          <TreeIndentedFrame
-            key={`link-${linkName}-${depth}`}
-            paddingDepth={depth}
-            connectorDepth={depth > 0 ? depth - 1 : undefined}
-            connectorBottom={depth > 0 ? "50%" : undefined}
-          >
-            <HierarchyLinkRow
-              linkName={linkName}
-              isSelected={isSelected}
-              isEndEffector={isEE}
-              isLeaf={true}
-              structureLabel={structureLabel}
-              linkCoordinates={linkCoordinates}
-              onSelect={() => selectHierarchyLink(linkName)}
-              onToggleEndEffector={
-                onMarkAsEndEffector
-                  ? () => toggleEndEffectorForLink(linkName)
-                  : undefined
-              }
-            />
-          </TreeIndentedFrame>
-        );
-      }
-
-      return (
-        <div key={`link-${linkName}-${depth}`}>
-          <TreeIndentedFrame
-            paddingDepth={depth}
-            connectorDepth={depth > 0 ? depth - 1 : undefined}
-            connectorBottom={depth > 0 ? "0" : undefined}
-          >
-            <HierarchyLinkRow
-              linkName={linkName}
-              isSelected={isSelected}
-              isEndEffector={isEE}
-              isLeaf={false}
-              structureLabel={structureLabel}
-              linkCoordinates={null}
-              onSelect={() => selectHierarchyLink(linkName)}
-              onToggleEndEffector={
-                onMarkAsEndEffector
-                  ? () => toggleEndEffectorForLink(linkName)
-                  : undefined
-              }
-            />
-          </TreeIndentedFrame>
-          {joints.map((joint, jointIndex) => {
-            if (!joint || !joint.jointName || !joint.childLink) {
-              return null;
-            }
-
-            const isLastJoint = jointIndex === joints.length - 1;
-            const childJoints = hierarchyTree.linkToJoints.get(joint.childLink) || [];
-            const hasChildJoints = childJoints.length > 0;
-
-            return (
-              <div key={`joint-${joint.jointName}`}>
-                <TreeIndentedFrame
-                  paddingDepth={depth + 1}
-                  connectorDepth={depth}
-                  connectorBottom={hasChildJoints || !isLastJoint ? "0" : "50%"}
-                >
-                  <JointListItem
-                    jointName={joint.jointName}
-                    jointInfo={jointLimits[joint.jointName]}
-                    effortLimit={jointEffortLimits[joint.jointName] ?? null}
-                    onValueChange={() => {}}
-                    isDeleted={deletedJoints.has(joint.jointName)}
-                    isSelected={selectedJoint === joint.jointName}
-                    isHighlighted={hoveredJoint === joint.jointName}
-                    angleUnit={angleUnit}
-                    onClick={() => selectHierarchyJoint(joint.jointName)}
-                    onHover={undefined}
-                    availableJoints={availableJoints}
-                    colorJointNames={colorJointNames}
-                    isVisible={visibleJoints.has(joint.jointName)}
-                    onVisibilityToggle={onVisibilityToggle}
-                    hideColorSquare={false}
-                    groupLabel={structureLabels.jointByName[joint.jointName] ?? null}
-                    compact
-                  />
-                </TreeIndentedFrame>
-                {renderLinkNode(joint.childLink, depth + 1, branchVisitedLinks)}
-              </div>
-            );
-          })}
-        </div>
-      );
-    } catch (error) {
-      console.error(`Error rendering link node ${linkName}:`, error);
-      return (
-        <div key={`error-${linkName}-${depth}`} className="text-xs text-red-500 px-2 py-1">
-          Error rendering {linkName}
-        </div>
-      );
-    }
-  };
-
   try {
     return (
       <div className="space-y-0.5">
@@ -400,7 +494,29 @@ export const HierarchyTreeView = React.memo(({
           if (!rootLink) return null;
           return (
             <React.Fragment key={`root-${rootLink}-${index}`}>
-              {renderLinkNode(rootLink, 0)}
+              <HierarchyTreeBranch
+                angleUnit={angleUnit}
+                availableJoints={availableJoints}
+                colorJointNames={colorJointNames}
+                deletedJoints={deletedJoints}
+                depth={0}
+                endEffectorLink={endEffectorLink}
+                hoveredJoint={hoveredJoint}
+                jointEffortLimits={jointEffortLimits}
+                jointLimits={jointLimits}
+                linkName={rootLink}
+                onMarkAsEndEffector={onMarkAsEndEffector}
+                onSelectJoint={selectHierarchyJoint}
+                onSelectLink={selectHierarchyLink}
+                onVisibilityToggle={onVisibilityToggle}
+                robot={robot}
+                selectedJoint={selectedJoint}
+                selectedLink={selectedLink}
+                structureLabels={structureLabels}
+                tree={hierarchyTree}
+                visibleJoints={visibleJoints}
+                visitedLinks={new Set()}
+              />
             </React.Fragment>
           );
         })}
