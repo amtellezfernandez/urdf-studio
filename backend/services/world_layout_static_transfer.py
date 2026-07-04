@@ -572,9 +572,9 @@ def _parse_rgba(color: str) -> tuple[float, float, float, float]:
     return DEFAULT_RGBA
 
 
-def _safe_sim_name(value: str, used_names: set[str], fallback: str) -> str:
+def _safe_sim_name(value: str, used_names: set[str], default_name: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9_]+", "_", value.strip()).strip("_")
-    base = f"wl_{normalized or fallback}"
+    base = f"wl_{normalized or default_name}"
     candidate = base
     suffix = 2
     while candidate in used_names:
