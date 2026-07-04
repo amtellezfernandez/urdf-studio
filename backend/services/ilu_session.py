@@ -128,10 +128,10 @@ def _read_session_payload(session_id: str) -> IluSessionMetadataPayload:
 def _metadata_string(
     payload: IluSessionMetadataPayload,
     field_name: str,
-    fallback: str = "",
+    default_value: str = "",
 ) -> str:
     value = payload.get(field_name)
-    return value if isinstance(value, str) else fallback
+    return value if isinstance(value, str) else default_value
 
 
 def _required_metadata_string(
@@ -160,11 +160,11 @@ def _coerce_loaded_source(raw: object) -> IluSessionLoadedSource | None:
         return None
 
 
-def _normalize_working_asset_path(value: str | None, fallback: str) -> str:
-    candidate = (value or fallback or "").replace("\\", "/").strip()
+def _normalize_working_asset_path(value: str | None, default_asset_path: str) -> str:
+    candidate = (value or default_asset_path or "").replace("\\", "/").strip()
     candidate = re.sub(r"/+", "/", candidate).lstrip("/")
     if not candidate:
-        candidate = fallback or "robot.urdf"
+        candidate = default_asset_path or "robot.urdf"
     candidate = re.sub(r"\.(urdf\.xacro|xacro)$", ".urdf", candidate, flags=re.IGNORECASE)
     return candidate
 
