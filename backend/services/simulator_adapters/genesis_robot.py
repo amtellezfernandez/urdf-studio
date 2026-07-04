@@ -22,7 +22,7 @@ class GenesisRobotUrdfMorphKwargs(TypedDict):
     visualization: bool
 
 
-def _flatten_finite_floats(value: Any) -> list[float]:
+def _flatten_finite_floats(value: object) -> list[float]:
     if hasattr(value, "detach"):
         value = value.detach()
     if hasattr(value, "cpu"):

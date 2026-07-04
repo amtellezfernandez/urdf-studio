@@ -150,14 +150,25 @@ def test_genesis_camera_attachment_links_are_unique_and_stable() -> None:
 
 
 def test_genesis_joint_dof_indices_ignore_boolean_values() -> None:
+    class _TensorLikeDofs:
+        def detach(self) -> _TensorLikeDofs:
+            return self
+
+        def cpu(self) -> _TensorLikeDofs:
+            return self
+
+        def numpy(self) -> np.ndarray:
+            return np.array([[3]])
+
     robot_entity = SimpleNamespace(
         joints=[
             SimpleNamespace(name="valid", dofs_idx_local=[[2]]),
+            SimpleNamespace(name="tensor", dofs_idx_local=_TensorLikeDofs()),
             SimpleNamespace(name="boolean", dofs_idx_local=True),
         ]
     )
 
-    assert joint_dof_indices_by_name(robot_entity) == {"valid": 2}
+    assert joint_dof_indices_by_name(robot_entity) == {"valid": 2, "tensor": 3}
 
 
 def test_genesis_apply_joint_values_uses_known_finite_joints_only() -> None:
