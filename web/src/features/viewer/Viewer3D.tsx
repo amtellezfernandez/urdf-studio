@@ -5224,7 +5224,7 @@ export const Viewer3D = ({
 
         {/* Runtime preview keeps only reset; full studio keeps the extended toolset. */}
         {viewerUi.showTopRightTools && (
-          <div className="absolute top-4 right-48 z-20 flex items-center gap-2">
+          <div className="absolute left-48 top-4 right-24 z-20 flex flex-nowrap items-center justify-end gap-2 overflow-x-auto overflow-y-hidden [&>*]:shrink-0">
             {!readOnlyMode && (
               <div className="relative">
                 <button
