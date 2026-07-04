@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, TypeAlias, TypedDict
 
 import numpy as np
 
@@ -14,6 +15,22 @@ from backend.services.simulator_adapters.camera_transfer import (
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
+
+GenesisVector3: TypeAlias = tuple[float, float, float]
+GenesisCameraViewerPose: TypeAlias = tuple[GenesisVector3, GenesisVector3, GenesisVector3, float]
+
+
+class GenesisObservationCameraSensorKwargs(TypedDict):
+    res: tuple[int, int]
+    pos: GenesisVector3
+    lookat: GenesisVector3
+    up: GenesisVector3
+    fov: float
+    near: float
+    far: float
+    offset_T: np.ndarray
+    entity_idx: int
+    link_idx_local: int
 
 
 def add_camera_marker_entity(gs: Any, scene: Any, camera: SimCameraSpec) -> None:
@@ -30,12 +47,7 @@ def add_camera_marker_entity(gs: Any, scene: Any, camera: SimCameraSpec) -> None
     )
 
 
-def camera_viewer_pose(camera: SimCameraSpec) -> tuple[
-    tuple[float, float, float],
-    tuple[float, float, float],
-    tuple[float, float, float],
-    float,
-]:
+def camera_viewer_pose(camera: SimCameraSpec) -> GenesisCameraViewerPose:
     forward = camera.render_forward_xyz
     lookat = tuple(camera.position_xyz[axis] + forward[axis] for axis in range(3))
     return camera.position_xyz, lookat, camera.render_up_xyz, camera.fov_deg
@@ -69,7 +81,7 @@ def transform_matrix(transform: Transform) -> np.ndarray:
     return matrix
 
 
-def robot_links_by_name(robot_entity: Any) -> dict[str, Any]:
+def robot_links_by_name(robot_entity: Any) -> dict[str, object]:
     return {
         getattr(link, "name", ""): link
         for link in getattr(robot_entity, "links", [])
@@ -104,7 +116,7 @@ def _integer_attr(value: Any) -> int | None:
 def observation_camera_sensor_kwargs(
     robot_entity: Any,
     camera: SimCameraSpec,
-) -> dict[str, Any] | None:
+) -> GenesisObservationCameraSensorKwargs | None:
     parent_link = robot_links_by_name(robot_entity).get(camera.parent_link)
     entity_idx = _integer_attr(getattr(robot_entity, "idx", None))
     link_idx_local = _integer_attr(getattr(parent_link, "idx_local", None))

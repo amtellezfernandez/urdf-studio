@@ -49,6 +49,34 @@ from backend.scripts.genesis_workspace_prepare import (
 )
 
 
+def _genesis_camera_spec(
+    *,
+    parent_link: str = "wrist_link",
+    render_local_pose: Transform | None = None,
+    render_world_pose: Transform | None = None,
+) -> SimCameraSpec:
+    return SimCameraSpec(
+        camera_id="cam-1",
+        name="Wrist camera",
+        sim_name="wrist_camera",
+        parent_joint="wrist_joint",
+        parent_link=parent_link,
+        render_local_pose=render_local_pose
+        or Transform(
+            position_xyz=(0.0, 0.0, 0.0),
+            rotation=Rotation.identity(),
+        ),
+        render_world_pose=render_world_pose
+        or Transform(
+            position_xyz=(1.0, 2.0, 3.0),
+            rotation=Rotation.identity(),
+        ),
+        fov_deg=65.0,
+        width=640,
+        height=480,
+    )
+
+
 def test_genesis_robot_morph_prefers_staged_urdf_materials(tmp_path: Path) -> None:
     robot_urdf_path = tmp_path / "robot.urdf"
     robot_urdf_path.write_text("<robot name=\"demo\"><link name=\"base\"/></robot>", encoding="utf-8")
@@ -528,21 +556,7 @@ def test_genesis_observation_camera_sensor_uses_native_entity_and_link_indices()
         position_xyz=(0.1, 0.2, 0.3),
         rotation=Rotation.from_euler("xyz", (0.0, 0.0, 0.5)),
     )
-    camera = SimCameraSpec(
-        camera_id="cam-1",
-        name="Wrist camera",
-        sim_name="wrist_camera",
-        parent_joint="wrist_joint",
-        parent_link="wrist_link",
-        render_local_pose=local_pose,
-        render_world_pose=Transform(
-            position_xyz=(1.0, 2.0, 3.0),
-            rotation=Rotation.identity(),
-        ),
-        fov_deg=65.0,
-        width=640,
-        height=480,
-    )
+    camera = _genesis_camera_spec(render_local_pose=local_pose)
 
     kwargs = observation_camera_sensor_kwargs(_FakeRobotEntity(), camera)
 
@@ -552,6 +566,20 @@ def test_genesis_observation_camera_sensor_uses_native_entity_and_link_indices()
     assert kwargs["res"] == (640, 480)
     assert kwargs["lookat"] == (1.0, 2.0, 2.0)
     assert np.allclose(kwargs["offset_T"][:3, 3], local_pose.position_xyz)
+
+
+def test_genesis_observation_camera_sensor_rejects_boolean_indices() -> None:
+    class _FakeLink:
+        name = "wrist_link"
+        idx_local = True
+
+    class _FakeRobotEntity:
+        idx = 2
+        links = [_FakeLink()]
+
+    kwargs = observation_camera_sensor_kwargs(_FakeRobotEntity(), _genesis_camera_spec())
+
+    assert kwargs is None
 
 
 def test_genesis_adds_mesh_object_when_asset_resolves(tmp_path: Path) -> None:
