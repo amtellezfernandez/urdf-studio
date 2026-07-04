@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Sequence, TypeAlias
+from collections.abc import Sequence
+from typing import Any, TypeAlias
 
 from backend.services.world_layout_transfer_constants import (
     COLOR_TOLERANCE,

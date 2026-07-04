@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 import re
 from pathlib import Path
-from typing import Any, Sequence, TypeAlias
+from typing import Any, TypeAlias
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -50,7 +51,7 @@ def _mujoco_geom_attrs(
     *,
     mesh_name: str | None = None,
 ) -> MujocoXmlAttributes:
-    attrs = {
+    attrs: MujocoXmlAttributes = {
         "name": primitive.sim_name,
         "type": "mesh" if mesh_name is not None else primitive.sim_type,
         "pos": _format_vec(primitive.position_xyz),
@@ -269,7 +270,11 @@ def _mujoco_geom_type_name(mujoco: Any, model: Any, geom_id: int) -> str | None:
     return None
 
 
-def _mujoco_geom_full_size(mujoco: Any, model: Any, geom_id: int) -> tuple[float, float, float] | None:
+def _mujoco_geom_full_size(
+    mujoco: Any,
+    model: Any,
+    geom_id: int,
+) -> tuple[float, float, float] | None:
     geom_type = int(model.geom_type[geom_id])
     size = model.geom_size[geom_id]
     if geom_type == int(mujoco.mjtGeom.mjGEOM_BOX):
