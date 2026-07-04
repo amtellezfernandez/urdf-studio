@@ -3,9 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from typing import Any
+from collections.abc import Mapping
+from typing import TypeAlias, cast
 
 from backend.models.world_scene_package import WorldScenePackageManifest
+
+WorldSceneJsonScalar: TypeAlias = str | int | float | bool | None
+WorldSceneJsonValue: TypeAlias = (
+    WorldSceneJsonScalar | list["WorldSceneJsonValue"] | dict[str, "WorldSceneJsonValue"]
+)
+WorldSceneJsonObject: TypeAlias = dict[str, WorldSceneJsonValue]
 
 
 def _expand_exponent_notation(number_text: str) -> str:
@@ -61,7 +68,7 @@ def _json_object_sort_key(key: str) -> bytes:
     return key.encode("utf-16-be")
 
 
-def _canonical_json_dump(payload: Any) -> str:
+def _canonical_json_dump(payload: WorldSceneJsonValue) -> str:
     if payload is None:
         return "null"
     if isinstance(payload, bool):
@@ -72,15 +79,16 @@ def _canonical_json_dump(payload: Any) -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     if isinstance(payload, list):
         return f"[{','.join(_canonical_json_dump(item) for item in payload)}]"
-    if isinstance(payload, dict):
+    if isinstance(payload, Mapping):
         if not all(isinstance(key, str) for key in payload):
             raise TypeError("World scene package JSON object keys must be strings.")
+        json_object = cast(Mapping[str, WorldSceneJsonValue], payload)
         fields = (
             (
                 f"{json.dumps(key, ensure_ascii=False, separators=(',', ':'))}:"
-                f"{_canonical_json_dump(payload[key])}"
+                f"{_canonical_json_dump(json_object[key])}"
             )
-            for key in sorted(payload, key=_json_object_sort_key)
+            for key in sorted(json_object, key=_json_object_sort_key)
         )
         return f"{{{','.join(fields)}}}"
     raise TypeError(f"Cannot canonicalize {type(payload).__name__} in world scene package JSON.")
@@ -91,11 +99,14 @@ def canonical_world_scene_package_json(manifest: WorldScenePackageManifest) -> s
     return _canonical_json_dump(payload)
 
 
-def world_scene_package_json_payload(manifest: WorldScenePackageManifest) -> dict[str, Any]:
-    payload = manifest.model_dump(mode="json")
+def world_scene_package_json_payload(manifest: WorldScenePackageManifest) -> WorldSceneJsonObject:
+    payload: WorldSceneJsonObject = manifest.model_dump(mode="json")
     if payload.get("description") is None:
         payload.pop("description", None)
-    for runtime_target in payload.get("runtime_targets", []):
+    runtime_targets = payload.get("runtime_targets", [])
+    if not isinstance(runtime_targets, list):
+        return payload
+    for runtime_target in runtime_targets:
         if isinstance(runtime_target, dict) and runtime_target.get("min_version") is None:
             runtime_target.pop("min_version", None)
     return payload
