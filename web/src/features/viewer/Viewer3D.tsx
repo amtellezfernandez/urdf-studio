@@ -16,11 +16,9 @@ import { resolveRobotRootLinkName } from "@/shared/lib/urdfRootLink";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
 import {
-  getPerpendicularDirection as getPerpendicularDirectionFromContract,
   localDirectionFromWorld,
   normalizeDirection,
   projectDirectionOntoPlane,
-  projectVectorOntoPlane as projectVectorOntoPlaneFromContract,
   resolveForwardWorldFromWheelAxes,
   worldDirectionFromLocal,
 } from "@/shared/lib/axisFrame";
@@ -52,11 +50,6 @@ import {
 } from "@/features/viewer/components/JointAxisVisualization";
 import { StudioWheelRoleMarkers } from "@/features/viewer/components/StudioWheelRoleMarkers";
 import { CameraIcons } from "@/features/camera/CameraIcons";
-import {
-  getCameraWorldPose,
-  resolveCameraParentLinkNameFromJoint,
-} from "@/features/camera/cameraWorldPose";
-import { computeOwnedLinkLocalVisualCentroid } from "@/features/camera/cameraAutoBounds";
 import { IKDragControls } from "@/features/viewer/IKDragControls";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { cn } from "@/shared/lib/utils";
@@ -172,7 +165,6 @@ import {
   buildContactPairKey,
   useAssemblyPlacementStore,
 } from "@/features/assembly/store/useAssemblyPlacementStore";
-import { enforcePlanarBasePose, FLAT_GROUND_HEIGHT_FN } from "@/features/locomotion/safety/planarClamp";
 import { isFeatureFlagEnabled, subscribeFeatureFlags } from "@/shared/config/featureFlags";
 import { buildMotionPartitions, createMotionKernel } from "@/features/viewer/motion-kernel";
 import {
@@ -236,6 +228,15 @@ import { WHEEL_PLAYBACK_MOTION_PARAMS } from "@/features/viewer/playback/wheelPl
 import { resolveShortestWheelAngleDeltaRad } from "@/features/viewer/playback/wheelAngleDelta";
 import { PREVIEW_READ_ONLY_NOTICE_PARAMS } from "@/features/viewer/previewReadOnlyNoticeParams";
 import { shouldShowPreviewReadOnlyNotice } from "@/features/viewer/previewReadOnlyNotice";
+import {
+  ROBOT_FRONT_LOCAL_FORWARD,
+  clampStudioPlanarPose,
+  cloneStudioUpAxis,
+  getPerpendicularDirection,
+  projectVectorOntoPlane,
+  resolveBaseCameraForwardLocal,
+  resolveBaseCameraLikeLinkForwardLocal,
+} from "@/features/viewer/studioRobotFrame";
 import {
   isObjectTargetInteractionActive,
   shouldShowRoverApproachGuideForSelectedObject,
@@ -2098,90 +2099,6 @@ const ASSEMBLY_MAGNETIC_LOCK_RELEASE_TOLERANCE_M = 0.26;
 const ASSEMBLY_AXIS_SNAP_TOLERANCE_M = 0.05;
 const ASSEMBLY_AXIS_ASSIST_RANGE_M = 0.24;
 const ASSEMBLY_WHEEL_DRAG_MIN_PROGRESS_RATIO = 0.22;
-const DOMINANT_AXIS_THRESHOLD = 0.9;
-const STUDIO_PLANAR_EPSILON = 1e-6;
-const STUDIO_WORLD_UP_AXIS = new THREE.Vector3(0, 0, 1);
-const ROBOT_FRONT_LOCAL_FORWARD = new THREE.Vector3(1, 0, 0);
-const ROBOT_FRONT_CAMERA_DIRECTION_EPSILON = 1e-10;
-const CAMERA_LIKE_LINK_NAME_PATTERN = /(camera|cam)/i;
-const ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH = 4;
-
-type StudioPlanarClampReason = "y" | "roll" | "pitch";
-
-type StudioPlanarClampResult = {
-  clamped: boolean;
-  reasons: StudioPlanarClampReason[];
-  floorHeight: number;
-};
-
-const cloneStudioUpAxis = () => STUDIO_WORLD_UP_AXIS.clone();
-
-const clampStudioPlanarPose = (
-  targetRobot: URDFRobot,
-  runtimeUp = cloneStudioUpAxis()
-): StudioPlanarClampResult => {
-  const dominantAxis = getDominantAxis(runtimeUp);
-  if (dominantAxis === "y" && Math.abs(runtimeUp.y) >= DOMINANT_AXIS_THRESHOLD) {
-    const clampResult = enforcePlanarBasePose(targetRobot, {
-      groundHeightFn: FLAT_GROUND_HEIGHT_FN,
-      epsilon: STUDIO_PLANAR_EPSILON,
-      lockRollPitch: true,
-      updateMatrixWorld: false,
-    });
-    if (clampResult.clamped) {
-      targetRobot.updateMatrixWorld(true);
-    }
-    return clampResult;
-  }
-
-  const reasons: StudioPlanarClampReason[] = [];
-  if (dominantAxis === "z") {
-    if (Math.abs(targetRobot.position.z) > STUDIO_PLANAR_EPSILON) {
-      targetRobot.position.z = 0;
-      reasons.push("y");
-    }
-    if (Math.abs(targetRobot.rotation.x) > STUDIO_PLANAR_EPSILON) {
-      targetRobot.rotation.x = 0;
-      reasons.push("roll");
-    }
-    if (Math.abs(targetRobot.rotation.y) > STUDIO_PLANAR_EPSILON) {
-      targetRobot.rotation.y = 0;
-      reasons.push("pitch");
-    }
-  } else {
-    if (Math.abs(targetRobot.position.x) > STUDIO_PLANAR_EPSILON) {
-      targetRobot.position.x = 0;
-      reasons.push("y");
-    }
-    if (Math.abs(targetRobot.rotation.y) > STUDIO_PLANAR_EPSILON) {
-      targetRobot.rotation.y = 0;
-      reasons.push("roll");
-    }
-    if (Math.abs(targetRobot.rotation.z) > STUDIO_PLANAR_EPSILON) {
-      targetRobot.rotation.z = 0;
-      reasons.push("pitch");
-    }
-  }
-  if (reasons.length > 0) {
-    targetRobot.updateMatrixWorld(true);
-  }
-  return {
-    clamped: reasons.length > 0,
-    reasons,
-    floorHeight: 0,
-  };
-};
-
-const getDominantAxis = (
-  axis: THREE.Vector3
-): "x" | "y" | "z" => {
-  const absX = Math.abs(axis.x);
-  const absY = Math.abs(axis.y);
-  const absZ = Math.abs(axis.z);
-  if (absX >= absY && absX >= absZ) return "x";
-  if (absY >= absX && absY >= absZ) return "y";
-  return "z";
-};
 
 const isFinitePositiveMotionDimension = (value: number | null | undefined): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > Number.EPSILON;
@@ -2215,170 +2132,6 @@ const resolveRoverApproachRobotFootprint = ({
     halfLengthM: projectedLengthM * 0.5,
     halfWidthM: projectedWidthM * 0.5,
   };
-};
-
-const projectVectorOntoPlane = (vector: THREE.Vector3, planeNormal: THREE.Vector3): THREE.Vector3 => {
-  return projectVectorOntoPlaneFromContract(vector, planeNormal);
-};
-
-const getPerpendicularDirection = (upAxis: THREE.Vector3): THREE.Vector3 => {
-  return getPerpendicularDirectionFromContract(upAxis, new THREE.Vector3(1, 0, 0));
-};
-
-const resolveLinkDepthByName = (
-  robot: URDFRobot,
-  rootLinkName: string
-): Map<string, number> => {
-  const depthByLinkName = new Map<string, number>([[rootLinkName, 0]]);
-  const rootLink =
-    (robot.links?.[rootLinkName] as THREE.Object3D | undefined) ??
-    robot.getObjectByName?.(rootLinkName) ??
-    null;
-  if (!rootLink) return depthByLinkName;
-
-  const queue: Array<{ linkObject: THREE.Object3D; depth: number }> = [{ linkObject: rootLink, depth: 0 }];
-  while (queue.length > 0) {
-    const entry = queue.shift();
-    if (!entry) continue;
-    const { linkObject, depth } = entry;
-    linkObject.children.forEach((child) => {
-      const joint = child as URDFJoint & { isURDFJoint?: boolean };
-      if (!joint.isURDFJoint) return;
-      joint.children.forEach((jointChild) => {
-        const linkChild = jointChild as THREE.Object3D & { isURDFLink?: boolean };
-        if (!linkChild.isURDFLink || !linkChild.name) return;
-        if (depthByLinkName.has(linkChild.name)) return;
-        const nextDepth = depth + 1;
-        depthByLinkName.set(linkChild.name, nextDepth);
-        queue.push({ linkObject: linkChild, depth: nextDepth });
-      });
-    });
-  }
-
-  return depthByLinkName;
-};
-
-const resolveBaseCameraForwardLocal = ({
-  robot,
-  cameras,
-  rootLinkName,
-  worldUp,
-}: {
-  robot: URDFRobot;
-  cameras: RobotCamera[];
-  rootLinkName: string | null;
-  worldUp: THREE.Vector3;
-}): THREE.Vector3 | null => {
-  if (!rootLinkName || cameras.length === 0) return null;
-  const depthByLinkName = resolveLinkDepthByName(robot, rootLinkName);
-  const localUp = localDirectionFromWorld(worldUp, robot.quaternion);
-  const centroidWorld = new THREE.Vector3();
-  let bestDirection: THREE.Vector3 | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let bestDepth = Number.POSITIVE_INFINITY;
-
-  cameras.forEach((camera) => {
-    const parentLinkName = resolveCameraParentLinkNameFromJoint(robot, camera.parent_joint);
-    if (!parentLinkName) return;
-    const linkDepth = depthByLinkName.get(parentLinkName);
-    if (typeof linkDepth !== "number") return;
-    if (linkDepth > ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH) return;
-    const { position: cameraWorldPosition } = getCameraWorldPose(robot, camera, {
-      updateRobotWorld: false,
-    });
-    const cameraLocalPosition = robot.worldToLocal(cameraWorldPosition.clone());
-    const planarDirection = projectDirectionOntoPlane(
-      cameraLocalPosition,
-      localUp,
-      ROBOT_FRONT_LOCAL_FORWARD.clone()
-    );
-    let planarLengthSq = planarDirection.lengthSq();
-    if (planarLengthSq <= ROBOT_FRONT_CAMERA_DIRECTION_EPSILON) {
-      const parentLinkObject =
-        (robot.links?.[parentLinkName] as THREE.Object3D | undefined) ??
-        robot.getObjectByName?.(parentLinkName) ??
-        null;
-      if (!parentLinkObject) return;
-      const localCentroid = computeOwnedLinkLocalVisualCentroid(parentLinkObject);
-      if (!localCentroid) return;
-      centroidWorld.copy(localCentroid).applyMatrix4(parentLinkObject.matrixWorld);
-      cameraLocalPosition.copy(robot.worldToLocal(centroidWorld.clone()));
-      planarDirection.copy(
-        projectDirectionOntoPlane(
-          cameraLocalPosition,
-          localUp,
-          ROBOT_FRONT_LOCAL_FORWARD.clone()
-        )
-      );
-      planarLengthSq = planarDirection.lengthSq();
-      if (planarLengthSq <= ROBOT_FRONT_CAMERA_DIRECTION_EPSILON) return;
-    }
-    planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
-    const score = planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD);
-    if (linkDepth > bestDepth) return;
-    if (linkDepth === bestDepth && score <= bestScore) return;
-    bestDepth = linkDepth;
-    bestScore = score;
-    bestDirection = planarDirection.clone();
-  });
-
-  return bestDirection;
-};
-
-const resolveBaseCameraLikeLinkForwardLocal = ({
-  robot,
-  rootLinkName,
-  worldUp,
-}: {
-  robot: URDFRobot;
-  rootLinkName: string | null;
-  worldUp: THREE.Vector3;
-}): THREE.Vector3 | null => {
-  if (!rootLinkName) return null;
-  const depthByLinkName = resolveLinkDepthByName(robot, rootLinkName);
-  const localUp = localDirectionFromWorld(worldUp, robot.quaternion);
-  const worldPosition = new THREE.Vector3();
-  const worldCentroid = new THREE.Vector3();
-  let bestDirection: THREE.Vector3 | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let bestDepth = Number.POSITIVE_INFINITY;
-
-  depthByLinkName.forEach((linkDepth, linkName) => {
-    if (linkName === rootLinkName) return;
-    if (linkDepth > ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH) return;
-    if (!CAMERA_LIKE_LINK_NAME_PATTERN.test(linkName)) return;
-    const linkObject =
-      (robot.links?.[linkName] as THREE.Object3D | undefined) ??
-      robot.getObjectByName?.(linkName) ??
-      null;
-    if (!linkObject) return;
-
-    linkObject.updateMatrixWorld(true);
-    const localCentroid = computeOwnedLinkLocalVisualCentroid(linkObject);
-    if (localCentroid) {
-      worldCentroid.copy(localCentroid).applyMatrix4(linkObject.matrixWorld);
-      worldPosition.copy(worldCentroid);
-    } else {
-      linkObject.getWorldPosition(worldPosition);
-    }
-    const linkLocalPosition = robot.worldToLocal(worldPosition.clone());
-    const planarDirection = projectDirectionOntoPlane(
-      linkLocalPosition,
-      localUp,
-      ROBOT_FRONT_LOCAL_FORWARD.clone()
-    );
-    const planarLengthSq = planarDirection.lengthSq();
-    if (planarLengthSq <= ROBOT_FRONT_CAMERA_DIRECTION_EPSILON) return;
-    planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
-    const score = planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD);
-    if (linkDepth > bestDepth) return;
-    if (linkDepth === bestDepth && score <= bestScore) return;
-    bestDepth = linkDepth;
-    bestScore = score;
-    bestDirection = planarDirection.clone();
-  });
-
-  return bestDirection;
 };
 
 const areSortedStringListsEqual = (
@@ -4333,7 +4086,7 @@ export const Viewer3D = ({
           frameHasBasePose &&
           previousPlaybackState
         ) {
-          const planarTranslationDelta = projectVectorOntoPlaneFromContract(
+          const planarTranslationDelta = projectVectorOntoPlane(
             robot.position.clone().sub(previousPlaybackState.position),
             upAxis
           );
