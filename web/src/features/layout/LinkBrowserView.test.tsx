@@ -113,8 +113,8 @@ describe("LinkBrowserView", () => {
       Array.from(container.querySelectorAll("button"))
         .find((button) => button.textContent === "ARM")
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      Array.from(container.querySelectorAll("span"))
-        .find((span) => span.textContent === "link_b")
+      container
+        .querySelector('[data-link-browser-row="link_b"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       Array.from(container.querySelectorAll("button"))
         .find((button) => button.textContent === "Add Col")
