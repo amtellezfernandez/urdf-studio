@@ -7,9 +7,17 @@ import { useObjectStore } from "@/features/objects";
 import { resolveTrackingReference } from "@/features/viewer/trackingTarget";
 import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
 import { LabeledNumberField } from "@/features/layout/sidebarNumberField";
+import {
+  normalizeDegrees360,
+  normalizeOrbitStartPoint,
+  resolveObjectEditorKeyboardCommand,
+  resolveObjectReferenceSelectValue,
+  resolveTrackedJointValueFromSelection,
+  toObjectEditModeLabel,
+  type ObjectEditMode,
+  type ObjectTransformSpace,
+} from "@/features/layout/objectEditorPanelHelpers";
 
-type ObjectEditMode = "move" | "rotate" | "resize";
-type ObjectTransformSpace = "world" | "local";
 type ObjectVectorAxis = "x" | "y" | "z";
 
 type ObjectVectorFieldsProps = {
@@ -46,29 +54,6 @@ const OBJECT_EDITOR_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
 
 const OBJECT_EDIT_MODES: ObjectEditMode[] = ["move", "rotate", "resize"];
 const OBJECT_TRANSFORM_SPACES: ObjectTransformSpace[] = ["world", "local"];
-
-const toObjectEditModeLabel = (mode: ObjectEditMode): string => {
-  if (mode === "move") return "Move";
-  if (mode === "rotate") return "Rotate";
-  return "Resize";
-};
-
-const normalizeOrbitStartPoint = (
-  value: "center" | "primary" | "secondary" | undefined
-): "primary" | "secondary" => (value && value !== "center" ? value : "primary");
-
-const normalizeDegrees360 = (value: number): number => ((value % 360) + 360) % 360;
-
-const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName.toLowerCase();
-  return (
-    tag === "input" ||
-    tag === "textarea" ||
-    tag === "select" ||
-    target.isContentEditable
-  );
-};
 
 function ObjectVectorFields({
   min,
@@ -211,87 +196,42 @@ export const ObjectEditorPanel = ({
     if (!selectedObject) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isEditableKeyboardTarget(event.target)) return;
-
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.shiftKey) {
-          redoObjectEdit();
-        } else {
-          undoObjectEdit();
-        }
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "y") {
-        event.preventDefault();
-        event.stopPropagation();
-        redoObjectEdit();
-        return;
-      }
-      if (event.key.toLowerCase() === "g") {
-        event.preventDefault();
-        event.stopPropagation();
-        selectObjectEditMode("move");
-        return;
-      }
-      if (event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        event.stopPropagation();
-        selectObjectEditMode("resize");
-        return;
-      }
-      if (event.key.toLowerCase() === "r") {
-        event.preventDefault();
-        event.stopPropagation();
-        selectObjectEditMode("rotate");
-        return;
-      }
-      if (event.key.toLowerCase() === "q") {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleObjectTransformSpace();
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        selectObjectEditMode("move");
-        return;
-      }
-
-      const baseStep = event.metaKey || event.ctrlKey ? 0.002 : 0.01;
-      const step = event.altKey ? 0.05 : baseStep;
-      const nextPosition = selectedObject.position.clone();
-
-      switch (event.key) {
-        case "ArrowLeft":
-          nextPosition.x -= step;
-          break;
-        case "ArrowRight":
-          nextPosition.x += step;
-          break;
-        case "ArrowUp":
-          if (event.shiftKey) {
-            nextPosition.z += step;
-          } else {
-            nextPosition.y += step;
-          }
-          break;
-        case "ArrowDown":
-          if (event.shiftKey) {
-            nextPosition.z -= step;
-          } else {
-            nextPosition.y -= step;
-          }
-          break;
-        default:
-          return;
-      }
+      const command = resolveObjectEditorKeyboardCommand({
+        key: event.key,
+        modifiers: {
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+        },
+        position: selectedObject.position,
+        target: event.target,
+      });
+      if (!command) return;
 
       event.preventDefault();
       event.stopPropagation();
-      updateObjectPosition(selectedObject.id, nextPosition);
+
+      if (command.type === "undo") {
+        undoObjectEdit();
+        return;
+      }
+      if (command.type === "redo") {
+        redoObjectEdit();
+        return;
+      }
+      if (command.type === "toggleTransformSpace") {
+        toggleObjectTransformSpace();
+        return;
+      }
+      if (command.type === "selectMode") {
+        selectObjectEditMode(command.mode);
+        return;
+      }
+
+      if (command.type === "updatePosition") {
+        updateObjectPosition(selectedObject.id, command.position);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -452,20 +392,16 @@ export const ObjectEditorPanel = ({
           <BlenderPropertyRow label="Reference" labelWidth="w-16">
             <Select
               value={
-                selectedObject.trackedJointName
-                  ? selectedObject.trackedJointName
-                  : endEffectorLink
-                    ? "__end_effector__"
-                    : "none"
+                resolveObjectReferenceSelectValue({
+                  trackedJointName: selectedObject.trackedJointName,
+                  endEffectorLink,
+                })
               }
               onValueChange={(value) => {
-                if (value === "none") {
-                  updateTrackedJoint(selectedObject.id, null);
-                } else if (value === "__end_effector__") {
-                  updateTrackedJoint(selectedObject.id, null);
-                } else {
-                  updateTrackedJoint(selectedObject.id, value);
-                }
+                updateTrackedJoint(
+                  selectedObject.id,
+                  resolveTrackedJointValueFromSelection(value)
+                );
               }}
             >
               <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
