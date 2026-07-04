@@ -21,7 +21,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { parseCameraConfig } from "@/features/camera";
 import { useGPUMode } from "@/shared/hooks/use-gpu-mode";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { Button } from "@/shared/ui/button";
@@ -49,6 +48,7 @@ import {
   writeStoredString,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
+import { useCameraConfigSourceController } from "@/app/pages/index/useCameraConfigSourceController";
 
 type CoreFolderUploadScreenProps = SourceEntryActions;
 
@@ -82,14 +82,11 @@ export const CoreFolderUploadScreen = ({
   const [githubUrdfPath, setGithubUrdfPath] = useState("");
   const [urlSource, setUrlSource] = useState("");
   const [worldLayoutUrl, setWorldLayoutUrl] = useState("");
-  const [cameraConfigUrl, setCameraConfigUrl] = useState("");
   const [robotSourceDropActive, setRobotSourceDropActive] = useState(false);
   const [worldSourceDropActive, setWorldSourceDropActive] = useState(false);
-  const [cameraSourceDropActive, setCameraSourceDropActive] = useState(false);
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [isLoadingWorldLayout, setIsLoadingWorldLayout] = useState(false);
-  const [isLoadingCameraConfig, setIsLoadingCameraConfig] = useState(false);
   const [isLoadingSetup, setIsLoadingSetup] = useState(false);
   const [loadedRobotName, setLoadedRobotName] = useState<string | null>(null);
   const [loadedWorldLayoutName, setLoadedWorldLayoutName] = useState<string | null>(null);
@@ -97,18 +94,26 @@ export const CoreFolderUploadScreen = ({
   const [lastLocalFolder, setLastLocalFolder] = useState<string | null>(() =>
     readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey)
   );
-  const [lastLocalCameraConfig, setLastLocalCameraConfig] = useState<string | null>(() =>
-    readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalCameraConfigStorageKey)
-  );
   const [lastLocalWorldLayout, setLastLocalWorldLayout] = useState<string | null>(() =>
     readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey)
-  );
-  const [recentCameraConfigs, setRecentCameraConfigs] = useState<string[]>(() =>
-    readStoredJsonArray(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentCameraConfigsStorageKey)
   );
   const [recentWorldLayouts, setRecentWorldLayouts] = useState<string[]>(() =>
     readStoredJsonArray(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey)
   );
+  const {
+    cameraConfigUrl,
+    cameraSourceDropActive,
+    clearLastLocalCameraConfig,
+    handleCameraConfigFileSelect,
+    handleCameraSourceDrop,
+    isLoadingCameraConfig,
+    lastLocalCameraConfig,
+    loadCameraConfigFromUrl,
+    recentCameraConfigs,
+    removeRecentCameraConfig,
+    setCameraConfigUrl,
+    setCameraSourceDropActive,
+  } = useCameraConfigSourceController({ loadCameras });
 
   const logoUrl = `${import.meta.env.BASE_URL}assets/urdf-studio-logo.png`;
   const entryLoadInteractionsDisabled = isLoadingSetup;
@@ -318,86 +323,6 @@ export const CoreFolderUploadScreen = ({
       void processWorldLayoutFiles(files);
     },
     [processWorldLayoutFiles]
-  );
-
-  const applyCameraConfig = useCallback(
-    (cameraConfig: Parameters<typeof loadCameras>[0], sourceLabel: string): void => {
-      loadCameras(cameraConfig);
-      toast.success(`Loaded ${cameraConfig.cameras.length} camera(s) from ${sourceLabel}.`);
-    },
-    [loadCameras]
-  );
-
-  const loadCameraConfigFromUrl = useCallback(
-    async (inputUrl: string): Promise<void> => {
-      const normalizedUrl = inputUrl.trim();
-      if (!normalizedUrl) {
-        toast.error("Please enter a camera config URL.");
-        return;
-      }
-      setIsLoadingCameraConfig(true);
-      try {
-        const response = await fetch(normalizedUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch camera config (${response.status}).`);
-        }
-        const content = await response.text();
-        const filename = deriveSourceLabel(normalizedUrl, "camera-config.json");
-        applyCameraConfig(parseCameraConfig(content, filename), normalizedUrl);
-        setRecentCameraConfigs(addRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentCameraConfigsStorageKey, normalizedUrl));
-        setCameraConfigUrl(normalizedUrl);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to import camera configuration.";
-        toast.error(message);
-      } finally {
-        setIsLoadingCameraConfig(false);
-      }
-    },
-    [applyCameraConfig]
-  );
-
-  const processCameraConfigFile = useCallback(
-    async (file: File): Promise<void> => {
-      setIsLoadingCameraConfig(true);
-      try {
-        const content = await file.text();
-        applyCameraConfig(parseCameraConfig(content, file.name), file.name);
-        setLastLocalCameraConfig(file.name);
-        writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalCameraConfigStorageKey, file.name);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to import camera configuration.";
-        toast.error(message);
-      } finally {
-        setIsLoadingCameraConfig(false);
-      }
-    },
-    [applyCameraConfig]
-  );
-
-  const handleCameraConfigFileSelect = useCallback(
-    (event: ChangeEvent<HTMLInputElement>): void => {
-      const file = event.currentTarget.files?.[0];
-      if (file) void processCameraConfigFile(file);
-      event.currentTarget.value = "";
-    },
-    [processCameraConfigFile]
-  );
-
-  const handleCameraSourceDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>): void => {
-      event.preventDefault();
-      event.stopPropagation();
-      setCameraSourceDropActive(false);
-      const file = event.dataTransfer.files?.[0];
-      if (!file) {
-        toast.error("No local file was dropped.");
-        return;
-      }
-      void processCameraConfigFile(file);
-    },
-    [processCameraConfigFile]
   );
 
   const handleLoadSetup = useCallback(async (): Promise<void> => {
@@ -626,15 +551,10 @@ export const CoreFolderUploadScreen = ({
           emptyLabel="No recent camera configs yet."
           entries={recentCameraConfigs}
           onLoadUrl={loadCameraConfigFromUrl}
-          onRemoveUrl={(url) => {
-            setRecentCameraConfigs(removeRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentCameraConfigsStorageKey, url));
-          }}
+          onRemoveUrl={removeRecentCameraConfig}
           lastLocalLabel={lastLocalCameraConfig}
           onBrowseLocal={() => cameraConfigFileInputRef.current?.click()}
-          onClearLocal={() => {
-            setLastLocalCameraConfig(null);
-            writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalCameraConfigStorageKey, null);
-          }}
+          onClearLocal={clearLastLocalCameraConfig}
         />
       )}
     </SourcePanel>
