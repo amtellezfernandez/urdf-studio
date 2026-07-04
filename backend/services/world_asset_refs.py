@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
 
 PORTABLE_WORLD_ASSET_REF_ERROR = "must be a portable relative asset reference"
 WORLD_OBJECT_ASSET_REF_KEYS = (
@@ -39,7 +39,7 @@ def normalize_portable_world_asset_ref(value: str) -> str:
     return normalized
 
 
-def read_world_object_asset_ref(value: Mapping[str, Any]) -> WorldObjectAssetRef | None:
+def read_world_object_asset_ref(value: Mapping[str, object]) -> WorldObjectAssetRef | None:
     for key in WORLD_OBJECT_ASSET_REF_KEYS:
         asset_ref = value.get(key)
         if isinstance(asset_ref, str) and asset_ref.strip():

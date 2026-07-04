@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
 
 from backend.services.simulator_adapters.robot_repair_profiles import (
     GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
@@ -63,7 +62,7 @@ def _compatibility_patch_profile_id(patch_id: str) -> str:
     return patch_id
 
 
-def _patch_id_list(value: Any, path: str) -> tuple[str, ...]:
+def _patch_id_list(value: object, path: str) -> tuple[str, ...]:
     if value is None:
         return ()
     if not isinstance(value, list):
@@ -76,7 +75,9 @@ def _patch_id_list(value: Any, path: str) -> tuple[str, ...]:
     return tuple(patch_ids)
 
 
-def genesis_robot_compatibility_patch_ids_from_world_package(world_package: Any) -> tuple[str, ...]:
+def genesis_robot_compatibility_patch_ids_from_world_package(
+    world_package: object,
+) -> tuple[str, ...]:
     provenance = getattr(world_package, "provenance", None)
     if not isinstance(provenance, Mapping):
         return ()
