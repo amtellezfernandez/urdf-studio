@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDisplayStore } from "@/features/displays/useDisplayStore";
 
@@ -40,5 +40,29 @@ describe("useDisplayStore", () => {
     const after = useDisplayStore.getState();
     expect(after.displays.trajectory.status).toBe("ok");
     expect(after.displays.trajectory.metrics.points).toBe(42);
+  });
+
+  it("applies only valid persisted display enabled states", async () => {
+    const storageKey = "urdfstudio:displayManager:v1";
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        markers: { enabled: false },
+        robot_model: { enabled: "no" },
+        tf_frames: null,
+        trajectory: true,
+        unknown_display: { enabled: false },
+      })
+    );
+
+    vi.resetModules();
+    const { useDisplayStore: freshDisplayStore } = await import("@/features/displays/useDisplayStore");
+    const displays = freshDisplayStore.getState().displays;
+
+    expect(displays.markers.enabled).toBe(false);
+    expect(displays.robot_model.enabled).toBe(true);
+    expect(displays.tf_frames.enabled).toBe(true);
+    expect(displays.trajectory.enabled).toBe(true);
+    expect(displays.diagnostics_overlay.enabled).toBe(true);
   });
 });

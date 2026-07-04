@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { createDefaultDisplays } from "@/features/displays/displayRegistry";
+import { DISPLAY_ORDER, createDefaultDisplays } from "@/features/displays/displayRegistry";
 import {
   readBrowserStorageItem,
   writeBrowserStorageItem,
@@ -46,12 +46,28 @@ const PROFILE_PRESETS: Record<ViewerProfile, Record<DisplayKind, boolean>> = {
   },
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const normalizeStoredState = (value: unknown): StoredDisplayState => {
+  if (!isRecord(value)) return {};
+
+  return DISPLAY_ORDER.reduce<StoredDisplayState>((state, kind) => {
+    const storedDisplay = value[kind];
+    if (!isRecord(storedDisplay) || typeof storedDisplay.enabled !== "boolean") {
+      return state;
+    }
+    state[kind] = { enabled: storedDisplay.enabled };
+    return state;
+  }, {});
+};
+
 const readStoredState = (): StoredDisplayState => {
   if (typeof window === "undefined") return {};
   try {
     const raw = readBrowserStorageItem(STORAGE_KEY);
     if (!raw) return {};
-    return JSON.parse(raw) as StoredDisplayState;
+    return normalizeStoredState(JSON.parse(raw) as unknown);
   } catch {
     return {};
   }
