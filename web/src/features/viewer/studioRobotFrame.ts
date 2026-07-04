@@ -26,6 +26,11 @@ export const ROBOT_FRONT_LOCAL_FORWARD = new THREE.Vector3(1, 0, 0);
 const CAMERA_LIKE_LINK_NAME_PATTERN = /(camera|cam)/i;
 
 type DominantAxisName = "x" | "y" | "z";
+type BaseForwardCandidate = {
+  depth: number;
+  direction: THREE.Vector3;
+  score: number;
+};
 
 export const cloneStudioUpAxis = () => STUDIO_WORLD_UP_AXIS.clone();
 
@@ -44,6 +49,32 @@ const getDominantAxis = (axis: THREE.Vector3): DominantAxisName => {
   if (absX >= absY && absX >= absZ) return "x";
   if (absY >= absX && absY >= absZ) return "y";
   return "z";
+};
+
+const choosePreferredBaseForwardCandidate = (
+  current: BaseForwardCandidate | null,
+  next: BaseForwardCandidate
+): BaseForwardCandidate => {
+  if (!current) return next;
+  if (next.depth < current.depth) return next;
+  if (next.depth > current.depth) return current;
+  return next.score > current.score ? next : current;
+};
+
+const resolveBaseForwardCandidateFromPlanarDirection = (
+  linkDepth: number,
+  planarDirection: THREE.Vector3
+): BaseForwardCandidate | null => {
+  const planarLengthSq = planarDirection.lengthSq();
+  if (planarLengthSq <= STUDIO_ROBOT_FRAME_PARAMS.frontCameraDirectionEpsilon) {
+    return null;
+  }
+  planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
+  return {
+    depth: linkDepth,
+    direction: planarDirection.clone(),
+    score: planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD),
+  };
 };
 
 export const clampStudioPlanarPose = (
@@ -155,9 +186,7 @@ export const resolveBaseCameraForwardLocal = ({
   const depthByLinkName = resolveLinkDepthByName(robot, rootLinkName);
   const localUp = localDirectionFromWorld(worldUp, robot.quaternion);
   const centroidWorld = new THREE.Vector3();
-  let bestDirection: THREE.Vector3 | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let bestDepth = Number.POSITIVE_INFINITY;
+  let bestCandidate: BaseForwardCandidate | null = null;
 
   cameras.forEach((camera) => {
     const parentLinkName = resolveCameraParentLinkNameFromJoint(robot, camera.parent_joint);
@@ -195,16 +224,12 @@ export const resolveBaseCameraForwardLocal = ({
       planarLengthSq = planarDirection.lengthSq();
       if (planarLengthSq <= STUDIO_ROBOT_FRAME_PARAMS.frontCameraDirectionEpsilon) return;
     }
-    planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
-    const score = planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD);
-    if (linkDepth > bestDepth) return;
-    if (linkDepth === bestDepth && score <= bestScore) return;
-    bestDepth = linkDepth;
-    bestScore = score;
-    bestDirection = planarDirection.clone();
+    const candidate = resolveBaseForwardCandidateFromPlanarDirection(linkDepth, planarDirection);
+    if (!candidate) return;
+    bestCandidate = choosePreferredBaseForwardCandidate(bestCandidate, candidate);
   });
 
-  return bestDirection;
+  return bestCandidate?.direction ?? null;
 };
 
 export const resolveBaseCameraLikeLinkForwardLocal = ({
@@ -221,9 +246,7 @@ export const resolveBaseCameraLikeLinkForwardLocal = ({
   const localUp = localDirectionFromWorld(worldUp, robot.quaternion);
   const worldPosition = new THREE.Vector3();
   const worldCentroid = new THREE.Vector3();
-  let bestDirection: THREE.Vector3 | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let bestDepth = Number.POSITIVE_INFINITY;
+  let bestCandidate: BaseForwardCandidate | null = null;
 
   depthByLinkName.forEach((linkDepth, linkName) => {
     if (linkName === rootLinkName) return;
@@ -249,16 +272,10 @@ export const resolveBaseCameraLikeLinkForwardLocal = ({
       localUp,
       ROBOT_FRONT_LOCAL_FORWARD.clone()
     );
-    const planarLengthSq = planarDirection.lengthSq();
-    if (planarLengthSq <= STUDIO_ROBOT_FRAME_PARAMS.frontCameraDirectionEpsilon) return;
-    planarDirection.multiplyScalar(1 / Math.sqrt(planarLengthSq));
-    const score = planarDirection.dot(ROBOT_FRONT_LOCAL_FORWARD);
-    if (linkDepth > bestDepth) return;
-    if (linkDepth === bestDepth && score <= bestScore) return;
-    bestDepth = linkDepth;
-    bestScore = score;
-    bestDirection = planarDirection.clone();
+    const candidate = resolveBaseForwardCandidateFromPlanarDirection(linkDepth, planarDirection);
+    if (!candidate) return;
+    bestCandidate = choosePreferredBaseForwardCandidate(bestCandidate, candidate);
   });
 
-  return bestDirection;
+  return bestCandidate?.direction ?? null;
 };
