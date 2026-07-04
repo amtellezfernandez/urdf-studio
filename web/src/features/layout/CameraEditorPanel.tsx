@@ -27,6 +27,7 @@ import {
   radToDeg,
   updateCameraPoseField,
 } from "@/features/layout/cameraEditorPanelHelpers";
+import type { Camera, CameraIntrinsics } from "@/shared/types/camera";
 
 export interface CameraEditorPanelProps {
   cameraId: string;
@@ -43,6 +44,78 @@ const CameraNumberField = (
   props: Omit<LabeledNumberFieldProps, "labelClassName">
 ) => <LabeledNumberField {...props} labelClassName={CAMERA_FIELD_LABEL_CLASS} />;
 
+type CameraPoseAxisFieldProps = {
+  axisIndex: 0 | 1 | 2;
+  cameraId: string;
+  className: string;
+  field: "xyz" | "rpy";
+  label: string;
+  pose: Camera["pose"];
+  step: number;
+  toDisplayValue?: (value: number) => number;
+  toStoredValue?: (value: number) => number;
+  updatePoseField: (
+    cameraId: string,
+    pose: Camera["pose"],
+    field: "xyz" | "rpy",
+    axisIndex: 0 | 1 | 2,
+    nextValue: number
+  ) => void;
+};
+
+type CameraIntrinsicsFieldProps = {
+  className: string;
+  label: string;
+  max?: number;
+  min?: number;
+  onValueChange: (value: number) => void;
+  step: number;
+  value: number;
+};
+
+const CameraPoseAxisField = ({
+  axisIndex,
+  cameraId,
+  className,
+  field,
+  label,
+  pose,
+  step,
+  toDisplayValue = (value) => value,
+  toStoredValue = (value) => value,
+  updatePoseField,
+}: CameraPoseAxisFieldProps) => (
+  <CameraNumberField
+    label={label}
+    value={toDisplayValue(pose[field][axisIndex])}
+    onValueChange={(nextValue) =>
+      updatePoseField(cameraId, pose, field, axisIndex, toStoredValue(nextValue))
+    }
+    step={step}
+    className={className}
+  />
+);
+
+const CameraIntrinsicsField = ({
+  className,
+  label,
+  max,
+  min,
+  onValueChange,
+  step,
+  value,
+}: CameraIntrinsicsFieldProps) => (
+  <CameraNumberField
+    label={label}
+    value={value}
+    onValueChange={onValueChange}
+    step={step}
+    min={min}
+    max={max}
+    className={className}
+  />
+);
+
 export const CameraEditorPanel = ({
   cameraId,
   availableJoints,
@@ -55,7 +128,7 @@ export const CameraEditorPanel = ({
   const [debugReport, setDebugReport] = useState<CameraTransformDebugReport | null>(null);
 
   const camera = cameras.find((candidateCamera) => candidateCamera.id === cameraId);
-  const updateCameraPose = (
+  const updateCameraPose = useCallback((
     id: string,
     pose: { xyz: [number, number, number]; rpy: [number, number, number] },
     field: "xyz" | "rpy",
@@ -70,7 +143,28 @@ export const CameraEditorPanel = ({
         nextValue,
       }),
     });
-  };
+  }, [updateCamera]);
+  const updateCameraParentJoint = useCallback((nextParentJoint: string) => {
+    if (!camera) {
+      return;
+    }
+    const remappedPose = remapCameraPoseBetweenParentJoints(
+      robot ?? null,
+      camera.parent_joint,
+      nextParentJoint,
+      camera.pose
+    );
+    updateCamera(camera.id, {
+      parent_joint: nextParentJoint,
+      pose: remappedPose,
+    });
+  }, [camera, robot, updateCamera]);
+  const updateCameraIntrinsics = useCallback((nextIntrinsics: CameraIntrinsics) => {
+    if (!camera) {
+      return;
+    }
+    updateCamera(camera.id, { intrinsics: nextIntrinsics });
+  }, [camera, updateCamera]);
   const refreshCameraDebugReport = useCallback(
     (poseOverride?: { xyz: [number, number, number]; rpy: [number, number, number] }) => {
       if (!camera) {
@@ -108,6 +202,7 @@ export const CameraEditorPanel = ({
   if (!camera) return null;
 
   const intrinsics = normalizeCameraIntrinsics(camera.intrinsics);
+  const compactInputClassName = CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput;
 
   return (
     <div className="p-0.5" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
@@ -118,18 +213,7 @@ export const CameraEditorPanel = ({
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Joint" labelWidth="w-14">
-            <Select
-              value={camera.parent_joint}
-              onValueChange={(value) => {
-                const remappedPose = remapCameraPoseBetweenParentJoints(
-                  robot ?? null,
-                  camera.parent_joint,
-                  value,
-                  camera.pose
-                );
-                updateCamera(camera.id, { parent_joint: value, pose: remappedPose });
-              }}
-            >
+            <Select value={camera.parent_joint} onValueChange={updateCameraParentJoint}>
               <SelectTrigger className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactSelectTrigger}>
                 <SelectValue />
               </SelectTrigger>
@@ -147,64 +231,76 @@ export const CameraEditorPanel = ({
 
           <BlenderPropertyRow label="Position" labelWidth="w-14" className="items-start">
             <div className="grid grid-cols-3 gap-0.5">
-              <CameraNumberField
+              <CameraPoseAxisField
+                axisIndex={0}
+                cameraId={camera.id}
+                className={compactInputClassName}
+                field="xyz"
                 label="X (m)"
-                value={camera.pose.xyz[0]}
-                onValueChange={(positionMeters) =>
-                  updateCameraPose(camera.id, camera.pose, "xyz", 0, positionMeters)
-                }
+                pose={camera.pose}
                 step={0.01}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
+                updatePoseField={updateCameraPose}
               />
-              <CameraNumberField
+              <CameraPoseAxisField
+                axisIndex={1}
+                cameraId={camera.id}
+                className={compactInputClassName}
+                field="xyz"
                 label="Y (m)"
-                value={camera.pose.xyz[1]}
-                onValueChange={(positionMeters) =>
-                  updateCameraPose(camera.id, camera.pose, "xyz", 1, positionMeters)
-                }
+                pose={camera.pose}
                 step={0.01}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
+                updatePoseField={updateCameraPose}
               />
-              <CameraNumberField
+              <CameraPoseAxisField
+                axisIndex={2}
+                cameraId={camera.id}
+                className={compactInputClassName}
+                field="xyz"
                 label="Z (m)"
-                value={camera.pose.xyz[2]}
-                onValueChange={(positionMeters) =>
-                  updateCameraPose(camera.id, camera.pose, "xyz", 2, positionMeters)
-                }
+                pose={camera.pose}
                 step={0.01}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
+                updatePoseField={updateCameraPose}
               />
             </div>
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Rotation" labelWidth="w-14" className="items-start">
             <div className="grid grid-cols-3 gap-0.5">
-              <CameraNumberField
+              <CameraPoseAxisField
+                axisIndex={0}
+                cameraId={camera.id}
+                className={compactInputClassName}
+                field="rpy"
                 label="Roll X"
-                value={radToDeg(camera.pose.rpy[0])}
-                onValueChange={(angleDegrees) =>
-                  updateCameraPose(camera.id, camera.pose, "rpy", 0, degToRad(angleDegrees))
-                }
+                pose={camera.pose}
                 step={1}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
+                toDisplayValue={radToDeg}
+                toStoredValue={degToRad}
+                updatePoseField={updateCameraPose}
               />
-              <CameraNumberField
+              <CameraPoseAxisField
+                axisIndex={1}
+                cameraId={camera.id}
+                className={compactInputClassName}
+                field="rpy"
                 label="Pitch Y"
-                value={radToDeg(camera.pose.rpy[1])}
-                onValueChange={(angleDegrees) =>
-                  updateCameraPose(camera.id, camera.pose, "rpy", 1, degToRad(angleDegrees))
-                }
+                pose={camera.pose}
                 step={1}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
+                toDisplayValue={radToDeg}
+                toStoredValue={degToRad}
+                updatePoseField={updateCameraPose}
               />
-              <CameraNumberField
+              <CameraPoseAxisField
+                axisIndex={2}
+                cameraId={camera.id}
+                className={compactInputClassName}
+                field="rpy"
                 label="Yaw Z"
-                value={radToDeg(camera.pose.rpy[2])}
-                onValueChange={(angleDegrees) =>
-                  updateCameraPose(camera.id, camera.pose, "rpy", 2, degToRad(angleDegrees))
-                }
+                pose={camera.pose}
                 step={1}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
+                toDisplayValue={radToDeg}
+                toStoredValue={degToRad}
+                updatePoseField={updateCameraPose}
               />
             </div>
           </BlenderPropertyRow>
@@ -213,125 +309,125 @@ export const CameraEditorPanel = ({
 
           <BlenderPropertyRow label="Res/FOV" labelWidth="w-14" className="items-start">
             <div className="grid grid-cols-3 gap-0.5">
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="W"
                 value={intrinsics.width}
-                onValueChange={(widthPixels) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildResolutionIntrinsics({
+                onValueChange={(widthPixels) =>
+                  updateCameraIntrinsics(
+                    buildResolutionIntrinsics({
                       intrinsics: camera.intrinsics,
                       widthPixels,
                       heightPixels: intrinsics.height,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={1}
                 min={1}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="H"
                 value={intrinsics.height}
-                onValueChange={(heightPixels) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildResolutionIntrinsics({
+                onValueChange={(heightPixels) =>
+                  updateCameraIntrinsics(
+                    buildResolutionIntrinsics({
                       intrinsics: camera.intrinsics,
                       widthPixels: intrinsics.width,
                       heightPixels,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={1}
                 min={1}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="FOV"
                 value={intrinsics.fov_deg}
-                onValueChange={(fovDegrees) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildFovIntrinsics({
+                onValueChange={(fovDegrees) =>
+                  updateCameraIntrinsics(
+                    buildFovIntrinsics({
                       intrinsics: camera.intrinsics,
                       fovDegrees,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={1}
                 min={1}
                 max={179}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Focal" labelWidth="w-14" className="items-start">
             <div className="grid grid-cols-2 gap-0.5">
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="fx"
                 value={intrinsics.fx ?? 0}
-                onValueChange={(focalLengthPixels) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildFocalLengthIntrinsics({
+                onValueChange={(focalLengthPixels) =>
+                  updateCameraIntrinsics(
+                    buildFocalLengthIntrinsics({
                       intrinsics: camera.intrinsics,
                       axis: "fx",
                       focalLengthPixels,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={1}
                 min={1e-3}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="fy"
                 value={intrinsics.fy ?? 0}
-                onValueChange={(focalLengthPixels) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildFocalLengthIntrinsics({
+                onValueChange={(focalLengthPixels) =>
+                  updateCameraIntrinsics(
+                    buildFocalLengthIntrinsics({
                       intrinsics: camera.intrinsics,
                       axis: "fy",
                       focalLengthPixels,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={1}
                 min={1e-3}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Center" labelWidth="w-14" className="items-start">
             <div className="grid grid-cols-2 gap-0.5">
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="cx"
                 value={intrinsics.cx ?? intrinsics.width * 0.5}
-                onValueChange={(principalPointPixels) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildPrincipalPointIntrinsics({
+                onValueChange={(principalPointPixels) =>
+                  updateCameraIntrinsics(
+                    buildPrincipalPointIntrinsics({
                       intrinsics: camera.intrinsics,
                       axis: "cx",
                       principalPointPixels,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={0.5}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
-              <CameraNumberField
+              <CameraIntrinsicsField
+                className={compactInputClassName}
                 label="cy"
                 value={intrinsics.cy ?? intrinsics.height * 0.5}
-                onValueChange={(principalPointPixels) => {
-                  updateCamera(camera.id, {
-                    intrinsics: buildPrincipalPointIntrinsics({
+                onValueChange={(principalPointPixels) =>
+                  updateCameraIntrinsics(
+                    buildPrincipalPointIntrinsics({
                       intrinsics: camera.intrinsics,
                       axis: "cy",
                       principalPointPixels,
-                    }),
-                  });
-                }}
+                    })
+                  )
+                }
                 step={0.5}
-                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
