@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
 
 from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
 from backend.services.simulator_adapters.camera_transfer import build_sim_camera_specs
@@ -19,6 +19,7 @@ from backend.services.world_layout_static_transfer import (
 )
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
+    StaticWorldLayout,
     WorldLayoutFrameMap,
 )
 from backend.services.world_scene_package_digest import world_scene_package_json_payload
@@ -79,7 +80,7 @@ def active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
     return count_transferable_world_objects(layout, include_hidden=False)
 
 
-def workspace_layout_from_request(request: SimulatorWorkspacePrepareRequest) -> Any:
+def workspace_layout_from_request(request: SimulatorWorkspacePrepareRequest) -> StaticWorldLayout:
     return parse_static_world_layout_payload(world_scene_package_json_payload(request.world_package))
 
 
