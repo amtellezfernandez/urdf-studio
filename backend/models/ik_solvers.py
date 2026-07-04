@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class IkSolverInfo(BaseModel):
     id: str
     label: str
-    description: Optional[str] = None
-    mode: Optional[str] = None
-    capabilities: List[str] = []
-    requirements: List[str] = []
+    description: str | None = None
+    mode: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    requirements: list[str] = Field(default_factory=list)
 
 
 class IkSolversResponse(BaseModel):
     version: str
-    solvers: List[IkSolverInfo]
-    default_chain: List[str]
+    solvers: list[IkSolverInfo]
+    default_chain: list[str]

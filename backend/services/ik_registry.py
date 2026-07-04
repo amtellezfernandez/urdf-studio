@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 from backend.models.ik_solvers import IkSolverInfo
 
@@ -14,8 +13,8 @@ class SolverDefinition:
     label: str
     description: str
     mode: str
-    capabilities: List[str]
-    requirements: List[str]
+    capabilities: tuple[str, ...]
+    requirements: tuple[str, ...]
 
 
 SOLVER_DEFINITIONS: dict[str, SolverDefinition] = {
@@ -24,16 +23,16 @@ SOLVER_DEFINITIONS: dict[str, SolverDefinition] = {
         label="Placo",
         description="Placo-based IK service.",
         mode="remote",
-        capabilities=["Pose", "Limits"],
-        requirements=["Backend", "Placo"],
+        capabilities=("Pose", "Limits"),
+        requirements=("Backend", "Placo"),
     ),
     "amik": SolverDefinition(
         id="amik",
         label="AMIK (CCD)",
         description="Backend CCD solver (URDF-only).",
         mode="remote",
-        capabilities=["Position", "Limits"],
-        requirements=["Backend"],
+        capabilities=("Position", "Limits"),
+        requirements=("Backend",),
     ),
 }
 
@@ -46,19 +45,19 @@ def _placo_available() -> bool:
     return True
 
 
-def _definition_to_info(defn: SolverDefinition) -> IkSolverInfo:
+def _definition_to_info(definition: SolverDefinition) -> IkSolverInfo:
     return IkSolverInfo(
-        id=defn.id,
-        label=defn.label,
-        description=defn.description,
-        mode=defn.mode,
-        capabilities=list(defn.capabilities),
-        requirements=list(defn.requirements),
+        id=definition.id,
+        label=definition.label,
+        description=definition.description,
+        mode=definition.mode,
+        capabilities=list(definition.capabilities),
+        requirements=list(definition.requirements),
     )
 
 
-def list_available_solvers() -> List[IkSolverInfo]:
-    solvers: List[IkSolverInfo] = []
+def list_available_solvers() -> list[IkSolverInfo]:
+    solvers: list[IkSolverInfo] = []
     if _placo_available() and "placo" in SOLVER_DEFINITIONS:
         solvers.append(_definition_to_info(SOLVER_DEFINITIONS["placo"]))
     if "amik" in SOLVER_DEFINITIONS:
@@ -66,7 +65,7 @@ def list_available_solvers() -> List[IkSolverInfo]:
     return solvers
 
 
-def default_solver_chain() -> List[str]:
+def default_solver_chain() -> list[str]:
     solvers = list_available_solvers()
     if not solvers:
         return []
