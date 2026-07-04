@@ -75,19 +75,19 @@ def _format_float_vector(values: tuple[float, ...]) -> str:
 def _parse_float_vector(
     raw_value: str | None,
     component_count: int,
-    fallback: tuple[float, ...],
+    default_value: tuple[float, ...],
 ) -> tuple[float, ...]:
     if not raw_value:
-        return fallback
+        return default_value
     parts = raw_value.split()
     if len(parts) != component_count:
-        return fallback
+        return default_value
     try:
         parsed = tuple(float(part) for part in parts)
     except ValueError:
-        return fallback
+        return default_value
     if len(parsed) != component_count:
-        return fallback
+        return default_value
     return parsed
 
 
