@@ -7,6 +7,12 @@ import {
   LINK_SIDEBAR_GROUPING_MODE_OPTIONS,
   type LinkSidebarGroupingMode,
 } from "@/features/layout/linkSidebarGrouping";
+import {
+  isStructureModeOptionDisabled,
+  resolveStructureSearchPlaceholder,
+  resolveSubgroupActionState,
+  shouldShowSubgroupControls,
+} from "@/features/layout/sidebarStructureControlsHelpers";
 
 type StructureViewMode = "links" | "flat" | "hierarchy";
 
@@ -63,16 +69,12 @@ export const SidebarStructureControls = ({
   typeFilter,
   urdfContentAvailable,
 }: SidebarStructureControlsProps) => {
-  const shouldShowSubgroupControls =
-    effectiveStructureViewMode === "links" || effectiveStructureViewMode === "flat";
-  const isSubgroupActionDisabled =
-    !canReassignStructureGroups ||
-    (effectiveStructureViewMode === "links" && linkGroupingMode !== "body");
-  const subgroupActionTitle = !canReassignStructureGroups
-    ? "Group editing is unavailable"
-    : effectiveStructureViewMode === "links" && linkGroupingMode !== "body"
-      ? "Subgroups are only available in Body grouping"
-      : "Create an empty subgroup drop target";
+  const shouldRenderSubgroupControls = shouldShowSubgroupControls(effectiveStructureViewMode);
+  const subgroupActionState = resolveSubgroupActionState({
+    canReassignStructureGroups,
+    effectiveStructureViewMode,
+    linkGroupingMode,
+  });
 
   return (
     <>
@@ -81,7 +83,10 @@ export const SidebarStructureControls = ({
         <div className="flex items-center gap-1">
           {structureModeOptions.map((option) => {
             const isActive = effectiveStructureViewMode === option.value;
-            const isDisabled = Boolean(option.requiresUrdf && !urdfContentAvailable);
+            const isDisabled = isStructureModeOptionDisabled({
+              option,
+              urdfContentAvailable,
+            });
             return (
               <button
                 key={option.value}
@@ -114,9 +119,7 @@ export const SidebarStructureControls = ({
             <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
-              placeholder={
-                effectiveStructureViewMode === "links" ? "Search links..." : "Search joints..."
-              }
+              placeholder={resolveStructureSearchPlaceholder(effectiveStructureViewMode)}
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
               className="h-6 pl-6 pr-6 text-[11px] bg-muted/20 border-border/50"
@@ -151,13 +154,13 @@ export const SidebarStructureControls = ({
             </Select>
           ) : null}
 
-          {shouldShowSubgroupControls ? (
+          {shouldRenderSubgroupControls ? (
             <button
               type="button"
               className={subgroupActionButtonClassName}
               onClick={onOpenSubgroupCreator}
-              disabled={isSubgroupActionDisabled}
-              title={subgroupActionTitle}
+              disabled={subgroupActionState.isDisabled}
+              title={subgroupActionState.title}
             >
               <Plus className="h-3 w-3" />
               <span>Subgroup</span>
@@ -188,7 +191,7 @@ export const SidebarStructureControls = ({
             })}
           </div>
         ) : null}
-        {shouldShowSubgroupControls && isSubgroupCreatorOpen ? (
+        {shouldRenderSubgroupControls && isSubgroupCreatorOpen ? (
           <div className="mt-1.5 flex items-center gap-1">
             <Input
               type="text"
