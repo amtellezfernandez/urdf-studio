@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence, TypeAlias
+from typing import TypeAlias, TypedDict, cast
 
 from backend.services.simulator_adapters.camera_artifacts import (
     MIN_VISIBLE_CHANNEL_SPAN,
@@ -38,12 +39,33 @@ class WorkspaceParityResult:
     detail: str
 
 
-ParityReportPayload: TypeAlias = dict[str, Any]
-ParityReportView: TypeAlias = Mapping[str, Any]
-ParitySignature: TypeAlias = dict[str, Any]
-CameraImageManifest: TypeAlias = dict[str, Any]
-CameraImageEntry: TypeAlias = dict[str, Any]
-ExpectedCameraImage: TypeAlias = dict[str, Any]
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+ParityReportPayload: TypeAlias = dict[str, JsonValue]
+ParityReportView: TypeAlias = Mapping[str, object]
+ParitySignature: TypeAlias = dict[str, object]
+
+
+class CameraImageEntry(TypedDict):
+    camera_id: str
+    sim_name: str
+    name: str
+    width: int
+    height: int
+
+
+class CameraImageManifest(TypedDict):
+    images: list[CameraImageEntry]
+
+
+class ExpectedCameraImage(TypedDict):
+    camera_id: str
+    sim_name: str
+    name: str
+    width: int
+    height: int
+
+
 LoadedParityReport: TypeAlias = tuple[WorkspaceParityInput, ParityReportPayload]
 LoadedParityReportView: TypeAlias = tuple[WorkspaceParityInput, ParityReportView]
 
@@ -93,11 +115,13 @@ def _load_report(path: Path) -> ParityReportPayload:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
-    return payload
+    return cast(ParityReportPayload, payload)
 
 
 def _parity_report_signature(report: ParityReportView) -> ParitySignature:
-    signature = {field: _normalize_for_parity(report.get(field)) for field in PARITY_REPORT_FIELDS}
+    signature: ParitySignature = {
+        field: _normalize_for_parity(report.get(field)) for field in PARITY_REPORT_FIELDS
+    }
     signature["warnings"] = sorted(
         str(warning)
         for warning in report.get("warnings", [])
@@ -120,12 +144,12 @@ def _parity_report_signature(report: ParityReportView) -> ParitySignature:
     return signature
 
 
-def _list_field(report: ParityReportView, field_name: str) -> list[Any]:
+def _list_field(report: ParityReportView, field_name: str) -> list[object]:
     value = report.get(field_name)
     return value if isinstance(value, list) else []
 
 
-def _normalize_for_parity(value: Any) -> Any:
+def _normalize_for_parity(value: object) -> object:
     if isinstance(value, float):
         return round(value, 10)
     if isinstance(value, Mapping):
@@ -138,15 +162,15 @@ def _normalize_for_parity(value: Any) -> Any:
     return value
 
 
-def _first_difference(expected: Any, actual: Any, *, path: str) -> str | None:
+def _first_difference(expected: object, actual: object, *, path: str) -> str | None:
     if isinstance(expected, Mapping) and isinstance(actual, Mapping):
         expected_keys = set(expected.keys())
         actual_keys = set(actual.keys())
         if expected_keys != actual_keys:
-            missing = sorted(expected_keys - actual_keys)
-            extra = sorted(actual_keys - expected_keys)
+            missing = sorted(expected_keys - actual_keys, key=str)
+            extra = sorted(actual_keys - expected_keys, key=str)
             return f"{path} keys differ: missing={missing}, extra={extra}"
-        for key in sorted(expected_keys):
+        for key in sorted(expected_keys, key=str):
             difference = _first_difference(
                 expected[key],
                 actual[key],
@@ -257,7 +281,7 @@ def _camera_image_manifest(
 
 def _expected_camera_images(
     label: str,
-    cameras: Sequence[Any],
+    cameras: Sequence[object],
 ) -> list[ExpectedCameraImage] | str:
     expected_images: list[ExpectedCameraImage] = []
     for index, camera in enumerate(cameras, start=1):
