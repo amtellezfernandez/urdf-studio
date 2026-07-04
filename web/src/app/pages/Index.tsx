@@ -64,6 +64,7 @@ import {
 } from "@/app/pages/index/loadReviewDerivations";
 import { useLoadReviewPanelController } from "@/app/pages/index/useLoadReviewPanelController";
 import { useSimulationPrepViewerHighlights } from "@/app/pages/index/useSimulationPrepViewerHighlights";
+import { useSimulationPrepPreflight } from "@/app/pages/index/useSimulationPrepPreflight";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
@@ -73,10 +74,8 @@ import {
   useRepeatedInertiaSymmetryLinkCentersLocal,
   useStudioIssueReportUrl,
   type CanonicalSynthesisPreviewSession,
-  type FramePreflightSession,
   type InertialSynthesisSession,
   type PhysicsActionRequest,
-  type PhysicsPreflightSession,
   type RepeatedInertiaGroupActionState,
   type RepeatedInertiaGroupOutcome,
   type RepeatedInertiaSymmetryOutcome,
@@ -130,9 +129,7 @@ import {
   type InertialDensityPresetId,
 } from "@/features/urdf/inertia/inertialSynthesisParams";
 import {
-  framePreflightViaBackend,
   generatePhysicsDraftViaBackend,
-  generatePhysicsPreflightViaBackend,
 } from "@/features/urdf/inertia/robotMasteringApi";
 import {
   applyRepeatedInertiaGroupManualFix,
@@ -141,7 +138,6 @@ import {
   REPEATED_INERTIA_MANUAL_FIX_POSTWRITE_MISMATCH_ERROR,
   REPEATED_INERTIA_MANUAL_FIX_ALREADY_CONSISTENT_ERROR,
 } from "@/features/urdf/inertia/repeatedInertiaManualFix";
-import { ROBOT_MASTERING_PREFLIGHT_DEBOUNCE_MS } from "@/features/urdf/inertia/robotMasteringApiParams";
 import {
   buildSimulationPrepUpdateToastPlan,
   buildSimulationPrepPhysicsActionStatusMap,
@@ -149,10 +145,7 @@ import {
   buildPhysicsIssueSummary,
   buildSimulationPrepStatus,
   canQueueSimulationPrepPhysicsAction,
-  resolveSimulationPrepPreflightRequestDecision,
   resolveSimulationPrepPhysicsSourceContent,
-  resolveSimulationPrepPreparationRefreshStatus,
-  type SimulationPrepPreparationRefreshResult,
   type SimulationPrepPhysicsActionKey,
 } from "@/features/layout/page/simulationPrepState";
 import { buildRepeatedInertiaDiagnostics } from "@/features/layout/page/repeatedInertiaDiagnostics";
@@ -502,16 +495,6 @@ const Index = () => {
     useState<CanonicalSynthesisPreviewSession | null>(null);
   const [inertialSynthesisSession, setInertialSynthesisSession] =
     useState<InertialSynthesisSession | null>(null);
-  const [framePreflightSession, setFramePreflightSession] =
-    useState<FramePreflightSession | null>(null);
-  const [isFramePreflightLoading, setIsFramePreflightLoading] = useState(false);
-  const framePreflightRequestIdRef = useRef(0);
-  const framePreflightRequestedSourceRef = useRef<string | null>(null);
-  const [physicsPreflightSession, setPhysicsPreflightSession] =
-    useState<PhysicsPreflightSession | null>(null);
-  const [isPhysicsPreflightLoading, setIsPhysicsPreflightLoading] = useState(false);
-  const physicsPreflightRequestIdRef = useRef(0);
-  const physicsPreflightRequestedSourceRef = useRef<string | null>(null);
   const [showHealthActionPanel, setShowHealthActionPanel] = useState(false);
   const [simulationPrepResetPoseRequestKey, setSimulationPrepResetPoseRequestKey] = useState<
     string | null
@@ -808,22 +791,6 @@ const Index = () => {
     addMeshFilesFromFiles,
   });
 
-  const orientationCard = framePreflightSession?.orientationCard ?? null;
-  const robotFrameLint: RobotFrameLintResult | null = framePreflightSession?.frameLint ?? null;
-  const orientationReviewState = useMemo(
-    () =>
-      buildOrientationReviewState({
-        orientationCard,
-        robotFrameLint,
-      }),
-    [orientationCard, robotFrameLint]
-  );
-  const orientationNeedsAttention = orientationReviewState.needsAttention;
-  const orientationSummary = orientationReviewState.summary;
-  const orientationStatus = orientationReviewState.status;
-  const canAlignOrientation = orientationReviewState.canAlignOrientation;
-  const canPreviewBakeVisualTransforms =
-    orientationReviewState.canPreviewBakeVisualTransforms;
   const bakePreviewStats = useMemo(
     () => (bakePreviewSession ? buildUrdfBakePreviewStats(bakePreviewSession) : null),
     [bakePreviewSession]
@@ -841,15 +808,44 @@ const Index = () => {
       }),
     [inertialDraftBaseContent, inertialSynthesisSession?.draftContent]
   );
-  const hasPhysicsPreflightInputReady = useMemo(
-    () => hasLoadedFiles && physicsGenerationSourceContent.trim().length > 0,
-    [hasLoadedFiles, physicsGenerationSourceContent]
-  );
   const meshFilesCacheKey = useMemo(() => buildMeshFilesCacheKey(meshFiles), [meshFiles]);
   const packageRootsCacheKey = useMemo(
     () => buildPackageRootsCacheKey(packageRoots),
     [packageRoots]
   );
+  const {
+    framePreflightSession,
+    handleOpenGeneratePhysicsDialog,
+    isPhysicsPreflightLoading,
+    loadPhysicsPreflight,
+    physicsPreflightSession,
+    refreshSimulationPrepPreparation,
+  } = useSimulationPrepPreflight({
+    hasLoadedFiles,
+    meshFiles,
+    meshFilesCacheKey,
+    packageRoots,
+    packageRootsCacheKey,
+    physicsGenerationSourceContent,
+    urdfBasePath,
+    vizUrdfContent,
+  });
+  const orientationCard = framePreflightSession?.orientationCard ?? null;
+  const robotFrameLint: RobotFrameLintResult | null = framePreflightSession?.frameLint ?? null;
+  const orientationReviewState = useMemo(
+    () =>
+      buildOrientationReviewState({
+        orientationCard,
+        robotFrameLint,
+      }),
+    [orientationCard, robotFrameLint]
+  );
+  const orientationNeedsAttention = orientationReviewState.needsAttention;
+  const orientationSummary = orientationReviewState.summary;
+  const orientationStatus = orientationReviewState.status;
+  const canAlignOrientation = orientationReviewState.canAlignOrientation;
+  const canPreviewBakeVisualTransforms =
+    orientationReviewState.canPreviewBakeVisualTransforms;
   const queuedPhysicsActionKeys = useMemo(
     () => queuedPhysicsActions.map((request) => request.key),
     [queuedPhysicsActions]
@@ -923,161 +919,6 @@ const Index = () => {
   const handleClearInertialSynthesisSession = useCallback(() => {
     setInertialSynthesisSession(null);
   }, []);
-  const loadFramePreflight = useCallback(async ({
-    force = false,
-    sourceUrdf = vizUrdfContent,
-  }: {
-    force?: boolean;
-    sourceUrdf?: string;
-  } = {}) => {
-    const trimmedUrdf = sourceUrdf.trim();
-    if (!trimmedUrdf) {
-      framePreflightRequestIdRef.current += 1;
-      framePreflightRequestedSourceRef.current = null;
-      setFramePreflightSession(null);
-      setIsFramePreflightLoading(false);
-      return "skipped" as const;
-    }
-    const requestDecision = resolveSimulationPrepPreflightRequestDecision({
-      force,
-      matchesCurrentSession: framePreflightSession?.sourceContent === sourceUrdf,
-      isSameSourceInFlight:
-        isFramePreflightLoading && framePreflightRequestedSourceRef.current === sourceUrdf,
-    });
-    if (requestDecision !== "start") {
-      return requestDecision;
-    }
-    const requestId = framePreflightRequestIdRef.current + 1;
-    framePreflightRequestIdRef.current = requestId;
-    framePreflightRequestedSourceRef.current = sourceUrdf;
-    setIsFramePreflightLoading(true);
-    try {
-      const result = await framePreflightViaBackend({
-        sourceUrdf,
-      });
-      if (framePreflightRequestIdRef.current !== requestId) {
-        return "superseded" as const;
-      }
-      setFramePreflightSession({
-        sourceContent: sourceUrdf,
-        ...result,
-      });
-      return "success" as const;
-    } catch {
-      if (framePreflightRequestIdRef.current !== requestId) {
-        return "superseded" as const;
-      }
-      return "failed" as const;
-    } finally {
-      if (framePreflightRequestIdRef.current === requestId) {
-        framePreflightRequestedSourceRef.current = null;
-        setIsFramePreflightLoading(false);
-      }
-    }
-  }, [framePreflightSession, isFramePreflightLoading, vizUrdfContent]);
-  const loadPhysicsPreflight = useCallback(
-    async ({
-      force = false,
-      showErrorToast = false,
-      sourceUrdf = physicsGenerationSourceContent,
-    }: {
-      force?: boolean;
-      showErrorToast?: boolean;
-      sourceUrdf?: string;
-    } = {}) => {
-      if (!hasLoadedFiles || sourceUrdf.trim().length === 0) {
-        physicsPreflightRequestIdRef.current += 1;
-        physicsPreflightRequestedSourceRef.current = null;
-        setPhysicsPreflightSession(null);
-        setIsPhysicsPreflightLoading(false);
-        return "skipped" as const;
-      }
-      const requestDecision = resolveSimulationPrepPreflightRequestDecision({
-        force,
-        matchesCurrentSession:
-          physicsPreflightSession?.sourceContent === sourceUrdf &&
-          physicsPreflightSession.urdfBasePath === urdfBasePath &&
-          physicsPreflightSession.meshFilesCacheKey === meshFilesCacheKey &&
-          physicsPreflightSession.packageRootsCacheKey === packageRootsCacheKey,
-        isSameSourceInFlight:
-          isPhysicsPreflightLoading && physicsPreflightRequestedSourceRef.current === sourceUrdf,
-      });
-      if (requestDecision !== "start") {
-        return requestDecision;
-      }
-      const requestId = physicsPreflightRequestIdRef.current + 1;
-      physicsPreflightRequestIdRef.current = requestId;
-      physicsPreflightRequestedSourceRef.current = sourceUrdf;
-      setIsPhysicsPreflightLoading(true);
-      try {
-        const result = await generatePhysicsPreflightViaBackend({
-          sourceUrdf,
-          meshFiles,
-          urdfBasePath,
-          packageRoots,
-        });
-        if (physicsPreflightRequestIdRef.current !== requestId) {
-          return "superseded" as const;
-        }
-        setPhysicsPreflightSession({
-          sourceContent: sourceUrdf,
-          urdfBasePath,
-          meshFilesCacheKey,
-          packageRootsCacheKey,
-          ...result,
-        });
-        return "success" as const;
-      } catch (error) {
-        if (physicsPreflightRequestIdRef.current !== requestId) {
-          return "superseded" as const;
-        }
-        if (showErrorToast) {
-          toast.error(error instanceof Error ? error.message : "Failed to load backend physics audit.");
-        }
-        return "failed" as const;
-      } finally {
-        if (physicsPreflightRequestIdRef.current === requestId) {
-          physicsPreflightRequestedSourceRef.current = null;
-          setIsPhysicsPreflightLoading(false);
-        }
-      }
-    },
-    [
-      hasLoadedFiles,
-      isPhysicsPreflightLoading,
-      meshFiles,
-      meshFilesCacheKey,
-      packageRoots,
-      packageRootsCacheKey,
-      physicsGenerationSourceContent,
-      physicsPreflightSession,
-      urdfBasePath,
-    ]
-  );
-  const handleOpenGeneratePhysicsDialog = useCallback(async () => {
-    if (isPhysicsPreflightLoading) {
-      return;
-    }
-    await loadPhysicsPreflight({ showErrorToast: true });
-  }, [isPhysicsPreflightLoading, loadPhysicsPreflight]);
-  const refreshSimulationPrepPreparation = useCallback(
-    async ({ sourceUrdf }: { sourceUrdf: string }) => {
-      const [frameResult, physicsResult] = await Promise.all([
-        loadFramePreflight({ force: true, sourceUrdf }),
-        loadPhysicsPreflight({ force: true, sourceUrdf }),
-      ]);
-      const refreshStatus = resolveSimulationPrepPreparationRefreshStatus({
-        frameResult: frameResult as SimulationPrepPreparationRefreshResult,
-        physicsResult: physicsResult as SimulationPrepPreparationRefreshResult,
-      });
-      return {
-        frameResult,
-        physicsResult,
-        ...refreshStatus,
-      };
-    },
-    [loadFramePreflight, loadPhysicsPreflight]
-  );
   const applySimulationPrepUrdfUpdate = useCallback(
     async ({
       nextUrdfContent,
@@ -1386,15 +1227,6 @@ const Index = () => {
     setInertialSynthesisSession,
     vizUrdfContent,
   });
-  useEffect(() => {
-    if (hasPhysicsPreflightInputReady) {
-      return;
-    }
-    physicsPreflightRequestIdRef.current += 1;
-    physicsPreflightRequestedSourceRef.current = null;
-    setPhysicsPreflightSession(null);
-    setIsPhysicsPreflightLoading(false);
-  }, [hasPhysicsPreflightInputReady]);
 
   useEffect(() => {
     if (runningPhysicsActionKey !== null || queuedPhysicsActions.length === 0) {
@@ -1404,27 +1236,6 @@ const Index = () => {
     setQueuedPhysicsActions(remainingActions);
     startPhysicsAction(nextAction);
   }, [queuedPhysicsActions, runningPhysicsActionKey, startPhysicsAction]);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadFramePreflight();
-    }, ROBOT_MASTERING_PREFLIGHT_DEBOUNCE_MS);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [loadFramePreflight]);
-
-  useEffect(() => {
-    if (!hasPhysicsPreflightInputReady) {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      void loadPhysicsPreflight();
-    }, ROBOT_MASTERING_PREFLIGHT_DEBOUNCE_MS);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [hasPhysicsPreflightInputReady, loadPhysicsPreflight]);
 
   const resetSimulationPrepReviewState = useCallback(() => {
     discardSimulationPrepViewerHighlightSnapshot();
