@@ -6,7 +6,6 @@ import threading
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
 from uuid import uuid4
 
 from backend.models.robot_mastering import (
@@ -22,6 +21,9 @@ from backend.models.robot_mastering import (
     GeneratePhysicsJobResultResponse,
     RobotMasteringJobCreatedResponse,
     RobotMasteringJobStatusResponse,
+    RobotMasteringJobStatus,
+    RobotMasteringJobType,
+    RobotMasteringPayload,
 )
 from backend.services.robot_mastering_params import (
     ROBOT_MASTERING_ARTIFACT_DRAFT_URDF,
@@ -29,10 +31,6 @@ from backend.services.robot_mastering_params import (
     ROBOT_MASTERING_NODE_BINARY,
     ROBOT_MASTERING_RUNNER_SCRIPT_PATH,
 )
-
-
-RobotMasteringJobStatus = Literal["queued", "running", "succeeded", "failed"]
-
 
 @dataclass(frozen=True)
 class RobotMasteringError(RuntimeError):
@@ -43,12 +41,12 @@ class RobotMasteringError(RuntimeError):
 @dataclass(frozen=True)
 class RobotMasteringJobRecord:
     job_id: str
-    job_type: Literal["generate-physics"]
+    job_type: RobotMasteringJobType
     status: RobotMasteringJobStatus
     created_at: str
     updated_at: str
     error: str | None = None
-    result: dict[str, Any] | None = None
+    result: RobotMasteringPayload | None = None
 
 
 def _now_iso() -> str:
@@ -64,7 +62,7 @@ def _ensure_script_exists(script_path: Path) -> Path:
     return script_path
 
 
-def _run_robot_mastering_command(payload: dict[str, Any]) -> dict[str, Any]:
+def _run_robot_mastering_command(payload: RobotMasteringPayload) -> RobotMasteringPayload:
     script_path = _ensure_script_exists(ROBOT_MASTERING_RUNNER_SCRIPT_PATH)
     command = [
         ROBOT_MASTERING_NODE_BINARY,
@@ -111,7 +109,7 @@ def _run_robot_mastering_command(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _run_generate_physics_command(request: GeneratePhysicsJobRequest) -> dict[str, Any]:
+def _run_generate_physics_command(request: GeneratePhysicsJobRequest) -> RobotMasteringPayload:
     return _run_robot_mastering_command(
         {
             "operation": "generate-physics",
@@ -122,7 +120,7 @@ def _run_generate_physics_command(request: GeneratePhysicsJobRequest) -> dict[st
 
 def _run_generate_physics_preflight_command(
     request: GeneratePhysicsPreflightRequest,
-) -> dict[str, Any]:
+) -> RobotMasteringPayload:
     return _run_robot_mastering_command(
         {
             "operation": "generate-physics-preflight",
@@ -133,7 +131,7 @@ def _run_generate_physics_preflight_command(
 
 def _run_frame_preflight_command(
     request: FramePreflightRequest,
-) -> dict[str, Any]:
+) -> RobotMasteringPayload:
     return _run_robot_mastering_command(
         {
             "operation": "frame-preflight",
@@ -144,7 +142,7 @@ def _run_frame_preflight_command(
 
 def _run_bake_export_execute_command(
     request: BakeExportExecuteRequest,
-) -> dict[str, Any]:
+) -> RobotMasteringPayload:
     return _run_robot_mastering_command(
         {
             "operation": "bake-export-execute",
@@ -155,7 +153,7 @@ def _run_bake_export_execute_command(
 
 def _run_canonical_synthesis_command(
     request: CanonicalSynthesisRequest,
-) -> dict[str, Any]:
+) -> RobotMasteringPayload:
     return _run_robot_mastering_command(
         {
             "operation": "canonical-synthesis",
@@ -249,7 +247,7 @@ class RobotMasteringService:
         *,
         status: RobotMasteringJobStatus,
         error: str | None,
-        result: dict[str, Any] | None,
+        result: RobotMasteringPayload | None,
     ) -> None:
         with self._lock:
             current = self._jobs.get(job_id)

@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+RobotMasteringJobType: TypeAlias = Literal["generate-physics"]
+RobotMasteringJobStatus: TypeAlias = Literal["queued", "running", "succeeded", "failed"]
+RobotMasteringPayload: TypeAlias = dict[str, Any]
 
 
 class RobotMasteringModel(BaseModel):
@@ -39,7 +44,7 @@ class RobotMasteringUnsupportedBakeEntryPayload(RobotMasteringModel):
 
 
 class GeneratePhysicsJobRequest(RobotMasteringModel):
-    job_type: Literal["generate-physics"] = Field(alias="jobType")
+    job_type: RobotMasteringJobType = Field(alias="jobType")
     source_urdf: str = Field(..., alias="sourceUrdf", min_length=1)
     urdf_base_path: str | None = Field(default=None, alias="urdfBasePath")
     package_roots: dict[str, list[str]] = Field(default_factory=dict, alias="packageRoots")
@@ -74,7 +79,12 @@ class FramePreflightRequest(RobotMasteringModel):
 
 class RobotMasteringBakePlanEntryRequest(RobotMasteringModel):
     mesh_reference: str = Field(..., alias="meshReference", min_length=1)
-    bake_matrix_elements: list[float] = Field(..., alias="bakeMatrixElements", min_length=16, max_length=16)
+    bake_matrix_elements: list[float] = Field(
+        ...,
+        alias="bakeMatrixElements",
+        min_length=16,
+        max_length=16,
+    )
     link_names: list[str] = Field(default_factory=list, alias="linkNames")
     source_entry_count: int = Field(..., alias="sourceEntryCount", ge=1)
 
@@ -85,8 +95,14 @@ class RobotMasteringBakePlanConflictRequest(RobotMasteringModel):
 
 
 class BakeExportExecuteRequest(RobotMasteringModel):
-    plan_entries: list[RobotMasteringBakePlanEntryRequest] = Field(default_factory=list, alias="planEntries")
-    plan_conflicts: list[RobotMasteringBakePlanConflictRequest] = Field(default_factory=list, alias="planConflicts")
+    plan_entries: list[RobotMasteringBakePlanEntryRequest] = Field(
+        default_factory=list,
+        alias="planEntries",
+    )
+    plan_conflicts: list[RobotMasteringBakePlanConflictRequest] = Field(
+        default_factory=list,
+        alias="planConflicts",
+    )
     mesh_files: list[RobotMasteringMeshFilePayload] = Field(default_factory=list, alias="meshFiles")
     urdf_base_path: str | None = Field(default=None, alias="urdfBasePath")
     package_roots: dict[str, list[str]] = Field(default_factory=dict, alias="packageRoots")
@@ -94,14 +110,14 @@ class BakeExportExecuteRequest(RobotMasteringModel):
 
 class RobotMasteringJobCreatedResponse(RobotMasteringModel):
     job_id: str = Field(alias="jobId")
-    job_type: Literal["generate-physics"] = Field(alias="jobType")
-    status: Literal["queued", "running", "succeeded", "failed"]
+    job_type: RobotMasteringJobType = Field(alias="jobType")
+    status: RobotMasteringJobStatus
 
 
 class RobotMasteringJobStatusResponse(RobotMasteringModel):
     job_id: str = Field(alias="jobId")
-    job_type: Literal["generate-physics"] = Field(alias="jobType")
-    status: Literal["queued", "running", "succeeded", "failed"]
+    job_type: RobotMasteringJobType = Field(alias="jobType")
+    status: RobotMasteringJobStatus
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
     error: str | None = None
@@ -109,21 +125,21 @@ class RobotMasteringJobStatusResponse(RobotMasteringModel):
 
 class GeneratePhysicsJobResultResponse(RobotMasteringModel):
     job_id: str = Field(alias="jobId")
-    job_type: Literal["generate-physics"] = Field(alias="jobType")
+    job_type: RobotMasteringJobType = Field(alias="jobType")
     draft_urdf_content: str = Field(alias="draftUrdfContent")
-    audit_summary: dict[str, Any] | None = Field(alias="auditSummary")
-    synthesis_result: dict[str, Any] = Field(alias="synthesisResult")
-    plausibility_summary: dict[str, Any] | None = Field(alias="plausibilitySummary")
+    audit_summary: RobotMasteringPayload | None = Field(alias="auditSummary")
+    synthesis_result: RobotMasteringPayload = Field(alias="synthesisResult")
+    plausibility_summary: RobotMasteringPayload | None = Field(alias="plausibilitySummary")
 
 
 class GeneratePhysicsPreflightResponse(RobotMasteringModel):
-    audit_summary: dict[str, Any] | None = Field(alias="auditSummary")
-    plausibility_summary: dict[str, Any] | None = Field(alias="plausibilitySummary")
+    audit_summary: RobotMasteringPayload | None = Field(alias="auditSummary")
+    plausibility_summary: RobotMasteringPayload | None = Field(alias="plausibilitySummary")
 
 
 class FramePreflightResponse(RobotMasteringModel):
-    orientation_card: dict[str, Any] | None = Field(alias="orientationCard")
-    frame_lint: dict[str, Any] | None = Field(alias="frameLint")
+    orientation_card: RobotMasteringPayload | None = Field(alias="orientationCard")
+    frame_lint: RobotMasteringPayload | None = Field(alias="frameLint")
 
 
 class BakeExportExecuteResponse(RobotMasteringModel):
@@ -164,5 +180,5 @@ class CanonicalSynthesisRequest(RobotMasteringModel):
 
 
 class CanonicalSynthesisResponse(RobotMasteringModel):
-    preview: dict[str, Any] = Field(default_factory=dict)
+    preview: RobotMasteringPayload = Field(default_factory=dict)
     draft_content: str = Field(..., alias="draftContent")
