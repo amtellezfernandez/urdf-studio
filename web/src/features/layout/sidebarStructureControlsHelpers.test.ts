@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isStructureModeOptionDisabled,
+  resolveSubgroupActionDisabledReason,
   resolveStructureSearchPlaceholder,
   resolveSubgroupActionState,
   shouldShowSubgroupControls,
@@ -15,6 +16,30 @@ describe("sidebarStructureControlsHelpers", () => {
   });
 
   it("resolves subgroup action state", () => {
+    expect(
+      resolveSubgroupActionDisabledReason({
+        canReassignStructureGroups: false,
+        effectiveStructureViewMode: "links",
+        linkGroupingMode: "body",
+      })
+    ).toBe("Group editing is unavailable");
+
+    expect(
+      resolveSubgroupActionDisabledReason({
+        canReassignStructureGroups: true,
+        effectiveStructureViewMode: "links",
+        linkGroupingMode: "mesh",
+      })
+    ).toBe("Subgroups are only available in Body grouping");
+
+    expect(
+      resolveSubgroupActionDisabledReason({
+        canReassignStructureGroups: true,
+        effectiveStructureViewMode: "flat",
+        linkGroupingMode: "mesh",
+      })
+    ).toBeNull();
+
     expect(
       resolveSubgroupActionState({
         canReassignStructureGroups: false,

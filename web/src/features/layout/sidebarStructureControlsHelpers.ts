@@ -11,6 +11,24 @@ export const shouldShowSubgroupControls = (
 ): boolean =>
   effectiveStructureViewMode === "links" || effectiveStructureViewMode === "flat";
 
+export const resolveSubgroupActionDisabledReason = ({
+  canReassignStructureGroups,
+  effectiveStructureViewMode,
+  linkGroupingMode,
+}: {
+  canReassignStructureGroups: boolean;
+  effectiveStructureViewMode: StructureViewMode;
+  linkGroupingMode: "body" | "mesh" | "alpha";
+}): string | null => {
+  if (!canReassignStructureGroups) {
+    return "Group editing is unavailable";
+  }
+  if (effectiveStructureViewMode === "links" && linkGroupingMode !== "body") {
+    return "Subgroups are only available in Body grouping";
+  }
+  return null;
+};
+
 export const resolveSubgroupActionState = ({
   canReassignStructureGroups,
   effectiveStructureViewMode,
@@ -23,22 +41,15 @@ export const resolveSubgroupActionState = ({
   isDisabled: boolean;
   title: string;
 } => {
-  if (!canReassignStructureGroups) {
-    return {
-      isDisabled: true,
-      title: "Group editing is unavailable",
-    };
-  }
-  if (effectiveStructureViewMode === "links" && linkGroupingMode !== "body") {
-    return {
-      isDisabled: true,
-      title: "Subgroups are only available in Body grouping",
-    };
-  }
+  const disabledReason = resolveSubgroupActionDisabledReason({
+    canReassignStructureGroups,
+    effectiveStructureViewMode,
+    linkGroupingMode,
+  });
 
   return {
-    isDisabled: false,
-    title: "Create an empty subgroup drop target",
+    isDisabled: disabledReason !== null,
+    title: disabledReason ?? "Create an empty subgroup drop target",
   };
 };
 
