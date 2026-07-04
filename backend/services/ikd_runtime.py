@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Literal, Optional
+from typing import Literal
 
 from backend.core.app_config import get_config_value, read_app_config
 from backend.core.settings import settings
@@ -17,6 +17,9 @@ from backend.core.settings import settings
 IKD_STARTUP_TIMEOUT_S = 4.0
 IKD_STOP_TIMEOUT_S = 2.0
 IKD_STOP_POLL_INTERVAL_S = 0.05
+IkdLaunchMode = Literal["binary", "cargo", "external"]
+ManagedIkdLaunchMode = Literal["binary", "cargo"]
+IkdRuntimePayload = dict[str, bool | int | str | None]
 
 
 @dataclass(frozen=True)
@@ -24,11 +27,11 @@ class IkdRuntimeStatus:
     configured_enabled: bool
     configured_use_for_drag: bool
     running: bool
-    pid: Optional[int]
-    launch_mode: Optional[Literal["binary", "cargo", "external"]]
-    message: Optional[str]
+    pid: int | None
+    launch_mode: IkdLaunchMode | None
+    message: str | None
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> IkdRuntimePayload:
         return {
             "configured_enabled": self.configured_enabled,
             "configured_use_for_drag": self.configured_use_for_drag,
@@ -42,8 +45,8 @@ class IkdRuntimeStatus:
 class IkdRuntimeManager:
     def __init__(self) -> None:
         self._lock = Lock()
-        self._process: Optional[subprocess.Popen[str]] = None
-        self._launch_mode: Optional[Literal["binary", "cargo"]] = None
+        self._process: subprocess.Popen[str] | None = None
+        self._launch_mode: ManagedIkdLaunchMode | None = None
         self._project_root = Path(__file__).resolve().parents[2]
         binary_name = "worldd.exe" if os.name == "nt" else "worldd"
         self._worldd_binary = self._project_root / "ikd" / "target" / "debug" / binary_name
@@ -59,7 +62,7 @@ class IkdRuntimeManager:
         return enabled, use_for_drag, control_hz, telemetry_hz, stale_target_ms
 
     @staticmethod
-    def _is_alive(process: Optional[subprocess.Popen[str]]) -> bool:
+    def _is_alive(process: subprocess.Popen[str] | None) -> bool:
         return process is not None and process.poll() is None
 
     def _check_worldd_socket(self) -> bool:
@@ -101,7 +104,7 @@ class IkdRuntimeManager:
                 pids.append(pid)
         return pids
 
-    def _resolve_command(self) -> tuple[list[str], Literal["binary", "cargo"]]:
+    def _resolve_command(self) -> tuple[list[str], ManagedIkdLaunchMode]:
         if self._worldd_binary.exists():
             return [str(self._worldd_binary)], "binary"
 
@@ -254,4 +257,3 @@ class IkdRuntimeManager:
 
 
 ikd_runtime_manager = IkdRuntimeManager()
-
