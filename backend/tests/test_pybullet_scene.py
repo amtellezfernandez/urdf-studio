@@ -272,34 +272,34 @@ def test_pybullet_static_robot_holds_current_non_fixed_joint_positions() -> None
 def test_pybullet_default_gui_workspace_does_not_step_static_debug_view() -> None:
     assert should_step_pybullet_workspace_once(
         no_viewer=False,
-        free_base=False,
+        run_physics=False,
         camera_screenshot_dir=None,
         report_path=None,
     ) is False
     assert should_step_pybullet_workspace_once(
         no_viewer=False,
-        free_base=True,
+        run_physics=True,
         camera_screenshot_dir=None,
         report_path=None,
     ) is True
     assert should_step_pybullet_workspace_once(
         no_viewer=True,
-        free_base=False,
+        run_physics=False,
         camera_screenshot_dir=None,
         report_path=None,
     ) is True
     assert should_step_pybullet_workspace_once(
         no_viewer=False,
-        free_base=False,
+        run_physics=False,
         camera_screenshot_dir=None,
         report_path=__file__,
     ) is False
 
 
-def test_pybullet_gui_loop_steps_only_for_dynamic_free_base_view() -> None:
-    assert should_step_pybullet_interactive_viewer_loop(no_viewer=False, free_base=False) is False
-    assert should_step_pybullet_interactive_viewer_loop(no_viewer=False, free_base=True) is True
-    assert should_step_pybullet_interactive_viewer_loop(no_viewer=True, free_base=True) is False
+def test_pybullet_gui_loop_steps_only_for_explicit_dynamic_view() -> None:
+    assert should_step_pybullet_interactive_viewer_loop(no_viewer=False, run_physics=False) is False
+    assert should_step_pybullet_interactive_viewer_loop(no_viewer=False, run_physics=True) is True
+    assert should_step_pybullet_interactive_viewer_loop(no_viewer=True, run_physics=True) is False
 
 
 def test_pybullet_static_interactive_frame_pumps_mouse_events_without_physics_step() -> None:
@@ -333,7 +333,7 @@ def test_pybullet_static_interactive_frame_pumps_mouse_events_without_physics_st
     state = advance_pybullet_viewer_frame(
         _FakeRuntime,
         no_viewer=False,
-        free_base=False,
+        run_physics=False,
     )
 
     assert _FakeRuntime.calls == [
@@ -353,7 +353,7 @@ def test_pybullet_static_interactive_frame_pumps_mouse_events_without_physics_st
     }
 
 
-def test_pybullet_free_base_interactive_frame_steps_and_pumps_mouse_events() -> None:
+def test_pybullet_dynamic_interactive_frame_steps_and_pumps_mouse_events() -> None:
     class _FakeRuntime:
         COV_ENABLE_SINGLE_STEP_RENDERING = 17
         calls: list[object] = []
@@ -384,7 +384,7 @@ def test_pybullet_free_base_interactive_frame_steps_and_pumps_mouse_events() -> 
     state = advance_pybullet_viewer_frame(
         _FakeRuntime,
         no_viewer=False,
-        free_base=True,
+        run_physics=True,
     )
 
     assert _FakeRuntime.calls == [
@@ -421,7 +421,7 @@ def test_pybullet_headless_frame_does_not_step_or_pump_gui_events() -> None:
     state = advance_pybullet_viewer_frame(
         _FakeRuntime,
         no_viewer=True,
-        free_base=False,
+        run_physics=False,
     )
 
     assert _FakeRuntime.calls == []
@@ -447,14 +447,14 @@ def test_pybullet_static_gui_loop_uses_zero_gravity_for_interaction_without_sett
     state = configure_pybullet_static_interactive_viewer_gravity(
         _FakeRuntime,
         no_viewer=False,
-        free_base=False,
+        run_physics=False,
     )
 
     assert state == {"enabled": True, "gravity_xyz": (0.0, 0.0, 0.0)}
     assert _FakeRuntime.gravity_calls == [(0.0, 0.0, 0.0)]
 
 
-def test_pybullet_free_base_gui_keeps_scene_gravity() -> None:
+def test_pybullet_dynamic_gui_keeps_scene_gravity() -> None:
     class _FakeRuntime:
         gravity_calls: list[tuple[float, float, float]] = []
 
@@ -465,10 +465,10 @@ def test_pybullet_free_base_gui_keeps_scene_gravity() -> None:
     state = configure_pybullet_static_interactive_viewer_gravity(
         _FakeRuntime,
         no_viewer=False,
-        free_base=True,
+        run_physics=True,
     )
 
-    assert state == {"enabled": False, "reason": "free_base"}
+    assert state == {"enabled": False, "reason": "dynamic_physics"}
     assert _FakeRuntime.gravity_calls == []
 
 

@@ -24,7 +24,7 @@ PyBulletViewerPumpStateName = Literal[
 ]
 PyBulletDebugCameraSource = Literal["aabb", "default"]
 PyBulletUnavailableReason = Literal["headless", "api_missing"]
-PyBulletGravityUnavailableReason = Literal["headless", "free_base", "api_missing"]
+PyBulletGravityUnavailableReason = Literal["headless", "dynamic_physics", "api_missing"]
 
 PYBULLET_STATIC_VIEWER_DEBUG_FLAGS: dict[PyBulletStaticViewerFlagName, tuple[str, int]] = {
     # Keep the mouse available for camera orbit/pan/zoom in static inspection
@@ -143,18 +143,21 @@ def pump_pybullet_static_debug_viewer(
     return pump_state
 
 
-def should_step_pybullet_interactive_viewer_loop(*, no_viewer: bool, free_base: bool) -> bool:
-    return not no_viewer and free_base
+def should_step_pybullet_interactive_viewer_loop(*, no_viewer: bool, run_physics: bool) -> bool:
+    return not no_viewer and run_physics
 
 
 def advance_pybullet_viewer_frame(
     pybullet: Any,
     *,
     no_viewer: bool,
-    free_base: bool,
+    run_physics: bool,
 ) -> PyBulletViewerFrameState:
     stepped = False
-    if should_step_pybullet_interactive_viewer_loop(no_viewer=no_viewer, free_base=free_base):
+    if should_step_pybullet_interactive_viewer_loop(
+        no_viewer=no_viewer,
+        run_physics=run_physics,
+    ):
         pybullet.stepSimulation()
         stepped = True
     return {
@@ -167,12 +170,12 @@ def configure_pybullet_static_interactive_viewer_gravity(
     pybullet: Any,
     *,
     no_viewer: bool,
-    free_base: bool,
+    run_physics: bool,
 ) -> PyBulletStaticInteractiveViewerGravityState:
     if no_viewer:
         return {"enabled": False, "reason": "headless"}
-    if free_base:
-        return {"enabled": False, "reason": "free_base"}
+    if run_physics:
+        return {"enabled": False, "reason": "dynamic_physics"}
     set_gravity = getattr(pybullet, "setGravity", None)
     if set_gravity is None:
         return {"enabled": False, "reason": "api_missing"}
@@ -200,13 +203,13 @@ def require_pybullet_gui_environment(*, no_viewer: bool) -> None:
 def should_step_pybullet_workspace_once(
     *,
     no_viewer: bool,
-    free_base: bool,
+    run_physics: bool,
     camera_screenshot_dir: Path | None,
     report_path: Path | None,
 ) -> bool:
     # Report generation is metadata-only; it must not advance a static GUI inspection scene.
     del report_path
-    return no_viewer or free_base or camera_screenshot_dir is not None
+    return no_viewer or run_physics or camera_screenshot_dir is not None
 
 
 def is_pybullet_connected(pybullet: Any, client_id: int) -> bool:

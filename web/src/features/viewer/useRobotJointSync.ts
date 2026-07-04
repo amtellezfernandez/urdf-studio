@@ -76,12 +76,14 @@ export const useRobotJointSync = ({
   const initialPoseRef = useRef<Record<string, number>>({});
   const targetJointValuesRef = useRef<Record<string, number>>({});
   const animatedJointValuesRef = useRef<Record<string, number>>({});
+  const latestJointValuesPropRef = useRef<Record<string, number>>(jointValues);
   const lastJointValuesPropRef = useRef<Record<string, number> | null>(null);
   const deferredJointValuesRef = useRef<Record<string, number> | null>(null);
   const wasAnyDraggingRef = useRef(false);
   const smoothingRate = 10;
   const dragSmoothingRate = 24;
   const smoothingEpsilon = 1e-4;
+  latestJointValuesPropRef.current = jointValues;
 
   useEffect(() => {
     if (!robot) {
@@ -122,6 +124,14 @@ export const useRobotJointSync = ({
       }
     });
     initialPoseRef.current = { ...initialJointAngles };
+    targetJointValuesRef.current = { ...initialJointAngles };
+    animatedJointValuesRef.current = { ...initialJointAngles };
+    lastJointValuesPropRef.current = { ...latestJointValuesPropRef.current };
+    deferredJointValuesRef.current = null;
+    wasAnyDraggingRef.current = false;
+    applyJointValues(robot, initialJointAngles, { filter: false });
+    robot.updateMatrixWorld?.(true);
+    animationController.clearManualJointChange();
     onRobotJointsLoaded?.(controllableJointNames, initialJointAngles);
     setAvailableJointsStore(controllableJointNames);
     useJointStore.getState().setInitialJointValues(initialJointAngles);
@@ -131,10 +141,9 @@ export const useRobotJointSync = ({
       buildJointTopologySnapshot(robot, controllableJointNames),
     );
     setStoreJointValues(initialJointAngles);
-    targetJointValuesRef.current = { ...initialJointAngles };
-    animatedJointValuesRef.current = { ...initialJointAngles };
   }, [
     robot,
+    animationController,
     onRobotJointsLoaded,
     setAvailableJointsStore,
     setStoreJointValues,

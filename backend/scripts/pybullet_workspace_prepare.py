@@ -43,6 +43,7 @@ def _parse_args() -> argparse.Namespace:
     add_common_workspace_args(parser)
     parser.add_argument("--no-floor", action="store_true")
     parser.add_argument("--free-base", action="store_true")
+    parser.add_argument("--run-physics", action="store_true")
     parser.add_argument("--show-camera-markers", action="store_true")
     parser.add_argument("--camera-screenshot-dir", default="")
     return parser.parse_args()
@@ -62,6 +63,7 @@ def prepare_pybullet_workspace_scene(
     no_floor: bool,
     no_viewer: bool,
     free_base: bool,
+    run_physics: bool,
     show_camera_markers: bool,
     camera_screenshot_dir: Path | None,
     report_path: Path | None,
@@ -129,12 +131,12 @@ def prepare_pybullet_workspace_scene(
         static_viewer_gravity = configure_pybullet_static_interactive_viewer_gravity(
             pybullet,
             no_viewer=no_viewer,
-            free_base=free_base,
+            run_physics=run_physics,
         )
         viewer_pump_state = pump_pybullet_static_debug_viewer(pybullet, no_viewer=no_viewer)
         if should_step_pybullet_workspace_once(
             no_viewer=no_viewer,
-            free_base=free_base,
+            run_physics=run_physics,
             camera_screenshot_dir=camera_screenshot_dir,
             report_path=report_path,
         ):
@@ -161,7 +163,7 @@ def prepare_pybullet_workspace_scene(
             f"connection_mode={connection_label} "
             f"frame_map={simulator_scene.frame_map} requested_frame_map={simulator_scene.requested_frame_map} "
             f"applied_initial_joints={applied_joints} held_joints={held_joints} "
-            f"static_view={not free_base} static_viewer_gravity={static_viewer_gravity} "
+            f"static_view={not run_physics} static_viewer_gravity={static_viewer_gravity} "
             f"debug_viewer={debug_viewer_state} "
             f"viewer_camera={viewer_camera} viewer_pump={viewer_pump_state} startup_ms={timings_ms}",
             flush=True,
@@ -185,8 +187,9 @@ def prepare_pybullet_workspace_scene(
                     "camera_screenshots": camera_screenshot_count,
                     "applied_initial_joints": applied_joints,
                     "held_joints": held_joints,
-                    "static_view": not free_base,
+                    "static_view": not run_physics,
                     "free_base": free_base,
+                    "run_physics": run_physics,
                     "floor": not no_floor,
                     "static_viewer_gravity": static_viewer_gravity,
                     "debug_viewer": debug_viewer_state,
@@ -209,7 +212,7 @@ def prepare_pybullet_workspace_scene(
             advance_pybullet_viewer_frame(
                 pybullet,
                 no_viewer=no_viewer,
-                free_base=free_base,
+                run_physics=run_physics,
             )
             if deadline is not None and time.monotonic() >= deadline:
                 break
@@ -231,6 +234,7 @@ def main() -> int:
         no_floor=args.no_floor,
         no_viewer=args.no_viewer,
         free_base=args.free_base,
+        run_physics=args.run_physics,
         show_camera_markers=args.show_camera_markers,
         camera_screenshot_dir=Path(args.camera_screenshot_dir) if args.camera_screenshot_dir else None,
         report_path=Path(args.report) if args.report else None,
