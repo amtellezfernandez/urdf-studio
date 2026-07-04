@@ -66,7 +66,6 @@ import {
   type SerializedWorldObjectObstacleSource,
   type RoverApproachWorldRouteResult,
 } from "@/features/locomotion/approach";
-
 import { ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS } from "./roverApproachBeforeIkSolveParams";
 
 const resolveActiveRoverApproachLegTarget = ({
