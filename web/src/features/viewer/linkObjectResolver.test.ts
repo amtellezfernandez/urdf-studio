@@ -47,4 +47,16 @@ describe("createLinkObjectResolver", () => {
     expect(resolve("wrist_link")).toBe(link);
     expect(resolve("robot::wrist_link")).toBe(link);
   });
+
+  it("ignores malformed link map entries without breaking alias resolution", () => {
+    const link = createMockLink("valid_link");
+    const robot = createMockRobot({
+      valid_link: link,
+    });
+    (robot.links as Record<string, unknown>).malformed_link = { name: "malformed_link" };
+
+    const resolve = createLinkObjectResolver(robot);
+    expect(resolve("valid_link")).toBe(link);
+    expect(resolve("malformed_link")).toBeNull();
+  });
 });

@@ -19,9 +19,13 @@ const safeEncodeURI = (value: string): string => {
 
 const normalizeAliasKey = (value: string): string => safeDecodeURIComponent(value).trim().toLowerCase();
 
-const isLikelyLinkObject = (object: THREE.Object3D | null | undefined): object is THREE.Object3D => {
-  if (!object) return false;
-  const objectLike = object as THREE.Object3D & { isURDFLink?: boolean; type?: string };
+const toObject3D = (value: unknown): THREE.Object3D | null =>
+  value instanceof THREE.Object3D ? value : null;
+
+const isLikelyLinkObject = (object: unknown): object is THREE.Object3D => {
+  const object3d = toObject3D(object);
+  if (!object3d) return false;
+  const objectLike = object3d as THREE.Object3D & { isURDFLink?: boolean; type?: string };
   return objectLike.isURDFLink === true || objectLike.type === "URDFLink";
 };
 
@@ -48,12 +52,13 @@ const buildLinkAliasMap = (robot: URDFRobot) => {
   const aliasMap = new Map<string, THREE.Object3D>();
 
   Object.entries(robot.links ?? {}).forEach(([name, object]) => {
-    if (!object) return;
+    const linkObject = toObject3D(object);
+    if (!linkObject) return;
     const aliases = new Set<string>();
     addAlias(aliases, name);
-    addAlias(aliases, object.name ?? "");
+    addAlias(aliases, linkObject.name ?? "");
     aliases.forEach((alias) => {
-      aliasMap.set(normalizeAliasKey(alias), object as unknown as THREE.Object3D);
+      aliasMap.set(normalizeAliasKey(alias), linkObject);
     });
   });
 
@@ -85,8 +90,8 @@ export const createLinkObjectResolver = (robot: URDFRobot | null): LinkObjectRes
     addAlias(aliases, linkName);
 
     for (const alias of aliases) {
-      const direct = (robot.links ?? {})[alias];
-      if (direct) return direct as unknown as THREE.Object3D;
+      const directLinkObject = toObject3D((robot.links ?? {})[alias]);
+      if (directLinkObject) return directLinkObject;
     }
 
     for (const alias of aliases) {
