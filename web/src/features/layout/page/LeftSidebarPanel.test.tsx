@@ -161,6 +161,30 @@ describe("LeftSidebarPanel", () => {
     });
   });
 
+  it("shows the launcher status label when there are no workspace targets", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = createProps();
+    props.workspaceTransfer = {
+      sceneSummary: null,
+      targets: [],
+    };
+    props.workspaceLauncherStatusLabel = "Backend offline";
+
+    await act(async () => {
+      root.render(createElement(LeftSidebarPanel, props));
+    });
+
+    expect(container.textContent).toContain("Backend offline");
+    expect(container.textContent).toContain(
+      "Start the backend to list compatible simulators and tools."
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("marks degraded openable simulator targets with an attention dot", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);

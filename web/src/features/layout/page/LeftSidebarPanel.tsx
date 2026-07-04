@@ -58,11 +58,40 @@ type LeftSidebarPanelProps = {
   onOpenWorkspaceLauncher?: () => void;
 };
 
+type WorkspaceTransferLauncherButtonProps = {
+  needsAttention: boolean;
+  onOpenWorkspaceLauncher?: () => void;
+  statusLabel?: string;
+};
+
+type WorkspaceTransferPanelProps = {
+  needsAttention: boolean;
+  onOpenWorkspaceLauncher?: () => void;
+  statusLabel?: string;
+  summary: string;
+  targets: WorkspaceTransferTargetState[];
+};
+
 const resolveSidebarWorkspaceTargets = (
   workspaceTransfer: WorkspaceTransferState | null | undefined
 ): WorkspaceTransferTargetState[] => {
   return workspaceTransfer?.targets ?? [];
 };
+
+const resolveWorkspaceTargetSummary = ({
+  targets,
+  workspaceLauncherStatusLabel,
+  workspaceTransfer,
+}: {
+  targets: WorkspaceTransferTargetState[];
+  workspaceLauncherStatusLabel?: string;
+  workspaceTransfer: WorkspaceTransferState | null | undefined;
+}): string =>
+  targets.length > 0
+    ? `${targets.length} targets${
+        workspaceTransfer?.sceneSummary ? ` · ${workspaceTransfer.sceneSummary}` : ""
+      }`
+    : workspaceLauncherStatusLabel ?? "Workspace targets";
 
 const getWorkspaceTransferBadgeClassName = (target: WorkspaceTransferTargetState) =>
   cn(
@@ -148,6 +177,65 @@ const WorkspaceTransferTargetButton = ({
   );
 };
 
+const WorkspaceTransferLauncherButton = ({
+  needsAttention,
+  onOpenWorkspaceLauncher,
+  statusLabel,
+}: WorkspaceTransferLauncherButtonProps) => (
+  <button
+    type="button"
+    onClick={onOpenWorkspaceLauncher}
+    disabled={!onOpenWorkspaceLauncher}
+    className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border/55 bg-background/35 px-2 text-[10px] font-medium text-foreground transition-colors hover:border-border/80 hover:bg-muted/25 disabled:cursor-not-allowed disabled:opacity-45"
+    aria-label="Simulation Prep"
+    title={statusLabel ? `Simulation Prep: ${statusLabel}` : "Simulation Prep"}
+  >
+    <span
+      aria-hidden="true"
+      className={`h-1.5 w-1.5 rounded-full ${
+        needsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
+      }`}
+    />
+    <ArrowUpRight className="h-3 w-3" />
+  </button>
+);
+
+const WorkspaceTransferPanel = ({
+  needsAttention,
+  onOpenWorkspaceLauncher,
+  statusLabel,
+  summary,
+  targets,
+}: WorkspaceTransferPanelProps) => (
+  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/45 bg-background/45">
+    <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/30 px-2 py-2">
+      <div className="min-w-0">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Simulation Prep
+        </div>
+        <div className="mt-1 truncate text-xs text-foreground">Simulators + tools</div>
+        <div className="mt-0.5 truncate text-[9px] text-muted-foreground">{summary}</div>
+      </div>
+      <WorkspaceTransferLauncherButton
+        needsAttention={needsAttention}
+        onOpenWorkspaceLauncher={onOpenWorkspaceLauncher}
+        statusLabel={statusLabel}
+      />
+    </div>
+    {targets.length > 0 ? (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {targets.map((target) => (
+          <WorkspaceTransferTargetButton key={target.id} target={target} />
+        ))}
+      </div>
+    ) : (
+      <div className="px-2 py-2 text-[9px] leading-snug text-muted-foreground">
+        Start the backend to list compatible simulators and tools.
+      </div>
+    )}
+  </div>
+);
+
 const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
   const {
     workspaceMode,
@@ -178,12 +266,11 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
   const workspaceModeUi = getWorkspaceModeUiPolicy(workspaceMode);
   const cameras = useCameraStore((state) => state.cameras);
   const workspaceTargets = resolveSidebarWorkspaceTargets(workspaceTransfer);
-  const workspaceTargetSummary =
-    workspaceTargets.length > 0
-      ? `${workspaceTargets.length} targets${
-          workspaceTransfer?.sceneSummary ? ` · ${workspaceTransfer.sceneSummary}` : ""
-        }`
-      : workspaceLauncherStatusLabel ?? "Workspace targets";
+  const workspaceTargetSummary = resolveWorkspaceTargetSummary({
+    targets: workspaceTargets,
+    workspaceLauncherStatusLabel,
+    workspaceTransfer,
+  });
 
   if (workspaceModeUi.isAssembly) {
     return (
@@ -230,52 +317,13 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
           style={{ flexBasis: `${topPanelHeight * 100}%` }}
         >
           <div className="flex h-full min-h-0 flex-col p-2">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/45 bg-background/45">
-              <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/30 px-2 py-2">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Simulation Prep
-                  </div>
-                  <div className="mt-1 truncate text-xs text-foreground">
-                    Simulators + tools
-                  </div>
-                  <div className="mt-0.5 truncate text-[9px] text-muted-foreground">
-                    {workspaceTargetSummary}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={onOpenWorkspaceLauncher}
-                  disabled={!onOpenWorkspaceLauncher}
-                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border/55 bg-background/35 px-2 text-[10px] font-medium text-foreground transition-colors hover:border-border/80 hover:bg-muted/25 disabled:cursor-not-allowed disabled:opacity-45"
-                  aria-label="Simulation Prep"
-                  title={
-                    workspaceLauncherStatusLabel
-                      ? `Simulation Prep: ${workspaceLauncherStatusLabel}`
-                      : "Simulation Prep"
-                  }
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      workspaceLauncherNeedsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
-                    }`}
-                  />
-                  <ArrowUpRight className="h-3 w-3" />
-                </button>
-              </div>
-              {workspaceTargets.length > 0 ? (
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  {workspaceTargets.map((target) => (
-                    <WorkspaceTransferTargetButton key={target.id} target={target} />
-                  ))}
-                </div>
-              ) : (
-                <div className="px-2 py-2 text-[9px] leading-snug text-muted-foreground">
-                  Start the backend to list compatible simulators and tools.
-                </div>
-              )}
-            </div>
+            <WorkspaceTransferPanel
+              needsAttention={Boolean(workspaceLauncherNeedsAttention)}
+              onOpenWorkspaceLauncher={onOpenWorkspaceLauncher}
+              statusLabel={workspaceLauncherStatusLabel}
+              summary={workspaceTargetSummary}
+              targets={workspaceTargets}
+            />
           </div>
         </div>
         <div
