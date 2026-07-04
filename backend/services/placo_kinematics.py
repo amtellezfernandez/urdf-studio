@@ -5,7 +5,7 @@ import math
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 from fastapi import HTTPException
@@ -14,6 +14,9 @@ from backend.models.kinematics import IKDiagnostics, IKRequest, IKResponse
 from backend.services.ik_config import get_solver_tuning
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
 
+PlacoTaskCache = dict[str, Any]
+IkMetadata = dict[str, Any]
+
 
 @dataclass
 class PlacoRobotEntry:
@@ -21,19 +24,19 @@ class PlacoRobotEntry:
     urdf_xml: str
     robot: Any
     solver: Any
-    joint_names: List[str]
+    joint_names: list[str]
     joints_task: Any | None
-    task_cache: Dict[str, Any] = field(default_factory=dict)
+    task_cache: PlacoTaskCache = field(default_factory=dict)
 
 
-_robot_cache: Dict[str, PlacoRobotEntry] = {}
+_robot_cache: dict[str, PlacoRobotEntry] = {}
 
 
 def _hash_urdf(urdf_xml: str) -> str:
     return hashlib.sha256(urdf_xml.encode("utf-8")).hexdigest()
 
 
-def _quat_to_matrix(wxyz: List[float]) -> np.ndarray:
+def _quat_to_matrix(wxyz: list[float]) -> np.ndarray:
     if len(wxyz) != 4:
         raise HTTPException(
             status_code=400,
@@ -252,7 +255,7 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
         branch_message="Placo solver does not report branch diagnostics.",
     )
 
-    metadata: Dict[str, Any] = {
+    metadata: IkMetadata = {
         "urdf_hash": entry.urdf_hash,
         "target_link": ik_request.target_link,
         "actuated_joint_names": entry.joint_names,
