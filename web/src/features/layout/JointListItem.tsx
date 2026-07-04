@@ -2,14 +2,13 @@ import { memo, useCallback } from "react";
 import { hexToRgba } from "@/shared/lib/color";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimitInfo } from "@/shared/lib/urdfBrowser";
-import jointColors from "@/shared/joint_colors.json";
-import { getJointColor } from "@/features/urdf/utils/jointColors";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { resolveJointValueRange } from "@/features/layout/jointValueRange";
 import { getJointValueColor } from "@/features/layout/jointValueColor";
 import { useJointValueInteraction } from "@/features/layout/jointValueInteraction";
 import { JOINT_LIST_ITEM_PARAMS } from "@/features/layout/jointListItemParams";
+import { resolveJointListItemDisplayState } from "@/features/layout/jointListItemDisplayState";
 
 interface JointListItemProps {
   jointName: string;
@@ -31,16 +30,6 @@ interface JointListItemProps {
   effortLimit?: number | null;
   compact?: boolean;
 }
-
-const toFiniteNumberOrNull = (value: number | null | undefined): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
-
-const formatMetricValue = (value: number | null | undefined): string => {
-  const finiteValue = toFiniteNumberOrNull(value);
-  return finiteValue === null
-    ? JOINT_LIST_ITEM_PARAMS.missingMetricLabel
-    : finiteValue.toFixed(JOINT_LIST_ITEM_PARAMS.metricDisplayPrecision);
-};
 
 const JointListItemBase = ({
   jointName,
@@ -75,11 +64,23 @@ const JointListItemBase = ({
       groupLabel,
     });
   const hasBothLimits = hasFiniteHardLimits;
-  const angleDisplayValue = angleUnit === "deg" ? resolvedValue * RAD_TO_DEG : resolvedValue;
-  const angleDisplay = angleDisplayValue.toFixed(JOINT_LIST_ITEM_PARAMS.angleDisplayPrecision);
-  const velocityDisplay = formatMetricValue(jointInfo?.velocity);
-  const effortDisplay = formatMetricValue(effortLimit);
-  const isFixedJoint = jointInfo?.type === "fixed";
+  const {
+    angleDisplay,
+    angleDisplayValue,
+    effortDisplay,
+    isFixedJoint,
+    jointTypeColor,
+    squareColor,
+    velocityDisplay,
+  } = resolveJointListItemDisplayState({
+    angleUnit,
+    availableJoints,
+    colorJointNames,
+    effortLimit,
+    jointInfo,
+    jointName,
+    resolvedValue,
+  });
   const metricGridWidthClassName = compact
     ? JOINT_LIST_ITEM_PARAMS.compactMetricGridWidthClassName
     : JOINT_LIST_ITEM_PARAMS.metricGridWidthClassName;
@@ -102,27 +103,6 @@ const JointListItemBase = ({
     onValueChange,
     resolvedValue,
   });
-
-  // Get joint type color from joint_colors.json
-  const jointTypeColor = isFixedJoint
-    ? jointColors.light_gray
-    : jointInfo?.type
-      ? (jointColors as Record<string, string>)[jointInfo.type] || jointColors.light_gray
-      : jointColors.light_gray;
-
-  const colorReferenceJoints = colorJointNames?.length ? colorJointNames : availableJoints;
-
-  // Get joint color from 3D editor color scheme (based on sorted joint names)
-  const jointEditorColor = isFixedJoint
-    ? jointColors.light_gray
-    : colorReferenceJoints.length > 0
-      ? getJointColor(jointName, colorReferenceJoints)
-      : jointTypeColor;
-
-  // Keep non-fixed joints colored even when hidden; fixed hidden joints stay grey.
-  const squareColor = isFixedJoint
-    ? "#52525b"
-    : jointEditorColor;
 
   const handleSquareClick = (e: React.MouseEvent) => {
     e.stopPropagation();
