@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Sequence, TypeAlias
 
 from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
@@ -13,6 +14,16 @@ from backend.services.world_layout_transfer_types import SimPrimitive
 from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 
+PyBulletShapeKwargs: TypeAlias = dict[str, object]
+
+
+@dataclass(frozen=True)
+class PyBulletPrimitiveShape:
+    shape_type: int
+    collision_kwargs: PyBulletShapeKwargs
+    visual_kwargs: PyBulletShapeKwargs
+
+
 def _quat_wxyz_to_xyzw(quat_wxyz: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
     return (quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0])
 
@@ -22,7 +33,7 @@ def pybullet_primitive_shape(
     primitive: SimPrimitive,
     *,
     asset_roots: Sequence[Path] = (),
-) -> tuple[int, dict[str, Any], dict[str, Any]]:
+) -> PyBulletPrimitiveShape:
     asset_path = resolve_declared_mesh_asset_path(
         primitive,
         asset_roots,
@@ -35,25 +46,41 @@ def pybullet_primitive_shape(
             "fileName": str(asset_path),
             "meshScale": primitive.asset_scale_xyz or (1.0, 1.0, 1.0),
         }
-        return pybullet.GEOM_MESH, shape_kwargs, shape_kwargs
+        return PyBulletPrimitiveShape(
+            shape_type=pybullet.GEOM_MESH,
+            collision_kwargs=shape_kwargs,
+            visual_kwargs=shape_kwargs,
+        )
     if primitive.sim_type == "box":
         shape_kwargs = {
             "halfExtents": [component * 0.5 for component in primitive.size_xyz],
         }
-        return pybullet.GEOM_BOX, shape_kwargs, shape_kwargs
+        return PyBulletPrimitiveShape(
+            shape_type=pybullet.GEOM_BOX,
+            collision_kwargs=shape_kwargs,
+            visual_kwargs=shape_kwargs,
+        )
     if primitive.sim_type == "sphere":
         shape_kwargs = {
             "radius": max(primitive.size_xyz) * 0.5,
         }
-        return pybullet.GEOM_SPHERE, shape_kwargs, shape_kwargs
+        return PyBulletPrimitiveShape(
+            shape_type=pybullet.GEOM_SPHERE,
+            collision_kwargs=shape_kwargs,
+            visual_kwargs=shape_kwargs,
+        )
     if primitive.sim_type == "cylinder":
-        return pybullet.GEOM_CYLINDER, {
-            "radius": primitive.size_xyz[0] * 0.5,
-            "height": primitive.size_xyz[2],
-        }, {
-            "radius": primitive.size_xyz[0] * 0.5,
-            "length": primitive.size_xyz[2],
-        }
+        return PyBulletPrimitiveShape(
+            shape_type=pybullet.GEOM_CYLINDER,
+            collision_kwargs={
+                "radius": primitive.size_xyz[0] * 0.5,
+                "height": primitive.size_xyz[2],
+            },
+            visual_kwargs={
+                "radius": primitive.size_xyz[0] * 0.5,
+                "length": primitive.size_xyz[2],
+            },
+        )
     raise ValueError(f"Unsupported PyBullet primitive type: {primitive.sim_type}")
 
 
@@ -63,20 +90,20 @@ def add_pybullet_primitive(
     *,
     asset_roots: Sequence[Path] = (),
 ) -> int:
-    shape_type, collision_shape_kwargs, visual_shape_kwargs = pybullet_primitive_shape(
+    shape = pybullet_primitive_shape(
         pybullet,
         primitive,
         asset_roots=asset_roots,
     )
     collision_shape = (
-        pybullet.createCollisionShape(shape_type, **collision_shape_kwargs)
+        pybullet.createCollisionShape(shape.shape_type, **shape.collision_kwargs)
         if primitive.collision
         else -1
     )
     visual_shape = pybullet.createVisualShape(
-        shape_type,
+        shape.shape_type,
         rgbaColor=primitive.rgba,
-        **visual_shape_kwargs,
+        **shape.visual_kwargs,
     )
     base_mass = 0.0 if primitive.fixed else (primitive.mass_kg if primitive.mass_kg is not None else 1.0)
     body_id = pybullet.createMultiBody(

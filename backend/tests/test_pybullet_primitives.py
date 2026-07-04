@@ -32,11 +32,11 @@ def test_pybullet_cylinder_uses_distinct_collision_and_visual_height_keywords() 
         collision=True,
     )
 
-    shape_type, collision_kwargs, visual_kwargs = pybullet_primitive_shape(_FakePybullet, primitive)
+    shape = pybullet_primitive_shape(_FakePybullet, primitive)
 
-    assert shape_type == _FakePybullet.GEOM_CYLINDER
-    assert collision_kwargs == {"radius": 0.1, "height": 0.8}
-    assert visual_kwargs == {"radius": 0.1, "length": 0.8}
+    assert shape.shape_type == _FakePybullet.GEOM_CYLINDER
+    assert shape.collision_kwargs == {"radius": 0.1, "height": 0.8}
+    assert shape.visual_kwargs == {"radius": 0.1, "length": 0.8}
 
 
 def test_pybullet_primitive_shape_uses_mesh_asset_when_available(tmp_path: Path) -> None:
@@ -58,18 +58,18 @@ def test_pybullet_primitive_shape_uses_mesh_asset_when_available(tmp_path: Path)
         asset_scale_xyz=(1.0, 1.2, 1.4),
     )
 
-    shape_type, collision_kwargs, visual_kwargs = pybullet_primitive_shape(
+    shape = pybullet_primitive_shape(
         _FakePybullet,
         primitive,
         asset_roots=(tmp_path,),
     )
 
-    assert shape_type == _FakePybullet.GEOM_MESH
-    assert collision_kwargs == {
+    assert shape.shape_type == _FakePybullet.GEOM_MESH
+    assert shape.collision_kwargs == {
         "fileName": str(mesh_path),
         "meshScale": (1.0, 1.2, 1.4),
     }
-    assert visual_kwargs == collision_kwargs
+    assert shape.visual_kwargs == shape.collision_kwargs
 
 
 def test_pybullet_primitive_shape_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
