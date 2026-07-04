@@ -181,6 +181,30 @@ const GITHUB_FILE_CONTENT_CACHE_MAX_ENTRIES = GITHUB_REPO_PARAMS.fileContentCach
 const gitHubFileContentCache = new Map<string, GitHubFileContentCacheEntry>();
 const gitHubFileContentInFlight = new Map<string, Promise<GitHubFileContentResult>>();
 
+const createGitHubFileContentResult = (
+  content: BlobPart,
+  mimeType: string
+): GitHubFileContentResult => ({
+  content: new Blob([content], { type: mimeType }),
+  mimeType,
+});
+
+const writeGitHubFileContentCache = (
+  cacheKey: string,
+  result: GitHubFileContentResult
+): void => {
+  gitHubFileContentCache.set(cacheKey, {
+    expiresAt: Date.now() + GITHUB_FILE_CONTENT_CACHE_TTL_MS,
+    value: result,
+  });
+
+  while (gitHubFileContentCache.size > GITHUB_FILE_CONTENT_CACHE_MAX_ENTRIES) {
+    const oldestCacheKey = gitHubFileContentCache.keys().next().value as string | undefined;
+    if (!oldestCacheKey) break;
+    gitHubFileContentCache.delete(oldestCacheKey);
+  }
+};
+
 const hashCacheToken = (value: string): string => {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i += 1) {
@@ -1435,7 +1459,7 @@ const readBlobText = async (blob: Blob): Promise<string> => {
     });
   }
   try {
-    return await new Response(blob as unknown as BodyInit).text();
+    return await new Response(blob).text();
   } catch {
     // Fall through to final error.
   }
@@ -1483,17 +1507,9 @@ async function getGitHubFileContent(
         const directResponse = await fetch(resolvedDirectUrl);
         if (directResponse.ok) {
           const content = await directResponse.arrayBuffer();
-          const result = { content: new Blob([content], { type: mimeType }), mimeType };
+          const result = createGitHubFileContentResult(content, mimeType);
           if (cacheable) {
-            gitHubFileContentCache.set(cacheKey, {
-              expiresAt: Date.now() + GITHUB_FILE_CONTENT_CACHE_TTL_MS,
-              value: result,
-            });
-            while (gitHubFileContentCache.size > GITHUB_FILE_CONTENT_CACHE_MAX_ENTRIES) {
-              const oldestKey = gitHubFileContentCache.keys().next().value as string | undefined;
-              if (!oldestKey) break;
-              gitHubFileContentCache.delete(oldestKey);
-            }
+            writeGitHubFileContentCache(cacheKey, result);
           }
           return result;
         }
@@ -1543,17 +1559,9 @@ async function getGitHubFileContent(
 
     try {
       const content = decodeBase64(data.content);
-      const result = { content: new Blob([content], { type: mimeType }), mimeType };
+      const result = createGitHubFileContentResult(content, mimeType);
       if (cacheable) {
-        gitHubFileContentCache.set(cacheKey, {
-          expiresAt: Date.now() + GITHUB_FILE_CONTENT_CACHE_TTL_MS,
-          value: result,
-        });
-        while (gitHubFileContentCache.size > GITHUB_FILE_CONTENT_CACHE_MAX_ENTRIES) {
-          const oldestKey = gitHubFileContentCache.keys().next().value as string | undefined;
-          if (!oldestKey) break;
-          gitHubFileContentCache.delete(oldestKey);
-        }
+        writeGitHubFileContentCache(cacheKey, result);
       }
       return result;
     } catch (error) {
@@ -1579,10 +1587,7 @@ const getEmbeddedGitHubFileContent = (file: GitHubFile): GitHubFileContentResult
   }
   const mimeType = getMimeType(file.path);
   const content = decodeBase64(file.content);
-  return {
-    content: new Blob([content], { type: mimeType }),
-    mimeType,
-  };
+  return createGitHubFileContentResult(content, mimeType);
 };
 
 async function getGitHubFileContentForFile(
@@ -2138,13 +2143,7 @@ export async function convertGitHubFilesToFileList(
     );
     urdfContent = response.content;
     urdfMimeType = response.mimeType;
-    // Extract URDF content as text
-    const urdfBlob =
-      urdfContent && typeof (urdfContent as Blob).text === "function"
-        ? (urdfContent as Blob)
-        : new Blob([urdfContent as unknown as BlobPart], { type: urdfMimeType });
-    urdfContent = urdfBlob;
-    urdfText = await readBlobText(urdfBlob);
+    urdfText = await readBlobText(urdfContent);
     if (hasXacroSyntax(urdfText)) {
       try {
         const expanded = await expandFromXacroSource(activeUrdfPath);
