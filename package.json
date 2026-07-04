@@ -70,6 +70,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
+    "@sparkjsdev/spark": "^2.0.0",
     "@tanstack/react-query": "^5.83.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -84,7 +85,7 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "three": "^0.160.1",
+    "three": "^0.180.0",
     "three-stdlib": "^2.36.0",
     "urdf-loader": "^0.12.6",
     "zustand": "^5.0.8"
