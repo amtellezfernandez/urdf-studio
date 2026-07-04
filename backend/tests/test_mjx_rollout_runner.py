@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.services.executability_audit import audit_physical_rollout_trace
 from backend.services.mjx_rollout_runner import MjxRolloutBatchConfig, run_mjx_rollout_batch
+
+pytest.importorskip("jax")
+pytest.importorskip("mujoco")
+pytest.importorskip("mujoco.mjx")
 
 _PENDULUM_URDF = """<?xml version="1.0"?>
 <robot name="pendulum">
@@ -22,6 +28,27 @@ _PENDULUM_URDF = """<?xml version="1.0"?>
   </joint>
 </robot>
 """
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"episode_count": 0}, "episode_count"),
+        ({"steps_per_episode": 0}, "steps_per_episode"),
+        ({"timestep_seconds": 0.0}, "timestep_seconds"),
+        ({"action_amplitude_rad": -0.1}, "action_amplitude_rad"),
+        ({"action_frequency_hz": 0.0}, "action_frequency_hz"),
+        ({"friction_scale_range": (1.5, 0.5)}, "friction_scale_range"),
+        ({"mass_scale_range": (0.0, 1.0)}, "mass_scale_range"),
+        ({"trace_id_prefix": ""}, "trace_id_prefix"),
+    ],
+)
+def test_mjx_rollout_batch_config_rejects_invalid_values(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        MjxRolloutBatchConfig(urdf_xml=_PENDULUM_URDF, **kwargs)
 
 
 def test_run_mjx_rollout_batch_produces_shaped_traces() -> None:
