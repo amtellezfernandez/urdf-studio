@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
-
 from pydantic import BaseModel
 
 
@@ -51,5 +49,5 @@ class IkConfigResponse(BaseModel):
     timeouts: IkTimeouts
     drag: IkDragConfig
     orbit: IkOrbitDefaults
-    solver_tuning: Dict[str, IkSolverTuning]
+    solver_tuning: dict[str, IkSolverTuning]
     tolerances: IkTolerances

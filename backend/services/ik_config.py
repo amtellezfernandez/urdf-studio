@@ -143,109 +143,68 @@ def _apply_config_overrides_orbit(base: IkOrbitDefaults, config: dict) -> IkOrbi
     )
 
 
+def _read_solver_tuning_config_value(
+    solver_id: str, setting_key: str, fallback: float | int, config: dict
+) -> float | int:
+    normalized_solver_id = solver_id.replace("-", "")
+    return get_config_value(
+        config,
+        ["ik", "solverTuning", solver_id, setting_key],
+        get_config_value(
+            config,
+            ["ik", "solverTuning", normalized_solver_id, setting_key],
+            fallback,
+        ),
+    )
+
+
 def _apply_config_overrides_solver(
     solver_id: str, base: IkSolverTuning, config: dict
 ) -> IkSolverTuning:
-    solver_key = solver_id.replace("-", "")
-    solver_key_alt = solver_id
     return IkSolverTuning(
         position_weight=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "positionWeight"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "positionWeight"],
-                    base.position_weight,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "positionWeight", base.position_weight, config
             )
         ),
         orientation_weight=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "orientationWeight"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "orientationWeight"],
-                    base.orientation_weight,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "orientationWeight", base.orientation_weight, config
             )
         ),
         posture_weight=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "postureWeight"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "postureWeight"],
-                    base.posture_weight,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "postureWeight", base.posture_weight, config
             )
         ),
         velocity_dt=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "velocityDt"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "velocityDt"],
-                    base.velocity_dt,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "velocityDt", base.velocity_dt, config
             )
         ),
         limit_weight=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "limitWeight"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "limitWeight"],
-                    base.limit_weight,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "limitWeight", base.limit_weight, config
             )
         ),
         smooth_alpha=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "smoothAlpha"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "smoothAlpha"],
-                    base.smooth_alpha,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "smoothAlpha", base.smooth_alpha, config
             )
         ),
         max_step_delta=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "maxStepDelta"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "maxStepDelta"],
-                    base.max_step_delta,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "maxStepDelta", base.max_step_delta, config
             )
         ),
         max_blend_delta=float(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "maxBlendDelta"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "maxBlendDelta"],
-                    base.max_blend_delta,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "maxBlendDelta", base.max_blend_delta, config
             )
         ),
         solve_iterations=int(
-            get_config_value(
-                config,
-                ["ik", "solverTuning", solver_key_alt, "solveIterations"],
-                get_config_value(
-                    config,
-                    ["ik", "solverTuning", solver_key, "solveIterations"],
-                    base.solve_iterations,
-                ),
+            _read_solver_tuning_config_value(
+                solver_id, "solveIterations", base.solve_iterations, config
             )
         ),
     )
