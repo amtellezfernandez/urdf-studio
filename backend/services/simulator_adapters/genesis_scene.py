@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 import math
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -10,8 +11,7 @@ from scipy.spatial.transform import Rotation
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
 from backend.services.simulator_adapters.scene_bounds import scene_bounds_from_aabbs
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
-from backend.services.world_layout_transfer_types import SimPrimitive
-from backend.services.world_layout_transfer_types import WorldLayoutTransferError
+from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutTransferError
 
 
 def primitive_bounds(primitive: SimPrimitive) -> tuple[np.ndarray, np.ndarray]:
@@ -41,7 +41,10 @@ def scene_center_and_radius(
     return bounds.center_xyz, bounds.radius_m
 
 
-def _aabb_to_tuple(min_xyz: np.ndarray, max_xyz: np.ndarray) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+def _aabb_to_tuple(
+    min_xyz: np.ndarray,
+    max_xyz: np.ndarray,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     return (
         tuple(float(value) for value in min_xyz),
         tuple(float(value) for value in max_xyz),
@@ -110,7 +113,7 @@ def add_mesh_entity_if_available(
             collision=primitive.collision,
         )
         material = primitive_rigid_material(gs, primitive)
-        entity_kwargs = {
+        entity_kwargs: dict[str, object] = {
             "morph": morph,
             "surface": gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3]),
             "name": primitive.sim_name,
@@ -162,7 +165,7 @@ def add_primitive_entity(
     else:
         raise ValueError(f"Unsupported Genesis primitive type: {primitive.sim_type}")
     material = primitive_rigid_material(gs, primitive)
-    entity_kwargs = {
+    entity_kwargs: dict[str, object] = {
         "morph": morph,
         "surface": gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3]),
         "name": primitive.sim_name,

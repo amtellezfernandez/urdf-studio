@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -73,15 +74,15 @@ def render_pybullet_camera_image(
         far_m=far_m,
     )
     renderer = getattr(pybullet, "ER_TINY_RENDERER", None)
-    kwargs = {}
+    camera_image_kwargs: dict[str, object] = {}
     if renderer is not None:
-        kwargs["renderer"] = renderer
+        camera_image_kwargs["renderer"] = renderer
     _width, _height, rgba, *_rest = pybullet.getCameraImage(
         camera.width,
         camera.height,
         viewMatrix=view_matrix,
         projectionMatrix=projection_matrix,
-        **kwargs,
+        **camera_image_kwargs,
     )
     image = np.asarray(rgba)
     if image.ndim == 1:
