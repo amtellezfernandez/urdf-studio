@@ -1,4 +1,8 @@
-import { buildFilteredLinks } from "@/features/layout/sidebarSelectors";
+import {
+  filterVoxelLinks,
+  resolveHighlightedLinkName,
+  resolveLinkSidebarViewMode,
+} from "@/features/layout/linkSidebarFilterHelpers";
 
 export type LinkSidebarViewMode = "links" | "flat" | "hierarchy";
 
@@ -12,13 +16,13 @@ export const filterLinksForSidebar = ({
   searchQuery: string;
   voxelDerivedInertialLinkSet: Set<string>;
   voxelOnly: boolean;
-}) => {
-  const searchFilteredLinks = buildFilteredLinks(allLinks, searchQuery);
-  if (!voxelOnly) {
-    return searchFilteredLinks;
-  }
-  return searchFilteredLinks.filter((linkName) => voxelDerivedInertialLinkSet.has(linkName));
-};
+}) =>
+  filterVoxelLinks({
+    allLinks,
+    searchQuery,
+    voxelDerivedInertialLinkSet,
+    voxelOnly,
+  });
 
 export const resolveLinkSidebarInteractionState = ({
   currentViewMode,
@@ -34,16 +38,17 @@ export const resolveLinkSidebarInteractionState = ({
   highlightedLinkName: string | null;
   viewMode: LinkSidebarViewMode;
 } => {
-  const highlightedLinkName = selectedLink ?? hoveredLink;
-  if (simulationPrepPanelOpen && highlightedLinkName) {
-    return {
-      highlightedLinkName,
-      viewMode: "links",
-    };
-  }
+  const highlightedLinkName = resolveHighlightedLinkName({
+    hoveredLink,
+    selectedLink,
+  });
 
   return {
     highlightedLinkName,
-    viewMode: currentViewMode,
+    viewMode: resolveLinkSidebarViewMode({
+      currentViewMode,
+      highlightedLinkName,
+      simulationPrepPanelOpen,
+    }),
   };
 };
