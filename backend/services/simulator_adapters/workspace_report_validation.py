@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TypeAlias, cast
 
+from backend.models.json_payload import JsonObject, JsonValue
 from backend.models.simulator_runtime import SimulatorId
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
@@ -15,6 +17,9 @@ from backend.services.world_layout_static_transfer import resolve_world_layout_a
 
 VALID_REPORT_FRAME_MAPS = frozenset(("identity", "studio-y-up-to-z-up"))
 VALID_REPORT_REQUESTED_FRAME_MAPS = frozenset(("auto", *VALID_REPORT_FRAME_MAPS))
+
+SimulatorWorkspaceReportPayload: TypeAlias = JsonObject
+SimulatorWorkspaceReportObject: TypeAlias = Mapping[str, JsonValue]
 
 
 @dataclass(frozen=True)
@@ -77,11 +82,12 @@ def validate_simulator_workspace_report(
     if not report_path.exists():
         return f"missing simulator validation report: {report_path}"
     try:
-        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        raw_payload = json.loads(report_path.read_text(encoding="utf-8"))
     except Exception as exc:
         return f"invalid simulator validation report {report_path}: {exc}"
-    if not isinstance(payload, dict):
+    if not isinstance(raw_payload, dict):
         return f"invalid simulator validation report {report_path}: expected JSON object"
+    payload = cast(SimulatorWorkspaceReportPayload, raw_payload)
 
     required_fields = (
         "simulator",
@@ -217,7 +223,7 @@ def validate_simulator_workspace_report(
 
 
 def _validate_report_simulator(
-    value: Any,
+    value: object,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     if not isinstance(value, Mapping):
@@ -237,7 +243,7 @@ def _validate_report_simulator(
     return None
 
 
-def _validate_report_header(payload: Mapping[str, Any]) -> str | None:
+def _validate_report_header(payload: SimulatorWorkspaceReportObject) -> str | None:
     for field_name in ("package_id", "version", "robot_urdf_path"):
         error = _validate_report_string(payload.get(field_name), field_name)
         if error:
@@ -278,7 +284,7 @@ def _validate_report_header(payload: Mapping[str, Any]) -> str | None:
     return _validate_report_string_list(payload.get("warnings"), "warnings", allow_empty=True)
 
 
-def _validate_report_joint_positions(payload: Mapping[str, Any]) -> str | None:
+def _validate_report_joint_positions(payload: SimulatorWorkspaceReportObject) -> str | None:
     joint_positions = payload.get("joint_positions")
     if not isinstance(joint_positions, Mapping):
         return "simulator validation report field 'joint_positions' must be an object"
@@ -298,7 +304,7 @@ def _validate_report_joint_positions(payload: Mapping[str, Any]) -> str | None:
 
 
 def _validate_expected_joint_positions(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_joint_positions = expectations.joint_positions or {}
@@ -321,7 +327,7 @@ def _validate_expected_joint_positions(
 
 
 def _validate_expected_runtime_joint_application(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_joint_positions = expectations.joint_positions or {}
@@ -342,7 +348,7 @@ def _validate_expected_runtime_joint_application(
 
 
 def _validate_report_frame_map(
-    value: Any,
+    value: object,
     path: str,
     valid_values: frozenset[ConcreteWorldLayoutFrameMap | WorldLayoutFrameMap],
 ) -> str | None:
@@ -358,7 +364,7 @@ def _validate_report_frame_map(
 
 
 def _validate_expected_frame_contract(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     if (
@@ -378,7 +384,7 @@ def _validate_expected_frame_contract(
 
 
 def _validate_report_artifacts(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     artifacts = payload.get("artifacts")
@@ -396,7 +402,7 @@ def _validate_report_artifacts(
 
 
 def _validate_report_artifact_path(
-    artifacts: Mapping[str, Any],
+    artifacts: SimulatorWorkspaceReportObject,
     key: str,
     *,
     kind: str,
@@ -420,7 +426,7 @@ def _validate_report_artifact_path(
 
 
 def _validate_report_count(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     *,
     field_name: str,
     list_field_name: str,
@@ -444,7 +450,7 @@ def _validate_report_count(
 
 
 def _validate_report_item_fields(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     *,
     list_field_name: str,
     required_fields: tuple[str, ...],
@@ -486,21 +492,21 @@ def _validate_report_item_fields(
 
 
 def _index_report_entries_by_string_field(
-    report_entries: list[Any],
+    report_entries: list[JsonValue],
     field_name: str,
-) -> dict[str, Mapping[str, Any]]:
-    indexed_entries: dict[str, Mapping[str, Any]] = {}
+) -> dict[str, SimulatorWorkspaceReportObject]:
+    indexed_entries: dict[str, SimulatorWorkspaceReportObject] = {}
     for report_entry in report_entries:
         if not isinstance(report_entry, Mapping):
             continue
         field_value = report_entry.get(field_name)
         if isinstance(field_value, str):
-            indexed_entries[field_value] = report_entry
+            indexed_entries[field_value] = cast(SimulatorWorkspaceReportObject, report_entry)
     return indexed_entries
 
 
 def _validate_expected_object_vectors(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_positions = expectations.object_positions_xyz or {}
@@ -537,7 +543,7 @@ def _validate_expected_object_vectors(
 
 
 def _validate_expected_object_contracts(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_contracts = expectations.object_contracts or {}
@@ -628,7 +634,7 @@ def _validate_expected_object_contracts(
 
 
 def _validate_expected_object_asset_refs(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_asset_refs = expectations.object_asset_refs or {}
@@ -652,7 +658,7 @@ def _validate_expected_object_asset_refs(
 
 
 def _validate_expected_camera_ids(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_camera_ids = expectations.camera_ids
@@ -675,7 +681,7 @@ def _validate_expected_camera_ids(
 
 
 def _validate_expected_camera_contracts(
-    payload: Mapping[str, Any],
+    payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
 ) -> str | None:
     expected_contracts = expectations.camera_contracts or {}
@@ -743,7 +749,7 @@ def _validate_expected_camera_contracts(
     return None
 
 
-def _validate_report_object_asset_refs(payload: Mapping[str, Any]) -> str | None:
+def _validate_report_object_asset_refs(payload: SimulatorWorkspaceReportObject) -> str | None:
     asset_roots_raw = payload.get("asset_roots")
     if not isinstance(asset_roots_raw, list):
         return "simulator validation report field 'asset_roots' must be a list"
@@ -772,7 +778,7 @@ def _validate_report_object_asset_refs(payload: Mapping[str, Any]) -> str | None
 
 
 def _validate_expected_vector3(
-    value: Any,
+    value: object,
     expected: tuple[float, float, float],
     path: str,
 ) -> str | None:
@@ -793,7 +799,7 @@ def _validate_expected_vector3(
 
 
 def _validate_expected_vector4(
-    value: Any,
+    value: object,
     expected: tuple[float, float, float, float],
     path: str,
 ) -> str | None:
@@ -807,7 +813,7 @@ def _validate_expected_vector4(
 
 
 def _validate_expected_matrix3(
-    value: Any,
+    value: object,
     expected: tuple[tuple[float, float, float], ...],
     path: str,
 ) -> str | None:
@@ -827,7 +833,7 @@ def _validate_expected_matrix3(
     return None
 
 
-def _validate_expected_number(value: Any, expected: float, path: str) -> str | None:
+def _validate_expected_number(value: object, expected: float, path: str) -> str | None:
     if (
         not isinstance(value, int | float)
         or isinstance(value, bool)
@@ -839,7 +845,7 @@ def _validate_expected_number(value: Any, expected: float, path: str) -> str | N
 
 
 def _validate_expected_optional_number(
-    value: Any,
+    value: object,
     expected: float | None,
     path: str,
 ) -> str | None:
@@ -851,7 +857,7 @@ def _validate_expected_optional_number(
 
 
 def _validate_report_unique_item_values(
-    report_entries: list[Any],
+    report_entries: list[JsonValue],
     *,
     list_field_name: str,
     field_names: tuple[str, ...],
@@ -878,7 +884,7 @@ def _validate_report_unique_item_values(
 
 
 def _validate_report_item_values(
-    report_entry: Mapping[str, Any],
+    report_entry: SimulatorWorkspaceReportObject,
     *,
     path: str,
     list_field_name: str,
@@ -953,26 +959,26 @@ def _validate_report_item_values(
     return None
 
 
-def _validate_report_string(value: Any, path: str) -> str | None:
+def _validate_report_string(value: object, path: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return f"simulator validation report field '{path}' must be a non-empty string"
     return None
 
 
-def _validate_report_optional_string(value: Any, path: str) -> str | None:
+def _validate_report_optional_string(value: object, path: str) -> str | None:
     if value is None:
         return None
     return _validate_report_string(value, path)
 
 
-def _validate_report_bool(value: Any, path: str) -> str | None:
+def _validate_report_bool(value: object, path: str) -> str | None:
     if not isinstance(value, bool):
         return f"simulator validation report field '{path}' must be a boolean"
     return None
 
 
 def _validate_report_string_list(
-    value: Any,
+    value: object,
     path: str,
     *,
     allow_empty: bool = False,
@@ -989,7 +995,7 @@ def _validate_report_string_list(
 
 
 def _validate_report_vector3(
-    value: Any,
+    value: object,
     path: str,
     *,
     positive: bool = False,
@@ -1002,7 +1008,7 @@ def _validate_report_vector3(
     return None
 
 
-def _validate_report_quat_wxyz(value: Any, path: str) -> str | None:
+def _validate_report_quat_wxyz(value: object, path: str) -> str | None:
     numbers = _report_number_tuple(value, path, expected_length=4)
     if isinstance(numbers, str):
         return numbers
@@ -1012,7 +1018,7 @@ def _validate_report_quat_wxyz(value: Any, path: str) -> str | None:
     return None
 
 
-def _validate_report_rgba(value: Any, path: str) -> str | None:
+def _validate_report_rgba(value: object, path: str) -> str | None:
     numbers = _report_number_tuple(value, path, expected_length=4)
     if isinstance(numbers, str):
         return numbers
@@ -1021,19 +1027,19 @@ def _validate_report_rgba(value: Any, path: str) -> str | None:
     return None
 
 
-def _validate_report_positive_int(value: Any, path: str) -> str | None:
+def _validate_report_positive_int(value: object, path: str) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         return f"simulator validation report field '{path}' must be a positive integer"
     return None
 
 
-def _validate_report_non_negative_int(value: Any, path: str) -> str | None:
+def _validate_report_non_negative_int(value: object, path: str) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         return f"simulator validation report field '{path}' must be a non-negative integer"
     return None
 
 
-def _validate_report_optional_non_negative_number(value: Any, path: str) -> str | None:
+def _validate_report_optional_non_negative_number(value: object, path: str) -> str | None:
     if value is None:
         return None
     if not _is_finite_report_number(value) or float(value) < 0.0:
@@ -1041,13 +1047,13 @@ def _validate_report_optional_non_negative_number(value: Any, path: str) -> str 
     return None
 
 
-def _validate_report_number(value: Any, path: str) -> str | None:
+def _validate_report_number(value: object, path: str) -> str | None:
     if not _is_finite_report_number(value):
         return f"simulator validation report field '{path}' must be a finite number"
     return None
 
 
-def _validate_report_camera_fov(value: Any, path: str) -> str | None:
+def _validate_report_camera_fov(value: object, path: str) -> str | None:
     if not _is_finite_report_number(value):
         return f"simulator validation report field '{path}' must be a finite number"
     parsed = float(value)
@@ -1056,7 +1062,7 @@ def _validate_report_camera_fov(value: Any, path: str) -> str | None:
     return None
 
 
-def _validate_report_camera_intrinsics(value: Any, path: str) -> str | None:
+def _validate_report_camera_intrinsics(value: object, path: str) -> str | None:
     if not isinstance(value, Mapping):
         return f"simulator validation report field '{path}' must be an object"
     matrix = value.get("matrix")
@@ -1078,7 +1084,7 @@ def _validate_report_camera_intrinsics(value: Any, path: str) -> str | None:
     return None
 
 
-def _report_matrix3(value: Any, path: str) -> tuple[tuple[float, float, float], ...] | str:
+def _report_matrix3(value: object, path: str) -> tuple[tuple[float, float, float], ...] | str:
     if not isinstance(value, list) or len(value) != 3:
         return f"simulator validation report field '{path}' must be a 3x3 number matrix"
     rows: list[tuple[float, float, float]] = []
@@ -1095,7 +1101,7 @@ def _report_matrix3(value: Any, path: str) -> tuple[tuple[float, float, float], 
 
 
 def _report_number_tuple(
-    value: Any,
+    value: object,
     path: str,
     *,
     expected_length: int,
@@ -1112,5 +1118,5 @@ def _report_number_tuple(
     return tuple(float(component) for component in value)
 
 
-def _is_finite_report_number(value: Any) -> bool:
+def _is_finite_report_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
