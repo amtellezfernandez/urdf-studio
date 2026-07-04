@@ -33,7 +33,6 @@ import {
 } from "@/shared/lib/urdfBrowser";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/shared/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/shared/lib/angleConversions";
-import { getJointLimitsError } from "@/shared/lib/jointLimits";
 import { resolveJointValueRange } from "@/features/layout/jointValueRange";
 import { getJointValueColor } from "@/features/layout/jointValueColor";
 import { JOINT_CONTROL_PARAMS } from "@/features/layout/jointControlParams";
@@ -44,12 +43,17 @@ import {
   type LimitAttributeDebugState,
 } from "@/features/layout/jointLimitDebugState";
 import {
+  jointTypeNeedsLimits,
   parseAxisValue,
   parseJointNumericInput,
   resolveAxisComponents,
   resolveJointAvailableLinks,
   resolveJointAxisPresetLabel,
+  resolveJointLimitCommitState,
+  resolveJointLimitDisplayValue,
+  resolveJointLimitLocalState,
   resolveJointOriginSnapshot,
+  resolveJointTypeChangeLimits,
 } from "@/features/layout/jointControlHelpers";
 import { resolveJointDynamicLimitDisplayState } from "@/features/layout/jointDynamicLimitDisplay";
 import { useJointValueInteraction } from "@/features/layout/jointValueInteraction";
@@ -197,7 +201,7 @@ export const JointControl = ({
   const currentType = jointInfo?.type || JOINT_CONTROL_PARAMS.defaultJointType;
   const isFixedJoint = currentType === "fixed";
 
-  const needsLimits = currentType === "revolute" || currentType === "prismatic";
+  const needsLimits = jointTypeNeedsLimits(currentType);
   const needsAxis = ["revolute", "continuous", "prismatic", "planar"].includes(currentType);
   const storeJointValue = useJointStore(
     useCallback((s) => s.jointValues[jointName] ?? 0, [jointName])
@@ -447,24 +451,9 @@ export const JointControl = ({
 
   // Update local limits when jointInfo changes (including type changes)
   useEffect(() => {
-    const newType = jointInfo?.type || "continuous";
-    const needsLimits = newType === "revolute" || newType === "prismatic";
-    
-    if (needsLimits) {
-      // For joints that need limits, sync from jointInfo
-      const lower = jointInfo?.lower !== null && jointInfo?.lower !== undefined 
-        ? String(jointInfo.lower) 
-        : "";
-      const upper = jointInfo?.upper !== null && jointInfo?.upper !== undefined 
-        ? String(jointInfo.upper) 
-        : "";
-      setLocalLowerLimit(lower);
-      setLocalUpperLimit(upper);
-    } else {
-      // For fixed/continuous joints, clear the local limit state
-      setLocalLowerLimit("");
-      setLocalUpperLimit("");
-    }
+    const nextLimitState = resolveJointLimitLocalState({ jointInfo });
+    setLocalLowerLimit(nextLimitState.lower);
+    setLocalUpperLimit(nextLimitState.upper);
   }, [jointInfo?.lower, jointInfo?.upper, jointInfo?.type]);
 
   useEffect(() => {
@@ -735,49 +724,40 @@ export const JointControl = ({
                   <div className="flex min-w-0 items-center gap-1">
                     <span className="text-[8px] text-muted-foreground">Min</span>
                     <NumberInput
-                      value={angleUnit === "deg"
-                        ? (localLowerLimit
-                            ? parseFloat(localLowerLimit) * RAD_TO_DEG
-                            : jointInfo?.lower !== null && jointInfo?.lower !== undefined
-                              ? jointInfo.lower * RAD_TO_DEG
-                              : undefined)
-                        : (localLowerLimit
-                            ? parseFloat(localLowerLimit)
-                            : jointInfo?.lower !== null && jointInfo?.lower !== undefined
-                              ? jointInfo.lower
-                              : undefined)}
+                      value={resolveJointLimitDisplayValue({
+                        angleUnit,
+                        fallbackLimit: jointInfo?.lower,
+                        localLimit: localLowerLimit,
+                      })}
                       onValueChange={(nextLimitDisplayValue) => {
                         const radValue = angleUnit === "deg" ? nextLimitDisplayValue * DEG_TO_RAD : nextLimitDisplayValue;
                         setLocalLowerLimit(String(radValue));
                         if (onLimitsChange) {
-                          const currentUpper = parseJointNumericInput(localUpperLimit);
-                          const error = getJointLimitsError(radValue, currentUpper);
-                          if (error) {
-                            toast.error(error);
+                          const nextCommitState = resolveJointLimitCommitState({
+                            currentType,
+                            localLowerLimit: String(radValue),
+                            localUpperLimit,
+                          });
+                          if ("errorMessage" in nextCommitState) {
+                            toast.error(nextCommitState.errorMessage);
                             return;
                           }
-                          onLimitsChange(radValue, currentUpper);
+                          onLimitsChange(nextCommitState.lower, nextCommitState.upper);
                         }
                       }}
                       onBlur={() => {
                         if (!onLimitsChange) return;
                         if (localLowerLimit.trim() !== "" && localUpperLimit.trim() !== "") return;
-                        const currentLower = parseJointNumericInput(localLowerLimit);
-                        const currentUpper = parseJointNumericInput(localUpperLimit);
-                        if (
-                          currentType === "prismatic" &&
-                          currentLower === undefined &&
-                          currentUpper === undefined
-                        ) {
-                          toast.error("Prismatic joints require limits.");
+                        const nextCommitState = resolveJointLimitCommitState({
+                          currentType,
+                          localLowerLimit,
+                          localUpperLimit,
+                        });
+                        if ("errorMessage" in nextCommitState) {
+                          toast.error(nextCommitState.errorMessage);
                           return;
                         }
-                        const error = getJointLimitsError(currentLower, currentUpper);
-                        if (error) {
-                          toast.error(error);
-                          return;
-                        }
-                        onLimitsChange(currentLower, currentUpper);
+                        onLimitsChange(nextCommitState.lower, nextCommitState.upper);
                       }}
                       step={angleUnit === "deg" ? 1 : 0.01}
                       compact
@@ -788,49 +768,40 @@ export const JointControl = ({
                   <div className="flex min-w-0 items-center gap-1">
                     <span className="text-[8px] text-muted-foreground">Max</span>
                     <NumberInput
-                      value={angleUnit === "deg"
-                        ? (localUpperLimit
-                            ? parseFloat(localUpperLimit) * RAD_TO_DEG
-                            : jointInfo?.upper !== null && jointInfo?.upper !== undefined
-                              ? jointInfo.upper * RAD_TO_DEG
-                              : undefined)
-                        : (localUpperLimit
-                            ? parseFloat(localUpperLimit)
-                            : jointInfo?.upper !== null && jointInfo?.upper !== undefined
-                              ? jointInfo.upper
-                              : undefined)}
+                      value={resolveJointLimitDisplayValue({
+                        angleUnit,
+                        fallbackLimit: jointInfo?.upper,
+                        localLimit: localUpperLimit,
+                      })}
                       onValueChange={(nextLimitDisplayValue) => {
                         const radValue = angleUnit === "deg" ? nextLimitDisplayValue * DEG_TO_RAD : nextLimitDisplayValue;
                         setLocalUpperLimit(String(radValue));
                         if (onLimitsChange) {
-                          const currentLower = parseJointNumericInput(localLowerLimit);
-                          const error = getJointLimitsError(currentLower, radValue);
-                          if (error) {
-                            toast.error(error);
+                          const nextCommitState = resolveJointLimitCommitState({
+                            currentType,
+                            localLowerLimit,
+                            localUpperLimit: String(radValue),
+                          });
+                          if ("errorMessage" in nextCommitState) {
+                            toast.error(nextCommitState.errorMessage);
                             return;
                           }
-                          onLimitsChange(currentLower, radValue);
+                          onLimitsChange(nextCommitState.lower, nextCommitState.upper);
                         }
                       }}
                       onBlur={() => {
                         if (!onLimitsChange) return;
                         if (localLowerLimit.trim() !== "" && localUpperLimit.trim() !== "") return;
-                        const currentLower = parseJointNumericInput(localLowerLimit);
-                        const currentUpper = parseJointNumericInput(localUpperLimit);
-                        if (
-                          currentType === "prismatic" &&
-                          currentLower === undefined &&
-                          currentUpper === undefined
-                        ) {
-                          toast.error("Prismatic joints require limits.");
+                        const nextCommitState = resolveJointLimitCommitState({
+                          currentType,
+                          localLowerLimit,
+                          localUpperLimit,
+                        });
+                        if ("errorMessage" in nextCommitState) {
+                          toast.error(nextCommitState.errorMessage);
                           return;
                         }
-                        const error = getJointLimitsError(currentLower, currentUpper);
-                        if (error) {
-                          toast.error(error);
-                          return;
-                        }
-                        onLimitsChange(currentLower, currentUpper);
+                        onLimitsChange(nextCommitState.lower, nextCommitState.upper);
                       }}
                       step={angleUnit === "deg" ? 1 : 0.01}
                       compact
@@ -866,28 +837,13 @@ export const JointControl = ({
               <Select
                 value={currentType}
                 onValueChange={(newType) => {
-                  const newTypeNeedsLimits = newType === "revolute" || newType === "prismatic";
-                  let lower: number | undefined = undefined;
-                  let upper: number | undefined = undefined;
-                  
-                  if (newTypeNeedsLimits) {
-                    // Try to get limits from local state first, then fall back to jointInfo
-                    if (localLowerLimit && localLowerLimit.trim() !== "") {
-                      const parsed = parseFloat(localLowerLimit);
-                      if (!isNaN(parsed)) lower = parsed;
-                    } else if (jointInfo?.lower !== null && jointInfo?.lower !== undefined) {
-                      lower = jointInfo.lower;
-                    }
-                    
-                    if (localUpperLimit && localUpperLimit.trim() !== "") {
-                      const parsed = parseFloat(localUpperLimit);
-                      if (!isNaN(parsed)) upper = parsed;
-                    } else if (jointInfo?.upper !== null && jointInfo?.upper !== undefined) {
-                      upper = jointInfo.upper;
-                    }
-                  }
-                  
-                  onTypeChange(newType, lower, upper);
+                  const nextLimits = resolveJointTypeChangeLimits({
+                    jointInfo,
+                    localLowerLimit,
+                    localUpperLimit,
+                    newType,
+                  });
+                  onTypeChange(newType, nextLimits.lower, nextLimits.upper);
                 }}
               >
                 <SelectTrigger 

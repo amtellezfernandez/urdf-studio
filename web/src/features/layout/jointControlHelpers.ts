@@ -2,9 +2,12 @@ import { analyzeUrdf } from "@/shared/lib/urdfCore";
 import {
   getUrdfElementByName,
   parseUrdfDocument,
+  type JointLimitInfo,
   type UrdfParseOptions,
   type UrdfAnalysis,
 } from "@/shared/lib/urdfBrowser";
+import { RAD_TO_DEG } from "@/shared/lib/angleConversions";
+import { getJointLimitsError } from "@/shared/lib/jointLimits";
 import { parseVector3 } from "@/features/urdf/editor/link-editor/sizeUtils";
 
 export type JointVector3 = [number, number, number];
@@ -71,6 +74,99 @@ export const resolveJointAvailableLinks = ({
 export const parseAxisValue = (value: string): number | null => {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+export const jointTypeNeedsLimits = (jointType: string): boolean =>
+  jointType === "revolute" || jointType === "prismatic";
+
+export const resolveJointLimitLocalState = ({
+  jointInfo,
+}: {
+  jointInfo?: JointLimitInfo;
+}): {
+  lower: string;
+  upper: string;
+} => {
+  if (!jointTypeNeedsLimits(jointInfo?.type ?? "")) {
+    return { lower: "", upper: "" };
+  }
+
+  return {
+    lower: jointInfo?.lower !== null && jointInfo?.lower !== undefined ? String(jointInfo.lower) : "",
+    upper: jointInfo?.upper !== null && jointInfo?.upper !== undefined ? String(jointInfo.upper) : "",
+  };
+};
+
+export const resolveJointLimitDisplayValue = ({
+  angleUnit,
+  fallbackLimit,
+  localLimit,
+}: {
+  angleUnit: "rad" | "deg";
+  fallbackLimit: number | null | undefined;
+  localLimit: string;
+}): number | undefined => {
+  const parsedLocalLimit = parseJointNumericInput(localLimit);
+  const resolvedLimit = parsedLocalLimit ?? fallbackLimit ?? undefined;
+  if (resolvedLimit === undefined || !Number.isFinite(resolvedLimit)) {
+    return undefined;
+  }
+  return angleUnit === "deg" ? resolvedLimit * RAD_TO_DEG : resolvedLimit;
+};
+
+export const resolveJointLimitCommitState = ({
+  currentType,
+  localLowerLimit,
+  localUpperLimit,
+}: {
+  currentType: string;
+  localLowerLimit: string;
+  localUpperLimit: string;
+}):
+  | { errorMessage: string }
+  | {
+      lower: number | undefined;
+      upper: number | undefined;
+      errorMessage?: undefined;
+    } => {
+  const lower = parseJointNumericInput(localLowerLimit);
+  const upper = parseJointNumericInput(localUpperLimit);
+  if (currentType === "prismatic" && lower === undefined && upper === undefined) {
+    return { errorMessage: "Prismatic joints require limits." };
+  }
+  const errorMessage = getJointLimitsError(lower, upper);
+  if (errorMessage) {
+    return { errorMessage };
+  }
+  return { lower, upper };
+};
+
+export const resolveJointTypeChangeLimits = ({
+  jointInfo,
+  localLowerLimit,
+  localUpperLimit,
+  newType,
+}: {
+  jointInfo?: JointLimitInfo;
+  localLowerLimit: string;
+  localUpperLimit: string;
+  newType: string;
+}): {
+  lower: number | undefined;
+  upper: number | undefined;
+} => {
+  if (!jointTypeNeedsLimits(newType)) {
+    return { lower: undefined, upper: undefined };
+  }
+
+  return {
+    lower:
+      parseJointNumericInput(localLowerLimit) ??
+      (jointInfo?.lower !== null && jointInfo?.lower !== undefined ? jointInfo.lower : undefined),
+    upper:
+      parseJointNumericInput(localUpperLimit) ??
+      (jointInfo?.upper !== null && jointInfo?.upper !== undefined ? jointInfo.upper : undefined),
+  };
 };
 
 export const resolveAxisComponents = ({
