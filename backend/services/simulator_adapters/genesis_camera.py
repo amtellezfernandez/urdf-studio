@@ -101,7 +101,7 @@ def attach_scene_camera_to_robot_link(
     return True
 
 
-def _integer_attr(value: Any) -> int | None:
+def _integer_attr(value: object) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -156,7 +156,7 @@ def add_observation_camera_sensor(gs: Any, scene: Any, robot_entity: Any, camera
         return None
 
 
-def rgb_to_image_array(rgb: Any) -> np.ndarray | None:
+def rgb_to_image_array(rgb: object) -> np.ndarray | None:
     if hasattr(rgb, "detach"):
         rgb = rgb.detach()
     if hasattr(rgb, "cpu"):

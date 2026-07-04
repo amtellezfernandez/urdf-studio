@@ -241,6 +241,19 @@ def test_genesis_attachment_links_include_terminal_tool_links(tmp_path: Path) ->
 
 
 def test_genesis_rgb_tensor_conversion_accepts_batched_float_image() -> None:
+    class _TensorLikeImage:
+        def detach(self) -> _TensorLikeImage:
+            return self
+
+        def cpu(self) -> _TensorLikeImage:
+            return self
+
+        def numpy(self) -> np.ndarray:
+            return np.array(
+                [[[[0.0, 0.5, 1.0], [1.0, 0.0, 0.25]]]],
+                dtype=np.float32,
+            )
+
     image = np.array(
         [[[[0.0, 0.5, 1.0], [1.0, 0.0, 0.25]]]],
         dtype=np.float32,
@@ -252,6 +265,7 @@ def test_genesis_rgb_tensor_conversion_accepts_batched_float_image() -> None:
     assert converted.dtype == np.uint8
     assert converted.shape == (1, 2, 3)
     assert converted[0, 0].tolist() == [0, 127, 255]
+    assert np.array_equal(rgb_to_image_array(_TensorLikeImage()), converted)
 
 
 def test_genesis_backend_resolution_uses_cpu_by_default(monkeypatch) -> None:
