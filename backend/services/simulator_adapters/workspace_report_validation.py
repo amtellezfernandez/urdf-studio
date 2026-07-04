@@ -278,7 +278,7 @@ def _validate_report_header(payload: SimulatorWorkspaceReportObject) -> str | No
             "simulator validation report field 'object_count' must be greater than "
             "or equal to primitive_count"
         )
-    error = _validate_report_string_list(payload.get("asset_roots"), "asset_roots")
+    error = _validate_report_asset_roots(payload.get("asset_roots"))
     if error:
         return error
     return _validate_report_string_list(payload.get("warnings"), "warnings", allow_empty=True)
@@ -750,10 +750,9 @@ def _validate_expected_camera_contracts(
 
 
 def _validate_report_object_asset_refs(payload: SimulatorWorkspaceReportObject) -> str | None:
-    asset_roots_raw = payload.get("asset_roots")
-    if not isinstance(asset_roots_raw, list):
-        return "simulator validation report field 'asset_roots' must be a list"
-    asset_roots = tuple(Path(path) for path in asset_roots_raw if isinstance(path, str))
+    asset_roots = _report_asset_roots(payload.get("asset_roots"))
+    if isinstance(asset_roots, str):
+        return asset_roots
     objects = payload.get("objects")
     if not isinstance(objects, list):
         return "simulator validation report field 'objects' must be a list"
@@ -775,6 +774,47 @@ def _validate_report_object_asset_refs(payload: SimulatorWorkspaceReportObject) 
                 f"does not resolve under asset_roots: {asset_ref}"
             )
     return None
+
+
+def _validate_report_asset_roots(value: object) -> str | None:
+    roots = _report_asset_roots(value)
+    if isinstance(roots, str):
+        return roots
+    return None
+
+
+def _report_asset_roots(value: object) -> tuple[Path, ...] | str:
+    if not isinstance(value, list):
+        return "simulator validation report field 'asset_roots' must be a list"
+    if not value:
+        return "simulator validation report field 'asset_roots' must be a non-empty list"
+
+    roots: list[Path] = []
+    for index, root_value in enumerate(value):
+        path_name = f"asset_roots[{index}]"
+        string_error = _validate_report_string(root_value, path_name)
+        if string_error:
+            return string_error
+        root_path = Path(cast(str, root_value)).expanduser()
+        if not root_path.is_absolute():
+            return (
+                f"simulator validation report field '{path_name}' "
+                "must be an absolute existing directory"
+            )
+        try:
+            resolved_root = root_path.resolve()
+        except (OSError, RuntimeError):
+            return (
+                f"simulator validation report field '{path_name}' "
+                "must be an absolute existing directory"
+            )
+        if not resolved_root.is_dir():
+            return (
+                f"simulator validation report field '{path_name}' "
+                "must be an absolute existing directory"
+            )
+        roots.append(resolved_root)
+    return tuple(dict.fromkeys(roots))
 
 
 def _validate_expected_vector3(

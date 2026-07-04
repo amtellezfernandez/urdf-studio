@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from backend.models.simulator_runtime import SIMULATOR_GENESIS_ID, SIMULATOR_PYBULLET_ID
 from backend.services.simulator_adapters.workspace_report_validation import (
     ExpectedCameraReport,
@@ -625,6 +627,71 @@ def test_workspace_report_validation_accepts_resolved_mesh_asset_ref(tmp_path) -
         report_path,
         _expectations(object_asset_refs={"mesh-crate": "assets/crate.obj"}),
     ) is None
+
+
+@pytest.mark.parametrize(
+    ("asset_roots", "expected_error"),
+    (
+        (
+            [],
+            "simulator validation report field 'asset_roots' must be a non-empty list",
+        ),
+        (
+            ["relative/assets"],
+            "simulator validation report field 'asset_roots[0]' "
+            "must be an absolute existing directory",
+        ),
+        (
+            [123],
+            "simulator validation report field 'asset_roots[0]' must be a non-empty string",
+        ),
+    ),
+)
+def test_workspace_report_validation_rejects_invalid_asset_roots(
+    tmp_path,
+    asset_roots: list[object],
+    expected_error: str,
+) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "asset_roots": asset_roots,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == expected_error
+
+
+def test_workspace_report_validation_rejects_non_directory_asset_root(tmp_path) -> None:
+    asset_root_file = tmp_path / "asset-root.txt"
+    asset_root_file.write_text("not a directory\n", encoding="utf-8")
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "asset_roots": [str(asset_root_file)],
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'asset_roots[0]' "
+        "must be an absolute existing directory"
+    )
 
 
 def test_workspace_report_validation_rejects_unexpected_mesh_asset_ref(tmp_path) -> None:
