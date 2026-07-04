@@ -85,14 +85,106 @@ const parseNameAttribute = (tagAttributesRaw: string): string | null => {
   return name.length > 0 ? name : null;
 };
 
-export const parseUrdfStructureCommentHints = (urdfContent: string | null | undefined): StructureCommentHints => {
-  if (!urdfContent) return EMPTY_HINTS;
+type StructureCommentHintAccumulator = {
+  hints: StructureCommentHints;
+  pendingLabel: string | null;
+};
 
-  const hints: StructureCommentHints = {
+const createStructureCommentHintAccumulator = (): StructureCommentHintAccumulator => ({
+  hints: {
     jointLabelByName: {},
     linkLabelByName: {},
-  };
-  let pendingLabel: string | null = null;
+  },
+  pendingLabel: null,
+});
+
+const applyExplicitDirective = ({
+  accumulator,
+  directive,
+}: {
+  accumulator: StructureCommentHintAccumulator;
+  directive: StructureCommentDirective;
+}): void => {
+  if (directive.targetType === "joint" && directive.targetName) {
+    accumulator.hints.jointLabelByName[directive.targetName] = directive.label;
+    accumulator.pendingLabel = null;
+    return;
+  }
+
+  if (directive.targetType === "link" && directive.targetName) {
+    accumulator.hints.linkLabelByName[directive.targetName] = directive.label;
+    accumulator.pendingLabel = null;
+    return;
+  }
+
+  accumulator.pendingLabel = directive.label;
+};
+
+const applyPendingDirectiveToTag = ({
+  accumulator,
+  tagAttributesRaw,
+  tagTypeRaw,
+}: {
+  accumulator: StructureCommentHintAccumulator;
+  tagAttributesRaw: string;
+  tagTypeRaw: string;
+}): void => {
+  if (!accumulator.pendingLabel) {
+    return;
+  }
+
+  const tagType = tagTypeRaw.toLowerCase();
+  const tagName = parseNameAttribute(tagAttributesRaw);
+  if (!tagName) {
+    return;
+  }
+
+  if (tagType === "joint") {
+    accumulator.hints.jointLabelByName[tagName] = accumulator.pendingLabel;
+    accumulator.pendingLabel = null;
+    return;
+  }
+
+  if (tagType === "link") {
+    accumulator.hints.linkLabelByName[tagName] = accumulator.pendingLabel;
+    accumulator.pendingLabel = null;
+  }
+};
+
+const applyStructureCommentToken = ({
+  accumulator,
+  commentBody,
+  tagAttributesRaw,
+  tagTypeRaw,
+}: {
+  accumulator: StructureCommentHintAccumulator;
+  commentBody?: string;
+  tagAttributesRaw?: string;
+  tagTypeRaw?: string;
+}): void => {
+  if (typeof commentBody === "string") {
+    const directive = parseUrdfStructureDirectiveComment(commentBody);
+    if (directive) {
+      applyExplicitDirective({ accumulator, directive });
+    }
+    return;
+  }
+
+  if (tagTypeRaw && tagAttributesRaw) {
+    applyPendingDirectiveToTag({
+      accumulator,
+      tagAttributesRaw,
+      tagTypeRaw,
+    });
+  }
+};
+
+export const parseUrdfStructureCommentHints = (
+  urdfContent: string | null | undefined
+): StructureCommentHints => {
+  if (!urdfContent) return EMPTY_HINTS;
+
+  const accumulator = createStructureCommentHintAccumulator();
 
   TOKEN_PATTERN.lastIndex = 0;
   let match = TOKEN_PATTERN.exec(urdfContent);
@@ -101,37 +193,17 @@ export const parseUrdfStructureCommentHints = (urdfContent: string | null | unde
     const tagTypeRaw = match[2];
     const tagAttributesRaw = match[3];
 
-    if (typeof commentBody === "string") {
-      const directive = parseUrdfStructureDirectiveComment(commentBody);
-      if (directive) {
-        if (directive.targetType === "joint" && directive.targetName) {
-          hints.jointLabelByName[directive.targetName] = directive.label;
-          pendingLabel = null;
-        } else if (directive.targetType === "link" && directive.targetName) {
-          hints.linkLabelByName[directive.targetName] = directive.label;
-          pendingLabel = null;
-        } else {
-          pendingLabel = directive.label;
-        }
-      }
-    } else if (pendingLabel && tagTypeRaw && tagAttributesRaw) {
-      const tagType = tagTypeRaw.toLowerCase();
-      const tagName = parseNameAttribute(tagAttributesRaw);
-      if (tagName) {
-        if (tagType === "joint") {
-          hints.jointLabelByName[tagName] = pendingLabel;
-          pendingLabel = null;
-        } else if (tagType === "link") {
-          hints.linkLabelByName[tagName] = pendingLabel;
-          pendingLabel = null;
-        }
-      }
-    }
+    applyStructureCommentToken({
+      accumulator,
+      commentBody,
+      tagAttributesRaw,
+      tagTypeRaw,
+    });
 
     match = TOKEN_PATTERN.exec(urdfContent);
   }
 
-  return hints;
+  return accumulator.hints;
 };
 
 export const hasUrdfStructureCommentHints = (urdfContent: string | null | undefined): boolean => {
