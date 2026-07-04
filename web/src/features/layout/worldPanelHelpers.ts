@@ -6,6 +6,8 @@ export type WorldObjectGroup = {
   objects: CreatedObject[];
 };
 
+const DEFAULT_WORLD_OBJECT_SOURCE: NonNullable<CreatedObject["source"]> = "user";
+
 export const toReadableWorldSourceLabel = (source: string): string =>
   source
     .split(/[-_]/g)
@@ -22,6 +24,44 @@ export const toWorldObjectDisplayName = (worldObject: CreatedObject): string => 
   return `${objectTypeLabel} ${objectOrdinal}`;
 };
 
+export const resolveWorldObjectSource = (
+  worldObject: CreatedObject
+): NonNullable<CreatedObject["source"]> =>
+  worldObject.source ?? DEFAULT_WORLD_OBJECT_SOURCE;
+
+export const resolveWorldObjectGroupLabel = ({
+  source,
+  sourceLabels,
+}: {
+  source: string;
+  sourceLabels: Record<NonNullable<CreatedObject["source"]>, string>;
+}): string =>
+  sourceLabels[source as NonNullable<CreatedObject["source"]>] ??
+  `${toReadableWorldSourceLabel(source)} Objects`;
+
+export const buildWorldObjectSourceIndex = (
+  sourceOrder: readonly NonNullable<CreatedObject["source"]>[]
+): Map<NonNullable<CreatedObject["source"]>, number> =>
+  new Map(sourceOrder.map((source, index) => [source, index]));
+
+export const compareWorldObjectSources = ({
+  leftSource,
+  rightSource,
+  sourceIndexByName,
+}: {
+  leftSource: string;
+  rightSource: string;
+  sourceIndexByName: ReadonlyMap<NonNullable<CreatedObject["source"]>, number>;
+}): number => {
+  const leftSourceIndex = sourceIndexByName.get(
+    leftSource as NonNullable<CreatedObject["source"]>
+  );
+  const rightSourceIndex = sourceIndexByName.get(
+    rightSource as NonNullable<CreatedObject["source"]>
+  );
+  return (leftSourceIndex ?? Number.MAX_SAFE_INTEGER) - (rightSourceIndex ?? Number.MAX_SAFE_INTEGER);
+};
+
 export const buildWorldObjectGroups = ({
   objects,
   sourceOrder,
@@ -33,7 +73,7 @@ export const buildWorldObjectGroups = ({
 }): WorldObjectGroup[] => {
   const groupedBySource = new Map<string, CreatedObject[]>();
   objects.forEach((object) => {
-    const source = object.source ?? "user";
+    const source = resolveWorldObjectSource(object);
     const existingSourceObjects = groupedBySource.get(source);
     if (existingSourceObjects) {
       existingSourceObjects.push(object);
@@ -42,23 +82,22 @@ export const buildWorldObjectGroups = ({
     }
   });
 
-  const sourceIndexByName = new Map(sourceOrder.map((source, index) => [source, index]));
+  const sourceIndexByName = buildWorldObjectSourceIndex(sourceOrder);
 
   return [...groupedBySource.entries()]
-    .sort(([leftSource], [rightSource]) => {
-      const leftSourceIndex = sourceIndexByName.get(
-        leftSource as NonNullable<CreatedObject["source"]>
-      );
-      const rightSourceIndex = sourceIndexByName.get(
-        rightSource as NonNullable<CreatedObject["source"]>
-      );
-      return (leftSourceIndex ?? Number.MAX_SAFE_INTEGER) - (rightSourceIndex ?? Number.MAX_SAFE_INTEGER);
-    })
+    .sort(([leftSource], [rightSource]) =>
+      compareWorldObjectSources({
+        leftSource,
+        rightSource,
+        sourceIndexByName,
+      })
+    )
     .map(([source, sourceObjects]) => ({
       source,
-      label:
-        sourceLabels[source as NonNullable<CreatedObject["source"]>] ??
-        `${toReadableWorldSourceLabel(source)} Objects`,
+      label: resolveWorldObjectGroupLabel({
+        source,
+        sourceLabels,
+      }),
       objects: [...sourceObjects].sort((leftObject, rightObject) =>
         leftObject.id.localeCompare(rightObject.id)
       ),

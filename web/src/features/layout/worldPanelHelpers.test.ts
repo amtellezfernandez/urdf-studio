@@ -4,6 +4,10 @@ import * as THREE from "three";
 import type { CreatedObject } from "@/features/objects";
 import {
   buildWorldObjectGroups,
+  buildWorldObjectSourceIndex,
+  compareWorldObjectSources,
+  resolveWorldObjectGroupLabel,
+  resolveWorldObjectSource,
   toReadableWorldSourceLabel,
   toWorldObjectDisplayName,
 } from "@/features/layout/worldPanelHelpers";
@@ -32,6 +36,43 @@ describe("worldPanelHelpers", () => {
     expect(toWorldObjectDisplayName(createObject({ id: "fixture_a", type: "cube" }))).toBe(
       "Cube fixture_a"
     );
+  });
+
+  it("resolves world object sources and fallback group labels", () => {
+    expect(resolveWorldObjectSource(createObject({ source: undefined }))).toBe("user");
+    expect(
+      resolveWorldObjectGroupLabel({
+        source: "sim-cache",
+        sourceLabels: {
+          user: "User Objects",
+          "demo-world": "Demo World Objects",
+          "world-scenario": "Scenario Objects",
+        },
+      })
+    ).toBe("Sim Cache Objects");
+  });
+
+  it("orders world object sources by the configured source index", () => {
+    const sourceIndexByName = buildWorldObjectSourceIndex([
+      "user",
+      "demo-world",
+      "world-scenario",
+    ]);
+
+    expect(
+      compareWorldObjectSources({
+        leftSource: "demo-world",
+        rightSource: "user",
+        sourceIndexByName,
+      })
+    ).toBeGreaterThan(0);
+    expect(
+      compareWorldObjectSources({
+        leftSource: "sim-cache",
+        rightSource: "world-scenario",
+        sourceIndexByName,
+      })
+    ).toBeGreaterThan(0);
   });
 
   it("groups world objects by source and sorts by configured source order", () => {
