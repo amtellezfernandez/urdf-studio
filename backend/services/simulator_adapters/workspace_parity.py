@@ -38,41 +38,45 @@ class WorkspaceParityResult:
     detail: str
 
 
+_LoadedParityReport = tuple[WorkspaceParityInput, dict[str, Any]]
+_LoadedParityReportView = tuple[WorkspaceParityInput, Mapping[str, Any]]
+
+
 def check_simulator_workspace_parity(
     inputs: Sequence[WorkspaceParityInput],
 ) -> WorkspaceParityResult | None:
     if len(inputs) < 2:
         return None
 
-    loaded_reports: list[tuple[WorkspaceParityInput, dict[str, Any]]] = []
-    for item in inputs:
+    loaded_reports: list[_LoadedParityReport] = []
+    for parity_input in inputs:
         try:
-            report = _load_report(item.report_path)
+            report = _load_report(parity_input.report_path)
         except Exception as exc:
             return WorkspaceParityResult(
                 passed=False,
-                detail=f"could not read {item.label} validation report: {exc}",
+                detail=f"could not read {parity_input.label} validation report: {exc}",
             )
-        loaded_reports.append((item, report))
+        loaded_reports.append((parity_input, report))
 
     reference_input, reference_report = loaded_reports[0]
     reference_signature = _parity_report_signature(reference_report)
-    for item, report in loaded_reports[1:]:
+    for candidate_input, candidate_report in loaded_reports[1:]:
         difference = _first_difference(
             reference_signature,
-            _parity_report_signature(report),
+            _parity_report_signature(candidate_report),
             path="report",
         )
         if difference is not None:
             return WorkspaceParityResult(
                 passed=False,
-                detail=f"{item.label} differs from {reference_input.label}: {difference}",
+                detail=f"{candidate_input.label} differs from {reference_input.label}: {difference}",
             )
 
     image_difference = _validate_camera_image_parity(loaded_reports)
     if image_difference is not None:
         return WorkspaceParityResult(passed=False, detail=image_difference)
-    labels = ", ".join(item.label for item, _report in loaded_reports)
+    labels = ", ".join(parity_input.label for parity_input, _report in loaded_reports)
     return WorkspaceParityResult(
         passed=True,
         detail=f"canonical scene and camera artifacts match across: {labels}",
@@ -94,17 +98,17 @@ def _parity_report_signature(report: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(warning, str)
     )
     signature["objects"] = sorted(
-        (_normalize_for_parity(item) for item in _list_field(report, "objects")),
-        key=lambda item: (
-            str(item.get("source_id", "")) if isinstance(item, Mapping) else "",
-            str(item.get("sim_name", "")) if isinstance(item, Mapping) else "",
+        (_normalize_for_parity(scene_object) for scene_object in _list_field(report, "objects")),
+        key=lambda scene_object: (
+            str(scene_object.get("source_id", "")) if isinstance(scene_object, Mapping) else "",
+            str(scene_object.get("sim_name", "")) if isinstance(scene_object, Mapping) else "",
         ),
     )
     signature["cameras"] = sorted(
-        (_normalize_for_parity(item) for item in _list_field(report, "cameras")),
-        key=lambda item: (
-            str(item.get("sim_name", "")) if isinstance(item, Mapping) else "",
-            str(item.get("camera_id", "")) if isinstance(item, Mapping) else "",
+        (_normalize_for_parity(camera) for camera in _list_field(report, "cameras")),
+        key=lambda camera: (
+            str(camera.get("sim_name", "")) if isinstance(camera, Mapping) else "",
+            str(camera.get("camera_id", "")) if isinstance(camera, Mapping) else "",
         ),
     )
     return signature
@@ -120,11 +124,11 @@ def _normalize_for_parity(value: Any) -> Any:
         return round(value, 10)
     if isinstance(value, Mapping):
         return {
-            str(key): _normalize_for_parity(item)
-            for key, item in sorted(value.items(), key=lambda entry: str(entry[0]))
+            str(key): _normalize_for_parity(nested_value)
+            for key, nested_value in sorted(value.items(), key=lambda entry: str(entry[0]))
         }
     if isinstance(value, list):
-        return [_normalize_for_parity(item) for item in value]
+        return [_normalize_for_parity(nested_value) for nested_value in value]
     return value
 
 
@@ -163,13 +167,13 @@ def _first_difference(expected: Any, actual: Any, *, path: str) -> str | None:
 
 
 def _validate_camera_image_parity(
-    loaded_reports: Sequence[tuple[WorkspaceParityInput, Mapping[str, Any]]],
+    loaded_reports: Sequence[_LoadedParityReportView],
 ) -> str | None:
     reference_label, reference_manifest = _camera_image_manifest(loaded_reports[0])
     if isinstance(reference_manifest, str):
         return reference_manifest
-    for loaded_report in loaded_reports[1:]:
-        label, manifest = _camera_image_manifest(loaded_report)
+    for candidate_report in loaded_reports[1:]:
+        label, manifest = _camera_image_manifest(candidate_report)
         if isinstance(manifest, str):
             return manifest
         difference = _first_difference(
@@ -183,33 +187,37 @@ def _validate_camera_image_parity(
 
 
 def _camera_image_manifest(
-    loaded_report: tuple[WorkspaceParityInput, Mapping[str, Any]],
+    loaded_report: _LoadedParityReportView,
 ) -> tuple[str, dict[str, Any] | str]:
-    item, report = loaded_report
+    parity_input, report = loaded_report
     cameras = _list_field(report, "cameras")
-    expected_images_or_error = _expected_camera_images(item.label, cameras)
+    expected_images_or_error = _expected_camera_images(parity_input.label, cameras)
     if isinstance(expected_images_or_error, str):
-        return item.label, expected_images_or_error
+        return parity_input.label, expected_images_or_error
     expected_images = expected_images_or_error
     if not expected_images:
-        return item.label, {"images": []}
+        return parity_input.label, {"images": []}
 
+    label = parity_input.label
     artifacts = report.get("artifacts")
     if not isinstance(artifacts, Mapping):
-        return item.label, f"{item.label} camera_images validation report has no artifacts object"
+        return label, f"{label} camera_images validation report has no artifacts object"
     directory_raw = artifacts.get("camera_screenshot_dir")
     if not isinstance(directory_raw, str) or not directory_raw.strip():
-        return item.label, f"{item.label} camera_images validation report has no camera_screenshot_dir"
+        return (
+            label,
+            f"{label} camera_images validation report has no camera_screenshot_dir",
+        )
     directory = Path(directory_raw)
     image_paths = sorted(directory.glob("*.png")) if directory.exists() else []
     if not image_paths:
-        return item.label, f"{item.label} camera_images has no PNG artifacts in {directory}"
+        return label, f"{label} camera_images has no PNG artifacts in {directory}"
     actual_names = sorted(path.name for path in image_paths)
     expected_names = sorted(entry["name"] for entry in expected_images)
     if actual_names != expected_names:
         return (
-            item.label,
-            f"{item.label} camera_images PNG names do not match report cameras: "
+            label,
+            f"{label} camera_images PNG names do not match report cameras: "
             f"actual={actual_names}, expected={expected_names}",
         )
 
@@ -220,15 +228,15 @@ def _camera_image_manifest(
         try:
             image_stats = inspect_rgb_image(path)
         except Exception as exc:
-            return item.label, f"invalid camera_images artifact {path}: {exc}"
+            return label, f"invalid camera_images artifact {path}: {exc}"
         if image_stats.size != (expected["width"], expected["height"]):
             return (
-                item.label,
-                f"{item.label} camera_images PNG {path.name} size {image_stats.size} "
+                label,
+                f"{label} camera_images PNG {path.name} size {image_stats.size} "
                 f"does not match report camera size {(expected['width'], expected['height'])}",
             )
         if image_stats.channel_span <= MIN_VISIBLE_CHANNEL_SPAN:
-            return item.label, f"{item.label} camera_images PNG {path.name} is blank"
+            return label, f"{label} camera_images PNG {path.name} is blank"
         images.append(
             {
                 "camera_id": expected["camera_id"],
@@ -238,7 +246,7 @@ def _camera_image_manifest(
                 "height": image_stats.size[1],
             }
         )
-    return item.label, {"images": images}
+    return label, {"images": images}
 
 
 def _expected_camera_images(
