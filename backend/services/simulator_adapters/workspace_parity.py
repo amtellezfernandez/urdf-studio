@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, TypeAlias
 
 from backend.services.simulator_adapters.camera_artifacts import (
     MIN_VISIBLE_CHANNEL_SPAN,
@@ -38,8 +38,14 @@ class WorkspaceParityResult:
     detail: str
 
 
-_LoadedParityReport = tuple[WorkspaceParityInput, dict[str, Any]]
-_LoadedParityReportView = tuple[WorkspaceParityInput, Mapping[str, Any]]
+ParityReportPayload: TypeAlias = dict[str, Any]
+ParityReportView: TypeAlias = Mapping[str, Any]
+ParitySignature: TypeAlias = dict[str, Any]
+CameraImageManifest: TypeAlias = dict[str, Any]
+CameraImageEntry: TypeAlias = dict[str, Any]
+ExpectedCameraImage: TypeAlias = dict[str, Any]
+LoadedParityReport: TypeAlias = tuple[WorkspaceParityInput, ParityReportPayload]
+LoadedParityReportView: TypeAlias = tuple[WorkspaceParityInput, ParityReportView]
 
 
 def check_simulator_workspace_parity(
@@ -48,7 +54,7 @@ def check_simulator_workspace_parity(
     if len(inputs) < 2:
         return None
 
-    loaded_reports: list[_LoadedParityReport] = []
+    loaded_reports: list[LoadedParityReport] = []
     for parity_input in inputs:
         try:
             report = _load_report(parity_input.report_path)
@@ -83,14 +89,14 @@ def check_simulator_workspace_parity(
     )
 
 
-def _load_report(path: Path) -> dict[str, Any]:
+def _load_report(path: Path) -> ParityReportPayload:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
     return payload
 
 
-def _parity_report_signature(report: Mapping[str, Any]) -> dict[str, Any]:
+def _parity_report_signature(report: ParityReportView) -> ParitySignature:
     signature = {field: _normalize_for_parity(report.get(field)) for field in PARITY_REPORT_FIELDS}
     signature["warnings"] = sorted(
         str(warning)
@@ -114,7 +120,7 @@ def _parity_report_signature(report: Mapping[str, Any]) -> dict[str, Any]:
     return signature
 
 
-def _list_field(report: Mapping[str, Any], field_name: str) -> list[Any]:
+def _list_field(report: ParityReportView, field_name: str) -> list[Any]:
     value = report.get(field_name)
     return value if isinstance(value, list) else []
 
@@ -167,7 +173,7 @@ def _first_difference(expected: Any, actual: Any, *, path: str) -> str | None:
 
 
 def _validate_camera_image_parity(
-    loaded_reports: Sequence[_LoadedParityReportView],
+    loaded_reports: Sequence[LoadedParityReportView],
 ) -> str | None:
     reference_label, reference_manifest = _camera_image_manifest(loaded_reports[0])
     if isinstance(reference_manifest, str):
@@ -187,8 +193,8 @@ def _validate_camera_image_parity(
 
 
 def _camera_image_manifest(
-    loaded_report: _LoadedParityReportView,
-) -> tuple[str, dict[str, Any] | str]:
+    loaded_report: LoadedParityReportView,
+) -> tuple[str, CameraImageManifest | str]:
     parity_input, report = loaded_report
     cameras = _list_field(report, "cameras")
     expected_images_or_error = _expected_camera_images(parity_input.label, cameras)
@@ -221,7 +227,7 @@ def _camera_image_manifest(
             f"actual={actual_names}, expected={expected_names}",
         )
 
-    images: list[dict[str, Any]] = []
+    images: list[CameraImageEntry] = []
     image_by_name = {path.name: path for path in image_paths}
     for expected in expected_images:
         path = image_by_name[expected["name"]]
@@ -252,8 +258,8 @@ def _camera_image_manifest(
 def _expected_camera_images(
     label: str,
     cameras: Sequence[Any],
-) -> list[dict[str, Any]] | str:
-    expected_images: list[dict[str, Any]] = []
+) -> list[ExpectedCameraImage] | str:
+    expected_images: list[ExpectedCameraImage] = []
     for index, camera in enumerate(cameras, start=1):
         if not isinstance(camera, Mapping):
             return f"{label} camera_images validation report camera[{index - 1}] must be an object"
