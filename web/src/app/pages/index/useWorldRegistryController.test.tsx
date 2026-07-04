@@ -1,0 +1,213 @@
+/** @vitest-environment jsdom */
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  useWorldRegistryController,
+  type UseWorldRegistryControllerResult,
+} from "@/app/pages/index/useWorldRegistryController";
+import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
+import type {
+  WorldScenePackageListEntry,
+  WorldScenePackageManifest,
+  WorldScenePackageVersionRecord,
+} from "@/features/world-share/worldScenePackageTypes";
+
+const {
+  fetchWorldRegistryPackagesMock,
+  fetchWorldScenePackageVersionMock,
+  requireFeatureGateMock,
+  toastErrorMock,
+} = vi.hoisted(() => ({
+  fetchWorldRegistryPackagesMock: vi.fn(),
+  fetchWorldScenePackageVersionMock: vi.fn(),
+  requireFeatureGateMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+}));
+
+vi.mock("@/shared/lib/backendGuard", () => ({
+  requireFeatureGate: (...args: unknown[]) => requireFeatureGateMock(...args),
+}));
+
+vi.mock("@/app/pages/index/worldSceneRuntime", () => ({
+  fetchWorldRegistryPackages: (...args: unknown[]) => fetchWorldRegistryPackagesMock(...args),
+  fetchWorldScenePackageVersion: (...args: unknown[]) =>
+    fetchWorldScenePackageVersionMock(...args),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: (...args: unknown[]) => toastErrorMock(...args),
+  },
+}));
+
+type RenderedHarness = {
+  appliedManifests: WorldScenePackageManifest[];
+  getHook: () => UseWorldRegistryControllerResult;
+  unmount: () => Promise<void>;
+};
+
+const WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES = {
+  packageId: "demo-world",
+  title: "Demo World",
+  version: "1.0.0",
+} as const;
+
+const createRegistryEntry = (): WorldScenePackageListEntry => ({
+  description: "A test world",
+  latest_digest_sha256: "digest",
+  latest_version: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.version,
+  owner: "studio",
+  package_id: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.packageId,
+  runtime_targets: ["browser"],
+  tags: ["test"],
+  title: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.title,
+  trust_level: "metadata_only",
+  updated_at: "2026-07-04T00:00:00Z",
+});
+
+const createManifest = (): WorldScenePackageManifest => ({
+  artifacts: [],
+  created_at: "2026-07-04T00:00:00Z",
+  interface: {
+    action_semantics: "none",
+    frame_convention: "urdf",
+    observation_modalities: [],
+    timestep_ms: 0,
+  },
+  package_id: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.packageId,
+  provenance: {},
+  runtime_targets: [],
+  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
+  security: {
+    attestation_refs: [],
+    sbom_ref: null,
+    signature_ref: null,
+  },
+  title: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.title,
+  version: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.version,
+  world_snapshot: {
+    cameras: [],
+    joint_positions: {},
+    objects: [],
+    scenario_duration_ms: 0,
+    scenario_time_ms: 0,
+    urdf_xml: "<robot name=\"demo\" />",
+  },
+});
+
+const createVersionRecord = (): WorldScenePackageVersionRecord => ({
+  digest_sha256: "digest",
+  manifest: createManifest(),
+  package_id: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.packageId,
+  published_at: "2026-07-04T00:00:00Z",
+  version: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.version,
+});
+
+const flushAsyncWork = async () => {
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
+};
+
+const renderWorldRegistryControllerHook = async (): Promise<RenderedHarness> => {
+  let hookValue: UseWorldRegistryControllerResult | null = null;
+  const appliedManifests: WorldScenePackageManifest[] = [];
+  const container = document.createElement("div");
+  const root: Root = createRoot(container);
+
+  const Harness = () => {
+    hookValue = useWorldRegistryController({
+      applyWorldScenePackage: (manifest) => {
+        appliedManifests.push(manifest);
+      },
+    });
+    return null;
+  };
+
+  await act(async () => {
+    root.render(createElement(Harness));
+    await flushAsyncWork();
+  });
+
+  return {
+    appliedManifests,
+    getHook: () => {
+      if (!hookValue) {
+        throw new Error("Hook did not render.");
+      }
+      return hookValue;
+    },
+    unmount: async () => {
+      await act(async () => {
+        root.unmount();
+      });
+    },
+  };
+};
+
+describe("useWorldRegistryController", () => {
+  beforeEach(() => {
+    (
+      globalThis as typeof globalThis & {
+        IS_REACT_ACT_ENVIRONMENT?: boolean;
+      }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    fetchWorldRegistryPackagesMock.mockReset();
+    fetchWorldScenePackageVersionMock.mockReset();
+    requireFeatureGateMock.mockReset();
+    toastErrorMock.mockReset();
+    fetchWorldRegistryPackagesMock.mockResolvedValue([createRegistryEntry()]);
+    fetchWorldScenePackageVersionMock.mockResolvedValue(createVersionRecord());
+  });
+
+  it("opens and refreshes registry entries with a single availability check", async () => {
+    const harness = await renderWorldRegistryControllerHook();
+
+    await act(async () => {
+      await harness.getHook().handleListWorldScenePackages();
+    });
+
+    expect(requireFeatureGateMock).toHaveBeenCalledOnce();
+    expect(fetchWorldRegistryPackagesMock).toHaveBeenCalledOnce();
+    expect(harness.getHook().worldRegistryOpen).toBe(true);
+    expect(harness.getHook().worldRegistryEntries).toEqual([createRegistryEntry()]);
+
+    await harness.unmount();
+  });
+
+  it("caches package version records after the first load", async () => {
+    const harness = await renderWorldRegistryControllerHook();
+    const registryEntry = createRegistryEntry();
+
+    await act(async () => {
+      await harness.getHook().handleLoadWorldScenePackageFromRegistry(registryEntry);
+    });
+    await act(async () => {
+      await harness.getHook().handleLoadWorldScenePackageFromRegistry(registryEntry);
+    });
+
+    expect(fetchWorldScenePackageVersionMock).toHaveBeenCalledOnce();
+    expect(harness.appliedManifests).toEqual([createManifest(), createManifest()]);
+    expect(harness.getHook().worldRegistryOpen).toBe(false);
+
+    await harness.unmount();
+  });
+
+  it("reports feature-gate failures without touching registry transport", async () => {
+    requireFeatureGateMock.mockImplementationOnce(() => {
+      throw new Error("World registry unavailable on this runtime");
+    });
+    const harness = await renderWorldRegistryControllerHook();
+
+    await act(async () => {
+      await harness.getHook().refreshWorldRegistry();
+    });
+
+    expect(fetchWorldRegistryPackagesMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith("World registry unavailable on this runtime");
+
+    await harness.unmount();
+  });
+});

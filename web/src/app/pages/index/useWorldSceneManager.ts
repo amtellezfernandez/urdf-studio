@@ -18,9 +18,7 @@ import type {
   WorldRolloutImportResponse,
 } from "@/features/world-share/worldRolloutTypes";
 import type {
-  WorldScenePackageListEntry,
   WorldScenePackageManifest,
-  WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
 import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransferApi";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
@@ -35,7 +33,6 @@ import {
   createDefaultWorldPublishDraft,
   prepareWorldPublishManifestOverrides,
   toWorldPublishFailureMessage,
-  toWorldRegistryRecordKey,
   toWorldPublishSuccessLabel,
   toWorldPublishTargetLabel,
   type WorldPublishTarget,
@@ -49,8 +46,6 @@ import {
   createWorldSceneLayerExportDocument,
   downloadWorldRolloutCampaignManifest,
   downloadWorldScenePackageManifest,
-  fetchWorldRegistryPackages,
-  fetchWorldScenePackageVersion,
   importWorldRolloutResultPayload,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
@@ -71,6 +66,7 @@ import {
   waitForWorldRolloutJob,
   type MeshUriResolutionContext,
 } from "@/app/pages/index/worldSceneManagerHelpers";
+import { useWorldRegistryController } from "@/app/pages/index/useWorldRegistryController";
 
 type UseWorldSceneManagerParams = {
   addCamera: (camera: Omit<Camera, "id">) => void;
@@ -125,13 +121,6 @@ export const useWorldSceneManager = ({
   const defaultWorldLayoutAppliedRef = useRef(false);
   const objectsRef = useRef(objects);
 
-  const [worldRegistryOpen, setWorldRegistryOpen] = useState(false);
-  const [worldRegistryFilterText, setWorldRegistryFilterText] = useState("");
-  const [worldRegistryEntries, setWorldRegistryEntries] = useState<WorldScenePackageListEntry[]>([]);
-  const [worldRegistryVersionCache, setWorldRegistryVersionCache] = useState<
-    Record<string, WorldScenePackageVersionRecord>
-  >({});
-  const [worldRegistryLoading, setWorldRegistryLoading] = useState(false);
   const [worldPublishDialogOpen, setWorldPublishDialogOpen] = useState(false);
   const [worldPublishTarget, setWorldPublishTarget] = useState<WorldPublishTarget>("registry");
   const [worldPublishDraft, setWorldPublishDraft] = useState<WorldScenePublishDraft>(() =>
@@ -477,62 +466,19 @@ export const useWorldSceneManager = ({
     });
   }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest, setActiveWorldSnapshotRef]);
 
-  const refreshWorldRegistry = useCallback(async () => {
-    try {
-      requireFeatureGate(FEATURE_GATES.worldsRegistry, "World registry refresh");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "World registry unavailable");
-      return;
-    }
-    setWorldRegistryLoading(true);
-    try {
-      const worlds = await fetchWorldRegistryPackages();
-      setWorldRegistryEntries(worlds);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to refresh world registry");
-    } finally {
-      setWorldRegistryLoading(false);
-    }
-  }, []);
-
-  const handleLoadWorldScenePackageFromRegistry = useCallback(
-    async (entry: WorldScenePackageListEntry) => {
-      try {
-        requireFeatureGate(FEATURE_GATES.worldsRegistry, "World registry load");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "World package load unavailable");
-        return;
-      }
-      const cacheKey = toWorldRegistryRecordKey(entry.package_id, entry.latest_version);
-      const cached = worldRegistryVersionCache[cacheKey];
-      if (cached) {
-        applyImportedWorldScenePackage(cached.manifest);
-        setWorldRegistryOpen(false);
-        return;
-      }
-      try {
-        const record = await fetchWorldScenePackageVersion(entry.package_id, entry.latest_version);
-        setWorldRegistryVersionCache((previous) => ({ ...previous, [cacheKey]: record }));
-        applyImportedWorldScenePackage(record.manifest);
-        setWorldRegistryOpen(false);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load world package");
-      }
-    },
-    [applyImportedWorldScenePackage, worldRegistryVersionCache]
-  );
-
-  const handleListWorldScenePackages = useCallback(async () => {
-    try {
-      requireFeatureGate(FEATURE_GATES.worldsRegistry, "World registry");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "World registry unavailable");
-      return;
-    }
-    setWorldRegistryOpen(true);
-    if (worldRegistryLoading) return;
-    await refreshWorldRegistry();
-  }, [refreshWorldRegistry, worldRegistryLoading]);
+  const {
+    handleListWorldScenePackages,
+    handleLoadWorldScenePackageFromRegistry,
+    refreshWorldRegistry,
+    setWorldRegistryFilterText,
+    setWorldRegistryOpen,
+    worldRegistryEntries,
+    worldRegistryFilterText,
+    worldRegistryLoading,
+    worldRegistryOpen,
+  } = useWorldRegistryController({
+    applyWorldScenePackage: applyImportedWorldScenePackage,
+  });
 
   const importWorldLayoutFromUrl = useCallback(
     async (
