@@ -12,6 +12,7 @@ Requires: datasets >= 4.0  (already in .venv-lerobot)
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -29,26 +30,29 @@ from backend.services.world_model_dataset import build_world_model_training_samp
 
 _REPO_ROOT = Path(__file__).parents[2]
 
-_ROBOT_CONFIGS: dict[str, dict[str, str]] = {
-    "so101": {
-        "urdf_path": str(
+@dataclass(frozen=True)
+class _RobotConfig:
+    urdf_path: Path
+    ee_link: str
+    entity_id: str
+
+
+_ROBOT_CONFIGS: dict[str, _RobotConfig] = {
+    "so101": _RobotConfig(
+        urdf_path=(
             _REPO_ROOT / "third_party/so-arm100/Simulation/SO101/so101_new_calib.urdf"
         ),
-        "ee_link": "gripper_link",
-        "entity_id": "so101",
-    },
-    "so100": {
-        "urdf_path": str(
+        ee_link="gripper_link",
+        entity_id="so101",
+    ),
+    "so100": _RobotConfig(
+        urdf_path=(
             _REPO_ROOT / "third_party/so-arm100/Simulation/SO100/so100.urdf"
         ),
-        "ee_link": "jaw",
-        "entity_id": "so100",
-    },
+        ee_link="jaw",
+        entity_id="so100",
+    ),
 }
-
-# ── Backward-compatibility aliases ────────────────────────────────────────────
-_SO101_URDF_PATH = Path(_ROBOT_CONFIGS["so101"]["urdf_path"])
-_SO101_EE_LINK = _ROBOT_CONFIGS["so101"]["ee_link"]
 
 # Joint order as it appears in both lerobot datasets (degrees).
 # Verified by matching observed ranges against SO-1xx physical joint limits.
@@ -65,31 +69,18 @@ SO101_DATASET_JOINT_NAMES = [
 
 _ENTRY_CACHE: dict[str, UrdfEntry] = {}
 
-# Keep backward-compat singleton name (points into the cache)
-_SO101_ENTRY: UrdfEntry | None = None
-
-
-def _so101_entry() -> UrdfEntry:
-    """Backward-compatible helper — returns the SO-101 UrdfEntry."""
-    return get_robot_urdf_entry("so101")
-
 
 def get_robot_urdf_entry(robot: str = "so101") -> UrdfEntry:
     """Return (cached) UrdfEntry for the given robot name."""
-    global _SO101_ENTRY
     if robot not in _ENTRY_CACHE:
         cfg = _ROBOT_CONFIGS.get(robot)
         if cfg is None:
             raise ValueError(
                 f"Unknown robot {robot!r}. Available: {list(_ROBOT_CONFIGS)}"
             )
-        urdf_text = Path(cfg["urdf_path"]).read_text(encoding="utf-8")
+        urdf_text = cfg.urdf_path.read_text(encoding="utf-8")
         _ENTRY_CACHE[robot] = load_urdf_entry(urdf_text)
-    entry = _ENTRY_CACHE[robot]
-    # Keep backward-compat global in sync
-    if robot == "so101":
-        _SO101_ENTRY = entry
-    return entry
+    return _ENTRY_CACHE[robot]
 
 
 # ── Conversion helpers ────────────────────────────────────────────────────────
@@ -107,7 +98,7 @@ def fk_ee_from_degrees(state_degrees: list[float], robot: str = "so101") -> list
     """Return end-effector [x, y, z] (m) from joint state in degrees."""
     cfg = _ROBOT_CONFIGS[robot]
     entry = get_robot_urdf_entry(robot)
-    return fk_position(entry, joint_dict_from_degrees(state_degrees), cfg["ee_link"])
+    return fk_position(entry, joint_dict_from_degrees(state_degrees), cfg.ee_link)
 
 
 def _robot_entity(
@@ -118,9 +109,9 @@ def _robot_entity(
 ) -> PhysicalEntity:
     cfg = _ROBOT_CONFIGS[robot]
     q_dict = joint_dict_from_degrees(state_degrees)
-    ee_pos = fk_position(entry, q_dict, cfg["ee_link"])
+    ee_pos = fk_position(entry, q_dict, cfg.ee_link)
     return PhysicalEntity(
-        entity_id=cfg["entity_id"],
+        entity_id=cfg.entity_id,
         entity_type="robot",
         geometry_type="box",
         position_xyz=ee_pos,
@@ -156,7 +147,7 @@ def _action_token(
     return ActionToken(
         action_id=f"{trace_id}:f{frame_index}",
         action_type="set_pose",
-        actor_id=cfg["entity_id"],
+        actor_id=cfg.entity_id,
         params={
             "joint_targets_deg": action_degrees,
             "joint_targets_rad": [math.radians(v) for v in action_degrees],
@@ -253,7 +244,7 @@ def load_lerobot_hf_episode(
             "episode_index": episode_index,
             "frame_count": len(frames),
             "robot": robot,
-            "ee_link": cfg["ee_link"],
+            "ee_link": cfg.ee_link,
         },
     )
 
