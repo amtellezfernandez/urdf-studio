@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toast } from "sonner";
-import { requireFeatureGate } from "@/shared/lib/backendGuard";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_AUTOLOAD, DEMO_MODE } from "@/shared/config/demo";
 import { DEFAULT_WORLD_LAYOUT_URL } from "@/shared/config/scenes";
@@ -21,7 +20,6 @@ import type {
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransferApi";
-import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import type { CreatedObject } from "@/features/objects";
 import {
   isTrustedWorldLayoutBridgeOrigin,
@@ -30,12 +28,6 @@ import {
 } from "@/app/pages/index/worldSceneManagerBridge";
 import {
   WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
-  createDefaultWorldPublishDraft,
-  prepareWorldPublishManifestOverrides,
-  toWorldPublishFailureMessage,
-  toWorldPublishSuccessLabel,
-  toWorldPublishTargetLabel,
-  type WorldPublishTarget,
 } from "@/app/pages/index/indexPageHelpers";
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
@@ -49,7 +41,6 @@ import {
   importWorldRolloutResultPayload,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
-  publishWorldScenePackage,
   readWorldSceneLayerFromUrl,
   resolveWorldRolloutImportPayload,
   validateWorldScenePackageLocally,
@@ -66,6 +57,7 @@ import {
   waitForWorldRolloutJob,
   type MeshUriResolutionContext,
 } from "@/app/pages/index/worldSceneManagerHelpers";
+import { useWorldPublishController } from "@/app/pages/index/useWorldPublishController";
 import { useWorldRegistryController } from "@/app/pages/index/useWorldRegistryController";
 
 type UseWorldSceneManagerParams = {
@@ -121,12 +113,6 @@ export const useWorldSceneManager = ({
   const defaultWorldLayoutAppliedRef = useRef(false);
   const objectsRef = useRef(objects);
 
-  const [worldPublishDialogOpen, setWorldPublishDialogOpen] = useState(false);
-  const [worldPublishTarget, setWorldPublishTarget] = useState<WorldPublishTarget>("registry");
-  const [worldPublishDraft, setWorldPublishDraft] = useState<WorldScenePublishDraft>(() =>
-    createDefaultWorldPublishDraft(null)
-  );
-  const [isPublishingWorldPackage, setIsPublishingWorldPackage] = useState(false);
   const [worldLayoutImportDialogOpen, setWorldLayoutImportDialogOpen] = useState(false);
   const [worldLayoutImportUrlDraft, setWorldLayoutImportUrlDraft] = useState("");
   const [isImportingWorldLayout, setIsImportingWorldLayout] = useState(false);
@@ -305,60 +291,6 @@ export const useWorldSceneManager = ({
     }
   }, [objects]);
 
-  const openWorldPublishDialog = useCallback(
-    (target: WorldPublishTarget) => {
-      setWorldPublishTarget(target);
-      setWorldPublishDraft(createDefaultWorldPublishDraft(resolvedRobotName));
-      setWorldPublishDialogOpen(true);
-    },
-    [resolvedRobotName]
-  );
-
-  const handlePublishCurrentWorldScenePackage = useCallback(() => {
-    openWorldPublishDialog("registry");
-  }, [openWorldPublishDialog]);
-
-  const handlePublishCurrentWorldScenePackageToHub = useCallback(() => {
-    openWorldPublishDialog("hub");
-  }, [openWorldPublishDialog]);
-
-  const handleSubmitWorldPublishDialog = useCallback(async () => {
-    const publishDraftPreparation = prepareWorldPublishManifestOverrides({
-      draft: worldPublishDraft,
-      resolvedRobotName,
-    });
-    if (publishDraftPreparation.ok === false) {
-      toast.error(publishDraftPreparation.errorMessage);
-      return;
-    }
-
-    setIsPublishingWorldPackage(true);
-    try {
-      if (worldPublishTarget === "hub") {
-        requireFeatureGate(FEATURE_GATES.worldsHubRegistry, "URDF Star publish");
-      } else {
-        requireFeatureGate(FEATURE_GATES.worldsRegistry, "World package publish");
-      }
-      const manifest = await buildCurrentWorldScenePackageManifest(
-        publishDraftPreparation.manifestOverrides
-      );
-      const publish = await publishWorldScenePackage(manifest, worldPublishTarget);
-      const destinationLabel = toWorldPublishSuccessLabel(worldPublishTarget);
-      toast.success(
-        `${destinationLabel} ${publish.package_id}@${publish.version} (${publish.digest_sha256.slice(0, 12)}...)`
-      );
-      setWorldPublishDialogOpen(false);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : toWorldPublishFailureMessage(worldPublishTarget)
-      );
-    } finally {
-      setIsPublishingWorldPackage(false);
-    }
-  }, [buildCurrentWorldScenePackageManifest, resolvedRobotName, worldPublishDraft, worldPublishTarget]);
-
   const handleImportWorldLayoutFromUrl = useCallback(() => {
     setWorldLayoutImportUrlDraft("");
     setWorldLayoutImportDialogOpen(true);
@@ -465,6 +397,22 @@ export const useWorldSceneManager = ({
       },
     });
   }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest, setActiveWorldSnapshotRef]);
+
+  const {
+    handlePublishCurrentWorldScenePackage,
+    handlePublishCurrentWorldScenePackageToHub,
+    handleSubmitWorldPublishDialog,
+    isPublishingWorldPackage,
+    publishTargetLabel,
+    setWorldPublishDialogOpen,
+    setWorldPublishDraft,
+    worldPublishDialogOpen,
+    worldPublishDraft,
+    worldPublishTarget,
+  } = useWorldPublishController({
+    buildCurrentWorldScenePackageManifest,
+    resolvedRobotName,
+  });
 
   const {
     handleListWorldScenePackages,
@@ -692,7 +640,7 @@ export const useWorldSceneManager = ({
     setWorldPublishDraft,
     setWorldRegistryFilterText,
     setWorldRegistryOpen,
-    publishTargetLabel: toWorldPublishTargetLabel(worldPublishTarget),
+    publishTargetLabel,
     worldLayoutImportDialogOpen,
     worldLayoutImportUrlDraft,
     worldPublishDialogOpen,
