@@ -11,25 +11,23 @@ import {
 
 export type RobotStructureLabels = BaseRobotStructureLabels;
 
-const createEmptyLabels = (): RobotStructureLabels => ({
+export const createEmptyRobotStructureLabels = (): RobotStructureLabels => ({
   linkByName: {},
   jointByName: {},
 });
 
-export const buildRobotStructureLabels = (
-  analysis: UrdfAnalysis | null | undefined,
+export const shouldPreferCommentStructureLabels = (
   urdfContent?: string | null
-): RobotStructureLabels => {
-  if (!analysis?.isValid) {
-    return createEmptyLabels();
-  }
+): boolean => hasUrdfStructureCommentHints(urdfContent);
 
-  const preferCommentLabels = hasUrdfStructureCommentHints(urdfContent);
-  if (!preferCommentLabels) {
-    return buildBaseRobotStructureLabels(analysis);
-  }
-
-  const labels = createEmptyLabels();
+export const buildCommentOverrideStructureLabels = ({
+  analysis,
+  urdfContent,
+}: {
+  analysis: UrdfAnalysis;
+  urdfContent?: string | null;
+}): RobotStructureLabels => {
+  const labels = createEmptyRobotStructureLabels();
   const orderedJoints = analysis.jointHierarchy.orderedJoints ?? [];
   const parentToJoints = buildParentToJointsMap(orderedJoints);
 
@@ -42,4 +40,22 @@ export const buildRobotStructureLabels = (
   });
 
   return labels;
+};
+
+export const buildRobotStructureLabels = (
+  analysis: UrdfAnalysis | null | undefined,
+  urdfContent?: string | null
+): RobotStructureLabels => {
+  if (!analysis?.isValid) {
+    return createEmptyRobotStructureLabels();
+  }
+
+  if (!shouldPreferCommentStructureLabels(urdfContent)) {
+    return buildBaseRobotStructureLabels(analysis);
+  }
+
+  return buildCommentOverrideStructureLabels({
+    analysis,
+    urdfContent,
+  });
 };

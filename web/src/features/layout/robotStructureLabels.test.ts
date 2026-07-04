@@ -1,7 +1,12 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 import { analyzeUrdf } from "@/shared/lib/urdfCore";
-import { buildRobotStructureLabels } from "./robotStructureLabels";
+import {
+  buildCommentOverrideStructureLabels,
+  buildRobotStructureLabels,
+  createEmptyRobotStructureLabels,
+  shouldPreferCommentStructureLabels,
+} from "./robotStructureLabels";
 
 const DUAL_ARM_MOBILE_URDF = `<?xml version="1.0"?>
 <robot name="dual_arm_mobile">
@@ -156,6 +161,17 @@ const PARTIAL_COMMENT_OVERRIDE_URDF = `<?xml version="1.0"?>
 </robot>`;
 
 describe("buildRobotStructureLabels", () => {
+  it("builds empty labels and detects when comment labels should be preferred", () => {
+    expect(createEmptyRobotStructureLabels()).toEqual({
+      jointByName: {},
+      linkByName: {},
+    });
+    expect(shouldPreferCommentStructureLabels(undefined)).toBe(false);
+    expect(
+      shouldPreferCommentStructureLabels("<!-- urdf-studio:group arm1 --><joint name='j1' />")
+    ).toBe(true);
+  });
+
   it("labels base, arms, and wheels for a mobile manipulator", () => {
     const analysis = analyzeUrdf(DUAL_ARM_MOBILE_URDF);
     const labels = buildRobotStructureLabels(analysis);
@@ -213,6 +229,21 @@ describe("buildRobotStructureLabels", () => {
     expect(labels.jointByName.left_shoulder_joint).toBe("arm7");
     expect(labels.jointByName.left_wrist_joint).toBe("arm7");
     expect(labels.linkByName.left_shoulder_link).toBe("arm7");
+    expect(labels.linkByName.left_tool_link).toBe("arm7");
+  });
+
+  it("can build comment override labels directly", () => {
+    const analysis = analyzeUrdf(COMMENT_OVERRIDE_URDF);
+    if (!analysis.isValid) {
+      throw new Error("Expected valid analysis fixture");
+    }
+
+    const labels = buildCommentOverrideStructureLabels({
+      analysis,
+      urdfContent: COMMENT_OVERRIDE_URDF,
+    });
+
+    expect(labels.jointByName.left_shoulder_joint).toBe("arm7");
     expect(labels.linkByName.left_tool_link).toBe("arm7");
   });
 
