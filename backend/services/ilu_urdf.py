@@ -5,10 +5,13 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import TypeAlias
 
 from backend.core.paths import BASE_DIR, SCRIPTS_DIR
+from backend.models.json_payload import JsonObject
 from backend.models.xacro import GitHubXacroExpandRequest, XacroExpandRequest
 from backend.services.github_auth import resolve_server_github_token
 
@@ -23,6 +26,8 @@ XACRODOC_WHEEL = (
     / "wheels"
     / "xacrodoc-1.3.0-py3-none-any.whl"
 )
+
+BridgePayload: TypeAlias = Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -131,30 +136,42 @@ def _map_bridge_error(command: str, detail: str) -> IluUrdfBridgeError:
     return IluUrdfBridgeError(status_code=400, detail=detail)
 
 
-def _run_bridge(command: str, payload: dict) -> dict:
-    process = subprocess.run(
-        [NODE_BIN, str(BRIDGE_SCRIPT), command],
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-        timeout=NODE_TIMEOUT_SECONDS,
-        check=False,
-    )
+def _run_bridge(command: str, payload: BridgePayload) -> JsonObject:
+    try:
+        completed_process = subprocess.run(
+            [NODE_BIN, str(BRIDGE_SCRIPT), command],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=NODE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError, OSError) as error:
+        raise IluUrdfBridgeError(
+            status_code=502,
+            detail=f"Failed to execute ilu bridge: {error}",
+        ) from error
 
-    stdout = process.stdout.strip()
-    stderr = process.stderr.strip()
+    stdout = completed_process.stdout.strip()
+    stderr = completed_process.stderr.strip()
 
-    if process.returncode != 0:
+    if completed_process.returncode != 0:
         detail = stderr or stdout or f"ilu bridge command failed: {command}"
         raise _map_bridge_error(command, detail)
 
     try:
-        return json.loads(stdout or "{}")
+        response = json.loads(stdout or "{}")
     except json.JSONDecodeError as error:
         raise IluUrdfBridgeError(
             status_code=502,
             detail="ilu bridge returned invalid JSON.",
         ) from error
+    if not isinstance(response, dict):
+        raise IluUrdfBridgeError(
+            status_code=502,
+            detail="ilu bridge returned an invalid JSON object.",
+        )
+    return response
 
 
 @lru_cache(maxsize=256)

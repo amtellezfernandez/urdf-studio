@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 import subprocess
 
+import pytest
+
 from backend.models.xacro import GitHubXacroExpandRequest
+from backend.services import ilu_urdf
 from backend.services.ilu_urdf import (
+    IluUrdfBridgeError,
     bundle_mesh_assets_for_urdf_file,
     convert_urdf_to_mjcf,
     convert_urdf_to_usd,
@@ -41,6 +45,37 @@ def test_expand_github_xacro_uses_load_source_bridge(monkeypatch) -> None:
     assert calls[0][-1] == "load-source-github"
     assert urdf == "<robot name=\"demo\"/>"
     assert stderr is None
+
+
+def test_run_bridge_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout="[]",
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(IluUrdfBridgeError) as exc_info:
+        ilu_urdf._run_bridge("fingerprint", {"urdfXml": "<robot />"})
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "ilu bridge returned an invalid JSON object."
+
+
+def test_run_bridge_maps_process_execution_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf.subprocess.run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError("node")),
+    )
+
+    with pytest.raises(IluUrdfBridgeError) as exc_info:
+        ilu_urdf._run_bridge("fingerprint", {"urdfXml": "<robot />"})
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Failed to execute ilu bridge: node"
 
 
 def test_bundle_mesh_assets_for_urdf_file_maps_bridge_response(monkeypatch) -> None:
