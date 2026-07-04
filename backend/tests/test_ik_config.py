@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pytest
 
 from backend.services import ik_config
@@ -12,7 +14,10 @@ IK_ENV_KEYS = (
 )
 
 
-def _install_config(monkeypatch: pytest.MonkeyPatch, config: dict) -> None:
+def _install_config(
+    monkeypatch: pytest.MonkeyPatch,
+    config: Mapping[str, object],
+) -> None:
     monkeypatch.setattr(ik_config, "read_app_config", lambda: config)
     for env_key in IK_ENV_KEYS:
         monkeypatch.delenv(env_key, raising=False)

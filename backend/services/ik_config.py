@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
+from typing import TypeAlias
 
 from backend.models.ik_config import (
     IkConfigResponse,
@@ -14,6 +16,8 @@ from backend.models.ik_config import (
 from backend.core.app_config import get_config_value, read_app_config
 
 IK_CONFIG_VERSION = "1"
+IkConfigOverrides: TypeAlias = Mapping[str, object]
+SolverTuningDefaults: TypeAlias = dict[str, IkSolverTuning]
 
 _DEFAULT_TIMEOUTS = IkTimeouts(request_ms=1200, drag_ms=300, orbit_ms=250)
 _DEFAULT_DRAG = IkDragConfig(
@@ -34,7 +38,7 @@ _DEFAULT_ORBIT = IkOrbitDefaults(
 )
 _DEFAULT_TOLERANCES = IkTolerances(position_tolerance=0.002, orientation_tolerance=0.05)
 
-_DEFAULT_SOLVER_TUNING = {
+_DEFAULT_SOLVER_TUNING: SolverTuningDefaults = {
     "placo": IkSolverTuning(
         position_weight=100.0,
         orientation_weight=0.5,
@@ -60,27 +64,29 @@ _DEFAULT_SOLVER_TUNING = {
 }
 
 
-def _read_int(key: str, fallback: int) -> int:
+def _read_int(key: str, default_value: int) -> int:
     raw = os.getenv(key)
     if not raw:
-        return fallback
+        return default_value
     try:
         return int(raw)
     except ValueError:
-        return fallback
+        return default_value
 
 
-def _read_float(key: str, fallback: float) -> float:
+def _read_float(key: str, default_value: float) -> float:
     raw = os.getenv(key)
     if not raw:
-        return fallback
+        return default_value
     try:
         return float(raw)
     except ValueError:
-        return fallback
+        return default_value
 
 
-def _apply_config_overrides_timeouts(base: IkTimeouts, config: dict) -> IkTimeouts:
+def _apply_config_overrides_timeouts(
+    base: IkTimeouts, config: IkConfigOverrides
+) -> IkTimeouts:
     request_ms = get_config_value(config, ["ik", "timeouts", "requestMs"], None)
     if request_ms is None:
         request_ms = get_config_value(config, ["ik", "timeouts", "request_ms"], base.request_ms)
@@ -97,7 +103,9 @@ def _apply_config_overrides_timeouts(base: IkTimeouts, config: dict) -> IkTimeou
     )
 
 
-def _apply_config_overrides_drag(base: IkDragConfig, config: dict) -> IkDragConfig:
+def _apply_config_overrides_drag(
+    base: IkDragConfig, config: IkConfigOverrides
+) -> IkDragConfig:
     return IkDragConfig(
         max_drag_speed=float(
             get_config_value(config, ["ik", "drag", "maxDragSpeed"], base.max_drag_speed)
@@ -126,7 +134,9 @@ def _apply_config_overrides_drag(base: IkDragConfig, config: dict) -> IkDragConf
     )
 
 
-def _apply_config_overrides_orbit(base: IkOrbitDefaults, config: dict) -> IkOrbitDefaults:
+def _apply_config_overrides_orbit(
+    base: IkOrbitDefaults, config: IkConfigOverrides
+) -> IkOrbitDefaults:
     return IkOrbitDefaults(
         radius=float(get_config_value(config, ["ik", "orbit", "radius"], base.radius)),
         inclination_deg=float(
@@ -144,7 +154,10 @@ def _apply_config_overrides_orbit(base: IkOrbitDefaults, config: dict) -> IkOrbi
 
 
 def _read_solver_tuning_config_value(
-    solver_id: str, setting_key: str, fallback: float | int, config: dict
+    solver_id: str,
+    setting_key: str,
+    default_value: float | int,
+    config: IkConfigOverrides,
 ) -> float | int:
     normalized_solver_id = solver_id.replace("-", "")
     return get_config_value(
@@ -153,13 +166,13 @@ def _read_solver_tuning_config_value(
         get_config_value(
             config,
             ["ik", "solverTuning", normalized_solver_id, setting_key],
-            fallback,
+            default_value,
         ),
     )
 
 
 def _apply_config_overrides_solver(
-    solver_id: str, base: IkSolverTuning, config: dict
+    solver_id: str, base: IkSolverTuning, config: IkConfigOverrides
 ) -> IkSolverTuning:
     return IkSolverTuning(
         position_weight=float(
@@ -242,7 +255,9 @@ def _apply_env_overrides_orbit(base: IkOrbitDefaults) -> IkOrbitDefaults:
     )
 
 
-def _apply_config_overrides_tolerances(base: IkTolerances, config: dict) -> IkTolerances:
+def _apply_config_overrides_tolerances(
+    base: IkTolerances, config: IkConfigOverrides
+) -> IkTolerances:
     return IkTolerances(
         position_tolerance=float(
             get_config_value(
@@ -303,7 +318,7 @@ def get_ik_config() -> IkConfigResponse:
     tolerances = _apply_env_overrides_tolerances(
         _apply_config_overrides_tolerances(_DEFAULT_TOLERANCES, config)
     )
-    solver_tuning = {}
+    solver_tuning: SolverTuningDefaults = {}
     for solver_id, tuning in _DEFAULT_SOLVER_TUNING.items():
         config_tuning = _apply_config_overrides_solver(solver_id, tuning, config)
         solver_tuning[solver_id] = _apply_env_overrides_solver(solver_id, config_tuning)
