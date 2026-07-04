@@ -4,7 +4,11 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
-from backend.services.placo_kinematics import _quat_to_matrix, _set_placo_posture_target
+from backend.services.placo_kinematics import (
+    _quat_to_matrix,
+    _resolved_weight,
+    _set_placo_posture_target,
+)
 
 
 class _FakeJointsTask:
@@ -45,6 +49,14 @@ def test_quat_to_matrix_rejects_invalid_length() -> None:
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "target_wxyz must have length 4 when provided"
+
+
+def test_resolved_weight_prefers_request_value() -> None:
+    assert _resolved_weight(2.5, 1.0) == 2.5
+
+
+def test_resolved_weight_uses_configured_default_when_request_is_empty() -> None:
+    assert _resolved_weight(None, 1.75) == 1.75
 
 
 def test_set_placo_posture_target_uses_named_mapping_first() -> None:

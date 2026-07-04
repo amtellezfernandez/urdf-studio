@@ -154,8 +154,12 @@ def _get_or_create_frame_task(entry: PlacoRobotEntry, target_link: str) -> Any:
     return frame_task
 
 
-def _request_weight(request_value: float | None, fallback_value: float) -> float:
-    return float(request_value) if request_value is not None else float(fallback_value)
+def _resolved_weight(request_value: float | None, configured_default: float) -> float:
+    return (
+        float(request_value)
+        if request_value is not None
+        else float(configured_default)
+    )
 
 
 def _set_placo_posture_target(
@@ -207,14 +211,14 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
     robot.update_kinematics()
 
     tuning = get_solver_tuning("placo")
-    position_weight = _request_weight(
+    position_weight = _resolved_weight(
         ik_request.position_weight, tuning.position_weight
     )
-    orientation_weight = _request_weight(
+    orientation_weight = _resolved_weight(
         ik_request.orientation_weight, tuning.orientation_weight
     )
-    posture_weight = _request_weight(ik_request.posture_weight, tuning.posture_weight)
-    limit_weight = _request_weight(ik_request.limit_weight, tuning.limit_weight)
+    posture_weight = _resolved_weight(ik_request.posture_weight, tuning.posture_weight)
+    limit_weight = _resolved_weight(ik_request.limit_weight, tuning.limit_weight)
 
     rotation = (
         np.array(ik_request.target_rotation, dtype=np.float64)
