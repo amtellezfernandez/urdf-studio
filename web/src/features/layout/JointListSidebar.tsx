@@ -80,16 +80,14 @@ import { SidebarStructureControls } from "@/features/layout/SidebarStructureCont
 import { LinkBrowserView } from "@/features/layout/LinkBrowserView";
 import { FlatJointBrowserView } from "@/features/layout/FlatJointBrowserView";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
-
-const toggleStringSetValue = (previous: Set<string>, value: string) => {
-  const next = new Set(previous);
-  if (next.has(value)) {
-    next.delete(value);
-  } else {
-    next.add(value);
-  }
-  return next;
-};
+import {
+  countSelectedValues,
+  filterStringArrayMembers,
+  filterStringSetMembers,
+  toggleSelectAllStringSetValues,
+  toggleStringSetGroup,
+  toggleStringSetValue,
+} from "@/features/layout/jointListSidebarSelection";
 
 
 const JOINT_LIST_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
@@ -409,21 +407,9 @@ export const JointListSidebar = ({
     setSelectedBatchLinks((prev) => toggleStringSetValue(prev, linkName));
   }, []);
   const toggleBatchLinkGroup = useCallback((linkNames: string[]) => {
-    if (linkNames.length === 0) return;
-    setSelectedBatchLinks((prev) => {
-      const allSelected = linkNames.every((linkName) => prev.has(linkName));
-      const next = new Set(prev);
-      if (allSelected) {
-        linkNames.forEach((linkName) => {
-          next.delete(linkName);
-        });
-      } else {
-        linkNames.forEach((linkName) => {
-          next.add(linkName);
-        });
-      }
-      return next;
-    });
+    setSelectedBatchLinks((previousSelectedLinks) =>
+      toggleStringSetGroup(previousSelectedLinks, linkNames)
+    );
   }, []);
   const clearBatchLinkSelection = useCallback(() => {
     setSelectedBatchLinks(new Set());
@@ -550,11 +536,14 @@ export const JointListSidebar = ({
   useEffect(() => {
     if (selectedBatchLinks.size === 0) return;
     const availableLinksSet = new Set(allLinks);
-    setSelectedBatchLinks((prev) => {
-      const filtered = new Set(
-        Array.from(prev).filter((linkName) => availableLinksSet.has(linkName))
+    setSelectedBatchLinks((previousSelectedLinks) => {
+      const filteredSelectedLinks = filterStringSetMembers(
+        previousSelectedLinks,
+        availableLinksSet
       );
-      return filtered.size === prev.size ? prev : filtered;
+      return filteredSelectedLinks.size === previousSelectedLinks.size
+        ? previousSelectedLinks
+        : filteredSelectedLinks;
     });
   }, [allLinks, selectedBatchLinks.size]);
   useEffect(() => {
@@ -562,9 +551,7 @@ export const JointListSidebar = ({
     const availableLinksSet = new Set(
       allLinks.filter((linkName) => linksWithCollisionSet.has(linkName))
     );
-    const filteredMergedLinks = collisionMergedLinks.filter((linkName) =>
-      availableLinksSet.has(linkName)
-    );
+    const filteredMergedLinks = filterStringArrayMembers(collisionMergedLinks, availableLinksSet);
     if (filteredMergedLinks.length !== collisionMergedLinks.length) {
       onCollisionMergedLinksChange(filteredMergedLinks);
     }
@@ -574,8 +561,9 @@ export const JointListSidebar = ({
     const availableLinksSet = new Set(
       allLinks.filter((linkName) => linksWithCollisionSet.has(linkName))
     );
-    const filteredSimplifyLinks = collisionSimplifyLinks.filter((linkName) =>
-      availableLinksSet.has(linkName)
+    const filteredSimplifyLinks = filterStringArrayMembers(
+      collisionSimplifyLinks,
+      availableLinksSet
     );
     if (filteredSimplifyLinks.length !== collisionSimplifyLinks.length) {
       onCollisionSimplifyLinksChange(filteredSimplifyLinks);
@@ -750,7 +738,7 @@ export const JointListSidebar = ({
     return () => window.clearInterval(intervalId);
   }, [activeMovingJointNames.size, updateActiveMovingJointNames]);
   const selectedFilteredLinkCount = useMemo(
-    () => filteredLinks.filter((linkName) => selectedBatchLinks.has(linkName)).length,
+    () => countSelectedValues(filteredLinks, selectedBatchLinks),
     [filteredLinks, selectedBatchLinks]
   );
   const areAllFilteredLinksSelected =
@@ -834,21 +822,13 @@ export const JointListSidebar = ({
   }
 
   const toggleSelectAllFilteredLinks = () => {
-    if (filteredLinks.length === 0) return;
-    setSelectedBatchLinks((prev) => {
-      if (areAllFilteredLinksSelected) {
-        const next = new Set(prev);
-        filteredLinks.forEach((linkName) => {
-          next.delete(linkName);
-        });
-        return next;
-      }
-      const next = new Set(prev);
-      filteredLinks.forEach((linkName) => {
-        next.add(linkName);
-      });
-      return next;
-    });
+    setSelectedBatchLinks((previousSelectedLinks) =>
+      toggleSelectAllStringSetValues(
+        previousSelectedLinks,
+        filteredLinks,
+        areAllFilteredLinksSelected
+      )
+    );
   };
 
   return (
