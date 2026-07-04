@@ -120,7 +120,7 @@ describe("TopNavBar", () => {
     expect(container.textContent).not.toContain("Physics Warning");
     expect(container.textContent).not.toContain("Credentials");
     expect(container.textContent).not.toContain("Browser token entry");
-    expect(container.textContent).toContain("Open In");
+    expect(container.textContent).toContain("Simulation Prep");
     expect(container.textContent).not.toContain("Review");
     expect(container.querySelector('button[title^="IK"]')).toBeNull();
 
@@ -177,13 +177,15 @@ describe("TopNavBar", () => {
 
     await renderTopNavBar(root, props);
 
-    expect(container.textContent).toContain("Open In");
+    expect(container.textContent).toContain("Simulation Prep");
     expect(container.textContent).not.toContain("Physics Warning");
     expect(container.textContent).not.toContain("Review");
 
-    const simulationPrepButton = container.querySelector('button[aria-label="Open In"]');
+    const simulationPrepButton = container.querySelector('button[aria-label="Simulation Prep"]');
     expect(simulationPrepButton).toBeTruthy();
-    expect(simulationPrepButton?.getAttribute("title")).toBe("Open In: Physics Warning");
+    expect(simulationPrepButton?.getAttribute("title")).toBe(
+      "Simulation Prep: Physics Warning",
+    );
 
     await act(async () => {
       simulationPrepButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

@@ -94,6 +94,7 @@ describe("LeftSidebarPanel", () => {
       root.render(createElement(LeftSidebarPanel, props));
     });
 
+    expect(container.textContent).toContain("Simulation Prep");
     expect(container.textContent).toContain("Genesis");
     expect(container.textContent).not.toContain("URDF simulation workspace");
     expect(container.querySelector("[data-camera-panel]")?.getAttribute("data-camera-panel")).toBe("1");

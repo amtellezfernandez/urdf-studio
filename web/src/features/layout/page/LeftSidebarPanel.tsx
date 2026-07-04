@@ -234,7 +234,7 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
               <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/30 px-2 py-2">
                 <div className="min-w-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Open In
+                    Simulation Prep
                   </div>
                   <div className="mt-1 truncate text-xs text-foreground">
                     Simulators + tools
@@ -248,11 +248,11 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
                   onClick={onOpenWorkspaceLauncher}
                   disabled={!onOpenWorkspaceLauncher}
                   className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border/55 bg-background/35 px-2 text-[10px] font-medium text-foreground transition-colors hover:border-border/80 hover:bg-muted/25 disabled:cursor-not-allowed disabled:opacity-45"
-                  aria-label="Open In"
+                  aria-label="Simulation Prep"
                   title={
                     workspaceLauncherStatusLabel
-                      ? `Open In: ${workspaceLauncherStatusLabel}`
-                      : "Open In"
+                      ? `Simulation Prep: ${workspaceLauncherStatusLabel}`
+                      : "Simulation Prep"
                   }
                 >
                   <span

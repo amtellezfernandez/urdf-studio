@@ -126,8 +126,8 @@ export const TopNavBar = (props: TopNavBarProps) => {
             type="button"
             className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/45 px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground sm:px-2"
             onClick={props.onOpenWorkspaceLauncher}
-            aria-label="Open In"
-            title={`Open In: ${props.workspaceLauncherStatusLabel}`}
+            aria-label="Simulation Prep"
+            title={`Simulation Prep: ${props.workspaceLauncherStatusLabel}`}
           >
             <span
               aria-hidden="true"
@@ -138,8 +138,8 @@ export const TopNavBar = (props: TopNavBarProps) => {
               }`}
             />
             <span className="font-medium text-foreground">
-              <span className="sm:hidden">Open</span>
-              <span className="hidden sm:inline">Open In</span>
+              <span className="sm:hidden">Prep</span>
+              <span className="hidden sm:inline">Simulation Prep</span>
             </span>
           </button>
         ) : null}
