@@ -1,4 +1,10 @@
 import { cn } from "@/shared/lib/utils";
+import {
+  resolveBatchLinkIndicatorClassName,
+  resolveBatchSelectionSummary,
+  resolveMergedCollisionStateLabel,
+  resolveSimplificationStateLabel,
+} from "@/features/layout/linkBatchEditorPanelHelpers";
 
 type LinkBatchEditorPanelProps = {
   canClearMergedCollision: boolean;
@@ -18,52 +24,6 @@ type LinkBatchEditorPanelProps = {
   selectedBatchMergedCount: number;
   selectedBatchSimplifiedCount: number;
   simplifiedLinkSet: ReadonlySet<string>;
-};
-
-const resolveSimplificationStateLabel = ({
-  hasMixedBatchSimplifyState,
-  hasSelectedCollisionBatchLinks,
-  selectedBatchCollisionCount,
-  selectedBatchSimplifiedCount,
-}: Pick<
-  LinkBatchEditorPanelProps,
-  | "hasMixedBatchSimplifyState"
-  | "hasSelectedCollisionBatchLinks"
-  | "selectedBatchCollisionCount"
-  | "selectedBatchSimplifiedCount"
->): string => {
-  if (!hasSelectedCollisionBatchLinks) {
-    return "Simplification state: no URDF collisions in selection";
-  }
-  if (hasMixedBatchSimplifyState) {
-    return "Simplification state: mixed";
-  }
-  return selectedBatchSimplifiedCount === selectedBatchCollisionCount
-    ? "Simplification state: enabled"
-    : "Simplification state: disabled";
-};
-
-const resolveMergedCollisionStateLabel = ({
-  hasMixedBatchMergeState,
-  hasSelectedCollisionBatchLinks,
-  selectedBatchCollisionCount,
-  selectedBatchMergedCount,
-}: Pick<
-  LinkBatchEditorPanelProps,
-  | "hasMixedBatchMergeState"
-  | "hasSelectedCollisionBatchLinks"
-  | "selectedBatchCollisionCount"
-  | "selectedBatchMergedCount"
->): string => {
-  if (!hasSelectedCollisionBatchLinks) {
-    return "Merged collision state: no URDF collisions in selection";
-  }
-  if (hasMixedBatchMergeState) {
-    return "Merged collision state: mixed";
-  }
-  return selectedBatchMergedCount === selectedBatchCollisionCount
-    ? "Merged collision state: active"
-    : "Merged collision state: inactive";
 };
 
 export const LinkBatchEditorPanel = ({
@@ -87,7 +47,7 @@ export const LinkBatchEditorPanel = ({
 }: LinkBatchEditorPanelProps) => (
   <div className="p-2 space-y-2">
     <div className="text-xs text-foreground">
-      {`${selectedBatchLinkNames.length} link${selectedBatchLinkNames.length === 1 ? "" : "s"} selected`}
+      {resolveBatchSelectionSummary(selectedBatchLinkNames.length)}
     </div>
     <div className="text-[11px] text-muted-foreground">
       {resolveSimplificationStateLabel({
@@ -154,11 +114,10 @@ export const LinkBatchEditorPanel = ({
           <span
             className={cn(
               "h-2.5 w-2.5 rounded-[2px] border",
-              mergedLinkSet.has(linkName)
-                ? "border-cyan-500/60 bg-cyan-500/50"
-                : simplifiedLinkSet.has(linkName)
-                  ? "border-emerald-500/60 bg-emerald-500/50"
-                  : "border-border/60 bg-transparent"
+              resolveBatchLinkIndicatorClassName({
+                isMerged: mergedLinkSet.has(linkName),
+                isSimplified: simplifiedLinkSet.has(linkName),
+              })
             )}
           />
           <span className="truncate">{linkName}</span>
