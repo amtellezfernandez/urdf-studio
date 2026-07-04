@@ -210,6 +210,8 @@ jobs:
           backend/tests/test_blender_saved_session.py
           backend/tests/test_blender_simulator_adapter.py
           backend/tests/test_genesis_simulator_adapter.py
+          backend/tests/test_mjx_rollout_runner.py
+          backend/tests/test_mjx_simulator_adapter.py
           backend/tests/test_mujoco_simulator_adapter.py
           backend/tests/test_pybullet_simulator_adapter.py
           backend/tests/test_simulator_camera_transfer.py
