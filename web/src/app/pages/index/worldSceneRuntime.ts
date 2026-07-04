@@ -582,5 +582,6 @@ export const readWorldSceneLayerFromUrl = async (
   return {
     worldLayout,
     embeddedCameras: countEmbeddedWorldSnapshotCameras(payload),
+    baseUrl: response.url || normalizedUrl,
   };
 };

@@ -29,6 +29,9 @@ import type {
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 
+const isAbsoluteOrRootedUrl = (value: string): boolean =>
+  value.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(value);
+
 type BuildWorldScenePackageManifestParams = {
   packageId: string;
   version: string;
@@ -294,7 +297,7 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
       serializable.asset_scale_xyz = assetScale;
     }
   }
-  if (object.meshUri) {
+  if (object.meshUri && !isAbsoluteOrRootedUrl(object.meshUri)) {
     serializable.mesh = { ...serializable.mesh, uri: object.meshUri };
   }
   if (object.isHidden === true) {

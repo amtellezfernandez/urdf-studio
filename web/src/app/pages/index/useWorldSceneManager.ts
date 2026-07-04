@@ -394,15 +394,18 @@ export const useWorldSceneManager = ({
   );
 
   const applyWorldSceneObjects = useCallback(
-    (sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]) => {
-      applyCreatedObjects(toImportedCreatedObjects(sceneObjects));
+    (
+      sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"],
+      baseUrl?: string
+    ) => {
+      applyCreatedObjects(toImportedCreatedObjects(sceneObjects, baseUrl));
     },
     [applyCreatedObjects]
   );
 
   const applyImportedWorldSceneLayer = useCallback(
-    (worldLayout: WorldSceneLayerSnapshot) => {
-      applyWorldSceneObjects(worldLayout.objects);
+    (worldLayout: WorldSceneLayerSnapshot, baseUrl?: string) => {
+      applyWorldSceneObjects(worldLayout.objects, baseUrl);
       setActiveWorldSnapshotRef(null);
     },
     [applyWorldSceneObjects, setActiveWorldSnapshotRef]
@@ -536,12 +539,13 @@ export const useWorldSceneManager = ({
       contextLabel: string,
       options: { sourceOverride?: NonNullable<CreatedObject["source"]> } = {}
     ) => {
-      const { worldLayout, embeddedCameras } = await readWorldSceneLayerFromUrl(
+      const { worldLayout, embeddedCameras, baseUrl } = await readWorldSceneLayerFromUrl(
         worldLayoutUrl,
         contextLabel
       );
       applyImportedWorldSceneLayer(
-        applyWorldSceneLayerObjectSourceOverride(worldLayout, options.sourceOverride)
+        applyWorldSceneLayerObjectSourceOverride(worldLayout, options.sourceOverride),
+        baseUrl
       );
       if (embeddedCameras > 0) {
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");

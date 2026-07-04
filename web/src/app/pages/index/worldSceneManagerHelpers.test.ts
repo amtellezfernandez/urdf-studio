@@ -64,6 +64,22 @@ describe("world scene manager helper conversions", () => {
     expect(importedObject?.rotation?.z).toBe(0.6);
   });
 
+  it("resolves relative mesh URIs against the imported layout URL", () => {
+    const [importedObject] = toImportedCreatedObjects(
+      [
+        createSerializableWorldObject({
+          asset_ref: undefined,
+          mesh: { uri: "mesh-demo/collider.glb" },
+        }),
+      ],
+      "https://example.test/world-layouts/mesh-demo.world-layout.json"
+    );
+
+    expect(importedObject?.meshUri).toBe(
+      "https://example.test/world-layouts/mesh-demo/collider.glb"
+    );
+  });
+
   it("maps package cameras into camera inputs without persisted ids", () => {
     const importedCameras = toImportedWorldSceneCameras([
       {

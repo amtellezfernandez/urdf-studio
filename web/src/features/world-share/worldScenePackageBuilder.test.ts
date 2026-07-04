@@ -250,6 +250,18 @@ describe("buildWorldScenePackageManifest", () => {
     );
   });
 
+  it("does not export browser-resolved mesh URLs as portable mesh URIs", () => {
+    const serializable = toSerializableWorldObject({
+      ...TEST_MESH_OBJECT,
+      assetRef: undefined,
+      assetScale: undefined,
+      meshUri: "https://example.test/world-layouts/mesh-demo/collider.glb",
+    });
+
+    expect(serializable.asset_ref).toBeUndefined();
+    expect(serializable.mesh).toBeUndefined();
+  });
+
   it("rejects non-positive mesh asset scale before package export", () => {
     expect(() =>
       toSerializableWorldObject({

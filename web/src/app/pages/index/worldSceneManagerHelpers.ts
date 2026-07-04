@@ -80,8 +80,27 @@ export async function waitForWorldRolloutJob(jobId: string) {
   return latest;
 }
 
+const resolveMeshUriAgainstBase = (
+  meshUri: string | undefined,
+  baseUrl: string | undefined
+): string | undefined => {
+  if (!meshUri) return undefined;
+  if (!baseUrl) return meshUri;
+  try {
+    const documentUrl =
+      typeof globalThis.location?.href === "string"
+        ? globalThis.location.href
+        : "http://localhost/";
+    const absoluteBaseUrl = new URL(baseUrl, documentUrl).toString();
+    return new URL(meshUri, absoluteBaseUrl).toString();
+  } catch {
+    return meshUri;
+  }
+};
+
 function toImportedObjectParams(
-  object: WorldScenePackageManifest["world_snapshot"]["objects"][number]
+  object: WorldScenePackageManifest["world_snapshot"]["objects"][number],
+  baseUrl?: string
 ): Omit<CreatedObject, "id"> {
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
     object.ik_target_type === "orbit" ? "orbit" : "punctual";
@@ -112,7 +131,7 @@ function toImportedObjectParams(
           object.asset_scale_xyz[2]
         )
       : undefined,
-    meshUri: object.mesh?.uri,
+    meshUri: resolveMeshUriAgainstBase(object.mesh?.uri, baseUrl),
     isHidden: object.is_hidden === true,
     source: object.source ?? "user",
     trackedJointName: object.tracked_joint_name ?? null,
@@ -130,11 +149,12 @@ function toImportedObjectParams(
 }
 
 export function toImportedCreatedObjects(
-  sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]
+  sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"],
+  baseUrl?: string
 ): CreatedObject[] {
   return sceneObjects.map((sceneObject) => ({
     id: sceneObject.id,
-    ...toImportedObjectParams(sceneObject),
+    ...toImportedObjectParams(sceneObject, baseUrl),
   }));
 }
 

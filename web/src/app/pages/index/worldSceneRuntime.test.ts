@@ -265,6 +265,7 @@ describe("worldSceneRuntime world layout import", () => {
       return {
         ok: true,
         status: 200,
+        url: "https://cdn.example.test/worlds/layout.json",
         json: async () => manifestPayload,
       } as Response;
     }) as typeof fetch;
@@ -277,6 +278,7 @@ describe("worldSceneRuntime world layout import", () => {
 
       expect(importedWorldLayout.embeddedCameras).toBe(2);
       expect(importedWorldLayout.worldLayout.objects).toHaveLength(1);
+      expect(importedWorldLayout.baseUrl).toBe("https://cdn.example.test/worlds/layout.json");
     } finally {
       globalThis.fetch = originalFetch;
     }
