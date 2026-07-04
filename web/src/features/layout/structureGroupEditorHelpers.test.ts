@@ -8,7 +8,12 @@ import {
 import {
   canDropInStructureGroup,
   parseStructureDragPayload,
+  resolveCreateSubgroupOutcome,
+  resolveKnownStructureGroupLabelSet,
   resolveStructureDragAutoScrollDelta,
+  shouldClearStructureDragState,
+  shouldCloseSubgroupCreatorForView,
+  shouldCloseSubgroupCreatorWhenUnavailable,
   shouldIgnoreStructureDragStart,
   STRUCTURE_SUBGROUP_SUPPORTED_VIEWS,
 } from "@/features/layout/structureGroupEditorHelpers";
@@ -136,5 +141,76 @@ describe("structureGroupEditorHelpers", () => {
     expect(STRUCTURE_SUBGROUP_SUPPORTED_VIEWS.has("links")).toBe(true);
     expect(STRUCTURE_SUBGROUP_SUPPORTED_VIEWS.has("flat")).toBe(true);
     expect(STRUCTURE_SUBGROUP_SUPPORTED_VIEWS.has("hierarchy")).toBe(false);
+  });
+
+  it("collects known group labels from custom, link, and joint labels", () => {
+    expect(
+      resolveKnownStructureGroupLabelSet({
+        customStructureGroupLabels: ["arm2"],
+        structureLabels: {
+          linkByName: { base_link: "base", tool_link: " arm1 " },
+          jointByName: { shoulder_joint: "arm1", wrist_joint: null },
+        } as never,
+      })
+    ).toEqual(new Set(["arm2", "base", "arm1"]));
+  });
+
+  it("resolves subgroup creation outcomes", () => {
+    expect(
+      resolveCreateSubgroupOutcome({
+        canReassignStructureGroups: false,
+        knownStructureGroupLabelSet: new Set(),
+        subgroupDraftLabel: "arm3",
+      })
+    ).toEqual({
+      kind: "error",
+      message: "Group editing is unavailable for this URDF.",
+    });
+
+    expect(
+      resolveCreateSubgroupOutcome({
+        canReassignStructureGroups: true,
+        knownStructureGroupLabelSet: new Set(["arm3"]),
+        subgroupDraftLabel: " arm3 ",
+      })
+    ).toEqual({
+      kind: "info",
+      message: "Arm3 already exists.",
+    });
+
+    expect(
+      resolveCreateSubgroupOutcome({
+        canReassignStructureGroups: true,
+        knownStructureGroupLabelSet: new Set(["arm1"]),
+        subgroupDraftLabel: " arm3 ",
+      })
+    ).toEqual({
+      kind: "success",
+      message: "Added subgroup Arm3.",
+      normalizedLabel: "arm3",
+    });
+  });
+
+  it("resolves subgroup/drag cleanup conditions", () => {
+    expect(
+      shouldCloseSubgroupCreatorForView({
+        isSubgroupCreatorOpen: true,
+        viewMode: "hierarchy",
+      })
+    ).toBe(true);
+    expect(
+      shouldCloseSubgroupCreatorWhenUnavailable({
+        canReassignStructureGroups: false,
+        isSubgroupCreatorOpen: false,
+        subgroupDraftLabel: "arm2",
+      })
+    ).toBe(true);
+    expect(
+      shouldClearStructureDragState({
+        activeStructureDrag: null,
+        activeStructureDropGroup: "arm1",
+        canReassignStructureGroups: false,
+      })
+    ).toBe(true);
   });
 });

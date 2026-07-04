@@ -16,7 +16,12 @@ import { resolveStructureDropGroupLabelFromPoint } from "@/features/layout/struc
 import {
   canDropInStructureGroup,
   parseStructureDragPayload,
+  resolveCreateSubgroupOutcome,
+  resolveKnownStructureGroupLabelSet,
   resolveStructureDragAutoScrollDelta,
+  shouldClearStructureDragState,
+  shouldCloseSubgroupCreatorForView,
+  shouldCloseSubgroupCreatorWhenUnavailable,
   shouldIgnoreStructureDragStart,
   STRUCTURE_DRAG_DATA_KEY,
   STRUCTURE_SUBGROUP_SUPPORTED_VIEWS,
@@ -106,16 +111,10 @@ export const useStructureGroupEditor = ({
   const [subgroupDraftLabel, setSubgroupDraftLabelState] = useState("");
 
   const knownStructureGroupLabelSet = useMemo(() => {
-    const labels = new Set<string>(customStructureGroupLabels);
-    Object.values(structureLabels.linkByName).forEach((label) => {
-      const normalized = normalizeStructureGroupLabel(label ?? "");
-      if (normalized) labels.add(normalized);
+    return resolveKnownStructureGroupLabelSet({
+      customStructureGroupLabels,
+      structureLabels,
     });
-    Object.values(structureLabels.jointByName).forEach((label) => {
-      const normalized = normalizeStructureGroupLabel(label ?? "");
-      if (normalized) labels.add(normalized);
-    });
-    return labels;
   }, [customStructureGroupLabels, structureLabels.jointByName, structureLabels.linkByName]);
 
   const groupedLinks = useMemo(
@@ -147,22 +146,22 @@ export const useStructureGroupEditor = ({
     setIsSubgroupCreatorOpen(true);
   }, [canReassignStructureGroups]);
   const createCustomSubgroup = useCallback(() => {
-    if (!canReassignStructureGroups) {
-      toast.error("Group editing is unavailable for this URDF.");
+    const outcome = resolveCreateSubgroupOutcome({
+      canReassignStructureGroups,
+      knownStructureGroupLabelSet,
+      subgroupDraftLabel,
+    });
+    if (outcome.kind === "error") {
+      toast.error(outcome.message);
       return;
     }
-    const normalizedLabel = normalizeStructureGroupLabel(subgroupDraftLabel);
-    if (!normalizedLabel) {
-      toast.error("Subgroup name cannot be empty.");
+    if (outcome.kind === "info") {
+      toast.info(outcome.message);
       return;
     }
-    if (knownStructureGroupLabelSet.has(normalizedLabel)) {
-      toast.info(`${toGroupDisplayLabel(normalizedLabel)} already exists.`);
-      return;
-    }
-    setCustomStructureGroupLabels((prev) => [...prev, normalizedLabel]);
+    setCustomStructureGroupLabels((prev) => [...prev, outcome.normalizedLabel]);
     closeSubgroupCreator();
-    toast.success(`Added subgroup ${toGroupDisplayLabel(normalizedLabel)}.`);
+    toast.success(outcome.message);
   }, [
     canReassignStructureGroups,
     closeSubgroupCreator,
@@ -369,14 +368,25 @@ export const useStructureGroupEditor = ({
   }, [clearStructureDragState]);
 
   useEffect(() => {
-    if (STRUCTURE_SUBGROUP_SUPPORTED_VIEWS.has(viewMode)) return;
-    if (!isSubgroupCreatorOpen) return;
-    closeSubgroupCreator();
+    if (
+      shouldCloseSubgroupCreatorForView({
+        isSubgroupCreatorOpen,
+        viewMode,
+      })
+    ) {
+      closeSubgroupCreator();
+    }
   }, [closeSubgroupCreator, isSubgroupCreatorOpen, viewMode]);
   useEffect(() => {
-    if (canReassignStructureGroups) return;
-    if (!activeStructureDrag && !activeStructureDropGroup) return;
-    clearStructureDragState();
+    if (
+      shouldClearStructureDragState({
+        activeStructureDrag,
+        activeStructureDropGroup,
+        canReassignStructureGroups,
+      })
+    ) {
+      clearStructureDragState();
+    }
   }, [
     activeStructureDrag,
     activeStructureDropGroup,
@@ -384,14 +394,20 @@ export const useStructureGroupEditor = ({
     clearStructureDragState,
   ]);
   useEffect(() => {
-    if (canReassignStructureGroups) return;
-    if (!isSubgroupCreatorOpen && subgroupDraftLabel.length === 0) return;
-    closeSubgroupCreator();
+    if (
+      shouldCloseSubgroupCreatorWhenUnavailable({
+        canReassignStructureGroups,
+        isSubgroupCreatorOpen,
+        subgroupDraftLabel,
+      })
+    ) {
+      closeSubgroupCreator();
+    }
   }, [
     canReassignStructureGroups,
     closeSubgroupCreator,
     isSubgroupCreatorOpen,
-    subgroupDraftLabel.length,
+    subgroupDraftLabel,
   ]);
 
   return {

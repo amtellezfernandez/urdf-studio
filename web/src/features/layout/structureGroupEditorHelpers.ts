@@ -1,8 +1,13 @@
+import type { RobotStructureLabels } from "@/features/layout/robotStructureLabels";
 import type { StructureMoveSourceType } from "@/features/layout/structureGroupAssignments";
+import {
+  normalizeStructureGroupLabel,
+} from "@/features/layout/structureGroupAssignments";
 import {
   STRUCTURE_DRAG_AUTOSCROLL_EDGE_PX,
   STRUCTURE_DRAG_AUTOSCROLL_MAX_STEP_PX,
 } from "@/features/layout/structureDragParams";
+import { toGroupDisplayLabel } from "@/features/layout/structureGroups";
 
 export type StructureGroupViewMode = "links" | "flat" | "hierarchy";
 
@@ -114,3 +119,100 @@ export const shouldIgnoreStructureDragStart = ({
   }
   return dragState.sourceType === "link" && Boolean(targetElement?.closest("button"));
 };
+
+export const resolveKnownStructureGroupLabelSet = ({
+  customStructureGroupLabels,
+  structureLabels,
+}: {
+  customStructureGroupLabels: readonly string[];
+  structureLabels: RobotStructureLabels;
+}): Set<string> => {
+  const labels = new Set<string>(customStructureGroupLabels);
+  Object.values(structureLabels.linkByName).forEach((label) => {
+    const normalized = normalizeStructureGroupLabel(label ?? "");
+    if (normalized) {
+      labels.add(normalized);
+    }
+  });
+  Object.values(structureLabels.jointByName).forEach((label) => {
+    const normalized = normalizeStructureGroupLabel(label ?? "");
+    if (normalized) {
+      labels.add(normalized);
+    }
+  });
+  return labels;
+};
+
+export const resolveCreateSubgroupOutcome = ({
+  canReassignStructureGroups,
+  knownStructureGroupLabelSet,
+  subgroupDraftLabel,
+}: {
+  canReassignStructureGroups: boolean;
+  knownStructureGroupLabelSet: ReadonlySet<string>;
+  subgroupDraftLabel: string;
+}):
+  | { kind: "error"; message: string }
+  | { kind: "info"; message: string }
+  | { kind: "success"; message: string; normalizedLabel: string } => {
+  if (!canReassignStructureGroups) {
+    return {
+      kind: "error",
+      message: "Group editing is unavailable for this URDF.",
+    };
+  }
+
+  const normalizedLabel = normalizeStructureGroupLabel(subgroupDraftLabel);
+  if (!normalizedLabel) {
+    return {
+      kind: "error",
+      message: "Subgroup name cannot be empty.",
+    };
+  }
+
+  if (knownStructureGroupLabelSet.has(normalizedLabel)) {
+    return {
+      kind: "info",
+      message: `${toGroupDisplayLabel(normalizedLabel)} already exists.`,
+    };
+  }
+
+  return {
+    kind: "success",
+    message: `Added subgroup ${toGroupDisplayLabel(normalizedLabel)}.`,
+    normalizedLabel,
+  };
+};
+
+export const shouldCloseSubgroupCreatorForView = ({
+  isSubgroupCreatorOpen,
+  viewMode,
+}: {
+  isSubgroupCreatorOpen: boolean;
+  viewMode: StructureGroupViewMode;
+}): boolean =>
+  isSubgroupCreatorOpen && !STRUCTURE_SUBGROUP_SUPPORTED_VIEWS.has(viewMode);
+
+export const shouldClearStructureDragState = ({
+  activeStructureDrag,
+  activeStructureDropGroup,
+  canReassignStructureGroups,
+}: {
+  activeStructureDrag: StructureDragState | null;
+  activeStructureDropGroup: string | null;
+  canReassignStructureGroups: boolean;
+}): boolean =>
+  !canReassignStructureGroups &&
+  (activeStructureDrag !== null || activeStructureDropGroup !== null);
+
+export const shouldCloseSubgroupCreatorWhenUnavailable = ({
+  canReassignStructureGroups,
+  isSubgroupCreatorOpen,
+  subgroupDraftLabel,
+}: {
+  canReassignStructureGroups: boolean;
+  isSubgroupCreatorOpen: boolean;
+  subgroupDraftLabel: string;
+}): boolean =>
+  !canReassignStructureGroups &&
+  (isSubgroupCreatorOpen || subgroupDraftLabel.length > 0);
