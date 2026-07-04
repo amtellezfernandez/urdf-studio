@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 
@@ -26,7 +25,10 @@ from backend.services.task_compiler import compile_ik_request
 
 
 REMOTE_SOLVERS = {"placo", "amik"}
-_LAST_SOLUTION_CACHE: Dict[Tuple[str, str], Dict[str, float]] = {}
+JointSolution = dict[str, float]
+SolutionCacheKey = tuple[str, str]
+StageSeedKey = tuple[str, int]
+_LAST_SOLUTION_CACHE: dict[SolutionCacheKey, JointSolution] = {}
 
 
 def _hash_urdf(urdf_xml: str) -> str:
@@ -34,7 +36,7 @@ def _hash_urdf(urdf_xml: str) -> str:
 
 
 def _score_solution(
-    solution: Dict[str, float], seed: Dict[str, float]
+    solution: JointSolution, seed: JointSolution
 ) -> float:
     if not seed:
         return 0.0
@@ -72,19 +74,18 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
     cached_solution = _LAST_SOLUTION_CACHE.get(cache_key)
     seed_candidates = build_seed_list(compiled_request.joint_values, cached_solution)
 
-    best_response: Optional[IKResponse] = None
+    best_response: IKResponse | None = None
     best_score = float("inf")
-    best_solver_id: Optional[str] = None
-    best_seed_source: Optional[str] = None
-    best_orientation_label: Optional[str] = None
-    best_orientation_weight: Optional[float] = None
-    best_position_error: Optional[float] = None
-    best_seed_index: Optional[int] = None
-    best_stage_index: Optional[int] = None
-    last_error: Optional[HTTPException] = None
+    best_solver_id: str | None = None
+    best_seed_source: str | None = None
+    best_orientation_label: str | None = None
+    best_orientation_weight: float | None = None
+    best_position_error: float | None = None
+    best_seed_index: int | None = None
+    last_error: HTTPException | None = None
 
-    previous_stage_solution: Dict[Tuple[str, int], Dict[str, float]] = {}
-    blocked_reason_by_seed: Dict[Tuple[str, int], str] = {}
+    previous_stage_solution: dict[StageSeedKey, JointSolution] = {}
+    blocked_reason_by_seed: dict[StageSeedKey, str] = {}
     require_chained = orientation_mode == "position_first"
     config = get_ik_config()
     position_tolerance = (
@@ -101,7 +102,7 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
     relaxed_position_gate = max(0.003, 5.0 * position_tolerance)
     strict_position_gate = max(absolute_position_gate, 3.0 * position_tolerance)
 
-    def _quat_angle_error(target_wxyz: List[float], actual_wxyz: List[float]) -> float:
+    def _quat_angle_error(target_wxyz: list[float], actual_wxyz: list[float]) -> float:
         tw, tx, ty, tz = target_wxyz
         aw, ax, ay, az = actual_wxyz
         t_norm = math.sqrt(tw * tw + tx * tx + ty * ty + tz * tz)
@@ -227,7 +228,6 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
                     best_orientation_weight = float(scaled_orientation_weight)
                     best_position_error = position_error
                     best_seed_index = seed_index
-                    best_stage_index = stage_index
 
                 if position_error is not None and position_error <= position_tolerance:
                     should_return = False
