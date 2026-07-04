@@ -40,6 +40,7 @@ import { parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
 import { useAssemblyActions } from "@/app/pages/index/useAssemblyActions";
+import { useDraftPreviewActions } from "@/app/pages/index/useDraftPreviewActions";
 import { useWorldSceneManager, downloadTextDocument } from "@/app/pages/index/useWorldSceneManager";
 import { useCameraRuntimeOrchestration } from "@/app/pages/index/useCameraRuntimeOrchestration";
 import type { DemoManifestPreferencesLoad } from "@/app/pages/index/useDemoMotionFlow";
@@ -111,10 +112,8 @@ import { useCollaborationInviteActions } from "@/app/pages/index/useCollaboratio
 import type { RobotFrameLintResult } from "@/features/urdf/lint/robotFrameLinter";
 import {
   buildUrdfBakePreviewStats,
-  buildVirtualBakePreview,
   type UrdfBakePreviewSession,
 } from "@/features/urdf/bake/virtualBake";
-import { captureKinematicState } from "@/features/urdf/synthesis/kinematicSynthesizer";
 import {
   buildInertialAuditSummary,
   buildInertialMassDeltaSummary,
@@ -129,7 +128,6 @@ import {
   type InertialDensityPresetId,
 } from "@/features/urdf/inertia/inertialSynthesisParams";
 import {
-  executeCanonicalSynthesisViaBackend,
   framePreflightViaBackend,
   generatePhysicsDraftViaBackend,
   generatePhysicsPreflightViaBackend,
@@ -878,66 +876,20 @@ const Index = () => {
     [inertialSynthesisSession]
   );
 
-  const handlePreviewBakeVisualTransforms = useCallback(() => {
-    const preview = buildVirtualBakePreview(vizUrdfContent, {
-      kinds: ["visual", "collision"],
-    });
-    if (preview.success === false) {
-      toast.error(preview.error);
-      return;
-    }
-    if (preview.entries.length === 0) {
-      toast.info("No visual or collision origins need baking.");
-      return;
-    }
-
-    setBakePreviewSession({
-      sourceContent: vizUrdfContent,
-      stagedContent: preview.content,
-      preview,
-    });
-    toast.success(
-      `Staged bake export for ${preview.entries.length} visual/collision entr${preview.entries.length === 1 ? "y" : "ies"}.`
-    );
-  }, [vizUrdfContent]);
-  const handleClearBakePreviewSession = useCallback(() => {
-    setBakePreviewSession(null);
-  }, []);
-  const handleCaptureCanonicalSynthesis = useCallback(async () => {
-    const capturedState = captureKinematicState(robot, vizUrdfContent);
-    if (!capturedState) {
-      toast.error("Failed to capture the current robot state for canonical synthesis.");
-      return;
-    }
-    try {
-      const synthesisSourceContent = bakePreviewSession?.stagedContent ?? vizUrdfContent;
-      const result = await executeCanonicalSynthesisViaBackend({
-        sourceUrdf: vizUrdfContent,
-        synthesisSourceUrdf: synthesisSourceContent,
-        capturedState,
-      });
-      setCanonicalSynthesisPreview({
-        sourceContent: vizUrdfContent,
-        synthesisSourceContent: synthesisSourceContent,
-        preview: result.preview,
-        draftContent: result.draftContent,
-      });
-      setShowUrdfEditor(true);
-      setUrdfViewMode("modified");
-      toast.success(
-        `Captured canonical synthesis draft for ${result.preview.jointCount} joint${result.preview.jointCount === 1 ? "" : "s"}.`
-      );
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to generate a canonical URDF draft from the captured synthesis."
-      );
-    }
-  }, [bakePreviewSession?.stagedContent, robot, setShowUrdfEditor, setUrdfViewMode, vizUrdfContent]);
-  const handleClearCanonicalSynthesisPreview = useCallback(() => {
-    setCanonicalSynthesisPreview(null);
-  }, []);
+  const {
+    handleCaptureCanonicalSynthesis,
+    handleClearBakePreviewSession,
+    handleClearCanonicalSynthesisPreview,
+    handlePreviewBakeVisualTransforms,
+  } = useDraftPreviewActions({
+    bakePreviewSession,
+    robot,
+    setBakePreviewSession,
+    setCanonicalSynthesisPreview,
+    setShowUrdfEditor,
+    setUrdfViewMode,
+    vizUrdfContent,
+  });
   const stageGeneratedPhysicsDraft = useCallback(
     ({
       jobId,
