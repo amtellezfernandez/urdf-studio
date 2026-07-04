@@ -29,7 +29,12 @@ const entrypoint = path.join(srcRoot, "app", "main.tsx");
 const codeExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 const graphExtensions = new Set([...codeExtensions, ".json", ".css"]);
 
-const scanDirs = ["web", "backend", "config", "tools"].map((dir) => path.join(root, dir));
+const scanDirs = [
+  srcRoot,
+  path.join(root, "backend"),
+  path.join(root, "config"),
+  path.join(root, "tools"),
+];
 const debug = process.env.DEAD_CODE_DEBUG === "1";
 
 const ALLOWED_UNUSED_FILE_PREFIXES = [];
