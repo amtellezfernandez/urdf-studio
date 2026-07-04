@@ -3,9 +3,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
-  type DragEvent,
-  type FormEvent,
 } from "react";
 import {
   ArrowRight,
@@ -33,23 +30,13 @@ import {
 } from "@/app/pages/index/coreFolderUploadScreenParts";
 import {
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
-  deriveLocalSourceLabel,
-  deriveSourceLabel,
-  fileListToArray,
-  readStoredString,
-  writeStoredString,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
 import { useCameraConfigSourceController } from "@/app/pages/index/useCameraConfigSourceController";
+import { useRobotSourceController } from "@/app/pages/index/useRobotSourceController";
 import { useWorldLayoutSourceController } from "@/app/pages/index/useWorldLayoutSourceController";
 
 type CoreFolderUploadScreenProps = SourceEntryActions;
-
-type StagedRobotSource = {
-  label: string;
-  kind: "local" | "github" | "url";
-  load: () => Promise<void>;
-};
 
 export const CoreFolderUploadScreen = ({
   onFolderSelected,
@@ -64,24 +51,42 @@ export const CoreFolderUploadScreen = ({
   const worldLayoutFileInputRef = useRef<HTMLInputElement | null>(null);
   const worldLayoutFolderInputRef = useRef<HTMLInputElement | null>(null);
   const cameraConfigFileInputRef = useRef<HTMLInputElement | null>(null);
-  const stagedRobotRef = useRef<StagedRobotSource | null>(null);
   const { gpuMode, setGPUMode } = useGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const loadCameras = useCameraStore((state) => state.loadCameras);
   const clearCameras = useCameraStore((state) => state.clearCameras);
   const removeCamera = useCameraStore((state) => state.removeCamera);
-  const [githubUrl, setGithubUrl] = useState("");
-  const [githubUrdfPath, setGithubUrdfPath] = useState("");
-  const [urlSource, setUrlSource] = useState("");
-  const [robotSourceDropActive, setRobotSourceDropActive] = useState(false);
-  const [isLoadingGithub, setIsLoadingGithub] = useState(false);
-  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [isLoadingSetup, setIsLoadingSetup] = useState(false);
-  const [loadedRobotName, setLoadedRobotName] = useState<string | null>(null);
-  const [stagedRobot, setStagedRobot] = useState<StagedRobotSource | null>(null);
-  const [lastLocalFolder, setLastLocalFolder] = useState<string | null>(() =>
-    readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey)
+  const shouldPreserveCamerasForRobotLoad = useCallback(
+    () => useCameraStore.getState().cameras.length > 0,
+    []
   );
+  const {
+    clearLastLocalFolder,
+    githubUrl,
+    githubUrdfPath,
+    handleFolderSelect,
+    handleRobotSourceDrop,
+    isLoadingGithub,
+    isLoadingUrl,
+    lastLocalFolder,
+    loadedRobotName,
+    loadStagedRobot,
+    robotSourceDropActive,
+    setGithubUrl,
+    setGithubUrdfPath,
+    setRobotSourceDropActive,
+    setUrlSource,
+    stageGithubRobot,
+    stageUrlRobot,
+    stagedRobot,
+    urlSource,
+  } = useRobotSourceController({
+    onFolderSelected,
+    onGitHubSelected,
+    onUrlSelected,
+    shouldPreserveCameras: shouldPreserveCamerasForRobotLoad,
+  });
   const {
     cameraConfigUrl,
     cameraSourceDropActive,
@@ -120,120 +125,8 @@ export const CoreFolderUploadScreen = ({
     [cameras.length]
   );
 
-  const stageRobot = useCallback((source: StagedRobotSource): void => {
-    stagedRobotRef.current = source;
-    setStagedRobot(source);
-    setLoadedRobotName(null);
-    toast.success(`Selected ${source.label} for setup.`);
-  }, []);
-
-  const loadRobotFiles = useCallback(
-    async (files: File[], label: string): Promise<void> => {
-      if (files.length === 0) {
-        toast.error("No robot files were selected.");
-        return;
-      }
-      await onFolderSelected(files, { preserveCameras: useCameraStore.getState().cameras.length > 0 });
-      setLoadedRobotName(label);
-    },
-    [onFolderSelected]
-  );
-
-  const stageLocalRobotFiles = useCallback(
-    (files: File[]): void => {
-      const usableFiles = files.filter(
-        (file) => file.size > 0 || /\.(urdf|xacro)$/i.test(file.name)
-      );
-      if (usableFiles.length === 0) {
-        toast.error("No robot files were selected.");
-        return;
-      }
-      const label = deriveLocalSourceLabel(usableFiles);
-      setLastLocalFolder(label);
-      writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey, label);
-      stageRobot({
-        label,
-        kind: "local",
-        load: async () => loadRobotFiles(usableFiles, label),
-      });
-    },
-    [loadRobotFiles, stageRobot]
-  );
-
-  const handleFolderSelect = useCallback(
-    (event: ChangeEvent<HTMLInputElement>): void => {
-      stageLocalRobotFiles(fileListToArray(event.currentTarget.files));
-      event.currentTarget.value = "";
-    },
-    [stageLocalRobotFiles]
-  );
-
-  const handleRobotSourceDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>): void => {
-      event.preventDefault();
-      event.stopPropagation();
-      setRobotSourceDropActive(false);
-      stageLocalRobotFiles(fileListToArray(event.dataTransfer.files));
-    },
-    [stageLocalRobotFiles]
-  );
-
-  const stageGithubRobot = useCallback(
-    (event?: FormEvent<HTMLFormElement>): void => {
-      event?.preventDefault();
-      const repoUrl = githubUrl.trim();
-      if (!repoUrl) {
-        toast.error("Paste a GitHub repository link first.");
-        return;
-      }
-      const urdfPath = githubUrdfPath.trim();
-      const label = deriveSourceLabel(urdfPath || repoUrl, "GitHub robot");
-      stageRobot({
-        label,
-        kind: "github",
-        load: async () => {
-          setIsLoadingGithub(true);
-          try {
-            await onGitHubSelected({ repoUrl, urdfPath: urdfPath || undefined });
-            setLoadedRobotName(label);
-          } finally {
-            setIsLoadingGithub(false);
-          }
-        },
-      });
-    },
-    [githubUrl, githubUrdfPath, onGitHubSelected, stageRobot]
-  );
-
-  const stageUrlRobot = useCallback(
-    (event?: FormEvent<HTMLFormElement>): void => {
-      event?.preventDefault();
-      const url = urlSource.trim();
-      if (!url) {
-        toast.error("Paste a URDF, Xacro, Hugging Face, or raw URL first.");
-        return;
-      }
-      const label = deriveSourceLabel(url, "Remote robot");
-      stageRobot({
-        label,
-        kind: "url",
-        load: async () => {
-          setIsLoadingUrl(true);
-          try {
-            await onUrlSelected(url);
-            setLoadedRobotName(label);
-          } finally {
-            setIsLoadingUrl(false);
-          }
-        },
-      });
-    },
-    [onUrlSelected, stageRobot, urlSource]
-  );
-
   const handleLoadSetup = useCallback(async (): Promise<void> => {
-    const robotSource = stagedRobotRef.current;
-    if (!robotSource) {
+    if (!stagedRobot) {
       if (!loadedWorldLayoutName) {
         toast.error("Select a robot source or load a world layout before loading setup.");
         return;
@@ -244,17 +137,22 @@ export const CoreFolderUploadScreen = ({
     }
     setIsLoadingSetup(true);
     try {
-      await robotSource.load();
+      await loadStagedRobot();
       if (worldLayoutUrl.trim() && !loadedWorldLayoutName) {
         await loadWorldLayoutFromUrl(worldLayoutUrl);
       }
-      setStagedRobot(null);
-      stagedRobotRef.current = null;
       toast.success("Setup loaded.");
     } finally {
       setIsLoadingSetup(false);
     }
-  }, [loadWorldLayoutFromUrl, loadedWorldLayoutName, onOpenWorldOnlyWorkspace, worldLayoutUrl]);
+  }, [
+    loadStagedRobot,
+    loadWorldLayoutFromUrl,
+    loadedWorldLayoutName,
+    onOpenWorldOnlyWorkspace,
+    stagedRobot,
+    worldLayoutUrl,
+  ]);
 
   const handlePlayDemoMotionClick = useCallback((): void => {
     void onPlayDemoMotion();
@@ -373,10 +271,7 @@ export const CoreFolderUploadScreen = ({
           onRemoveUrl={() => undefined}
           lastLocalLabel={lastLocalFolder}
           onBrowseLocal={() => folderInputRef.current?.click()}
-          onClearLocal={() => {
-            setLastLocalFolder(null);
-            writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey, null);
-          }}
+          onClearLocal={clearLastLocalFolder}
         />
       )}
     </SourcePanel>
