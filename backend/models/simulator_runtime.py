@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -15,6 +15,7 @@ SimulatorTransferStrategy = Literal["direct", "convert", "planned"]
 SimulatorTargetKind = Literal["physics_simulator", "authoring_tool", "renderer"]
 SimulatorDependencyScope = Literal["workspace", "validation", "runtime"]
 SimulatorWorkspaceLaunchMode = Literal["interactive_viewer", "headless_check"]
+WorkspaceChangeSetPayload: TypeAlias = dict[str, Any]
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",
@@ -142,7 +143,7 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
 
 class WorkspaceChangeSetApplyRequest(BaseModel):
     world_package: WorldScenePackageManifest
-    change_set: dict[str, Any]
+    change_set: WorkspaceChangeSetPayload
 
 
 class WorkspaceChangeSetApplyResponse(BaseModel):

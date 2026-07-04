@@ -1,38 +1,29 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.models.simulator_runtime import (
-    SIMULATOR_CANONICAL_FRAME_CONVENTION,
-    SimulatorAssetFormat,
-    SimulatorDependencyScope,
     SimulatorId,
-    SimulatorMeshAssetUpload,
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
     SimulatorRuntimeTransferPolicy,
     SimulatorTargetKind,
-    SimulatorTransferStrategy,
     SimulatorWorkspaceAssetFormat,
     SimulatorWorkspaceLaunchMode,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse as AdapterWorkspaceOpenResponse,
     WorkspaceChangeSetApplyResponse as AdapterWorkspaceChangeSetApplyResponse,
+    WorkspaceChangeSetPayload,
     validate_simulator_workspace_launch_id,
 )
 from backend.models.world_scene_package import WorldScenePackageManifest
 
 
 WorkspaceTransferTargetId = SimulatorId
-WorkspaceTransferAssetFormat = SimulatorAssetFormat
 WorkspaceTransferWorkspaceAssetFormat = SimulatorWorkspaceAssetFormat
-WorkspaceTransferStrategy = SimulatorTransferStrategy
 WorkspaceTransferTargetKind = SimulatorTargetKind
-WorkspaceTransferMeshAssetUpload = SimulatorMeshAssetUpload
 WorkspaceTransferLaunchMode = SimulatorWorkspaceLaunchMode
 
 
@@ -40,30 +31,16 @@ class WorkspaceTransferCamelModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
 
-class WorkspaceTransferDependency(WorkspaceTransferCamelModel):
-    name: str
-    available: bool
-    required: bool = True
-    scope: SimulatorDependencyScope = "workspace"
-
+class WorkspaceTransferDependency(SimulatorRuntimeDependency):
     @classmethod
     def from_runtime_dependency(
         cls,
         dependency: SimulatorRuntimeDependency,
     ) -> "WorkspaceTransferDependency":
-        return cls(
-            name=dependency.name,
-            available=dependency.available,
-            required=dependency.required,
-            scope=dependency.scope,
-        )
+        return cls.model_validate(dependency.model_dump(by_alias=True))
 
 
-class WorkspaceTransferCapabilities(WorkspaceTransferCamelModel):
-    workspace_target: bool = Field(default=False, alias="workspaceTarget")
-    motion_validation: bool = Field(default=False, alias="motionValidation")
-    layout_round_trip: bool = Field(default=False, alias="layoutRoundTrip")
-
+class WorkspaceTransferCapabilities(SimulatorRuntimeCapabilities):
     @classmethod
     def from_runtime_capabilities(
         cls,
@@ -72,15 +49,7 @@ class WorkspaceTransferCapabilities(WorkspaceTransferCamelModel):
         return cls.model_validate(capabilities.model_dump(by_alias=True))
 
 
-class WorkspaceTransferPolicy(WorkspaceTransferCamelModel):
-    robot_asset_format: WorkspaceTransferAssetFormat = Field(..., alias="robotAssetFormat")
-    scene_asset_format: WorkspaceTransferAssetFormat = Field(..., alias="sceneAssetFormat")
-    frame_convention: str = Field(
-        default=SIMULATOR_CANONICAL_FRAME_CONVENTION,
-        alias="frameConvention",
-    )
-    transfer_strategy: WorkspaceTransferStrategy = Field(..., alias="transferStrategy")
-
+class WorkspaceTransferPolicy(SimulatorRuntimeTransferPolicy):
     @classmethod
     def from_runtime_policy(
         cls,
@@ -220,7 +189,7 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
 
 class WorkspaceChangeSetApplyRequest(BaseModel):
     world_package: WorldScenePackageManifest
-    change_set: dict[str, Any]
+    change_set: WorkspaceChangeSetPayload
 
 
 class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):

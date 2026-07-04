@@ -3,6 +3,7 @@ from __future__ import annotations
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SimulatorId,
+    SimulatorRuntimeSpec,
     SimulatorWorkspacePrepareRequest,
     WorkspaceChangeSetApplyRequest as AdapterWorkspaceChangeSetApplyRequest,
     validate_simulator_workspace_launch_id,
@@ -53,7 +54,7 @@ def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspace
     )
 
 
-def _target_descriptor_for_spec(spec) -> WorkspaceTransferTargetDescriptor:
+def _target_descriptor_for_spec(spec: SimulatorRuntimeSpec) -> WorkspaceTransferTargetDescriptor:
     get_simulator_adapter(spec.simulator_id)
     return WorkspaceTransferTargetDescriptor.from_runtime_spec(spec)
 
