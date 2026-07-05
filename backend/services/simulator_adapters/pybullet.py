@@ -37,7 +37,6 @@ class PyBulletWorkspaceError(SimulatorAdapterError):
 
 @dataclass(frozen=True)
 class PyBulletWorkspaceCheckArtifacts:
-    screenshot_dir: Path
     camera_screenshot_dir: Path
     report_path: Path
 
@@ -57,34 +56,44 @@ def prepare_pybullet_workspace(request: SimulatorWorkspacePrepareRequest) -> Pre
 def _build_pybullet_workspace_check_artifacts(
     prepared: PreparedSimulatorWorkspace,
 ) -> PyBulletWorkspaceCheckArtifacts:
-    screenshot_dir = prepared.workspace_dir / "artifacts"
+    artifacts_dir = prepared.workspace_dir / "artifacts"
     return PyBulletWorkspaceCheckArtifacts(
-        screenshot_dir=screenshot_dir,
-        camera_screenshot_dir=screenshot_dir / "cameras",
-        report_path=screenshot_dir / "report.json",
+        camera_screenshot_dir=artifacts_dir / "cameras",
+        report_path=artifacts_dir / "report.json",
     )
 
 
-def _apply_degraded_opengl_runtime_status(
-    status: SimulatorRuntimeStatus,
-) -> SimulatorRuntimeStatus:
-    dependencies = list(status.dependencies)
-    if not any(
+def _has_hardware_opengl_runtime_dependency(
+    dependencies: list[SimulatorRuntimeDependency],
+) -> bool:
+    return any(
         dependency.name == PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME
         for dependency in dependencies
-    ):
-        dependencies.append(
-            SimulatorRuntimeDependency(
-                name=PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME,
-                available=False,
-                required=False,
-                scope="runtime",
-            )
-        )
+    )
+
+
+def _degraded_opengl_runtime_dependencies(
+    dependencies: list[SimulatorRuntimeDependency],
+) -> list[SimulatorRuntimeDependency]:
+    if _has_hardware_opengl_runtime_dependency(dependencies):
+        return dependencies
+    return [
+        *dependencies,
+        SimulatorRuntimeDependency(
+            name=PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME,
+            available=False,
+            required=False,
+            scope="runtime",
+        ),
+    ]
+
+
+def _apply_degraded_opengl_runtime_status(status: SimulatorRuntimeStatus) -> SimulatorRuntimeStatus:
+    dependencies = list(status.dependencies)
     return status.model_copy(
         update={
             "status": "ready, display degraded: software OpenGL",
-            "dependencies": dependencies,
+            "dependencies": _degraded_opengl_runtime_dependencies(dependencies),
         }
     )
 

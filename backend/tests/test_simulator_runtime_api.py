@@ -437,6 +437,49 @@ def test_pybullet_runtime_status_reports_degraded_software_opengl(monkeypatch) -
     ]
 
 
+def test_pybullet_runtime_status_keeps_single_hardware_opengl_dependency(monkeypatch) -> None:
+    from backend.models.simulator_runtime import SimulatorRuntimeDependency, SimulatorRuntimeStatus
+    from backend.services.simulator_adapters import pybullet as pybullet_adapter
+    from backend.services.simulator_adapters.plugin import DirectUrdfSimulatorPlugin
+
+    monkeypatch.setattr(
+        DirectUrdfSimulatorPlugin,
+        "runtime_status",
+        lambda self: SimulatorRuntimeStatus(
+            runtimeName="pybullet",
+            available=True,
+            status="ready",
+            dependencies=[
+                SimulatorRuntimeDependency(
+                    name="pybullet",
+                    available=True,
+                    required=True,
+                    scope="workspace",
+                ),
+                SimulatorRuntimeDependency(
+                    name="hardware OpenGL",
+                    available=False,
+                    required=False,
+                    scope="runtime",
+                ),
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        pybullet_adapter,
+        "pybullet_runtime_opengl_warnings",
+        lambda **_kwargs: ("PyBullet GUI is using software OpenGL.",),
+    )
+
+    status = pybullet_adapter.PyBulletPlugin().runtime_status()
+
+    assert status.status == "ready, display degraded: software OpenGL"
+    assert [
+        dependency.name for dependency in status.dependencies
+        if dependency.name == "hardware OpenGL"
+    ] == ["hardware OpenGL"]
+
+
 def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     with _patch_security_settings():
         response = asyncio.run(_request_json("GET", "/simulators", headers=_operator_headers()))
