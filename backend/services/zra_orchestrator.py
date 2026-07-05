@@ -57,6 +57,23 @@ class _DeviceRuntime:
     current_state: AttestationTrustState = AttestationTrustState.INACTIVE
 
 
+def _read_configured_timeout_seconds(value: object, default: int = 10) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if 1 <= value <= 120 else default
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default
+        try:
+            parsed = int(candidate)
+        except ValueError:
+            return default
+        return parsed if 1 <= parsed <= 120 else default
+    return default
+
+
 def load_zra_orchestrator_devices(path_value: str | None) -> list[ZraOrchestratorDevice]:
     if not path_value:
         return []
@@ -82,7 +99,7 @@ def load_zra_orchestrator_devices(path_value: str | None) -> list[ZraOrchestrato
                 ssh_password=str(entry.get("ssh_password") or "").strip() or None,
                 remote_gateway_path=str(entry.get("remote_gateway_path") or "").strip() or None,
                 local_gateway_path=str(entry.get("local_gateway_path") or "").strip() or None,
-                timeout_seconds=int(entry.get("timeout_seconds") or 10),
+                timeout_seconds=_read_configured_timeout_seconds(entry.get("timeout_seconds")),
             )
         )
     return devices
