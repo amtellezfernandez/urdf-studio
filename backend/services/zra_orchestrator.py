@@ -57,6 +57,13 @@ class _DeviceRuntime:
     current_state: AttestationTrustState = AttestationTrustState.INACTIVE
 
 
+def _read_optional_config_str(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _read_configured_timeout_seconds(value: object, default: int = 10) -> int:
     if isinstance(value, bool):
         return default
@@ -94,11 +101,11 @@ def load_zra_orchestrator_devices(path_value: str | None) -> list[ZraOrchestrato
         devices.append(
             ZraOrchestratorDevice(
                 robot_id=robot_id,
-                ssh_host=str(entry.get("ssh_host") or "").strip() or None,
-                ssh_user=str(entry.get("ssh_user") or "").strip() or None,
-                ssh_password=str(entry.get("ssh_password") or "").strip() or None,
-                remote_gateway_path=str(entry.get("remote_gateway_path") or "").strip() or None,
-                local_gateway_path=str(entry.get("local_gateway_path") or "").strip() or None,
+                ssh_host=_read_optional_config_str(entry.get("ssh_host")),
+                ssh_user=_read_optional_config_str(entry.get("ssh_user")),
+                ssh_password=_read_optional_config_str(entry.get("ssh_password")),
+                remote_gateway_path=_read_optional_config_str(entry.get("remote_gateway_path")),
+                local_gateway_path=_read_optional_config_str(entry.get("local_gateway_path")),
                 timeout_seconds=_read_configured_timeout_seconds(entry.get("timeout_seconds")),
             )
         )
