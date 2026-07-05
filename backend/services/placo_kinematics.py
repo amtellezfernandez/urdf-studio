@@ -115,7 +115,7 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
         if float(tuning.posture_weight) > 0.0:
             joints_task = solver.add_joints_task()
             joints_task.configure("posture", "soft", float(tuning.posture_weight))
-    except Exception as exc:
+    except (RuntimeError, ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=400, detail=f"Failed to build Placo robot: {exc}"
         ) from exc

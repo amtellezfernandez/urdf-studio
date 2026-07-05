@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import numpy as np
 import pytest
 from fastapi import HTTPException
@@ -7,6 +8,7 @@ from fastapi import HTTPException
 from backend.services import placo_kinematics as placo_kinematics_module
 from backend.services.placo_kinematics import (
     _get_or_create_frame_task,
+    _load_placo,
     _quat_to_matrix,
     _resolved_weight,
     _set_placo_posture_target,
@@ -145,3 +147,48 @@ def test_get_or_create_frame_task_preserves_unexpected_errors() -> None:
 
     with pytest.raises(AttributeError, match="unexpected frame task failure"):
         _get_or_create_frame_task(entry, "tool")
+
+
+def test_load_placo_wraps_expected_robot_build_errors(monkeypatch) -> None:
+    class _FakeRobotWrapper:
+        def __init__(self, _path: str) -> None:
+            raise ValueError("bad placo robot")
+
+    class _FakePlacoModule:
+        RobotWrapper = _FakeRobotWrapper
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "placo":
+            return _FakePlacoModule()
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _load_placo("<robot name='demo'/>")
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Failed to build Placo robot: bad placo robot"
+
+
+def test_load_placo_preserves_unexpected_robot_build_errors(monkeypatch) -> None:
+    class _FakeRobotWrapper:
+        def __init__(self, _path: str) -> None:
+            raise KeyError("unexpected placo robot failure")
+
+    class _FakePlacoModule:
+        RobotWrapper = _FakeRobotWrapper
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "placo":
+            return _FakePlacoModule()
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(KeyError, match="unexpected placo robot failure"):
+        _load_placo("<robot name='demo'/>")
