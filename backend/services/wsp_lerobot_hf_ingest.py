@@ -74,7 +74,9 @@ _ENTRY_CACHE: dict[str, UrdfEntry] = {}
 def _load_hf_dataset_loader() -> Any:
     try:
         datasets_module = importlib.import_module("datasets")
-    except ImportError as exc:
+    except ModuleNotFoundError as exc:
+        if exc.name != "datasets":
+            raise
         raise ImportError(
             "Loading HuggingFace datasets requires: pip install datasets"
         ) from exc

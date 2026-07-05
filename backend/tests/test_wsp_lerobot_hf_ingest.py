@@ -93,7 +93,7 @@ def test_hf_integration_available_returns_false_without_datasets(monkeypatch: py
     monkeypatch.setattr(
         importlib,
         "import_module",
-        lambda _name: (_ for _ in ()).throw(ImportError("datasets")),
+        lambda _name: (_ for _ in ()).throw(ModuleNotFoundError(name="datasets")),
     )
 
     assert _hf_integration_available() is False
@@ -155,6 +155,18 @@ def test_load_hf_dataset_loader_rejects_incomplete_datasets_module(
     monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ImportError, match="pip install datasets"):
+        _load_hf_dataset_loader()
+
+
+def test_load_hf_dataset_loader_preserves_unexpected_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected datasets import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected datasets import failure"):
         _load_hf_dataset_loader()
 
 
