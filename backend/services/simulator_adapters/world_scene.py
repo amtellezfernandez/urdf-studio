@@ -134,10 +134,7 @@ class SimulatorSceneSpec:
             "primitive_count": len(self.primitives),
             "camera_count": len(self.cameras),
             "joint_position_count": len(self.robot.joint_positions),
-            "joint_positions": {
-                str(name): float(position)
-                for name, position in sorted(self.robot.joint_positions.items())
-            },
+            "joint_positions": _joint_positions_report(self.robot.joint_positions),
             "robot_urdf_path": str(self.robot.urdf_path),
             "asset_roots": [str(path) for path in self.robot.asset_roots],
             "warnings": list(self.warnings),
@@ -243,14 +240,34 @@ def prepare_simulator_scene(
         layout=prepared_world.layout,
         requested_frame_map=frame_map,
         frame_map=prepared_world.frame_map,
-        robot=SimulatorRobotSpec(
-            urdf_path=robot_urdf_path,
-            asset_roots=workspace_asset_roots(world_package_path, robot_urdf_path),
+        robot=_simulator_robot_spec(
+            world_package_path=world_package_path,
+            robot_urdf_path=robot_urdf_path,
             joint_positions=prepared_world.world_package.world_snapshot.joint_positions,
         ),
         primitives=prepared_world.primitives,
         cameras=cameras,
         warnings=(*prepared_world.warnings, *camera_warnings),
+    )
+
+
+def _joint_positions_report(joint_positions: Mapping[str, float]) -> dict[str, float]:
+    return {
+        str(name): float(position)
+        for name, position in sorted(joint_positions.items())
+    }
+
+
+def _simulator_robot_spec(
+    *,
+    world_package_path: Path,
+    robot_urdf_path: Path,
+    joint_positions: Mapping[str, float],
+) -> SimulatorRobotSpec:
+    return SimulatorRobotSpec(
+        urdf_path=robot_urdf_path,
+        asset_roots=workspace_asset_roots(world_package_path, robot_urdf_path),
+        joint_positions=joint_positions,
     )
 
 
