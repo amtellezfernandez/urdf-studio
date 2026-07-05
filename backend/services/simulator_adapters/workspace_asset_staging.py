@@ -46,7 +46,10 @@ def write_workspace_asset_file(
         if existing != content:
             raise error(f"Conflicting uploaded asset path: {relative_path}")
         return output_path
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    except FileExistsError:
+        raise error(f"Conflicting uploaded asset path: {relative_path}") from None
     output_path.write_bytes(content)
     return output_path
 
