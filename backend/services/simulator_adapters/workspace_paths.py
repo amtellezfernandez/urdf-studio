@@ -90,7 +90,7 @@ def _valid_manifest_asset_roots(payload: list[object]) -> tuple[Path, ...] | Non
 def _manifest_workspace_asset_roots(manifest_path: Path) -> tuple[Path, ...] | None:
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     if not isinstance(payload, list):
         return None

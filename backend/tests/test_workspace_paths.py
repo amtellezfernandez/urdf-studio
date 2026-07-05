@@ -86,6 +86,21 @@ def test_workspace_asset_roots_falls_back_when_manifest_payload_is_not_a_list(tm
     )
 
 
+def test_workspace_asset_roots_falls_back_when_manifest_encoding_is_invalid(tmp_path) -> None:
+    workspace_dir = tmp_path / "workspace"
+    robot_urdf_path = workspace_dir / "robot" / "robot.urdf"
+    world_package_path = workspace_dir / "world-package.json"
+    workspace_dir.mkdir()
+    (workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME).write_bytes(b"\xff\xfe\x00")
+
+    roots = workspace_asset_roots(world_package_path, robot_urdf_path)
+
+    assert roots == compute_workspace_asset_roots(
+        workspace_dir=workspace_dir,
+        robot_urdf_path=robot_urdf_path,
+    )
+
+
 def test_write_workspace_asset_roots_normalizes_and_dedupes_manifest_entries(tmp_path) -> None:
     workspace_dir = tmp_path / "workspace"
     root_a = tmp_path / "assets-a"
