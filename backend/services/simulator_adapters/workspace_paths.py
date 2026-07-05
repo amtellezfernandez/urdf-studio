@@ -54,6 +54,10 @@ def _default_workspace_asset_roots(
     )
 
 
+def _workspace_asset_roots_manifest_path(world_package_path: Path) -> Path:
+    return world_package_path.parent / WORKSPACE_ASSET_ROOTS_FILENAME
+
+
 def _manifest_asset_root(value: object) -> Path | None:
     if not isinstance(value, str):
         return None
@@ -90,8 +94,7 @@ def _manifest_workspace_asset_roots(manifest_path: Path) -> tuple[Path, ...] | N
 
 
 def workspace_asset_roots(world_package_path: Path, robot_urdf_path: Path) -> tuple[Path, ...]:
-    workspace_dir = world_package_path.parent
-    manifest_path = workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME
+    manifest_path = _workspace_asset_roots_manifest_path(world_package_path)
     manifest_roots = _manifest_workspace_asset_roots(manifest_path)
     if manifest_roots is not None:
         return manifest_roots
