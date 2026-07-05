@@ -5,8 +5,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TypeAlias, TypeVar, cast
 
+from backend.core.paths import BASE_DIR
+
 JsonConfig: TypeAlias = dict[str, object]
 DefaultValue = TypeVar("DefaultValue")
+APP_CONFIG_PATH = BASE_DIR / "config" / "app.config.json"
 
 
 def read_app_config(config_path: Path | None = None) -> JsonConfig:
@@ -23,8 +26,7 @@ def read_app_config(config_path: Path | None = None) -> JsonConfig:
 
 
 def _default_app_config_path() -> Path:
-    root_dir = Path(__file__).resolve().parents[2]
-    return root_dir / "config" / "app.config.json"
+    return APP_CONFIG_PATH
 
 
 def get_config_value(

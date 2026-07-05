@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.core.app_config import get_config_value, read_app_config
+from backend.core.app_config import _default_app_config_path, get_config_value, read_app_config
+from backend.core.paths import BASE_DIR
 
 
 def test_read_app_config_loads_json_object(tmp_path: Path) -> None:
@@ -44,6 +45,10 @@ def test_read_app_config_returns_empty_object_when_file_read_fails(
     monkeypatch.setattr(Path, "read_text", _raise_read_error)
 
     assert read_app_config(config_path) == {}
+
+
+def test_default_app_config_path_uses_repo_config_location() -> None:
+    assert _default_app_config_path() == BASE_DIR / "config" / "app.config.json"
 
 
 def test_get_config_value_reads_nested_value() -> None:
