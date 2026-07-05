@@ -243,18 +243,10 @@ def _camera_image_manifest(
         return parity_input.label, {"images": []}
 
     label = parity_input.label
-    artifacts = report.get("artifacts")
-    if not isinstance(artifacts, Mapping):
-        return label, f"{label} camera_images validation report has no artifacts object"
-    directory_raw = artifacts.get("camera_screenshot_dir")
-    if not isinstance(directory_raw, str) or not directory_raw.strip():
-        return (
-            label,
-            f"{label} camera_images validation report has no camera_screenshot_dir",
-        )
-    directory = Path(directory_raw)
-    if not directory.is_dir():
-        return label, f"{label} camera_images directory is not a directory: {directory}"
+    directory_or_error = _camera_image_directory(report, label=label)
+    if isinstance(directory_or_error, str):
+        return label, directory_or_error
+    directory = directory_or_error
     image_paths = sorted(directory.glob("*.png"))
     if not image_paths:
         return label, f"{label} camera_images has no PNG artifacts in {directory}"
@@ -293,6 +285,23 @@ def _camera_image_manifest(
             }
         )
     return label, {"images": images}
+
+
+def _camera_image_directory(
+    report: ParityReportView,
+    *,
+    label: str,
+) -> Path | str:
+    artifacts = report.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        return f"{label} camera_images validation report has no artifacts object"
+    directory_raw = artifacts.get("camera_screenshot_dir")
+    if not isinstance(directory_raw, str) or not directory_raw.strip():
+        return f"{label} camera_images validation report has no camera_screenshot_dir"
+    directory = Path(directory_raw)
+    if not directory.is_dir():
+        return f"{label} camera_images directory is not a directory: {directory}"
+    return directory
 
 
 def _expected_camera_images(
