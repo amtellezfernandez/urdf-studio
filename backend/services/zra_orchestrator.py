@@ -48,7 +48,11 @@ class _DeviceRuntime:
 def load_zra_orchestrator_devices(path_value: str | None) -> list[ZraOrchestratorDevice]:
     if not path_value:
         return []
-    payload = json.loads(Path(path_value).read_text(encoding="utf-8"))
+    path = Path(path_value)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Failed to read zRA orchestrator devices file: {path}") from exc
     if not isinstance(payload, list):
         raise ValueError("zRA orchestrator devices file must contain a JSON list.")
     devices: list[ZraOrchestratorDevice] = []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import timedelta
+from pathlib import Path
 
 from backend.tests.asgi_test_client import AsgiTestClient
 import pytest
@@ -170,6 +171,40 @@ def test_orchestrator_status_endpoint_reports_state(monkeypatch: pytest.MonkeyPa
     assert payload["enabled"] is True
     assert payload["poll_interval_seconds"] == 15
     assert payload["inactive_after_seconds"] == 60
+    assert payload["devices"] == []
+
+
+def test_orchestrator_status_endpoint_ignores_invalid_devices_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from backend.services import zra_orchestrator
+
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_bytes(b"\xff\xfe\x00")
+    client = _local_client()
+    monkeypatch.setattr(
+        zra_orchestrator,
+        "settings",
+        replace(
+            zra_orchestrator.settings,
+            zra_orchestrator_enabled=True,
+            zra_orchestrator_devices_path=str(devices_path),
+            zra_orchestrator_poll_interval_seconds=15,
+            zra_orchestrator_inactive_after_seconds=60,
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.services.zra_orchestrator.zra_orchestrator_service._devices",
+        [],
+    )
+
+    response = client.get("/attestation/orchestrator/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["enabled"] is True
+    assert payload["device_count"] == 0
     assert payload["devices"] == []
 
 
