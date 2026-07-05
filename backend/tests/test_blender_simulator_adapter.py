@@ -460,6 +460,38 @@ def test_blender_edit_session_validation_rejects_duplicate_source_camera_id(
     )
 
 
+def test_blender_edit_session_validation_rejects_non_string_object_stable_id(
+    tmp_path: Path,
+) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["objects"][0]["stable_id"] = ["crate"]
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
+        "Blender edit-session field 'objects[0].stable_id' must be a non-empty string"
+    )
+
+
+def test_blender_edit_session_validation_rejects_non_string_camera_stable_id(
+    tmp_path: Path,
+) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["cameras"][0]["stable_id"] = {"camera": "cam-1"}
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
+        "Blender edit-session field 'cameras[0].stable_id' must be a non-empty string"
+    )
+
+
 def test_blender_edit_session_validation_rejects_invalid_json(tmp_path: Path) -> None:
     artifacts = _write_blender_edit_session_artifacts(tmp_path)
     artifacts.edit_session_path.write_text("{", encoding="utf-8")

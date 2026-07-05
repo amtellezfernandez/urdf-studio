@@ -315,9 +315,11 @@ def _entry_stable_ids(value: object, field_name: str) -> tuple[str, ...] | str:
     if not isinstance(value, Sequence) or isinstance(value, str):
         return f"Blender edit-session field '{field_name}' must be a list"
     stable_ids = tuple(
-        str(entry.get("stable_id", "")).strip()
+        stable_id.strip()
         for entry in value
         if isinstance(entry, Mapping)
+        for stable_id in [entry.get("stable_id")]
+        if isinstance(stable_id, str)
     )
     duplicate_ids = _duplicate_ids(stable_ids)
     if duplicate_ids:
