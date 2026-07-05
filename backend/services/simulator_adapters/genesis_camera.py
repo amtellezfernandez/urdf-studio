@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, TypeAlias, TypedDict
@@ -154,8 +155,7 @@ def add_observation_camera_sensor(gs: Any, scene: Any, robot_entity: Any, camera
     if kwargs is None:
         return None
     try:
-        import genesis.engine.sensors.camera  # noqa: F401
-
+        importlib.import_module("genesis.engine.sensors.camera")
         return scene.add_sensor(gs.options.sensors.RasterizerCameraOptions(**kwargs))
     except (ImportError, ModuleNotFoundError, TypeError, ValueError, RuntimeError) as exc:
         print(

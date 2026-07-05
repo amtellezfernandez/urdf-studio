@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import builtins
+import importlib
 import os
 import shutil
 import sys
@@ -900,6 +901,33 @@ def test_genesis_observation_camera_sensor_rejects_boolean_indices() -> None:
     assert kwargs is None
 
 
+def test_genesis_add_observation_camera_sensor_returns_none_when_sensor_module_missing(
+    monkeypatch,
+    capsys,
+) -> None:
+    class _FakeLink:
+        name = "wrist_link"
+        idx_local = 4
+
+    class _FakeRobotEntity:
+        idx = 2
+        links = [_FakeLink()]
+
+    real_import_module = importlib.import_module
+
+    def fake_import_module(name, package=None):
+        if name == "genesis.engine.sensors.camera":
+            raise ImportError("Genesis camera sensors unavailable")
+        return real_import_module(name, package=package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+
+    sensor = add_observation_camera_sensor(object(), object(), _FakeRobotEntity(), _genesis_camera_spec())
+
+    assert sensor is None
+    assert "failed to add observation camera sensor 'wrist_camera'" in capsys.readouterr().out
+
+
 def test_genesis_add_observation_camera_sensor_preserves_unexpected_errors(monkeypatch) -> None:
     class _FakeLink:
         name = "wrist_link"
@@ -923,14 +951,14 @@ def test_genesis_add_observation_camera_sensor_preserves_unexpected_errors(monke
         def add_sensor(_sensor):
             return object()
 
-    real_import = builtins.__import__
+    real_import_module = importlib.import_module
 
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+    def fake_import_module(name, package=None):
         if name == "genesis.engine.sensors.camera":
             return object()
-        return real_import(name, globals, locals, fromlist, level)
+        return real_import_module(name, package=package)
 
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
 
     with pytest.raises(KeyError, match="unexpected sensor setup failure"):
         add_observation_camera_sensor(_FakeGs, _FakeScene(), _FakeRobotEntity(), _genesis_camera_spec())
