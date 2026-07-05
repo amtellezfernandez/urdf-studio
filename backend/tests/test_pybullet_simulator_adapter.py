@@ -25,6 +25,7 @@ from backend.services.simulator_adapters.pybullet_camera import (
 )
 from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
 from backend.services.simulator_adapters.workspace_diagnostics import (
+    latest_workspace_log_path,
     pybullet_glxinfo_warnings,
     pybullet_opengl_warnings,
     pybullet_runtime_opengl_warnings,
@@ -160,6 +161,64 @@ def test_pybullet_runtime_diagnostic_uses_latest_workspace_log_when_glxinfo_is_u
         raise OSError("glxinfo missing")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+
+    warnings = pybullet_runtime_opengl_warnings(
+        workspace_root=tmp_path,
+        log_name="pybullet.log",
+    )
+
+    assert len(warnings) == 1
+    assert "software OpenGL" in warnings[0]
+
+
+def test_latest_workspace_log_path_prefers_lexically_latest_log_when_mtimes_tie(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    older_workspace_dir = tmp_path / "workspace-100"
+    older_workspace_dir.mkdir()
+    older_log_path = older_workspace_dir / "pybullet.log"
+    older_log_path.write_text("older\n", encoding="utf-8")
+
+    newer_workspace_dir = tmp_path / "workspace-200"
+    newer_workspace_dir.mkdir()
+    newer_log_path = newer_workspace_dir / "pybullet.log"
+    newer_log_path.write_text("newer\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_diagnostics._existing_path_mtime",
+        lambda _path: 123.0,
+    )
+
+    assert latest_workspace_log_path(workspace_root=tmp_path, log_name="pybullet.log") == newer_log_path
+
+
+def test_pybullet_runtime_diagnostic_prefers_lexically_latest_log_when_mtimes_tie(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    older_workspace_dir = tmp_path / "workspace-100"
+    older_workspace_dir.mkdir()
+    (older_workspace_dir / "pybullet.log").write_text(
+        "GL_RENDERER=NVIDIA GPU Renderer\n",
+        encoding="utf-8",
+    )
+
+    newer_workspace_dir = tmp_path / "workspace-200"
+    newer_workspace_dir.mkdir()
+    (newer_workspace_dir / "pybullet.log").write_text(
+        "GL_RENDERER=llvmpipe (LLVM 20.1.2, 256 bits)\n",
+        encoding="utf-8",
+    )
+
+    def fake_run(*_args, **_kwargs):
+        raise OSError("glxinfo missing")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_diagnostics._existing_path_mtime",
+        lambda _path: 123.0,
+    )
 
     warnings = pybullet_runtime_opengl_warnings(
         workspace_root=tmp_path,

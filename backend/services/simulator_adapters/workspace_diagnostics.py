@@ -106,7 +106,11 @@ def _latest_existing_path_by_mtime(candidate_paths: Iterable[Path]) -> Path | No
         path_mtime = _existing_path_mtime(path)
         if path_mtime is None:
             continue
-        if path_mtime > latest_mtime:
+        if path_mtime > latest_mtime or (
+            path_mtime == latest_mtime
+            and latest_path is not None
+            and str(path) > str(latest_path)
+        ):
             latest_path = path
             latest_mtime = path_mtime
     return latest_path
