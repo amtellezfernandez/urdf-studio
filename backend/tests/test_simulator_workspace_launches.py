@@ -4,10 +4,12 @@ import subprocess
 import sys
 import uuid
 
+from backend.services.simulator_adapters import workspace_launches
 from backend.services.simulator_adapters.workspace_launches import (
     attach_workspace_launch_process,
     begin_workspace_launch,
     cancel_workspace_launch,
+    terminate_workspace_process,
 )
 
 
@@ -113,3 +115,28 @@ def test_attach_workspace_launch_process_rejects_pre_cancelled_launch() -> None:
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
+
+
+def test_terminate_workspace_process_reports_false_when_process_survives_kill(
+    monkeypatch,
+) -> None:
+    class _StuckProcess:
+        pid = 1234
+
+        def __init__(self) -> None:
+            self.wait_calls = 0
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            self.wait_calls += 1
+            raise subprocess.TimeoutExpired(cmd="stuck", timeout=timeout)
+
+    process = _StuckProcess()
+
+    monkeypatch.setattr(workspace_launches, "_terminate_running_process", lambda _process: None)
+    monkeypatch.setattr(workspace_launches, "_kill_running_process", lambda _process: None)
+
+    assert terminate_workspace_process(process) is False
+    assert process.wait_calls == 2

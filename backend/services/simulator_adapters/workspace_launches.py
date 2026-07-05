@@ -252,6 +252,14 @@ def _kill_running_process(process: subprocess.Popen) -> None:
     process.kill()
 
 
+def _wait_for_process_exit(process: subprocess.Popen) -> bool:
+    try:
+        process.wait(timeout=WORKSPACE_LAUNCH_TERMINATE_GRACE_SEC)
+        return True
+    except subprocess.TimeoutExpired:
+        return False
+
+
 def terminate_workspace_process(process: subprocess.Popen) -> bool:
     if process.poll() is not None:
         return False
@@ -266,16 +274,10 @@ def terminate_workspace_process(process: subprocess.Popen) -> bool:
         except OSError:
             return False
 
+    if _wait_for_process_exit(process):
+        return True
     try:
-        process.wait(timeout=WORKSPACE_LAUNCH_TERMINATE_GRACE_SEC)
-        return True
-    except subprocess.TimeoutExpired:
-        try:
-            _kill_running_process(process)
-        except OSError:
-            return True
-        try:
-            process.wait(timeout=WORKSPACE_LAUNCH_TERMINATE_GRACE_SEC)
-        except subprocess.TimeoutExpired:
-            pass
-        return True
+        _kill_running_process(process)
+    except OSError:
+        return process.poll() is not None
+    return _wait_for_process_exit(process) or process.poll() is not None
