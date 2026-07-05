@@ -42,6 +42,38 @@ def _record_matches_target(record: _WorkspaceLaunchRecord, target_id: str) -> bo
     return record.target_id in {"", target_id}
 
 
+def _create_workspace_launch_record(
+    *,
+    launch_id: str,
+    target_id: str,
+    created_at: float,
+    cancelled: bool = False,
+) -> _WorkspaceLaunchRecord:
+    return _WorkspaceLaunchRecord(
+        launch_id=launch_id,
+        target_id=target_id,
+        created_at=created_at,
+        cancelled=cancelled,
+    )
+
+
+def _get_or_create_workspace_launch_record(
+    *,
+    launch_id: str,
+    target_id: str,
+    now: float,
+) -> _WorkspaceLaunchRecord:
+    record = _launches.get(launch_id)
+    if record is None:
+        record = _create_workspace_launch_record(
+            launch_id=launch_id,
+            target_id=target_id,
+            created_at=now,
+        )
+        _launches[launch_id] = record
+    return record
+
+
 def _prune_locked(now: float) -> None:
     stale_launch_ids = [
         launch_id
@@ -57,10 +89,9 @@ def begin_workspace_launch(launch_id: str, target_id: str) -> bool:
     now = time.monotonic()
     with _launches_lock:
         _prune_locked(now)
-        record = _launches.get(launch_id)
-        if record is not None:
+        if launch_id in _launches:
             return False
-        _launches[launch_id] = _WorkspaceLaunchRecord(
+        _launches[launch_id] = _create_workspace_launch_record(
             launch_id=launch_id,
             target_id=target_id,
             created_at=now,
@@ -71,14 +102,11 @@ def begin_workspace_launch(launch_id: str, target_id: str) -> bool:
 def attach_workspace_launch_process(launch_id: str, process: subprocess.Popen) -> bool:
     process_to_stop: subprocess.Popen | None = None
     with _launches_lock:
-        record = _launches.get(launch_id)
-        if record is None:
-            record = _WorkspaceLaunchRecord(
-                launch_id=launch_id,
-                target_id="",
-                created_at=time.monotonic(),
-            )
-            _launches[launch_id] = record
+        record = _get_or_create_workspace_launch_record(
+            launch_id=launch_id,
+            target_id="",
+            now=time.monotonic(),
+        )
         record.process = process
         if record.cancelled:
             process_to_stop = process
@@ -113,7 +141,7 @@ def cancel_workspace_launch(
         _prune_locked(now)
         record = _launches.get(launch_id)
         if record is None:
-            record = _WorkspaceLaunchRecord(
+            record = _create_workspace_launch_record(
                 launch_id=launch_id,
                 target_id=target_id,
                 created_at=now,
