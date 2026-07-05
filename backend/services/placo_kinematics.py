@@ -264,7 +264,7 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
         for _solve_iteration in range(iterations):
             entry.solver.solve(True)
             robot.update_kinematics()
-    except Exception as exc:
+    except (RuntimeError, ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=500, detail=f"Placo IK solve failed: {exc}"
         ) from exc
