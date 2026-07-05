@@ -17,7 +17,9 @@ __all__ = ["app", "create_app"]
 def _run_uvicorn_app() -> None:
     try:
         uvicorn = importlib.import_module("uvicorn")
-    except ImportError as exc:
+    except ModuleNotFoundError as exc:
+        if exc.name != "uvicorn":
+            raise
         raise RuntimeError("Running backend.server requires uvicorn to be installed") from exc
     run_server = getattr(uvicorn, "run", None)
     if not callable(run_server):

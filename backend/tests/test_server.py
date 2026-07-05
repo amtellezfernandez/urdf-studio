@@ -32,7 +32,7 @@ def test_run_uvicorn_app_rejects_missing_uvicorn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _missing_import(name: str) -> object:
-        raise ImportError(name)
+        raise ModuleNotFoundError(name, name="uvicorn")
 
     monkeypatch.setattr(server.importlib, "import_module", _missing_import)
 
@@ -48,4 +48,16 @@ def test_run_uvicorn_app_rejects_missing_run(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     with pytest.raises(RuntimeError, match="uvicorn.run is unavailable"):
+        server._run_uvicorn_app()
+
+
+def test_run_uvicorn_app_preserves_unexpected_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _unexpected_import_error(name: str) -> object:
+        raise ModuleNotFoundError("No module named 'h11'", name="h11")
+
+    monkeypatch.setattr(server.importlib, "import_module", _unexpected_import_error)
+
+    with pytest.raises(ModuleNotFoundError, match="h11"):
         server._run_uvicorn_app()
