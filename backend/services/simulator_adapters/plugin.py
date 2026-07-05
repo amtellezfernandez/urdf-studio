@@ -58,6 +58,10 @@ class SimulatorPlugin:
     requires_runtime_for_check: bool = True
     include_in_parity: bool = True
 
+    @property
+    def runtime_override_python_env_var(self) -> str:
+        return f"STUDIO_{self.simulator_id.upper()}_PYTHON"
+
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
         if cls.__dict__.get("_abstract"):
@@ -82,11 +86,22 @@ class SimulatorPlugin:
             layout_round_trip=self.layout_round_trip,
         )
 
+    def _resolve_runtime_override_python(self) -> str | None:
+        override_python = os.environ.get(self.runtime_override_python_env_var, "").strip()
+        return override_python or None
+
+    def _build_transfer_spec(self) -> SimulatorTransferSpec:
+        return SimulatorTransferSpec(
+            robot_asset_format=self.robot_asset_format,
+            scene_asset_format=self.robot_asset_format,
+            transfer_strategy=self.transfer_strategy,
+            frame_convention=self.frame_convention,
+        )
+
     def runtime_status(self) -> SimulatorRuntimeStatus:
-        override_python = os.environ.get(f"STUDIO_{self.simulator_id.upper()}_PYTHON", "").strip()
         deps = build_runtime_dependency_statuses(
             self.dependencies,
-            python_executable=override_python or None,
+            python_executable=self._resolve_runtime_override_python(),
         )
         available, status = format_runtime_dependency_status(
             ready_status="ready",
@@ -122,12 +137,7 @@ class SimulatorPlugin:
         return SimulatorRuntimeSpec(
             simulator_id=self.simulator_id,
             label=self.label,
-            transfer=SimulatorTransferSpec(
-                robot_asset_format=self.robot_asset_format,
-                scene_asset_format=self.robot_asset_format,
-                transfer_strategy=self.transfer_strategy,
-                frame_convention=self.frame_convention,
-            ),
+            transfer=self._build_transfer_spec(),
             target_kind=self.target_kind,
             workspace_target=self.workspace_target,
             motion_validation=self.motion_validation,
@@ -146,12 +156,7 @@ class SimulatorPlugin:
         )
 
     def transfer_policy(self) -> SimulatorRuntimeTransferPolicy:
-        return SimulatorRuntimeTransferPolicy(
-            robotAssetFormat=self.robot_asset_format,
-            sceneAssetFormat=self.robot_asset_format,
-            frameConvention=self.frame_convention,
-            transferStrategy=self.transfer_strategy,
-        )
+        return self._build_transfer_spec().runtime_model()
 
     def require_workspace_process(self) -> SimulatorWorkspaceProcessParams:
         workspace_process = self.workspace_process
