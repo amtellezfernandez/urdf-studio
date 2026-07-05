@@ -400,18 +400,31 @@ def _read_render_camera_local_transform(
 ) -> tuple[Transform | None, str | None]:
     pose = camera.get("pose")
     if isinstance(pose, dict):
-        xyz = _read_vector3(pose.get("xyz"))
-        rpy = _read_vector3(pose.get("rpy"))
-        if xyz is None or rpy is None:
-            return None, f"Camera '{name}' has invalid pose.xyz or pose.rpy."
-        return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
+        return _render_camera_local_transform_from_pose_parts(
+            xyz_value=pose.get("xyz"),
+            rpy_value=pose.get("rpy"),
+            error_message=f"Camera '{name}' has invalid pose.xyz or pose.rpy.",
+        )
     if isinstance(pose, list | tuple) and len(pose) >= 6:
-        xyz = _read_vector3(pose[:3])
-        rpy = _read_vector3(pose[3:6])
-        if xyz is None or rpy is None:
-            return None, f"Camera '{name}' has invalid pose values."
-        return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
+        return _render_camera_local_transform_from_pose_parts(
+            xyz_value=pose[:3],
+            rpy_value=pose[3:6],
+            error_message=f"Camera '{name}' has invalid pose values.",
+        )
     return None, f"Camera '{name}' has no pose."
+
+
+def _render_camera_local_transform_from_pose_parts(
+    *,
+    xyz_value: object,
+    rpy_value: object,
+    error_message: str,
+) -> tuple[Transform | None, str | None]:
+    xyz = _read_vector3(xyz_value)
+    rpy = _read_vector3(rpy_value)
+    if xyz is None or rpy is None:
+        return None, error_message
+    return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
 
 
 def _transform_from_xyz_rpy(
