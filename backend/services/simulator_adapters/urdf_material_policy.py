@@ -72,28 +72,22 @@ def materialize_urdf_visual_material_colors(
     for link in root.findall("link"):
         link_name = link.get("name", "")
         for visual_index, visual in enumerate(link.findall("visual")):
-            material = visual.find("material")
+            material = _ensure_visual_material(
+                visual,
+                link_name=link_name,
+                visual_index=visual_index,
+            )
             if urdf_material_has_color(material):
                 continue
-            if material is None:
-                material = ET.SubElement(
-                    visual,
-                    "material",
-                    {"name": synthetic_urdf_material_name(link_name, visual_index)},
-                )
-            material_name = material.get("name", "").strip()
-            named_rgba = material_colors.get(material_name)
-            mesh = visual.find("./geometry/mesh")
             ET.SubElement(
                 material,
                 "color",
                 {
-                    "rgba": named_rgba
-                    or synthetic_urdf_visual_rgba(
+                    "rgba": _resolved_visual_material_rgba(
+                        visual,
+                        material_colors=material_colors,
                         link_name=link_name,
-                        visual_name=visual.get("name", ""),
                         visual_index=visual_index,
-                        mesh_filename=mesh.get("filename", "") if mesh is not None else "",
                         policy=resolved_policy,
                     ),
                 },
@@ -104,6 +98,45 @@ def materialize_urdf_visual_material_colors(
         ET.indent(root, space="  ")
         tree.write(urdf_path, encoding="unicode", xml_declaration=False)
     return changed_count
+
+
+def _ensure_visual_material(
+    visual: ET.Element,
+    *,
+    link_name: str,
+    visual_index: int,
+) -> ET.Element:
+    material = visual.find("material")
+    if material is not None:
+        return material
+    return ET.SubElement(
+        visual,
+        "material",
+        {"name": synthetic_urdf_material_name(link_name, visual_index)},
+    )
+
+
+def _resolved_visual_material_rgba(
+    visual: ET.Element,
+    *,
+    material_colors: dict[str, str],
+    link_name: str,
+    visual_index: int,
+    policy: UrdfMaterialPolicy,
+) -> str:
+    material = visual.find("material")
+    material_name = material.get("name", "").strip() if material is not None else ""
+    named_rgba = material_colors.get(material_name)
+    if named_rgba:
+        return named_rgba
+    mesh = visual.find("./geometry/mesh")
+    return synthetic_urdf_visual_rgba(
+        link_name=link_name,
+        visual_name=visual.get("name", ""),
+        visual_index=visual_index,
+        mesh_filename=mesh.get("filename", "") if mesh is not None else "",
+        policy=policy,
+    )
 
 
 def urdf_material_has_color(material: ET.Element | None) -> bool:
