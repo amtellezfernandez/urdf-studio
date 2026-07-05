@@ -14,7 +14,10 @@ TraceAdapterSource = Literal["auto", "mujoco", "genesis", "ros", "lerobot"]
 
 
 def _read_payload(path: Path) -> Any:
-    raw_text = path.read_text(encoding="utf-8")
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Failed to read trace adapter input: {path}") from exc
     stripped = raw_text.strip()
     if not stripped:
         raise ValueError(f"Trace adapter input is empty: {path}")
@@ -23,7 +26,15 @@ def _read_payload(path: Path) -> Any:
             return json.loads(stripped)
         except json.JSONDecodeError:
             pass
-    return [json.loads(line) for line in raw_text.splitlines() if line.strip()]
+    records: list[Any] = []
+    for line_number, line in enumerate(raw_text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid trace adapter JSONL line {line_number} in {path}: {exc}") from exc
+    return records
 
 
 def _record(value: Any, field: str) -> dict[str, Any]:

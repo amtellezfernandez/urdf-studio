@@ -213,6 +213,22 @@ def test_compile_simulator_file_reads_jsonl(tmp_path) -> None:
     assert trace.metadata["source_kind"] == "mujoco"
 
 
+def test_compile_simulator_file_rejects_invalid_jsonl_line(tmp_path) -> None:
+    trace_file = tmp_path / "mujoco_trace.jsonl"
+    trace_file.write_text('{"t_ms":0,"entities":[]}\n{"t_ms":\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Invalid trace adapter JSONL line 2"):
+        compile_simulator_file(trace_file, source="mujoco")
+
+
+def test_compile_simulator_file_rejects_invalid_encoding(tmp_path) -> None:
+    trace_file = tmp_path / "mujoco_trace.json"
+    trace_file.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read trace adapter input:"):
+        compile_simulator_file(trace_file, source="mujoco")
+
+
 def test_trace_adapter_cli_writes_trace_and_dataset(tmp_path) -> None:
     input_path = tmp_path / "mujoco.json"
     trace_path = tmp_path / "trace.json"
