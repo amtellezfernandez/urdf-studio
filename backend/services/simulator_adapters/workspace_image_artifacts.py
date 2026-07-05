@@ -68,22 +68,13 @@ def _expected_camera_images(
             f"camera image artifact contract count mismatch in {directory}: "
             f"{len(camera_ids)} camera id(s), expected {expected_count}"
         )
-    missing_contract_ids = tuple(
-        camera_id for camera_id in camera_ids if camera_id not in contracts
+    contract_membership_error = _camera_contract_membership_error(
+        camera_ids=camera_ids,
+        contracts=contracts,
+        directory=directory,
     )
-    if missing_contract_ids:
-        return (
-            f"camera image artifact contracts missing camera id(s) in {directory}: "
-            f"{', '.join(missing_contract_ids)}"
-        )
-    extra_contract_ids = tuple(
-        camera_id for camera_id in contracts if camera_id not in camera_ids
-    )
-    if extra_contract_ids:
-        return (
-            f"camera image artifact contracts contain unexpected camera id(s) in {directory}: "
-            f"{', '.join(extra_contract_ids)}"
-        )
+    if contract_membership_error is not None:
+        return contract_membership_error
     if expected_count == 0:
         return ()
     if not contracts:
@@ -133,4 +124,29 @@ def _validate_image_paths(image_paths: tuple[Path, ...]) -> str | None:
         error = validate_visible_rgb_image(path)
         if error:
             return error
+    return None
+
+
+def _camera_contract_membership_error(
+    *,
+    camera_ids: tuple[str, ...],
+    contracts: Mapping[str, ExpectedCameraReport],
+    directory: Path,
+) -> str | None:
+    missing_contract_ids = tuple(
+        camera_id for camera_id in camera_ids if camera_id not in contracts
+    )
+    if missing_contract_ids:
+        return (
+            f"camera image artifact contracts missing camera id(s) in {directory}: "
+            f"{', '.join(missing_contract_ids)}"
+        )
+    extra_contract_ids = tuple(
+        camera_id for camera_id in contracts if camera_id not in camera_ids
+    )
+    if extra_contract_ids:
+        return (
+            f"camera image artifact contracts contain unexpected camera id(s) in {directory}: "
+            f"{', '.join(extra_contract_ids)}"
+        )
     return None
