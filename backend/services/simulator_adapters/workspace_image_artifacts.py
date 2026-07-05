@@ -86,11 +86,9 @@ def _expected_camera_images(
     expected_count: int,
 ) -> tuple[tuple[Path, tuple[int, int]], ...] | str | None:
     contracts = expectations.camera_contracts or {}
-    camera_ids = expectations.camera_ids
+    camera_ids = _resolved_camera_ids(expectations, contracts=contracts)
     if camera_ids is None:
-        if not contracts:
-            return None
-        camera_ids = tuple(contracts)
+        return None
     if len(camera_ids) != expected_count:
         return (
             f"camera image artifact contract count mismatch in {directory}: "
@@ -111,6 +109,18 @@ def _expected_camera_images(
         directory=directory,
         ordered_contracts=tuple(contracts[camera_id] for camera_id in camera_ids),
     )
+
+
+def _resolved_camera_ids(
+    expectations: WorkspaceImageArtifactExpectations,
+    *,
+    contracts: Mapping[str, ExpectedCameraReport],
+) -> tuple[str, ...] | None:
+    if expectations.camera_ids is not None:
+        return expectations.camera_ids
+    if not contracts:
+        return None
+    return tuple(contracts)
 
 
 def _expected_camera_image_specs(
