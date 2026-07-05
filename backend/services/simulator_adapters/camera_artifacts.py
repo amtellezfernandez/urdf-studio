@@ -87,7 +87,7 @@ def validate_visible_rgb_image(
         return f"missing image artifact: {path}"
     try:
         stats = inspect_rgb_image(path)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         return f"invalid image artifact {path}: {exc}"
     size_error = _validate_image_size(
         path,

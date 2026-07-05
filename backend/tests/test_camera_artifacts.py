@@ -41,3 +41,13 @@ def test_validate_visible_rgb_image_accepts_written_rgb_image(tmp_path: Path) ->
     )
 
     assert validate_visible_rgb_image(image_path, expected_size=(2, 2)) is None
+
+
+def test_validate_visible_rgb_image_rejects_corrupted_image(tmp_path: Path) -> None:
+    image_path = tmp_path / "camera.png"
+    image_path.write_bytes(b"not-a-real-png")
+
+    error = validate_visible_rgb_image(image_path)
+
+    assert error is not None
+    assert "invalid image artifact" in error
