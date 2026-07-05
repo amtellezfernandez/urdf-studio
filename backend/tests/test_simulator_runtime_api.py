@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import get_args
+from typing import cast, get_args
 from unittest.mock import patch
 
 import pytest
@@ -344,7 +344,7 @@ def test_get_plugin_reports_unsupported_simulator() -> None:
         SimulatorCapabilityError,
         match="Unsupported simulator: definitely-not-a-simulator",
     ):
-        get_plugin("definitely-not-a-simulator")  # type: ignore[arg-type]
+        get_plugin(cast(SimulatorId, "definitely-not-a-simulator"))
 
 
 def test_mjlab_workspace_status_uses_mujoco_workspace_dependency(monkeypatch) -> None:

@@ -11,12 +11,14 @@ the camera-convention chain.  Two failure categories:
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
 from backend.services.simulator_adapters.camera_conventions import (
+    CameraFrameConvention,
     OPENGL_CAMERA_FORWARD_LOCAL_XYZ,
     OPENGL_CAMERA_UP_LOCAL_XYZ,
     ROS_CAMERA_FORWARD_LOCAL_XYZ,
@@ -280,7 +282,8 @@ def test_camera_convention_self_inverse(convention):
 
 def test_camera_convention_rejects_unsupported_self_identity_shortcut():
     with pytest.raises(ValueError, match="Unsupported camera frame convention: bogus"):
-        camera_frame_conversion_rotation("bogus", "bogus")  # type: ignore[arg-type]
+        bogus_convention = cast(CameraFrameConvention, "bogus")
+        camera_frame_conversion_rotation(bogus_convention, bogus_convention)
 
 
 @pytest.mark.parametrize(("a", "b"), [
