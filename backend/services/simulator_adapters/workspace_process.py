@@ -51,6 +51,16 @@ def _cancelled_launch_error(label: str) -> str:
     return f"{label} workspace launch was cancelled."
 
 
+def _cleanup_cancelled_launch(
+    *,
+    workspace_dir: Path,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+) -> None:
+    shutil.rmtree(workspace_dir, ignore_errors=True)
+    raise error(_cancelled_launch_error(simulator_label))
+
+
 def _raise_if_launch_cancelled(
     *,
     prepared: PreparedSimulatorWorkspace,
@@ -62,11 +72,17 @@ def _raise_if_launch_cancelled(
     if launch_id is None:
         return
     if not begin_workspace_launch(launch_id, simulator_id):
-        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
-        raise error(_cancelled_launch_error(simulator_label))
+        _cleanup_cancelled_launch(
+            workspace_dir=prepared.workspace_dir,
+            simulator_label=simulator_label,
+            error=error,
+        )
     if is_workspace_launch_cancelled(launch_id):
-        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
-        raise error(_cancelled_launch_error(simulator_label))
+        _cleanup_cancelled_launch(
+            workspace_dir=prepared.workspace_dir,
+            simulator_label=simulator_label,
+            error=error,
+        )
 
 
 def build_workspace_process_command(

@@ -3,13 +3,43 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
+from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.params import (
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
     WORKSPACE_LAUNCH_FRAME_MAP,
 )
+from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.simulator_adapters.workspace_process import (
     build_workspace_process_command,
+    start_workspace_process_until_ready,
 )
+from backend.services.simulator_adapters.workspace_launches import cancel_workspace_launch
+
+
+def _prepared_workspace(tmp_path: Path) -> PreparedSimulatorWorkspace:
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    world_package_path = workspace_dir / "world-package.json"
+    robot_urdf_path = workspace_dir / "robot.urdf"
+    world_package_path.write_text("{}\n", encoding="utf-8")
+    robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+    return PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content="",
+            out_path=str(robot_urdf_path),
+            assets_root=str(workspace_dir / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+    )
 
 
 def test_build_workspace_process_command_uses_expected_launch_shape(tmp_path: Path) -> None:
@@ -36,3 +66,23 @@ def test_build_workspace_process_command_uses_expected_launch_shape(tmp_path: Pa
         tmp_path / "artifacts" / "cameras"
     )
     assert command[command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
+
+
+def test_start_workspace_process_until_ready_removes_workspace_for_pre_cancelled_launch(tmp_path: Path) -> None:
+    prepared = _prepared_workspace(tmp_path)
+    launch_id = "pre-cancelled-workspace-launch"
+    cancel_workspace_launch(launch_id, target_id="pybullet")
+
+    with pytest.raises(ValueError, match="PyBullet workspace launch was cancelled."):
+        start_workspace_process_until_ready(
+            command=[sys.executable, "-c", "print('unused')"],
+            prepared=prepared,
+            workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
+            simulator_id="pybullet",
+            simulator_label="PyBullet",
+            log_path=prepared.workspace_dir / "pybullet.log",
+            error=ValueError,
+            launch_id=launch_id,
+        )
+
+    assert not prepared.workspace_dir.exists()
