@@ -31,7 +31,6 @@ class GenesisWorkspaceError(SimulatorAdapterError):
 
 @dataclass(frozen=True)
 class GenesisWorkspaceCheckArtifacts:
-    screenshot_dir: Path
     viewer_screenshot_path: Path
     camera_screenshot_dir: Path
     sensor_screenshot_dir: Path
@@ -53,13 +52,12 @@ def prepare_genesis_workspace(request: SimulatorWorkspacePrepareRequest) -> Prep
 def _build_genesis_workspace_check_artifacts(
     prepared: PreparedSimulatorWorkspace,
 ) -> GenesisWorkspaceCheckArtifacts:
-    screenshot_dir = prepared.workspace_dir / "artifacts"
+    artifacts_dir = prepared.workspace_dir / "artifacts"
     return GenesisWorkspaceCheckArtifacts(
-        screenshot_dir=screenshot_dir,
-        viewer_screenshot_path=screenshot_dir / "viewer.png",
-        camera_screenshot_dir=screenshot_dir / "cameras",
-        sensor_screenshot_dir=screenshot_dir / "sensors",
-        report_path=screenshot_dir / "report.json",
+        viewer_screenshot_path=artifacts_dir / "viewer.png",
+        camera_screenshot_dir=artifacts_dir / "cameras",
+        sensor_screenshot_dir=artifacts_dir / "sensors",
+        report_path=artifacts_dir / "report.json",
     )
 
 
