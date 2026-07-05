@@ -23,13 +23,20 @@ _GENESIS_INITIALIZED = False
 GenesisEntityEntry: TypeAlias = tuple[SimPrimitive, object]
 
 
+def _genesis_init_error_types(gs: Any) -> tuple[type[BaseException], ...]:
+    genesis_exception = getattr(gs, "GenesisException", None)
+    if isinstance(genesis_exception, type) and issubclass(genesis_exception, BaseException):
+        return (RuntimeError, genesis_exception)
+    return (RuntimeError,)
+
+
 def _ensure_genesis_initialized(gs: Any) -> None:
     global _GENESIS_INITIALIZED
     if _GENESIS_INITIALIZED:
         return
     try:
         gs.init(backend=gs.cpu, logging_level="warning")
-    except Exception as exc:
+    except _genesis_init_error_types(gs) as exc:
         if "already" not in str(exc).lower() and "initialized" not in str(exc).lower():
             raise
     _GENESIS_INITIALIZED = True
