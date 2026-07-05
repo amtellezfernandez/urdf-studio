@@ -163,10 +163,12 @@ def _coerce_loaded_source(raw: object) -> IluSessionLoadedSource | None:
 
 
 def _normalize_working_asset_path(value: str | None, default_asset_path: str) -> str:
-    candidate = (value or default_asset_path or "").replace("\\", "/").strip()
+    raw_value = value if isinstance(value, str) else ""
+    raw_default_asset_path = default_asset_path if isinstance(default_asset_path, str) else ""
+    candidate = (raw_value or raw_default_asset_path or "").replace("\\", "/").strip()
     candidate = re.sub(r"/+", "/", candidate).lstrip("/")
     if not candidate:
-        candidate = default_asset_path or "robot.urdf"
+        candidate = raw_default_asset_path or "robot.urdf"
     candidate = re.sub(r"\.(urdf\.xacro|xacro)$", ".urdf", candidate, flags=re.IGNORECASE)
     return candidate
 

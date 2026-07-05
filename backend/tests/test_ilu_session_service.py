@@ -112,6 +112,23 @@ def test_session_snapshot_rejects_non_string_session_id(monkeypatch, tmp_path: P
         raise AssertionError("Expected non-string session id to be rejected.")
 
 
+def test_normalize_working_asset_path_ignores_non_string_values() -> None:
+    assert (
+        ilu_session_service._normalize_working_asset_path(  # type: ignore[arg-type]
+            ["robots/demo/robot.xacro"],
+            " robots/demo/fallback.xacro ",
+        )
+        == "robots/demo/fallback.urdf"
+    )
+    assert (
+        ilu_session_service._normalize_working_asset_path(  # type: ignore[arg-type]
+            None,
+            123,  # type: ignore[arg-type]
+        )
+        == "robot.urdf"
+    )
+
+
 def test_local_session_manifest_exposes_working_urdf_and_filtered_assets(
     monkeypatch, tmp_path: Path
 ) -> None:
