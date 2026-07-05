@@ -443,6 +443,26 @@ def test_apply_mjcf_workspace_repairs_regularizes_invalid_dynamic_body_inertial(
     assert warnings == ("Workspace repair regularized invalid inertial on MJCF body 'dynamic_link'.",)
 
 
+def test_apply_mjcf_workspace_repairs_leaves_valid_dynamic_body_inertial_unchanged() -> None:
+    mjcf = """
+    <mujoco model="demo">
+      <worldbody>
+        <body name="dynamic_link">
+          <joint name="hinge" type="hinge" axis="0 0 1"/>
+          <geom type="box" size="0.01 0.01 0.01"/>
+          <inertial mass="0.1" diaginertia="0.01 0.01 0.01" pos="0 0 0"/>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+
+    sanitized, warnings = mujoco_adapter.apply_mjcf_workspace_repairs(mjcf)
+
+    assert 'mass="0.1"' in sanitized
+    assert 'diaginertia="0.01 0.01 0.01"' in sanitized
+    assert warnings == ()
+
+
 def test_apply_mjcf_workspace_repairs_preserves_or_defaults_inertial_pos() -> None:
     mjcf = """
     <mujoco model="demo">

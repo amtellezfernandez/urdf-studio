@@ -155,58 +155,65 @@ def _body_needs_only_frame_inertial(body: ET.Element) -> bool:
     return body.find("joint") is None and body.find("freejoint") is None and body.find("geom") is None
 
 
+def _repair_dynamic_body_inertial(inertial: ET.Element, mass: float | None) -> None:
+    inertial.set(
+        "mass",
+        f"{max(mass or 0.0, MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertial_mass):.12g}",
+    )
+    _ensure_inertial_pose_attrs(inertial)
+    full_inertia = _parse_full_inertia(inertial)
+    regularized_full_inertia = (
+        _regularize_full_inertia(full_inertia)
+        if full_inertia is not None and (mass or 0.0) > MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertial_mass
+        else None
+    )
+    if regularized_full_inertia is not None:
+        inertial.set(
+            "fullinertia",
+            " ".join(f"{value:.12g}" for value in regularized_full_inertia),
+        )
+        inertial.attrib.pop("diaginertia", None)
+        return
+    inertial.attrib.pop("fullinertia", None)
+    inertial.set(
+        "diaginertia",
+        f"{MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertia_diagonal:.12g} "
+        f"{MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertia_diagonal:.12g} "
+        f"{MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertia_diagonal:.12g}"
+    )
+
+
+def _repair_mjcf_body_inertial(body: ET.Element) -> str | None:
+    inertial = body.find("inertial")
+    if inertial is None:
+        return None
+
+    mass = _parse_float_attr(inertial, "mass")
+    has_valid_inertia = _has_positive_diagonal_inertia(inertial) or _has_positive_full_inertia(inertial)
+    if (
+        mass is not None
+        and mass > MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertial_mass
+        and has_valid_inertia
+    ):
+        return None
+
+    body_name = body.get("name", "<unnamed-body>")
+    if _body_needs_only_frame_inertial(body):
+        body.remove(inertial)
+        return f"Workspace repair removed invalid frame inertial from MJCF body '{body_name}'."
+
+    _repair_dynamic_body_inertial(inertial, mass)
+    return f"Workspace repair regularized invalid inertial on MJCF body '{body_name}'."
+
+
 def apply_mjcf_workspace_repairs(mjcf_content: str) -> tuple[str, tuple[str, ...]]:
     root = ET.fromstring(mjcf_content)
-    warnings: list[str] = []
-
-    for body in root.findall(".//body"):
-        inertial = body.find("inertial")
-        if inertial is None:
-            continue
-
-        mass = _parse_float_attr(inertial, "mass")
-        has_valid_inertia = _has_positive_diagonal_inertia(inertial) or _has_positive_full_inertia(inertial)
-        if (
-            mass is not None
-            and mass > MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertial_mass
-            and has_valid_inertia
-        ):
-            continue
-
-        body_name = body.get("name", "<unnamed-body>")
-        if _body_needs_only_frame_inertial(body):
-            body.remove(inertial)
-            warnings.append(f"Workspace repair removed invalid frame inertial from MJCF body '{body_name}'.")
-            continue
-
-        inertial.set(
-            "mass",
-            f"{max(mass or 0.0, MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertial_mass):.12g}",
-        )
-        _ensure_inertial_pose_attrs(inertial)
-        full_inertia = _parse_full_inertia(inertial)
-        regularized_full_inertia = (
-            _regularize_full_inertia(full_inertia)
-            if full_inertia is not None and (mass or 0.0) > MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertial_mass
-            else None
-        )
-        if regularized_full_inertia is not None:
-            inertial.set(
-                "fullinertia",
-                " ".join(f"{value:.12g}" for value in regularized_full_inertia),
-            )
-            inertial.attrib.pop("diaginertia", None)
-        else:
-            inertial.attrib.pop("fullinertia", None)
-            inertial.set(
-                "diaginertia",
-                f"{MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertia_diagonal:.12g} "
-                f"{MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertia_diagonal:.12g} "
-                f"{MUJOCO_WORKSPACE_REPAIR_PARAMS.min_inertia_diagonal:.12g}"
-            )
-        warnings.append(f"Workspace repair regularized invalid inertial on MJCF body '{body_name}'.")
-
-    return ET.tostring(root, encoding="unicode"), tuple(warnings)
+    warnings = tuple(
+        warning
+        for body in root.findall(".//body")
+        if (warning := _repair_mjcf_body_inertial(body)) is not None
+    )
+    return ET.tostring(root, encoding="unicode"), warnings
 
 
 def _unique_mesh_name(source_path: Path, robot_dir: Path) -> str:
