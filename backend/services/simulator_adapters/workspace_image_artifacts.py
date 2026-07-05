@@ -51,6 +51,10 @@ def _validate_image_directory(
     directory: Path,
     expected_count: int,
 ) -> _ImageDirectoryValidation:
+    if directory.exists() and not directory.is_dir():
+        return _ImageDirectoryValidation(
+            error=f"expected PNG artifact directory, found non-directory path: {directory}"
+        )
     directory_images = _directory_png_images(directory)
     if len(directory_images) != expected_count:
         return _ImageDirectoryValidation(

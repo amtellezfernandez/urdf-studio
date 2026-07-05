@@ -771,6 +771,18 @@ def test_workspace_check_rejects_camera_image_contract_count_drift(tmp_path) -> 
     )
 
 
+def test_workspace_check_rejects_non_directory_camera_artifact_path(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    camera_dir.write_text("not a directory\n", encoding="utf-8")
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 0),),
+    )
+
+    assert validate_workspace_image_artifacts(expectations) == (
+        f"expected PNG artifact directory, found non-directory path: {camera_dir}"
+    )
+
+
 def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
     monkeypatch, tmp_path
 ) -> None:
