@@ -290,7 +290,7 @@ def _build_gallery_media_status(
 
 def _build_gallery_item_status(raw_item: dict) -> str:
     status_parts: list[str] = []
-    inspection_mode = str(raw_item.get("inspectionMode") or "").strip()
+    inspection_mode = _normalize_optional_text(raw_item.get("inspectionMode"))
     unresolved_mesh_refs = raw_item.get("unresolvedMeshReferenceCount")
     has_renderable_geometry = raw_item.get("hasRenderableGeometry")
 
@@ -1519,7 +1519,7 @@ def _resolve_selected_candidate_paths(record: _GalleryJobRecord, request: IluGal
 def _resolve_generate_asset_kinds(request: IluGalleryJobGenerateRequest) -> list[str]:
     normalized: list[str] = []
     for asset_kind in request.asset_kinds:
-        value = str(asset_kind).strip().lower()
+        value = _normalize_optional_text(asset_kind).lower()
         if value and value not in normalized:
             normalized.append(value)
     if not normalized:
@@ -2036,7 +2036,7 @@ def _github_api_request(
 
 def _github_get_repo_default_branch(repo_slug: str, token: str) -> str:
     response = _github_api_request("GET", f"/repos/{repo_slug}", token)
-    default_branch = str(response.get("default_branch") or "").strip() if isinstance(response, dict) else ""
+    default_branch = _normalize_optional_text(response.get("default_branch")) if isinstance(response, dict) else ""
     if not default_branch:
         raise RuntimeError(f"GitHub repo {repo_slug} does not expose a default branch.")
     return default_branch
@@ -2052,7 +2052,7 @@ def _github_get_ref_sha(repo_slug: str, ref: str, token: str) -> str | None:
     if not isinstance(response, dict):
         raise RuntimeError(f"GitHub ref lookup returned invalid payload for {repo_slug}:{ref}")
     ref_object = response.get("object")
-    sha = str(ref_object.get("sha") or "").strip() if isinstance(ref_object, dict) else ""
+    sha = _normalize_optional_text(ref_object.get("sha")) if isinstance(ref_object, dict) else ""
     return sha or None
 
 
@@ -2061,7 +2061,7 @@ def _github_get_commit_tree_sha(repo_slug: str, commit_sha: str, token: str) -> 
     if not isinstance(response, dict):
         raise RuntimeError(f"GitHub commit lookup returned invalid payload for {repo_slug}:{commit_sha}")
     tree = response.get("tree")
-    tree_sha = str(tree.get("sha") or "").strip() if isinstance(tree, dict) else ""
+    tree_sha = _normalize_optional_text(tree.get("sha")) if isinstance(tree, dict) else ""
     if not tree_sha:
         raise RuntimeError(f"GitHub commit {commit_sha} does not expose a tree SHA.")
     return tree_sha
@@ -2079,7 +2079,7 @@ def _github_create_blob(
         token,
         payload={"content": content, "encoding": encoding},
     )
-    sha = str(response.get("sha") or "").strip() if isinstance(response, dict) else ""
+    sha = _normalize_optional_text(response.get("sha")) if isinstance(response, dict) else ""
     if not sha:
         raise RuntimeError(f"GitHub blob creation did not return a blob SHA for {repo_slug}.")
     return sha
@@ -2104,7 +2104,7 @@ def _github_create_tree(
         ],
     }
     response = _github_api_request("POST", f"/repos/{repo_slug}/git/trees", token, payload=tree_payload)
-    sha = str(response.get("sha") or "").strip() if isinstance(response, dict) else ""
+    sha = _normalize_optional_text(response.get("sha")) if isinstance(response, dict) else ""
     if not sha:
         raise RuntimeError(f"GitHub tree creation did not return a tree SHA for {repo_slug}.")
     return sha
@@ -2117,7 +2117,7 @@ def _github_create_commit(repo_slug: str, token: str, message: str, tree_sha: st
         token,
         payload={"message": message, "tree": tree_sha, "parents": [parent_sha]},
     )
-    sha = str(response.get("sha") or "").strip() if isinstance(response, dict) else ""
+    sha = _normalize_optional_text(response.get("sha")) if isinstance(response, dict) else ""
     if not sha:
         raise RuntimeError(f"GitHub commit creation did not return a commit SHA for {repo_slug}.")
     return sha
@@ -2926,7 +2926,7 @@ def publish_gallery_job(job_id: str) -> IluGalleryPublishResponse:
         base_branch=default_branch,
     )
     pull_request_number = int(pull_request.get("number") or 0) if isinstance(pull_request, dict) else 0
-    pull_request_url = str(pull_request.get("html_url") or "").strip() if isinstance(pull_request, dict) else ""
+    pull_request_url = _normalize_optional_text(pull_request.get("html_url")) if isinstance(pull_request, dict) else ""
     if pull_request_number <= 0 or not pull_request_url:
         raise RuntimeError("GitHub publish did not return a valid pull request.")
 

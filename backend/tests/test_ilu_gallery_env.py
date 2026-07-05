@@ -52,6 +52,31 @@ def test_merge_text_lists_ignores_non_string_entries() -> None:
     ]
 
 
+def test_build_gallery_item_status_ignores_non_string_inspection_mode() -> None:
+    status = ilu_gallery._build_gallery_item_status(
+        {
+            "inspectionMode": 123,
+            "hasRenderableGeometry": True,
+            "unresolvedMeshReferenceCount": 2,
+        }
+    )
+
+    assert status == "renderable, 2 unresolved mesh refs"
+
+
+def test_resolve_generate_asset_kinds_ignores_non_string_values() -> None:
+    request = SimpleNamespace(asset_kinds=[" image ", 2, None, "video", "image"])
+
+    assert ilu_gallery._resolve_generate_asset_kinds(request) == ["image", "video"]
+
+
+def test_resolve_generate_asset_kinds_rejects_non_string_only_values() -> None:
+    request = SimpleNamespace(asset_kinds=[1, None, False])
+
+    with pytest.raises(RuntimeError, match="Select at least one asset kind"):
+        ilu_gallery._resolve_generate_asset_kinds(request)
+
+
 def test_catalog_from_snapshot_ignores_non_string_repo_keys_and_file_bases() -> None:
     catalog = ilu_gallery._catalog_from_snapshot(
         {
@@ -86,6 +111,73 @@ def test_catalog_from_payloads_ignores_non_string_repo_keys_and_file_bases() -> 
 
     assert list(catalog.repo_entries) == ["acme/demo"]
     assert list(catalog.preview_entries) == ["acme/demo::demo-base"]
+
+
+def test_github_helpers_ignore_non_string_response_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    responses = iter(
+        [
+            {"default_branch": []},
+            {"object": {"sha": 123}},
+            {"tree": {"sha": object()}},
+            {"sha": []},
+            {"sha": 123},
+            {"sha": None},
+        ]
+    )
+
+    monkeypatch.setattr(ilu_gallery, "_github_api_request", lambda *_args, **_kwargs: next(responses))
+
+    with pytest.raises(RuntimeError, match="does not expose a default branch"):
+        ilu_gallery._github_get_repo_default_branch("acme/demo", "token")
+    assert ilu_gallery._github_get_ref_sha("acme/demo", "heads/main", "token") is None
+    with pytest.raises(RuntimeError, match="does not expose a tree SHA"):
+        ilu_gallery._github_get_commit_tree_sha("acme/demo", "commit-sha", "token")
+    with pytest.raises(RuntimeError, match="did not return a blob SHA"):
+        ilu_gallery._github_create_blob("acme/demo", "token", "content", "utf-8")
+    with pytest.raises(RuntimeError, match="did not return a tree SHA"):
+        ilu_gallery._github_create_tree("acme/demo", "token", "base-tree", [])
+    with pytest.raises(RuntimeError, match="did not return a commit SHA"):
+        ilu_gallery._github_create_commit("acme/demo", "token", "message", "tree-sha", "parent-sha")
+
+
+def test_publish_gallery_job_rejects_non_string_pull_request_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ilu_gallery, "get_gallery_job", lambda _job_id: SimpleNamespace(status="completed"))
+    monkeypatch.setattr(ilu_gallery, "resolve_server_github_token", lambda: "token")
+    monkeypatch.setattr(ilu_gallery, "_get_job_record", lambda _job_id: SimpleNamespace(output_root=str(tmp_path)))
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_run_ilu_gallery_publish_build",
+        lambda _record, _output_root: SimpleNamespace(
+            repo_slug="acme/demo",
+            branch_name="gallery/update",
+            title="Update gallery",
+            body="body",
+            files=[SimpleNamespace(path="robots/demo.urdf", content="{}", encoding="utf-8")],
+        ),
+    )
+    monkeypatch.setattr(ilu_gallery, "_github_get_repo_default_branch", lambda _repo_slug, _token: "main")
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_github_get_ref_sha",
+        lambda _repo_slug, ref, _token: None if ref == "heads/gallery/update" else "base-sha",
+    )
+    monkeypatch.setattr(ilu_gallery, "_github_get_commit_tree_sha", lambda _repo_slug, _sha, _token: "tree-base")
+    monkeypatch.setattr(ilu_gallery, "_github_create_blob", lambda _repo_slug, _token, _content, _encoding: "blob-sha")
+    monkeypatch.setattr(ilu_gallery, "_github_create_tree", lambda _repo_slug, _token, _base_tree_sha, _files: "tree-sha")
+    monkeypatch.setattr(ilu_gallery, "_github_create_commit", lambda *_args, **_kwargs: "commit-sha")
+    monkeypatch.setattr(ilu_gallery, "_github_upsert_ref", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ilu_gallery, "_github_find_open_pull_request", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_github_create_pull_request",
+        lambda *_args, **_kwargs: {"number": 42, "html_url": 123},
+    )
+
+    with pytest.raises(RuntimeError, match="did not return a valid pull request"):
+        ilu_gallery.publish_gallery_job("job-1")
 
 
 def test_build_repo_robot_index_ignores_non_string_core_fields() -> None:
