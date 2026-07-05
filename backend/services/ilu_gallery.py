@@ -2174,10 +2174,10 @@ def _guess_tags(candidate_path: str) -> list[str]:
 
 
 def _default_gallery_title(candidate_path: str, raw_item: dict) -> str:
-    configured_name = str(raw_item.get("galleryRobotName") or "").strip()
+    configured_name = _normalize_optional_text(raw_item.get("galleryRobotName"))
     if configured_name:
         return configured_name
-    source_file = str(raw_item.get("sourceFile") or "").strip()
+    source_file = _normalize_optional_text(raw_item.get("sourceFile"))
     if source_file:
         return _strip_robot_source_extension(source_file.split("/")[-1])
     file_name = candidate_path.split("/")[-1]
@@ -2192,9 +2192,9 @@ def _rehydrate_gallery_item_from_catalog_snapshot(
     if catalog is None:
         return raw_item
 
-    candidate_path = str(raw_item.get("candidatePath") or "").strip()
-    gallery_repo_key = _normalize_repo_or_path(str(raw_item.get("galleryRepoKey") or ""))
-    gallery_file_base = str(raw_item.get("galleryFileBase") or "").strip()
+    candidate_path = _normalize_optional_text(raw_item.get("candidatePath"))
+    gallery_repo_key = _normalize_repo_or_path(_normalize_optional_text(raw_item.get("galleryRepoKey")))
+    gallery_file_base = _normalize_optional_text(raw_item.get("galleryFileBase"))
 
     preview_entry = (
         catalog.preview_entries.get(f"{gallery_repo_key}::{gallery_file_base}")
@@ -2229,13 +2229,13 @@ def _rehydrate_gallery_item_from_catalog_snapshot(
 
 
 def _map_gallery_items(job_id: str, source: IluGallerySource, manifest: dict) -> tuple[list[IluGalleryEntry], str | None]:
-    output_root = str(manifest.get("outputRoot") or "").strip() or None
+    output_root = _normalize_optional_text(manifest.get("outputRoot")) or None
     catalog_snapshot = manifest.get("catalogSnapshot")
     catalog = _catalog_from_snapshot(catalog_snapshot) if isinstance(catalog_snapshot, dict) else None
     items: list[IluGalleryEntry] = []
     for raw_item in _require_manifest_items(manifest, "ilu gallery manifest returned an invalid items list"):
         enriched_item = _rehydrate_gallery_item_from_catalog_snapshot(source, raw_item, catalog)
-        candidate_path = str(enriched_item.get("candidatePath") or "").strip()
+        candidate_path = _normalize_optional_text(enriched_item.get("candidatePath"))
         if not candidate_path:
             continue
         title = _default_gallery_title(candidate_path, enriched_item)
@@ -2247,7 +2247,7 @@ def _map_gallery_items(job_id: str, source: IluGallerySource, manifest: dict) ->
             "thumbnailPath",
             GALLERY_ASSET_KIND_THUMBNAIL,
         )
-        preview_url = str(enriched_item.get("previewUrl") or "").strip() or None
+        preview_url = _normalize_optional_text(enriched_item.get("previewUrl")) or None
         video_url = _resolve_job_asset_url(
             job_id,
             candidate_path,
@@ -2260,19 +2260,19 @@ def _map_gallery_items(job_id: str, source: IluGallerySource, manifest: dict) ->
             IluGalleryEntry(
                 id=candidate_path,
                 title=title or source.repo,
-                summary=str(enriched_item.get("status") or "").strip() or None,
+                summary=_normalize_optional_text(enriched_item.get("status")) or None,
                 attention_notes=_normalize_text_list(enriched_item.get("attentionNotes")),
                 owner=source.owner,
                 repo=source.repo,
                 path=source.path,
                 branch=source.branch,
                 urdf_path=candidate_path,
-                source_file=str(enriched_item.get("sourceFile") or "").strip() or None,
+                source_file=_normalize_optional_text(enriched_item.get("sourceFile")) or None,
                 thumbnail_url=thumbnail_url,
                 preview_url=preview_url,
                 video_url=video_url,
-                gallery_repo_key=str(enriched_item.get("galleryRepoKey") or "").strip() or None,
-                gallery_file_base=str(enriched_item.get("galleryFileBase") or "").strip() or None,
+                gallery_repo_key=_normalize_optional_text(enriched_item.get("galleryRepoKey")) or None,
+                gallery_file_base=_normalize_optional_text(enriched_item.get("galleryFileBase")) or None,
                 macro_tags=_normalize_text_list(enriched_item.get("macroTags")),
                 mesh_count=_normalize_optional_int(enriched_item.get("meshCount")),
                 link_count=_normalize_optional_int(enriched_item.get("linkCount")),
@@ -2312,7 +2312,7 @@ def get_gallery_repo_preview(
     for raw_candidate in raw_candidates:
         if not isinstance(raw_candidate, dict):
             continue
-        candidate_path = _normalize_repo_or_path(str(raw_candidate.get("path") or ""))
+        candidate_path = _normalize_repo_or_path(_normalize_optional_text(raw_candidate.get("path")))
         if not candidate_path:
             continue
         repo_entry, preview_entry, robot_entry = _resolve_gallery_preview_entry(catalog, source, candidate_path)
@@ -2332,19 +2332,19 @@ def get_gallery_repo_preview(
             IluGalleryEntry(
                 id=candidate_path,
                 title=_default_gallery_title(candidate_path, manifest_item) or source.repo,
-                summary=str(manifest_item.get("status") or "").strip() or None,
+                summary=_normalize_optional_text(manifest_item.get("status")) or None,
                 attentionNotes=_normalize_text_list(manifest_item.get("attentionNotes")),
                 owner=source.owner,
                 repo=source.repo,
                 path=source.path,
                 branch=source.branch,
                 urdfPath=candidate_path,
-                sourceFile=str(manifest_item.get("sourceFile") or "").strip() or None,
-                thumbnailUrl=str(manifest_item.get("thumbnailUrl") or "").strip() or None,
-                previewUrl=str(manifest_item.get("previewUrl") or "").strip() or None,
-                videoUrl=str(manifest_item.get("videoUrl") or "").strip() or None,
-                galleryRepoKey=str(manifest_item.get("galleryRepoKey") or "").strip() or None,
-                galleryFileBase=str(manifest_item.get("galleryFileBase") or "").strip() or None,
+                sourceFile=_normalize_optional_text(manifest_item.get("sourceFile")) or None,
+                thumbnailUrl=_normalize_optional_text(manifest_item.get("thumbnailUrl")) or None,
+                previewUrl=_normalize_optional_text(manifest_item.get("previewUrl")) or None,
+                videoUrl=_normalize_optional_text(manifest_item.get("videoUrl")) or None,
+                galleryRepoKey=_normalize_optional_text(manifest_item.get("galleryRepoKey")) or None,
+                galleryFileBase=_normalize_optional_text(manifest_item.get("galleryFileBase")) or None,
                 macroTags=_normalize_text_list(manifest_item.get("macroTags")),
                 meshCount=_normalize_optional_int(manifest_item.get("meshCount")),
                 linkCount=_normalize_optional_int(manifest_item.get("linkCount")),
@@ -2953,11 +2953,11 @@ def read_gallery_job_asset_file(job_id: str, item_id: str, kind: str) -> tuple[b
     for raw_item in raw_items:
         if not isinstance(raw_item, dict):
             continue
-        if str(raw_item.get("candidatePath") or "").strip() != item_id:
+        if _normalize_optional_text(raw_item.get("candidatePath")) != item_id:
             continue
         asset_path_by_kind = {
-            GALLERY_ASSET_KIND_THUMBNAIL: str(raw_item.get("thumbnailPath") or "").strip(),
-            GALLERY_ASSET_KIND_VIDEO: str(raw_item.get("videoPath") or "").strip(),
+            GALLERY_ASSET_KIND_THUMBNAIL: _normalize_optional_text(raw_item.get("thumbnailPath")),
+            GALLERY_ASSET_KIND_VIDEO: _normalize_optional_text(raw_item.get("videoPath")),
         }
         asset_path = asset_path_by_kind.get(kind, "")
         if not asset_path:

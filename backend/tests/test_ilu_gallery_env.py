@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from backend.models.ilu_gallery import IluGallerySource
+from backend.models.ilu_gallery import IluGalleryPublishedRepo, IluGallerySource
 from backend.services import ilu_gallery
 
 
@@ -238,3 +239,93 @@ def test_merge_generated_gallery_manifest_ignores_non_string_generated_paths(
     merged_item = merged["items"][0]
     assert merged_item["thumbnailPath"] == ""
     assert merged_item["galleryPngPath"] == ""
+
+
+def test_get_gallery_repo_preview_ignores_non_string_preview_item_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = IluGallerySource(owner="acme", repo="demo")
+
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_load_gallery_catalog_for_source",
+        lambda _source: ilu_gallery._GalleryCatalog(repo_entries={}, preview_entries={}),
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_build_gallery_published_repo",
+        lambda _source, _catalog: IluGalleryPublishedRepo(repo="demo"),
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_resolve_gallery_preview_candidates",
+        lambda _source, _candidates=None: [{"path": 123}, {"path": "robots/demo.urdf"}],
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_resolve_gallery_preview_entry",
+        lambda _catalog, _source, candidate_path: ({"repoKey": "acme/demo"}, None, None)
+        if candidate_path == "robots/demo.urdf"
+        else (None, None, None),
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_build_gallery_manifest_item",
+        lambda **_kwargs: {
+            "status": [],
+            "sourceFile": {},
+            "thumbnailUrl": 123,
+            "previewUrl": False,
+            "videoUrl": [],
+            "galleryRepoKey": 456,
+            "galleryFileBase": object(),
+            "macroTags": ["preview"],
+            "tags": ["urdf"],
+        },
+    )
+
+    response = ilu_gallery.get_gallery_repo_preview(source)
+
+    assert len(response.items) == 1
+    item = response.items[0]
+    assert item.urdf_path == "robots/demo.urdf"
+    assert item.summary is None
+    assert item.source_file is None
+    assert item.thumbnail_url is None
+    assert item.preview_url is None
+    assert item.video_url is None
+    assert item.gallery_repo_key is None
+    assert item.gallery_file_base is None
+
+
+def test_read_gallery_job_asset_file_ignores_non_string_manifest_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    thumbnail_path = tmp_path / "demo.png"
+    thumbnail_path.write_bytes(b"png")
+
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_get_job_record",
+        lambda _job_id: SimpleNamespace(output_root=str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_read_job_manifest",
+        lambda _output_root: {
+            "items": [
+                {
+                    "candidatePath": ["robots/demo.urdf"],
+                    "thumbnailPath": str(thumbnail_path),
+                },
+                {
+                    "candidatePath": "robots/demo.urdf",
+                    "thumbnailPath": {"path": str(thumbnail_path)},
+                },
+            ]
+        },
+    )
+
+    with pytest.raises(FileNotFoundError):
+        ilu_gallery.read_gallery_job_asset_file("job-1", "robots/demo.urdf", ilu_gallery.GALLERY_ASSET_KIND_THUMBNAIL)
