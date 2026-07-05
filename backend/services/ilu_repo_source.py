@@ -433,7 +433,8 @@ def _extract_github_error_detail(status_code: int, body: str, reason: str) -> st
     except json.JSONDecodeError:
         payload = None
     if isinstance(payload, dict):
-        message = str(payload.get("message") or "").strip()
+        message = payload.get("message")
+        message = message.strip() if isinstance(message, str) else ""
         if message:
             detail = message
     if status_code in (401, 403) and "rate limit exceeded" in detail.lower():
@@ -556,7 +557,7 @@ def _load_public_git_tree_files(
         normalized_path = _normalize_repository_path(_read_entry_str(raw_entry, "path"))
         if not normalized_path:
             continue
-        entry_type = _read_entry_str(raw_entry, "type").strip().lower()
+        entry_type = _read_entry_str(raw_entry, "type").lower()
         if entry_type == "tree":
             directories[normalized_path] = {
                 "name": normalized_path.split("/")[-1],
@@ -815,15 +816,18 @@ def list_repo_contents(
         if not isinstance(files, list):
             raise GitHubPublicProxyError(502, "ilu bridge returned an invalid repository listing.")
         if path:
+            payload_ref = payload.get("ref")
+            resolved_payload_ref = payload_ref.strip() if isinstance(payload_ref, str) else ""
             files = _filter_archive_files(
                 _ArchiveSnapshot(
-                    resolved_ref=str(payload.get("ref") or branch or "").strip() or branch or "",
+                    resolved_ref=resolved_payload_ref or branch or "",
                     files=files,
                     file_bytes_by_path={},
                 ),
                 path,
             )
-        resolved_ref = str(payload.get("ref") or branch or "").strip() or branch
+        payload_ref = payload.get("ref")
+        resolved_ref = (payload_ref.strip() if isinstance(payload_ref, str) else "") or branch
     except GitHubPublicProxyError:
         snapshot = _load_public_archive_snapshot(owner, repo, branch)
         files = _filter_archive_files(snapshot, path)
@@ -874,7 +878,8 @@ def list_repo_candidates(
         candidates = payload.get("candidates")
         if not isinstance(candidates, list):
             raise GitHubPublicProxyError(502, "ilu bridge returned an invalid repository candidate list.")
-        resolved_ref = str(payload.get("ref") or branch or "").strip() or branch
+        payload_ref = payload.get("ref")
+        resolved_ref = (payload_ref.strip() if isinstance(payload_ref, str) else "") or branch
         return {
             "ref": resolved_ref,
             "candidates": candidates,

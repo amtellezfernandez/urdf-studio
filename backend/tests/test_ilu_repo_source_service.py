@@ -127,6 +127,34 @@ def test_list_repo_contents_filters_bridge_results_to_requested_path(monkeypatch
     )
 
 
+def test_list_repo_contents_ignores_non_string_bridge_ref(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
+
+    def _fake_run(*args, **kwargs):
+        del kwargs
+        payload = {
+            "ref": [],
+            "files": [
+                {
+                    "name": "demo.urdf",
+                    "path": "robots/demo/demo.urdf",
+                    "type": "file",
+                    "sha": "sha-demo",
+                    "encoding": "sha",
+                }
+            ],
+        }
+        return subprocess.CompletedProcess(args[0], 0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr("backend.services.ilu_repo_source.subprocess.run", _fake_run)
+
+    files = list_repo_contents(owner="acme", repo="robot", path="robots/demo", branch="main")
+
+    assert files[0]["download_url"] == (
+        "/ilu/file?owner=acme&repo=robot&path=robots%2Fdemo%2Fdemo.urdf&sha=sha-demo&branch=main"
+    )
+
+
 def test_fetch_file_bytes_uses_ilu_bridge(monkeypatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
@@ -178,6 +206,35 @@ def test_list_repo_candidates_uses_ilu_bridge(monkeypatch) -> None:
     assert calls[0][-1] == "repo-candidates"
     assert payload["ref"] == "main"
     assert payload["candidates"][0]["path"] == "robots/demo/demo.urdf"
+
+
+def test_list_repo_candidates_ignores_non_string_bridge_ref(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
+
+    def _fake_run(*args, **kwargs):
+        del kwargs
+        payload = {
+            "ref": {},
+            "candidates": [
+                {
+                    "path": "robots/demo/demo.urdf",
+                    "name": "demo.urdf",
+                    "displayName": "demo",
+                    "fileBase": "demo--abc123",
+                    "sourceFile": "demo.urdf",
+                    "hasMeshesFolder": True,
+                    "meshesFolderPath": "robots/demo/meshes",
+                    "isXacro": False,
+                }
+            ],
+        }
+        return subprocess.CompletedProcess(args[0], 0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr("backend.services.ilu_repo_source.subprocess.run", _fake_run)
+
+    payload = list_repo_candidates(owner="acme", repo="robot", branch="main")
+
+    assert payload["ref"] == "main"
 
 
 def test_run_bridge_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -526,6 +583,28 @@ def test_load_public_git_tree_files_ignores_non_string_and_invalid_numeric_field
     assert files[-1]["sha"] is None
 
 
+def test_load_public_git_tree_files_ignores_non_string_entry_types(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda explicit_token=None: None)
+    monkeypatch.setattr("backend.services.ilu_repo_source._resolve_default_branch_from_html", lambda owner, repo: "main")
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._fetch_url_bytes",
+        lambda url, *, max_bytes, headers=None: json.dumps(
+            {
+                "truncated": False,
+                "tree": [
+                    {"path": "robots/ignored.urdf", "type": []},
+                    {"path": "robots/demo/demo.urdf", "type": "blob", "size": 12, "sha": "sha-demo"},
+                ],
+            }
+        ).encode("utf-8"),
+    )
+
+    resolved_ref, files = ilu_repo_source._load_public_git_tree_files("acme", "robot")
+
+    assert resolved_ref == "main"
+    assert [file["path"] for file in files] == ["robots", "robots/demo", "robots/demo/demo.urdf"]
+
+
 def test_list_repo_candidates_falls_back_to_public_git_tree_when_archive_is_too_large(monkeypatch) -> None:
     monkeypatch.setattr(
         "backend.services.ilu_repo_source._run_bridge",
@@ -577,6 +656,16 @@ def test_extract_github_error_detail_simplifies_rate_limit_json() -> None:
     )
 
     assert detail == "GitHub public API rate limit exceeded. Configure server GitHub auth or retry later."
+
+
+def test_extract_github_error_detail_ignores_non_string_message() -> None:
+    detail = _extract_github_error_detail(
+        403,
+        json.dumps({"message": ["bad request"]}),
+        "Forbidden",
+    )
+
+    assert detail == '{"message": ["bad request"]}'
 
 
 def test_fetch_file_bytes_falls_back_for_invalid_base64_bridge_content(
