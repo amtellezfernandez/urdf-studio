@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -349,6 +350,26 @@ def _ros2_message_to_dict(msg: Any) -> dict[str, Any]:
     return {}
 
 
+def _load_mcap_decoder_tools() -> tuple[Any, Any]:
+    try:
+        reader_module = importlib.import_module("mcap.reader")
+        decoder_module = importlib.import_module("mcap_ros2.decoder")
+    except ImportError as exc:
+        raise ImportError(
+            "Native MCAP reading requires the mcap packages: "
+            "pip install mcap mcap-ros2-support"
+        ) from exc
+
+    make_reader = getattr(reader_module, "make_reader", None)
+    decoder_factory = getattr(decoder_module, "DecoderFactory", None)
+    if not callable(make_reader) or not callable(decoder_factory):
+        raise ImportError(
+            "Native MCAP reading requires the mcap packages: "
+            "pip install mcap mcap-ros2-support"
+        )
+    return make_reader, decoder_factory
+
+
 def compile_mcap_file(path: Path) -> PhysicalRolloutTrace:
     """Read a native ROS 2 MCAP bag and compile to a PhysicalRolloutTrace.
 
@@ -359,18 +380,11 @@ def compile_mcap_file(path: Path) -> PhysicalRolloutTrace:
       /wsp/entities    — WSP entity state list
       /wsp/action      — WSP action command
     """
-    try:
-        from mcap.reader import make_reader  # type: ignore[import-not-found]
-        from mcap_ros2.decoder import DecoderFactory  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise ImportError(
-            "Native MCAP reading requires the mcap packages: "
-            "pip install mcap mcap-ros2-support"
-        ) from exc
+    make_reader, decoder_factory = _load_mcap_decoder_tools()
 
     messages: list[dict[str, Any]] = []
     with open(path, "rb") as bag_file:
-        reader = make_reader(bag_file, decoder_factories=[DecoderFactory()])
+        reader = make_reader(bag_file, decoder_factories=[decoder_factory()])
         for _schema, channel, message, ros_msg in reader.iter_decoded_messages():
             messages.append({
                 "topic": channel.topic,

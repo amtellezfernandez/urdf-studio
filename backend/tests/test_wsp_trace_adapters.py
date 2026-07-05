@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -151,6 +152,29 @@ def test_lerobot_adapter_accepts_episode_frames() -> None:
 def test_compile_mcap_file_raises_import_error_when_mcap_not_installed(tmp_path) -> None:
     fake_mcap = tmp_path / "test.mcap"
     fake_mcap.write_bytes(b"MCAP0\x00")
+    with pytest.raises(ImportError, match="mcap"):
+        compile_mcap_file(fake_mcap)
+
+
+def test_compile_mcap_file_raises_import_error_when_decoder_tools_are_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    fake_mcap = tmp_path / "test.mcap"
+    fake_mcap.write_bytes(b"MCAP0\x00")
+
+    def _fake_import_module(name: str) -> object:
+        if name == "mcap.reader":
+            return SimpleNamespace(make_reader=None)
+        if name == "mcap_ros2.decoder":
+            return SimpleNamespace(DecoderFactory=object)
+        raise ImportError(name)
+
+    monkeypatch.setattr(
+        "backend.services.wsp_trace_adapters.importlib.import_module",
+        _fake_import_module,
+    )
+
     with pytest.raises(ImportError, match="mcap"):
         compile_mcap_file(fake_mcap)
 
