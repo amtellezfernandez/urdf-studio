@@ -26,30 +26,58 @@ def validate_workspace_image_artifacts(
 ) -> str | None:
     image_paths = list(expectations.image_paths)
     for directory, expected_count in expectations.image_dirs:
-        directory_images = sorted(directory.glob("*.png")) if directory.exists() else []
-        if len(directory_images) != expected_count:
-            return f"expected {expected_count} PNG artifact(s) in {directory}, found {len(directory_images)}"
-        expected_camera_images = _expected_camera_images(
+        directory_validation = _validate_image_directory(
             expectations,
             directory,
             expected_count,
         )
-        if isinstance(expected_camera_images, str):
-            return expected_camera_images
-        if expected_camera_images is not None:
-            error = _validate_expected_camera_images(
-                directory_images=tuple(directory_images),
-                expected_camera_images=expected_camera_images,
-                directory=directory,
-            )
-            if error:
-                return error
-            continue
-        image_paths.extend(directory_images)
+        if directory_validation.error is not None:
+            return directory_validation.error
+        image_paths.extend(directory_validation.unchecked_image_paths)
     if not image_paths:
         return None
 
     return _validate_image_paths(tuple(image_paths))
+
+
+@dataclass(frozen=True)
+class _ImageDirectoryValidation:
+    error: str | None
+    unchecked_image_paths: tuple[Path, ...] = ()
+
+
+def _validate_image_directory(
+    expectations: WorkspaceImageArtifactExpectations,
+    directory: Path,
+    expected_count: int,
+) -> _ImageDirectoryValidation:
+    directory_images = _directory_png_images(directory)
+    if len(directory_images) != expected_count:
+        return _ImageDirectoryValidation(
+            error=f"expected {expected_count} PNG artifact(s) in {directory}, found {len(directory_images)}"
+        )
+    expected_camera_images = _expected_camera_images(
+        expectations,
+        directory,
+        expected_count,
+    )
+    if isinstance(expected_camera_images, str):
+        return _ImageDirectoryValidation(error=expected_camera_images)
+    if expected_camera_images is not None:
+        return _ImageDirectoryValidation(
+            error=_validate_expected_camera_images(
+                directory_images=directory_images,
+                expected_camera_images=expected_camera_images,
+                directory=directory,
+            )
+        )
+    return _ImageDirectoryValidation(error=None, unchecked_image_paths=directory_images)
+
+
+def _directory_png_images(directory: Path) -> tuple[Path, ...]:
+    if not directory.exists():
+        return ()
+    return tuple(sorted(directory.glob("*.png")))
 
 
 def _expected_camera_images(
