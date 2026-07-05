@@ -23,6 +23,7 @@ from backend.services.simulator_adapters.pybullet_camera import (
     pybullet_camera_projection_matrix,
     pybullet_camera_view_matrix,
 )
+from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
 from backend.services.simulator_adapters.workspace_diagnostics import (
     pybullet_glxinfo_warnings,
     pybullet_opengl_warnings,
@@ -576,3 +577,55 @@ def test_pybullet_plugin_reports_direct_urdf_transfer(monkeypatch, tmp_path: Pat
     assert kwargs["stdin"] == workspace_process.subprocess.DEVNULL
     assert kwargs["start_new_session"] is True
     assert kwargs["close_fds"] is True
+
+
+def test_pybullet_plugin_build_check_command_uses_expected_artifact_paths(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=tmp_path / "workspace",
+        world_package_path=tmp_path / "workspace" / "world-package.json",
+        robot_urdf_path=tmp_path / "workspace" / "robot" / "robot.urdf",
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content="<robot name='demo'/>",
+            out_path=str(tmp_path / "workspace" / "robot" / "robot.urdf"),
+            assets_root=str(tmp_path / "workspace" / "robot" / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+        world_object_count=1,
+        camera_count=2,
+    )
+    prepared.world_package_path.parent.mkdir(parents=True, exist_ok=True)
+    prepared.robot_urdf_path.parent.mkdir(parents=True, exist_ok=True)
+    prepared.world_package_path.write_text("{}", encoding="utf-8")
+    prepared.robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+
+    monkeypatch.setattr(pybullet_adapter, "prepare_pybullet_workspace", lambda request: prepared)
+
+    command = pybullet_adapter.PyBulletPlugin().build_check_command(
+        SimulatorWorkspacePrepareRequest(
+            world_package=make_world_package("<robot name='demo'><link name='base'/></robot>"),
+        ),
+        WorkspaceExpectations(
+            duration_sec=0.25,
+            frame_map="auto",
+            resolved_frame_map="urdf_studio/v1",
+            object_count=1,
+            camera_count=2,
+            object_positions_xyz={},
+            object_sizes_xyz={},
+            object_asset_refs={},
+            object_contracts={},
+            joint_positions={},
+            camera_ids=(),
+            camera_contracts={},
+        ),
+    )
+
+    assert str(prepared.workspace_dir / "artifacts" / "cameras") in command.command
+    assert command.expected_report_path == prepared.workspace_dir / "artifacts" / "report.json"

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
 from backend.models.simulator_runtime import (
     SIMULATOR_PYBULLET_ID,
     SimulatorDependencySpec,
@@ -32,6 +35,13 @@ class PyBulletWorkspaceError(SimulatorAdapterError):
     pass
 
 
+@dataclass(frozen=True)
+class PyBulletWorkspaceCheckArtifacts:
+    screenshot_dir: Path
+    camera_screenshot_dir: Path
+    report_path: Path
+
+
 def _pybullet_error(message: str) -> PyBulletWorkspaceError:
     return PyBulletWorkspaceError(message)
 
@@ -41,6 +51,41 @@ def prepare_pybullet_workspace(request: SimulatorWorkspacePrepareRequest) -> Pre
         request,
         workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
         error=_pybullet_error,
+    )
+
+
+def _build_pybullet_workspace_check_artifacts(
+    prepared: PreparedSimulatorWorkspace,
+) -> PyBulletWorkspaceCheckArtifacts:
+    screenshot_dir = prepared.workspace_dir / "artifacts"
+    return PyBulletWorkspaceCheckArtifacts(
+        screenshot_dir=screenshot_dir,
+        camera_screenshot_dir=screenshot_dir / "cameras",
+        report_path=screenshot_dir / "report.json",
+    )
+
+
+def _apply_degraded_opengl_runtime_status(
+    status: SimulatorRuntimeStatus,
+) -> SimulatorRuntimeStatus:
+    dependencies = list(status.dependencies)
+    if not any(
+        dependency.name == PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME
+        for dependency in dependencies
+    ):
+        dependencies.append(
+            SimulatorRuntimeDependency(
+                name=PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME,
+                available=False,
+                required=False,
+                scope="runtime",
+            )
+        )
+    return status.model_copy(
+        update={
+            "status": "ready, display degraded: software OpenGL",
+            "dependencies": dependencies,
+        }
     )
 
 
@@ -65,25 +110,7 @@ class PyBulletPlugin(DirectUrdfSimulatorPlugin):
         )
         if not warnings:
             return status
-        dependencies = list(status.dependencies)
-        if not any(
-            dependency.name == PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME
-            for dependency in dependencies
-        ):
-            dependencies.append(
-                SimulatorRuntimeDependency(
-                    name=PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME,
-                    available=False,
-                    required=False,
-                    scope="runtime",
-                )
-            )
-        return status.model_copy(
-            update={
-                "status": "ready, display degraded: software OpenGL",
-                "dependencies": dependencies,
-            }
-        )
+        return _apply_degraded_opengl_runtime_status(status)
 
     def build_check_command(
         self,
@@ -91,9 +118,7 @@ class PyBulletPlugin(DirectUrdfSimulatorPlugin):
         expectations: WorkspaceExpectations,
     ) -> PreparedWorkspaceCommand:
         prepared = prepare_pybullet_workspace(request)
-        screenshot_dir = prepared.workspace_dir / "artifacts"
-        camera_screenshot_dir = screenshot_dir / "cameras"
-        report_path = screenshot_dir / "report.json"
+        artifacts = _build_pybullet_workspace_check_artifacts(prepared)
         return _prepare_direct_urdf_command(
             prepared,
             simulator_id=SIMULATOR_PYBULLET_ID,
@@ -102,10 +127,10 @@ class PyBulletPlugin(DirectUrdfSimulatorPlugin):
             extra_expected_markers=(f"camera_screenshots={expectations.camera_count}",),
             extra_args=(
                 "--camera-screenshot-dir",
-                str(camera_screenshot_dir),
+                str(artifacts.camera_screenshot_dir),
             ),
-            expected_image_dirs=((camera_screenshot_dir, expectations.camera_count),),
+            expected_image_dirs=((artifacts.camera_screenshot_dir, expectations.camera_count),),
             expectations=expectations,
-            expected_report_path=report_path,
+            expected_report_path=artifacts.report_path,
             expected_report_artifact_dir_keys=("camera_screenshot_dir",),
         )
