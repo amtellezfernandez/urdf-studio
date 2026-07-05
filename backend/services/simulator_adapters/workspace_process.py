@@ -51,6 +51,47 @@ def _cancelled_launch_error(label: str) -> str:
     return f"{label} workspace launch was cancelled."
 
 
+def _raise_if_launch_cancelled(
+    *,
+    prepared: PreparedSimulatorWorkspace,
+    simulator_id: str,
+    simulator_label: str,
+    launch_id: str | None,
+    error: Callable[[str], Exception],
+) -> None:
+    if launch_id is None:
+        return
+    if not begin_workspace_launch(launch_id, simulator_id):
+        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
+        raise error(_cancelled_launch_error(simulator_label))
+    if is_workspace_launch_cancelled(launch_id):
+        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
+        raise error(_cancelled_launch_error(simulator_label))
+
+
+def build_workspace_process_command(
+    *,
+    workspace_process: SimulatorWorkspaceProcessParams,
+    world_package_path: Path,
+    simulator_asset_flag: str,
+    simulator_asset_path: Path,
+    extra_simulator_args: Sequence[str] = (),
+) -> list[str]:
+    return [
+        sys.executable,
+        "-u",
+        "-m",
+        workspace_process.module_name,
+        "--world-package",
+        str(world_package_path),
+        simulator_asset_flag,
+        str(simulator_asset_path),
+        *extra_simulator_args,
+        "--frame-map",
+        WORKSPACE_LAUNCH_FRAME_MAP,
+    ]
+
+
 def start_workspace_process_until_ready(
     *,
     command: Sequence[str],
@@ -62,12 +103,13 @@ def start_workspace_process_until_ready(
     error: Callable[[str], Exception],
     launch_id: str | None = None,
 ) -> subprocess.Popen:
-    if launch_id and not begin_workspace_launch(launch_id, simulator_id):
-        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
-        raise error(_cancelled_launch_error(simulator_label))
-    if launch_id and is_workspace_launch_cancelled(launch_id):
-        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
-        raise error(_cancelled_launch_error(simulator_label))
+    _raise_if_launch_cancelled(
+        prepared=prepared,
+        simulator_id=simulator_id,
+        simulator_label=simulator_label,
+        launch_id=launch_id,
+        error=error,
+    )
 
     process: subprocess.Popen | None = None
     try:
@@ -157,19 +199,13 @@ def start_prepared_workspace_process(
 ) -> SimulatorWorkspacePrepareResponse:
     resolved_simulator_label = simulator_label or runtime_spec.label
     log_path = prepared.workspace_dir / workspace_process.log_name
-    command = [
-        sys.executable,
-        "-u",
-        "-m",
-        workspace_process.module_name,
-        "--world-package",
-        str(prepared.world_package_path),
-        simulator_asset_flag,
-        str(simulator_asset_path),
-        *extra_simulator_args,
-        "--frame-map",
-        WORKSPACE_LAUNCH_FRAME_MAP,
-    ]
+    command = build_workspace_process_command(
+        workspace_process=workspace_process,
+        world_package_path=prepared.world_package_path,
+        simulator_asset_flag=simulator_asset_flag,
+        simulator_asset_path=simulator_asset_path,
+        extra_simulator_args=extra_simulator_args,
+    )
     process = start_workspace_process_until_ready(
         command=command,
         prepared=prepared,
