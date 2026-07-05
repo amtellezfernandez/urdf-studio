@@ -254,7 +254,7 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
             )
 
         entry.solver.enable_joint_limits(limit_weight > 0.0)
-    except Exception as exc:
+    except (RuntimeError, ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=500, detail=f"Placo IK setup failed: {exc}"
         ) from exc
