@@ -39,7 +39,7 @@ def pybullet_runtime_opengl_warnings(
 ) -> tuple[str, ...]:
     glxinfo_renderer = pybullet_glxinfo_renderer()
     if glxinfo_renderer is not None:
-        return pybullet_opengl_warnings(f"OpenGL renderer string: {glxinfo_renderer}\n")
+        return _pybullet_warnings_for_renderer(glxinfo_renderer)
     return pybullet_latest_workspace_log_warnings(
         workspace_root=workspace_root,
         log_name=log_name,
@@ -51,7 +51,10 @@ def pybullet_latest_workspace_log_warnings(
     workspace_root: Path,
     log_name: str,
 ) -> tuple[str, ...]:
-    log_path = latest_workspace_log_path(workspace_root=workspace_root, log_name=log_name)
+    log_path = latest_workspace_log_path(
+        workspace_root=workspace_root,
+        log_name=log_name,
+    )
     if log_path is None:
         return ()
     return _pybullet_log_warnings(log_path)
@@ -59,29 +62,17 @@ def pybullet_latest_workspace_log_warnings(
 
 def latest_workspace_log_path(*, workspace_root: Path, log_name: str) -> Path | None:
     try:
-        candidate_paths = list(workspace_root.glob(f"workspace-*/{log_name}"))
+        candidate_paths = tuple(workspace_root.glob(f"workspace-*/{log_name}"))
     except OSError:
         return None
-    latest_path: Path | None = None
-    latest_mtime = float("-inf")
-    for path in candidate_paths:
-        try:
-            if not path.is_file():
-                continue
-            mtime = path.stat().st_mtime
-        except OSError:
-            continue
-        if mtime > latest_mtime:
-            latest_path = path
-            latest_mtime = mtime
-    return latest_path
+    return _latest_existing_path_by_mtime(candidate_paths)
 
 
 def pybullet_glxinfo_warnings() -> tuple[str, ...]:
     renderer = pybullet_glxinfo_renderer()
     if renderer is None:
         return ()
-    return _pybullet_renderer_warnings(renderer)
+    return _pybullet_warnings_for_renderer(renderer)
 
 
 def pybullet_glxinfo_renderer() -> str | None:
@@ -104,13 +95,43 @@ def pybullet_opengl_warnings(log_text: str) -> tuple[str, ...]:
     renderer = _pybullet_opengl_renderer(log_text)
     if renderer is None:
         return ()
-    return _pybullet_renderer_warnings(renderer)
+    return _pybullet_warnings_for_renderer(renderer)
 
 
 def _pybullet_log_warnings(log_path: Path) -> tuple[str, ...]:
-    return pybullet_opengl_warnings(
+    return _pybullet_warnings_for_log_text(
         read_log_tail(log_path, tail_chars=WORKSPACE_DIAGNOSTIC_LOG_TAIL_CHARS)
     )
+
+
+def _latest_existing_path_by_mtime(candidate_paths: tuple[Path, ...]) -> Path | None:
+    latest_path: Path | None = None
+    latest_mtime = float("-inf")
+    for path in candidate_paths:
+        path_mtime = _existing_path_mtime(path)
+        if path_mtime is None:
+            continue
+        if path_mtime > latest_mtime:
+            latest_path = path
+            latest_mtime = path_mtime
+    return latest_path
+
+
+def _existing_path_mtime(path: Path) -> float | None:
+    try:
+        if not path.is_file():
+            return None
+        return path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def _pybullet_warnings_for_log_text(log_text: str) -> tuple[str, ...]:
+    return pybullet_opengl_warnings(log_text)
+
+
+def _pybullet_warnings_for_renderer(renderer: str) -> tuple[str, ...]:
+    return _pybullet_renderer_warnings(renderer)
 
 
 def _pybullet_renderer_warnings(renderer: str) -> tuple[str, ...]:
