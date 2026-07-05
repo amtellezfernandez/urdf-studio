@@ -193,3 +193,21 @@ def test_workspace_env_acceleration_disable_suppresses_pybullet_wsl_d3d12(
 
     assert "GALLIUM_DRIVER" not in env
     assert "MESA_D3D12_DEFAULT_ADAPTER_NAME" not in env
+
+
+def test_is_wsl_environment_ignores_invalid_proc_version_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    monkeypatch.delenv("WSL_INTEROP", raising=False)
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(self: Path, *args, **kwargs) -> str:
+        if self == Path("/proc/version"):
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+    assert simulator_acceleration._is_wsl_environment() is False

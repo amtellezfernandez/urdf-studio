@@ -33,7 +33,7 @@ def _is_wsl_environment() -> bool:
         return True
     try:
         return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return False
 
 
