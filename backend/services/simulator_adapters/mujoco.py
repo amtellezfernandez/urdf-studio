@@ -36,7 +36,7 @@ from backend.services.ilu_urdf import (
 
 
 class MujocoWorkspaceError(SimulatorAdapterError):
-    pass
+    ...
 
 
 @dataclass(frozen=True)

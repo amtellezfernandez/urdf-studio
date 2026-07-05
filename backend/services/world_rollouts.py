@@ -52,7 +52,7 @@ from backend.services.world_rollout_params import (
 
 
 class WorldRolloutError(RuntimeError):
-    pass
+    ...
 
 
 def _utc_now() -> datetime:

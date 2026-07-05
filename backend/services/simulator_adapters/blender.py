@@ -38,7 +38,7 @@ from backend.services.simulator_adapters.workspace_process import (
 
 
 class BlenderWorkspaceError(SimulatorAdapterError):
-    pass
+    ...
 
 
 def _blender_error(message: str) -> BlenderWorkspaceError:

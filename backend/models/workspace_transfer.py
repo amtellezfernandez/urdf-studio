@@ -111,7 +111,7 @@ class WorkspaceTransferTargetStatus(WorkspaceTransferCamelModel):
 
 
 class WorkspaceOpenRequest(SimulatorWorkspacePrepareRequest):
-    pass
+    ...
 
 
 class WorkspaceLaunchCancelResponse(WorkspaceTransferCamelModel):

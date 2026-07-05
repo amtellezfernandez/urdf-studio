@@ -32,7 +32,7 @@ from backend.services.simulator_adapters.workspace_package import PreparedSimula
 
 
 class PyBulletWorkspaceError(SimulatorAdapterError):
-    pass
+    ...
 
 
 @dataclass(frozen=True)

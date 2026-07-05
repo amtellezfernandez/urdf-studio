@@ -29,7 +29,7 @@ class CollaborationJournal(Protocol):
         occurred_at: str,
         details: CollaborationJournalDetails,
     ) -> None:
-        pass
+        ...
 
 
 class NoopCollaborationJournal:
