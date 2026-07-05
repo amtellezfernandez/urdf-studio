@@ -84,4 +84,52 @@ describe("toViewer3DProps", () => {
     expect(props.simulationPrepRobotMirrorDeemphasizedLinkNames).toBeNull();
     expect(props.simulationPrepSymmetryVisualization).toBeNull();
   });
+
+  it("disables editable joint handlers in read-only mode", () => {
+    const onJointSelect = vi.fn();
+    const onLinkSelect = vi.fn();
+    const onJointHover = vi.fn();
+    const onLinkHover = vi.fn();
+    const onJointChange = vi.fn();
+
+    const props = buildViewer3DProps({
+      readOnlyMode: true,
+      setSelectedJoint: onJointSelect,
+      setSelectedLink: onLinkSelect,
+      setHoveredJoint: onJointHover,
+      setHoveredLink: onLinkHover,
+      handleJointChange: onJointChange,
+    });
+
+    expect(props.onJointSelect).toBeUndefined();
+    expect(props.onLinkSelect).toBeUndefined();
+    expect(props.onJointHover).toBeUndefined();
+    expect(props.onLinkHover).toBeUndefined();
+
+    props.onJointChange?.("joint_a", 1.2);
+    expect(onJointChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps editable joint handlers active outside read-only mode", () => {
+    const onJointSelect = vi.fn();
+    const onLinkSelect = vi.fn();
+    const onJointHover = vi.fn();
+    const onLinkHover = vi.fn();
+    const onJointChange = vi.fn();
+
+    const props = buildViewer3DProps({
+      readOnlyMode: false,
+      setSelectedJoint: onJointSelect,
+      setSelectedLink: onLinkSelect,
+      setHoveredJoint: onJointHover,
+      setHoveredLink: onLinkHover,
+      handleJointChange: onJointChange,
+    });
+
+    expect(props.onJointSelect).toBe(onJointSelect);
+    expect(props.onLinkSelect).toBe(onLinkSelect);
+    expect(props.onJointHover).toBe(onJointHover);
+    expect(props.onLinkHover).toBe(onLinkHover);
+    expect(props.onJointChange).toBe(onJointChange);
+  });
 });

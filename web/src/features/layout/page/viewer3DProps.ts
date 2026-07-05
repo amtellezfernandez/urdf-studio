@@ -73,6 +73,81 @@ type Viewer3DPropsInput = {
   preferStudioRuntime?: boolean;
 };
 
+type InteractionHandlers = Pick<
+  Viewer3DProps,
+  | "onJointSelect"
+  | "onLinkSelect"
+  | "onJointHover"
+  | "onLinkHover"
+  | "onJointChange"
+>;
+
+const resolveInteractionHandlers = ({
+  readOnlyMode,
+  setSelectedJoint,
+  setSelectedLink,
+  setHoveredJoint,
+  setHoveredLink,
+  handleJointChange,
+}: Pick<
+  Viewer3DPropsInput,
+  | "readOnlyMode"
+  | "setSelectedJoint"
+  | "setSelectedLink"
+  | "setHoveredJoint"
+  | "setHoveredLink"
+  | "handleJointChange"
+>): InteractionHandlers =>
+  readOnlyMode
+    ? {
+        onJointSelect: undefined,
+        onLinkSelect: undefined,
+        onJointHover: undefined,
+        onLinkHover: undefined,
+        onJointChange: () => {},
+      }
+    : {
+        onJointSelect: setSelectedJoint,
+        onLinkSelect: setSelectedLink,
+        onJointHover: setHoveredJoint,
+        onLinkHover: setHoveredLink,
+        onJointChange: handleJointChange,
+      };
+
+const resolveInertialVisualization = (
+  inertialVisualization: InertialVisualizationSettings,
+  simulationPrepPanelOpen: boolean
+): InertialVisualizationSettings =>
+  simulationPrepPanelOpen || inertialVisualization.scopedLinkNames === null
+    ? inertialVisualization
+    : {
+        ...inertialVisualization,
+        scopedLinkNames: null,
+      };
+
+const resolveSimulationPrepVisualState = ({
+  simulationPrepPanelOpen,
+  simulationPrepRobotMirrorVisualization,
+  simulationPrepRobotMirrorDeemphasizedLinkNames,
+  simulationPrepSymmetryVisualization,
+}: Pick<
+  Viewer3DPropsInput,
+  | "simulationPrepPanelOpen"
+  | "simulationPrepRobotMirrorVisualization"
+  | "simulationPrepRobotMirrorDeemphasizedLinkNames"
+  | "simulationPrepSymmetryVisualization"
+>) => ({
+  simulationPrepRobotMirrorVisualization: simulationPrepPanelOpen
+    ? simulationPrepRobotMirrorVisualization
+    : null,
+  simulationPrepRobotMirrorDeemphasizedLinkNames: simulationPrepPanelOpen
+    ? simulationPrepRobotMirrorDeemphasizedLinkNames
+    : null,
+  simulationPrepSymmetryVisualization: simulationPrepPanelOpen
+    ? simulationPrepSymmetryVisualization
+    : null,
+});
+
 export const toViewer3DProps = ({
   workspaceMode,
   assemblyPrimaryModel,
@@ -124,22 +199,24 @@ export const toViewer3DProps = ({
   readOnlyMode = false,
   preferStudioRuntime = false,
 }: Viewer3DPropsInput): Viewer3DProps => {
-  const effectiveInertialVisualization =
-    simulationPrepPanelOpen || inertialVisualization.scopedLinkNames === null
-      ? inertialVisualization
-      : {
-          ...inertialVisualization,
-          scopedLinkNames: null,
-        };
-  const effectiveSimulationPrepRobotMirrorVisualization = simulationPrepPanelOpen
-    ? simulationPrepRobotMirrorVisualization
-    : null;
-  const effectiveSimulationPrepRobotMirrorDeemphasizedLinkNames = simulationPrepPanelOpen
-    ? simulationPrepRobotMirrorDeemphasizedLinkNames
-    : null;
-  const effectiveSimulationPrepSymmetryVisualization = simulationPrepPanelOpen
-    ? simulationPrepSymmetryVisualization
-    : null;
+  const interactionHandlers = resolveInteractionHandlers({
+    readOnlyMode,
+    setSelectedJoint,
+    setSelectedLink,
+    setHoveredJoint,
+    setHoveredLink,
+    handleJointChange,
+  });
+  const effectiveInertialVisualization = resolveInertialVisualization(
+    inertialVisualization,
+    simulationPrepPanelOpen
+  );
+  const simulationPrepVisualState = resolveSimulationPrepVisualState({
+    simulationPrepPanelOpen,
+    simulationPrepRobotMirrorVisualization,
+    simulationPrepRobotMirrorDeemphasizedLinkNames,
+    simulationPrepSymmetryVisualization,
+  });
 
   return {
     workspaceMode,
@@ -155,11 +232,7 @@ export const toViewer3DProps = ({
     jointValues,
     jointLimits,
     jointAxes,
-    onJointSelect: readOnlyMode ? undefined : setSelectedJoint,
-    onLinkSelect: readOnlyMode ? undefined : setSelectedLink,
-    onJointHover: readOnlyMode ? undefined : setHoveredJoint,
-    onLinkHover: readOnlyMode ? undefined : setHoveredLink,
-    onJointChange: readOnlyMode ? (() => {}) : handleJointChange,
+    ...interactionHandlers,
     onRobotJointsLoaded: handleRobotJointsLoaded,
     onPlayingChange: setIsPlaying,
     onAnimationFramesChange: setHasAnimationFrames,
@@ -172,10 +245,7 @@ export const toViewer3DProps = ({
     inertialVisualization: effectiveInertialVisualization,
     simulationPrepPanelOpen,
     simulationPrepResetPoseRequestKey,
-    simulationPrepRobotMirrorVisualization: effectiveSimulationPrepRobotMirrorVisualization,
-    simulationPrepRobotMirrorDeemphasizedLinkNames:
-      effectiveSimulationPrepRobotMirrorDeemphasizedLinkNames,
-    simulationPrepSymmetryVisualization: effectiveSimulationPrepSymmetryVisualization,
+    ...simulationPrepVisualState,
     simulationPrepSymmetryOverlayCenterMode,
     onRobotBoundingBoxChange: setRobotBoundingBox,
     onRobotLoaded: setRobot,
