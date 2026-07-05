@@ -18,6 +18,7 @@ from backend.tests.simulator_adapter_test_utils import make_world_package
 from backend.services.ilu_urdf import BundleMeshAssetsResult, BundledMeshAsset
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec, Transform
 from backend.services.simulator_adapters import genesis as genesis_adapter
+from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
 from backend.services.simulator_adapters.genesis_camera import (
     add_scene_camera,
     attach_scene_camera_to_robot_link,
@@ -31,6 +32,7 @@ from backend.services.simulator_adapters.camera_artifacts import validate_visibl
 from backend.services.simulator_adapters.genesis_robot import (
     apply_joint_values,
     attachment_links_from_urdf,
+    configure_robot_position_controller,
     joint_dof_indices_by_name,
     links_to_keep_for_camera_attachment,
     links_to_keep_for_workspace_attachments,
@@ -229,6 +231,101 @@ def test_genesis_apply_joint_values_uses_known_finite_joints_only() -> None:
     assert applied_count == 1
     assert robot_entity.set_position_calls == [([0.25], [1], True)]
     assert robot_entity.control_position_calls == [([0.25], [1])]
+
+
+def test_genesis_configures_robot_controller_with_keyword_dof_indices() -> None:
+    class _FakeRobotEntity:
+        def __init__(self) -> None:
+            self.kp_calls: list[tuple[list[float], list[int]]] = []
+            self.kv_calls: list[tuple[list[float], list[int]]] = []
+            self.force_calls: list[tuple[list[float], list[float], list[int]]] = []
+
+        def set_dofs_kp(self, values: list[float], *, dofs_idx_local: list[int]) -> None:
+            self.kp_calls.append((values, dofs_idx_local))
+
+        def set_dofs_kv(self, values: list[float], *, dofs_idx_local: list[int]) -> None:
+            self.kv_calls.append((values, dofs_idx_local))
+
+        def set_dofs_force_range(
+            self,
+            lower: list[float],
+            upper: list[float],
+            *,
+            dofs_idx_local: list[int],
+        ) -> None:
+            self.force_calls.append((lower, upper, dofs_idx_local))
+
+    robot_entity = _FakeRobotEntity()
+
+    controlled = configure_robot_position_controller(
+        robot_entity,
+        {"arm_joint": 1, "left_gripper_joint": 3},
+    )
+
+    assert controlled == 2
+    assert robot_entity.kp_calls == [(
+        [
+            GENESIS_SCENE_PARAMS.arm_controller.kp,
+            GENESIS_SCENE_PARAMS.gripper_controller.kp,
+        ],
+        [1, 3],
+    )]
+    assert robot_entity.kv_calls == [(
+        [
+            GENESIS_SCENE_PARAMS.arm_controller.kv,
+            GENESIS_SCENE_PARAMS.gripper_controller.kv,
+        ],
+        [1, 3],
+    )]
+    assert robot_entity.force_calls == [(
+        [
+            -GENESIS_SCENE_PARAMS.arm_controller.force_limit,
+            -GENESIS_SCENE_PARAMS.gripper_controller.force_limit,
+        ],
+        [
+            GENESIS_SCENE_PARAMS.arm_controller.force_limit,
+            GENESIS_SCENE_PARAMS.gripper_controller.force_limit,
+        ],
+        [1, 3],
+    )]
+
+
+def test_genesis_configures_robot_controller_with_positional_dof_indices_fallback() -> None:
+    class _FakeRobotEntity:
+        def __init__(self) -> None:
+            self.kp_calls: list[tuple[list[float], list[int]]] = []
+            self.kv_calls: list[tuple[list[float], list[int]]] = []
+            self.force_calls: list[tuple[list[float], list[float], list[int]]] = []
+
+        def set_dofs_kp(self, values: list[float], dofs_idx_local: list[int]) -> None:
+            self.kp_calls.append((values, dofs_idx_local))
+
+        def set_dofs_kv(self, values: list[float], dofs_idx_local: list[int]) -> None:
+            self.kv_calls.append((values, dofs_idx_local))
+
+        def set_dofs_force_range(
+            self,
+            lower: list[float],
+            upper: list[float],
+            dofs_idx_local: list[int],
+        ) -> None:
+            self.force_calls.append((lower, upper, dofs_idx_local))
+
+    robot_entity = _FakeRobotEntity()
+
+    controlled = configure_robot_position_controller(
+        robot_entity,
+        {"arm_joint": 1},
+    )
+
+    assert controlled == 1
+    assert robot_entity.kp_calls == [([GENESIS_SCENE_PARAMS.arm_controller.kp], [1])]
+    assert robot_entity.kv_calls == [([GENESIS_SCENE_PARAMS.arm_controller.kv], [1])]
+    assert robot_entity.force_calls == [(
+        [-GENESIS_SCENE_PARAMS.arm_controller.force_limit],
+        [GENESIS_SCENE_PARAMS.arm_controller.force_limit],
+        [1],
+    )]
 
 
 def test_genesis_attachment_links_include_terminal_tool_links(tmp_path: Path) -> None:

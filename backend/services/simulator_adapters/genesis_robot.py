@@ -97,11 +97,15 @@ def configure_robot_position_controller(
         force_upper.append(force_limit)
 
     if hasattr(robot_entity, "set_dofs_kp"):
-        robot_entity.set_dofs_kp(kp_values, dofs_idx_local=dof_indices)
+        _call_dof_setter(robot_entity.set_dofs_kp, (kp_values,), dof_indices=dof_indices)
     if hasattr(robot_entity, "set_dofs_kv"):
-        robot_entity.set_dofs_kv(kv_values, dofs_idx_local=dof_indices)
+        _call_dof_setter(robot_entity.set_dofs_kv, (kv_values,), dof_indices=dof_indices)
     if hasattr(robot_entity, "set_dofs_force_range"):
-        robot_entity.set_dofs_force_range(force_lower, force_upper, dofs_idx_local=dof_indices)
+        _call_dof_setter(
+            robot_entity.set_dofs_force_range,
+            (force_lower, force_upper),
+            dof_indices=dof_indices,
+        )
     return len(dof_indices)
 
 
@@ -156,6 +160,18 @@ def _apply_joint_position_targets(
             robot_entity.set_dofs_position(positions, dofs_idx_local=dof_indices)
     if hasattr(robot_entity, "control_dofs_position"):
         robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
+
+
+def _call_dof_setter(
+    setter: Any,
+    args: tuple[object, ...],
+    *,
+    dof_indices: list[int],
+) -> None:
+    try:
+        setter(*args, dofs_idx_local=dof_indices)
+    except TypeError:
+        setter(*args, dof_indices)
 
 
 _ATTACHMENT_LINK_NAME_RE = re.compile(
