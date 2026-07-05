@@ -230,6 +230,129 @@ def test_bundle_mesh_assets_for_urdf_file_maps_bridge_response(monkeypatch) -> N
     assert result.bundled[0].rewritten == "assets/demo/meshes/link.stl"
 
 
+def test_bundle_mesh_assets_for_urdf_file_trims_string_fields(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "success": True,
+            "content": "  <robot name=\"demo\"/>  ",
+            "outPath": " /tmp/out/robot.urdf ",
+            "assetsRoot": " /tmp/out/assets ",
+            "copiedFiles": 1,
+            "bundled": [
+                {
+                    "original": " package://demo/meshes/link.stl ",
+                    "rewritten": " assets/demo/meshes/link.stl ",
+                    "sourcePath": " /tmp/demo/meshes/link.stl ",
+                    "targetPath": " /tmp/out/assets/demo/meshes/link.stl ",
+                }
+            ],
+            "unresolved": [" meshes/missing.stl "],
+            "error": " warning ",
+        },
+    )
+
+    result = bundle_mesh_assets_for_urdf_file(
+        urdf_path="/tmp/demo/robot.urdf",
+        urdf_xml="<robot name=\"demo\"/>",
+        out_path="/tmp/out/robot.urdf",
+        extra_search_roots=["/tmp/demo"],
+    )
+
+    assert result.content == "<robot name=\"demo\"/>"
+    assert result.out_path == "/tmp/out/robot.urdf"
+    assert result.assets_root == "/tmp/out/assets"
+    assert result.unresolved == ("meshes/missing.stl",)
+    assert result.error == "warning"
+    assert result.bundled[0].source_path == "/tmp/demo/meshes/link.stl"
+
+
+def test_bundle_mesh_assets_for_urdf_file_rejects_blank_string_fields(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "success": True,
+            "content": "   ",
+            "outPath": "/tmp/out/robot.urdf",
+            "assetsRoot": "/tmp/out/assets",
+            "copiedFiles": 1,
+            "bundled": [],
+            "unresolved": [],
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid mesh bundle response"):
+        bundle_mesh_assets_for_urdf_file(
+            urdf_path="/tmp/demo/robot.urdf",
+            urdf_xml="<robot name=\"demo\"/>",
+            out_path="/tmp/out/robot.urdf",
+            extra_search_roots=["/tmp/demo"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "success": True,
+            "content": "<robot name=\"demo\"/>",
+            "outPath": "   ",
+            "assetsRoot": "/tmp/out/assets",
+            "copiedFiles": 1,
+            "bundled": [],
+            "unresolved": [],
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid mesh bundle path"):
+        bundle_mesh_assets_for_urdf_file(
+            urdf_path="/tmp/demo/robot.urdf",
+            urdf_xml="<robot name=\"demo\"/>",
+            out_path="/tmp/out/robot.urdf",
+            extra_search_roots=["/tmp/demo"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "success": True,
+            "content": "<robot name=\"demo\"/>",
+            "outPath": "/tmp/out/robot.urdf",
+            "assetsRoot": "/tmp/out/assets",
+            "copiedFiles": 1,
+            "bundled": [{"original": " ", "rewritten": "ok", "sourcePath": "ok", "targetPath": "ok"}],
+            "unresolved": [],
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid bundled mesh entry"):
+        bundle_mesh_assets_for_urdf_file(
+            urdf_path="/tmp/demo/robot.urdf",
+            urdf_xml="<robot name=\"demo\"/>",
+            out_path="/tmp/out/robot.urdf",
+            extra_search_roots=["/tmp/demo"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "success": True,
+            "content": "<robot name=\"demo\"/>",
+            "outPath": "/tmp/out/robot.urdf",
+            "assetsRoot": "/tmp/out/assets",
+            "copiedFiles": 1,
+            "bundled": [],
+            "unresolved": [" "],
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid unresolved mesh entry"):
+        bundle_mesh_assets_for_urdf_file(
+            urdf_path="/tmp/demo/robot.urdf",
+            urdf_xml="<robot name=\"demo\"/>",
+            out_path="/tmp/out/robot.urdf",
+            extra_search_roots=["/tmp/demo"],
+        )
+
+
 def test_convert_urdf_to_mjcf_maps_bridge_response(monkeypatch) -> None:
     def _fake_run_bridge(command, payload):
         assert command == "convert-mjcf"

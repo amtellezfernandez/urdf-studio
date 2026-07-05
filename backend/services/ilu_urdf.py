@@ -318,17 +318,22 @@ def bundle_mesh_assets_for_urdf_file(
     def _read_asset(value: object) -> BundledMeshAsset:
         if not isinstance(value, dict):
             raise IluUrdfBridgeError(502, "ilu bridge returned an invalid bundled mesh entry.")
-        original = value.get("original")
-        rewritten = value.get("rewritten")
-        source_path = value.get("sourcePath")
-        target_path = value.get("targetPath")
-        if not all(isinstance(item, str) for item in (original, rewritten, source_path, target_path)):
+        normalized_values = tuple(
+            item.strip() if isinstance(item, str) else ""
+            for item in (
+                value.get("original"),
+                value.get("rewritten"),
+                value.get("sourcePath"),
+                value.get("targetPath"),
+            )
+        )
+        if not all(normalized_values):
             raise IluUrdfBridgeError(502, "ilu bridge returned an invalid bundled mesh entry.")
         return BundledMeshAsset(
-            original=original,
-            rewritten=rewritten,
-            source_path=source_path,
-            target_path=target_path,
+            original=normalized_values[0],
+            rewritten=normalized_values[1],
+            source_path=normalized_values[2],
+            target_path=normalized_values[3],
         )
 
     success = response.get("success")
@@ -337,26 +342,30 @@ def bundle_mesh_assets_for_urdf_file(
     assets_root = response.get("assetsRoot")
     copied_files = response.get("copiedFiles")
     error = response.get("error")
-    if not isinstance(success, bool) or not isinstance(content, str):
+    normalized_content = content.strip() if isinstance(content, str) else ""
+    normalized_out_path = returned_out_path.strip() if isinstance(returned_out_path, str) else ""
+    normalized_assets_root = assets_root.strip() if isinstance(assets_root, str) else ""
+    normalized_error = error.strip() if isinstance(error, str) else None
+    if not isinstance(success, bool) or not normalized_content:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle response.")
-    if not isinstance(returned_out_path, str) or not isinstance(assets_root, str):
+    if not normalized_out_path or not normalized_assets_root:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle path.")
     if not isinstance(copied_files, int) or copied_files < 0:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid copied file count.")
-    if error is not None and not isinstance(error, str):
+    if error is not None and normalized_error is None:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle error.")
-    unresolved = tuple(item for item in raw_unresolved if isinstance(item, str))
+    unresolved = tuple(item.strip() for item in raw_unresolved if isinstance(item, str) and item.strip())
     if len(unresolved) != len(raw_unresolved):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid unresolved mesh entry.")
     return BundleMeshAssetsResult(
         success=success,
-        content=content,
-        out_path=returned_out_path,
-        assets_root=assets_root,
+        content=normalized_content,
+        out_path=normalized_out_path,
+        assets_root=normalized_assets_root,
         copied_files=copied_files,
         bundled=tuple(_read_asset(item) for item in raw_bundled),
         unresolved=unresolved,
-        error=error,
+        error=normalized_error,
     )
 
 
