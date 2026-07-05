@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import importlib
 import json
 import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypedDict
 
 from scipy.spatial.transform import Rotation
 
@@ -26,6 +25,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
+from backend.services.yourdfpy_loader import load_yourdfpy_urdf_loader
 from backend.services.world_layout_transfer_types import SimPrimitive
 
 if TYPE_CHECKING:
@@ -95,20 +95,6 @@ class BlenderRobotGlbReference:
     geometry_count: int
     node_count: int
     applied_joint_count: int
-
-
-def _load_yourdfpy_urdf_loader() -> Any:
-    try:
-        yourdfpy_module = importlib.import_module("yourdfpy")
-    except ModuleNotFoundError as exc:
-        if exc.name != "yourdfpy":
-            raise
-        raise ValueError("yourdfpy is not installed") from exc
-    urdf_class = getattr(yourdfpy_module, "URDF", None)
-    load_urdf = getattr(urdf_class, "load", None)
-    if not callable(load_urdf):
-        raise ValueError("yourdfpy.URDF.load is unavailable")
-    return load_urdf
 
 
 def write_blender_workspace_artifacts(
@@ -193,7 +179,7 @@ def _write_robot_glb_reference(
     *,
     joint_positions: Mapping[str, float],
 ) -> BlenderRobotGlbReference | None:
-    load_urdf = _load_yourdfpy_urdf_loader()
+    load_urdf = load_yourdfpy_urdf_loader()
     robot = load_urdf(
         str(robot_urdf_path),
         build_scene_graph=True,
@@ -295,6 +281,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             import json
             import math
             import re
+            from contextlib import suppress
             from pathlib import Path
 
             import bpy
@@ -412,18 +399,14 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
 
 
             def select_edit_roots(robot_root, world_objects):
-                try:
+                with suppress(RuntimeError):
                     bpy.ops.object.select_all(action="DESELECT")
-                except RuntimeError:
-                    pass
                 selectable = list(world_objects) or ([robot_root] if robot_root is not None else [])
                 for obj in selectable:
                     safe_select(obj, True)
                 if selectable and getattr(bpy.context, "view_layer", None) is not None:
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError):
                         bpy.context.view_layer.objects.active = selectable[0]
-                    except (AttributeError, RuntimeError, TypeError):
-                        pass
 
 
             def active_view3d_spaces():
@@ -448,27 +431,21 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             def configure_view3d_space(space, camera_objects):
                 shading = getattr(space, "shading", None)
                 if shading is not None:
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError, ValueError):
                         shading.type = "MATERIAL"
                         shading.background_type = "VIEWPORT"
                         shading.background_color = (0.12, 0.13, 0.14)
-                    except (AttributeError, RuntimeError, TypeError, ValueError):
-                        pass
                 for attr, value in (("clip_start", 0.01), ("clip_end", 100.0)):
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError, ValueError):
                         setattr(space, attr, value)
-                    except (AttributeError, RuntimeError, TypeError, ValueError):
-                        pass
                 region_3d = getattr(space, "region_3d", None)
                 if region_3d is None:
                     return
                 center, radius = scene_edit_bounds()
-                try:
+                with suppress(AttributeError, RuntimeError, TypeError, ValueError):
                     region_3d.view_location = center
                     region_3d.view_distance = max(radius * 2.6, 1.0)
                     region_3d.view_perspective = "PERSP"
-                except (AttributeError, RuntimeError, TypeError, ValueError):
-                    pass
 
 
             def initialize_edit_view(robot_root, world_objects, camera_objects):
@@ -693,10 +670,8 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 root["urdf_studio_robot_visual_axis_correction"] = "glb_y_up_to_urdf_z_up"
                 update = getattr(getattr(bpy.context, "view_layer", None), "update", None)
                 if update is not None:
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError):
                         update()
-                    except (AttributeError, RuntimeError, TypeError):
-                        pass
 
 
             def import_visual_file(root, path, importer, status):
@@ -798,6 +773,8 @@ def build_blender_focus_script() -> str:
     return (
         textwrap.dedent(
             """
+            from contextlib import suppress
+
             import bpy
             from mathutils import Vector
 
@@ -860,20 +837,14 @@ def build_blender_focus_script() -> str:
 
 
             def select_layout_roots(roots):
-                try:
+                with suppress(RuntimeError):
                     bpy.ops.object.select_all(action="DESELECT")
-                except RuntimeError:
-                    pass
                 for obj in roots:
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError):
                         obj.select_set(True)
-                    except (AttributeError, RuntimeError, TypeError):
-                        pass
                 if roots:
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError):
                         bpy.context.view_layer.objects.active = roots[0]
-                    except (AttributeError, RuntimeError, TypeError):
-                        pass
 
 
             def focus_layout_viewports():
@@ -885,13 +856,11 @@ def build_blender_focus_script() -> str:
                     region_3d = getattr(space, "region_3d", None)
                     if region_3d is None:
                         continue
-                    try:
+                    with suppress(AttributeError, RuntimeError, TypeError, ValueError):
                         region_3d.view_location = center
                         region_3d.view_distance = max(radius * 3.0, 1.0)
                         region_3d.view_perspective = "PERSP"
                         focused += 1
-                    except (AttributeError, RuntimeError, TypeError, ValueError):
-                        pass
                 print(
                     f"[urdf-studio-blender] viewport_focused world_objects={len(roots)} viewports={focused}",
                     flush=True,
@@ -901,10 +870,8 @@ def build_blender_focus_script() -> str:
 
             def main():
                 focus_layout_viewports()
-                try:
+                with suppress(AttributeError, RuntimeError, TypeError, ValueError):
                     bpy.app.timers.register(focus_layout_viewports, first_interval=0.25)
-                except (AttributeError, RuntimeError, TypeError, ValueError):
-                    pass
 
 
             main()

@@ -6,13 +6,12 @@ in URDF format, using yourdfpy for FK without hardcoded link lengths or limits.
 from __future__ import annotations
 
 import hashlib
-import importlib
 import math
 import random
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -24,6 +23,7 @@ from backend.models.physical_state import (
     PhysicalRolloutTrace,
     PhysicalStateFrame,
 )
+from backend.services.yourdfpy_loader import load_yourdfpy_urdf_loader
 
 if TYPE_CHECKING:
     import yourdfpy
@@ -40,20 +40,6 @@ class UrdfEntry:
 _URDF_CACHE: dict[str, UrdfEntry] = {}
 
 
-def _load_yourdfpy_urdf_loader() -> Any:
-    try:
-        yourdfpy_module = importlib.import_module("yourdfpy")
-    except ModuleNotFoundError as exc:
-        if exc.name != "yourdfpy":
-            raise
-        raise ValueError("yourdfpy is not installed") from exc
-    urdf_class = getattr(yourdfpy_module, "URDF", None)
-    load_urdf = getattr(urdf_class, "load", None)
-    if not callable(load_urdf):
-        raise ValueError("yourdfpy.URDF.load is unavailable")
-    return load_urdf
-
-
 def load_urdf_entry(urdf_xml: str) -> UrdfEntry:
     """Load and cache a URDF; extract actuated joint names and limits."""
     key = hashlib.sha256(urdf_xml.encode()).hexdigest()
@@ -64,7 +50,7 @@ def load_urdf_entry(urdf_xml: str) -> UrdfEntry:
         tmp.write(urdf_xml)
         tmp_path = tmp.name
     try:
-        load_urdf = _load_yourdfpy_urdf_loader()
+        load_urdf = load_yourdfpy_urdf_loader()
         urdf = load_urdf(tmp_path)
     finally:
         Path(tmp_path).unlink(missing_ok=True)

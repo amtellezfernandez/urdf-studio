@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import hashlib
-import importlib
 import tempfile
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 from fastapi import HTTPException
@@ -21,6 +20,7 @@ from backend.models.kinematics import (
     Vector3,
 )
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
+from backend.services.yourdfpy_loader import load_yourdfpy_urdf_loader
 
 if TYPE_CHECKING:
     import yourdfpy
@@ -40,26 +40,12 @@ def _hash_urdf(urdf_xml: str) -> str:
     return hashlib.sha256(urdf_xml.encode("utf-8")).hexdigest()
 
 
-def _load_yourdfpy_urdf_loader() -> Any:
-    try:
-        yourdfpy_module = importlib.import_module("yourdfpy")
-    except ModuleNotFoundError as exc:
-        if exc.name != "yourdfpy":
-            raise
-        raise ValueError("yourdfpy is not installed") from exc
-    urdf_class = getattr(yourdfpy_module, "URDF", None)
-    load_urdf = getattr(urdf_class, "load", None)
-    if not callable(load_urdf):
-        raise ValueError("yourdfpy.URDF.load is unavailable")
-    return load_urdf
-
-
 def _load_urdf_from_xml(urdf_xml: str) -> yourdfpy.URDF:
     with tempfile.NamedTemporaryFile("w", suffix=".urdf", delete=False) as urdf_file:
         urdf_file.write(urdf_xml)
         temporary_urdf_path = urdf_file.name
     try:
-        load_urdf = _load_yourdfpy_urdf_loader()
+        load_urdf = load_yourdfpy_urdf_loader()
         loaded_urdf = load_urdf(temporary_urdf_path)
     finally:
         with suppress(OSError):

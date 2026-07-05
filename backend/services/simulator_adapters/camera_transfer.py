@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import importlib
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -24,6 +23,7 @@ from backend.services.simulator_adapters.camera_intrinsics import (
     pinhole_camera_intrinsics_from_record,
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
+from backend.services.yourdfpy_loader import load_yourdfpy_urdf_loader
 from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 if TYPE_CHECKING:
@@ -280,22 +280,8 @@ def _resolve_camera_parent_link(
     )
 
 
-def _load_yourdfpy_urdf_loader() -> Any:
-    try:
-        yourdfpy_module = importlib.import_module("yourdfpy")
-    except ModuleNotFoundError as exc:
-        if exc.name != "yourdfpy":
-            raise
-        raise ValueError("yourdfpy is not installed") from exc
-    urdf_class = getattr(yourdfpy_module, "URDF", None)
-    load_urdf = getattr(urdf_class, "load", None)
-    if not callable(load_urdf):
-        raise ValueError("yourdfpy.URDF.load is unavailable")
-    return load_urdf
-
-
 def _load_robot_for_camera_transfer(robot_urdf_path: Path) -> yourdfpy.URDF:
-    load_urdf = _load_yourdfpy_urdf_loader()
+    load_urdf = load_yourdfpy_urdf_loader()
     return load_urdf(
         str(robot_urdf_path.resolve()),
         load_meshes=False,
