@@ -273,6 +273,7 @@ def _prepare_simulator_workspace_package_inner(
         source_root=source_root,
         staged_robot_source=staged_robot_source,
     )
+    bundle_inputs.bundled_urdf_path.parent.mkdir(parents=True, exist_ok=True)
     write_workspace_asset_roots(workspace_dir, bundle_inputs.workspace_asset_roots)
     bundle_result = _bundle_workspace_robot_assets(
         bundle_inputs,

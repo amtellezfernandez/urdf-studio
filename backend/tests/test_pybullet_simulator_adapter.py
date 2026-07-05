@@ -56,6 +56,15 @@ def test_pybullet_opengl_diagnostic_accepts_glxinfo_renderer_line() -> None:
     assert "software OpenGL" in warnings[0]
 
 
+def test_pybullet_opengl_diagnostic_accepts_indented_renderer_lines() -> None:
+    warnings = pybullet_opengl_warnings(
+        "    OpenGL renderer string: llvmpipe (LLVM 20.1.2, 256 bits)\n"
+    )
+
+    assert len(warnings) == 1
+    assert "software OpenGL" in warnings[0]
+
+
 def test_pybullet_glxinfo_diagnostic_is_nonfatal_when_probe_missing(monkeypatch) -> None:
     def fake_run(*_args, **_kwargs):
         raise OSError("glxinfo missing")
@@ -71,6 +80,23 @@ def test_pybullet_glxinfo_diagnostic_warns_for_software_renderer(monkeypatch) ->
             args=args,
             returncode=0,
             stdout="OpenGL renderer string: llvmpipe (LLVM 20.1.2, 256 bits)\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    warnings = pybullet_glxinfo_warnings()
+
+    assert len(warnings) == 1
+    assert "software OpenGL" in warnings[0]
+
+
+def test_pybullet_glxinfo_diagnostic_accepts_indented_renderer_output(monkeypatch) -> None:
+    def fake_run(*args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout="    OpenGL renderer string: llvmpipe (LLVM 20.1.2, 256 bits)\n",
             stderr="",
         )
 

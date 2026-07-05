@@ -18,9 +18,9 @@ PYBULLET_SOFTWARE_OPENGL_RENDERERS = (
 )
 PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME = "hardware OpenGL"
 PYBULLET_OPENGL_RENDERER_PATTERNS = (
-    re.compile(r"^GL_RENDERER=(?P<renderer>.+)$", re.MULTILINE),
-    re.compile(r"^Renderer\s*=\s*(?P<renderer>.+)$", re.MULTILINE),
-    re.compile(r"^OpenGL renderer string:\s*(?P<renderer>.+)$", re.MULTILINE),
+    re.compile(r"^\s*GL_RENDERER=(?P<renderer>.+)$", re.MULTILINE),
+    re.compile(r"^\s*Renderer\s*=\s*(?P<renderer>.+)$", re.MULTILINE),
+    re.compile(r"^\s*OpenGL renderer string:\s*(?P<renderer>.+)$", re.MULTILINE),
 )
 
 
