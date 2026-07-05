@@ -88,7 +88,7 @@ def check_simulator_workspace_parity(
     for parity_input in inputs:
         try:
             report = _load_report(parity_input.report_path)
-        except Exception as exc:
+        except ValueError as exc:
             return WorkspaceParityResult(
                 passed=False,
                 detail=f"could not read {parity_input.label} validation report: {exc}",

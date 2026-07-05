@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.models.simulator_runtime import SIMULATOR_GENESIS_ID, SIMULATOR_MUJOCO_ID
+from backend.services.simulator_adapters import workspace_parity as workspace_parity_module
 from backend.services.simulator_adapters.workspace_parity import (
     WorkspaceParityInput,
     check_simulator_workspace_parity,
@@ -181,6 +184,27 @@ def test_simulator_workspace_parity_rejects_invalid_report_encoding(tmp_path: Pa
     assert "could not read Invalid validation report" in result.detail
     assert "invalid parity report" in result.detail
     assert "report.json" in result.detail
+
+
+def test_simulator_workspace_parity_propagates_unexpected_report_loader_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text("{}", encoding="utf-8")
+
+    def fail_unexpectedly(_path: Path):
+        raise RuntimeError("unexpected loader failure")
+
+    monkeypatch.setattr(workspace_parity_module, "_load_report", fail_unexpectedly)
+
+    with pytest.raises(RuntimeError, match="unexpected loader failure"):
+        check_simulator_workspace_parity(
+            [
+                WorkspaceParityInput("Genesis", report_path),
+                WorkspaceParityInput("MuJoCo", report_path),
+            ]
+        )
 
 
 def test_simulator_workspace_parity_rejects_joint_position_mismatch(tmp_path: Path) -> None:
