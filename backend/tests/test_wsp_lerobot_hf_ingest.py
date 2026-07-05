@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import builtins
 import importlib
-import importlib.util
 import math
 import sys
 from types import SimpleNamespace
@@ -77,7 +75,9 @@ def test_get_robot_urdf_entry_rejects_invalid_urdf_encoding(tmp_path) -> None:
 
 
 def _hf_integration_available() -> bool:
-    if importlib.util.find_spec("datasets") is None:
+    try:
+        _load_hf_dataset_loader()
+    except ImportError:
         return False
     try:
         import requests
@@ -90,7 +90,11 @@ def _hf_integration_available() -> bool:
 
 
 def test_hf_integration_available_returns_false_without_datasets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: None)
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("datasets")),
+    )
 
     assert _hf_integration_available() is False
 
@@ -98,7 +102,11 @@ def test_hf_integration_available_returns_false_without_datasets(monkeypatch: py
 def test_hf_integration_available_returns_false_on_expected_request_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: object())
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda name: SimpleNamespace(load_dataset=lambda *_args, **_kwargs: None) if name == "datasets" else None,
+    )
     requests_module = SimpleNamespace(
         RequestException=RuntimeError,
         head=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("network unavailable")),
@@ -109,18 +117,31 @@ def test_hf_integration_available_returns_false_on_expected_request_failures(
 
 
 def test_hf_integration_available_preserves_unexpected_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: object())
-    original_import = builtins.__import__
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda name: SimpleNamespace(load_dataset=lambda *_args, **_kwargs: None) if name == "datasets" else None,
+    )
+    requests_module = SimpleNamespace(
+        RequestException=RuntimeError,
+        head=lambda *_args, **_kwargs: (_ for _ in ()).throw(KeyError("unexpected requests failure")),
+    )
+    monkeypatch.setitem(sys.modules, "requests", requests_module)
 
-    def _failing_import(name, *args, **kwargs):
-        if name == "requests":
-            raise KeyError("unexpected requests import failure")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _failing_import)
-
-    with pytest.raises(KeyError, match="unexpected requests import failure"):
+    with pytest.raises(KeyError, match="unexpected requests failure"):
         _hf_integration_available()
+
+
+def test_hf_integration_available_returns_false_for_incomplete_datasets_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda name: SimpleNamespace(load_dataset=None) if name == "datasets" else None,
+    )
+
+    assert _hf_integration_available() is False
 
 
 def test_load_hf_dataset_loader_rejects_incomplete_datasets_module(
