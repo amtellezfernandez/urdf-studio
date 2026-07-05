@@ -3,11 +3,10 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 from fastapi import HTTPException
-
-import yourdfpy  # type: ignore
 
 from backend.models.kinematics import (
     IKDiagnostics,
@@ -17,6 +16,9 @@ from backend.models.kinematics import (
 )
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
 from backend.services.kinematics import _load_urdf_from_xml
+
+if TYPE_CHECKING:
+    import yourdfpy
 
 
 DEFAULT_MAX_ITERATIONS = 28

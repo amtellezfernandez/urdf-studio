@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import math
 from types import SimpleNamespace
 
@@ -68,12 +69,24 @@ def test_kinematics_get_or_create_entry_preserves_unexpected_urdf_load_errors(mo
 
 
 def test_load_urdf_from_xml_rejects_missing_yourdfpy_loader(monkeypatch) -> None:
-    class _LoaderlessUrdf:
-        pass
+    def _fake_import_module(name: str) -> object:
+        if name == "yourdfpy":
+            return SimpleNamespace(URDF=SimpleNamespace(load=None))
+        raise ImportError(name)
 
-    monkeypatch.setattr(kinematics_module.yourdfpy, "URDF", _LoaderlessUrdf)
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ValueError, match="yourdfpy.URDF.load is unavailable"):
+        kinematics_module._load_urdf_from_xml("<robot name='demo'/>")
+
+
+def test_load_urdf_from_xml_rejects_missing_yourdfpy_module(monkeypatch) -> None:
+    def _fake_import_module(name: str) -> object:
+        raise ImportError(name)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ValueError, match="yourdfpy is not installed"):
         kinematics_module._load_urdf_from_xml("<robot name='demo'/>")
 
 
