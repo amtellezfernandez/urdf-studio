@@ -448,15 +448,105 @@ def _rewrite_mesh_paths_to_basenames(urdf_content: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
+def _build_simulation_prep_geometry_result(
+    expected_geometry: MujocoMeshGeometryExpectation,
+    *,
+    staged_basenames: set[str],
+    mujoco_loaded: bool | None,
+    compiled_geometry: CompiledMujocoMeshGeometry | None,
+    error: str | None,
+):
+    from backend.models.simulation_prep import SimulationPrepGeometryResult
+
+    return SimulationPrepGeometryResult(
+        geom_name=expected_geometry.geom_name,
+        mesh_file=expected_geometry.mesh_file_name,
+        staged=expected_geometry.mesh_file_name in staged_basenames,
+        mujoco_loaded=mujoco_loaded,
+        authored_position=list(compiled_geometry.authored_position) if compiled_geometry else None,
+        authored_quaternion=list(compiled_geometry.authored_quaternion) if compiled_geometry else None,
+        scale=list(compiled_geometry.mesh_scale) if compiled_geometry else list(expected_geometry.scale),
+        error=error,
+    )
+
+
+def _build_simulation_prep_report(
+    *,
+    success: bool,
+    error: str | None,
+    expectations: tuple[MujocoMeshGeometryExpectation, ...],
+    geometry_results: list,
+    smoke_simulation,
+    mujoco_available: bool,
+    warnings: list[str],
+):
+    from backend.models.simulation_prep import SimulationPrepValidationReport
+
+    return SimulationPrepValidationReport(
+        success=success,
+        error=error,
+        geometry_count=len(expectations),
+        geometries=geometry_results,
+        smoke_simulation=smoke_simulation,
+        mujoco_available=mujoco_available,
+        warnings=warnings,
+    )
+
+
+def _build_unavailable_mujoco_geometry_results(
+    expectations: tuple[MujocoMeshGeometryExpectation, ...],
+    staged_basenames: set[str],
+) -> list:
+    return [
+        _build_simulation_prep_geometry_result(
+            expected_geometry,
+            staged_basenames=staged_basenames,
+            mujoco_loaded=None,
+            compiled_geometry=None,
+            error=None,
+        )
+        for expected_geometry in expectations
+    ]
+
+
+def _build_compiled_mujoco_geometry_results(
+    expectations: tuple[MujocoMeshGeometryExpectation, ...],
+    staged_basenames: set[str],
+    compiled_geometries: dict[str, CompiledMujocoMeshGeometry],
+    mesh_load_error: str | None,
+) -> list:
+    geometry_results = []
+    for expected_geometry in expectations:
+        compiled_geometry = compiled_geometries.get(expected_geometry.validation_geom_name)
+        geometry_error = mesh_load_error if (mesh_load_error and compiled_geometry is None) else None
+        geometry_results.append(
+            _build_simulation_prep_geometry_result(
+                expected_geometry,
+                staged_basenames=staged_basenames,
+                mujoco_loaded=compiled_geometry is not None,
+                compiled_geometry=compiled_geometry,
+                error=geometry_error,
+            )
+        )
+    return geometry_results
+
+
+def _build_smoke_simulation_result(*, passed: bool, error: str | None):
+    from backend.models.simulation_prep import SimulationPrepSmokeSimResult
+
+    return SimulationPrepSmokeSimResult(
+        ran=True,
+        steps=SIMULATION_PREP_MUJOCO_SMOKE_STEP_COUNT,
+        passed=passed,
+        error=error,
+    )
+
+
 def run_simulation_prep_validation(
     urdf_content: str,
     mesh_files_by_name: dict[str, bytes],
 ) -> "SimulationPrepValidationReport":
-    from backend.models.simulation_prep import (
-        SimulationPrepGeometryResult,
-        SimulationPrepSmokeSimResult,
-        SimulationPrepValidationReport,
-    )
+    from backend.models.simulation_prep import SimulationPrepValidationReport
 
     warnings: list[str] = []
 
@@ -470,11 +560,11 @@ def run_simulation_prep_validation(
     try:
         rewritten_urdf = _rewrite_mesh_paths_to_basenames(urdf_content)
     except ET.ParseError as exc:
-        return SimulationPrepValidationReport(
+        return _build_simulation_prep_report(
             success=False,
             error=f"URDF XML parse error: {exc}",
-            geometry_count=0,
-            geometries=[],
+            expectations=(),
+            geometry_results=[],
             smoke_simulation=None,
             mujoco_available=mujoco_available,
             warnings=warnings,
@@ -496,35 +586,23 @@ def run_simulation_prep_validation(
         except ValueError:
             expectations = ()
         except FileNotFoundError as exc:
-            return SimulationPrepValidationReport(
+            return _build_simulation_prep_report(
                 success=False,
                 error=str(exc),
-                geometry_count=0,
-                geometries=[],
+                expectations=(),
+                geometry_results=[],
                 smoke_simulation=None,
                 mujoco_available=mujoco_available,
                 warnings=warnings,
             )
 
-        geometry_results: list[SimulationPrepGeometryResult] = []
-
         if not mujoco_available:
-            for exp in expectations:
-                geometry_results.append(SimulationPrepGeometryResult(
-                    geom_name=exp.geom_name,
-                    mesh_file=exp.mesh_file_name,
-                    staged=exp.mesh_file_name in staged_basenames,
-                    mujoco_loaded=None,
-                    authored_position=None,
-                    authored_quaternion=None,
-                    scale=list(exp.scale),
-                    error=None,
-                ))
-            return SimulationPrepValidationReport(
+            geometry_results = _build_unavailable_mujoco_geometry_results(expectations, staged_basenames)
+            return _build_simulation_prep_report(
                 success=True,
                 error=None,
-                geometry_count=len(expectations),
-                geometries=geometry_results,
+                expectations=expectations,
+                geometry_results=geometry_results,
                 smoke_simulation=None,
                 mujoco_available=False,
                 warnings=warnings,
@@ -541,46 +619,28 @@ def run_simulation_prep_validation(
             except Exception as exc:
                 mesh_load_error = str(exc)
 
-        for exp in expectations:
-            compiled = compiled_geometries.get(exp.validation_geom_name)
-            error: str | None = mesh_load_error if (mesh_load_error and compiled is None) else None
-            geometry_results.append(SimulationPrepGeometryResult(
-                geom_name=exp.geom_name,
-                mesh_file=exp.mesh_file_name,
-                staged=exp.mesh_file_name in staged_basenames,
-                mujoco_loaded=compiled is not None,
-                authored_position=list(compiled.authored_position) if compiled else None,
-                authored_quaternion=list(compiled.authored_quaternion) if compiled else None,
-                scale=list(compiled.mesh_scale) if compiled else list(exp.scale),
-                error=error,
-            ))
+        geometry_results = _build_compiled_mujoco_geometry_results(
+            expectations,
+            staged_basenames,
+            compiled_geometries,
+            mesh_load_error,
+        )
 
-        smoke_result: SimulationPrepSmokeSimResult | None = None
         try:
             full_model = load_mujoco_model(urdf_path)
             run_headless_smoke_simulation(full_model)
-            smoke_result = SimulationPrepSmokeSimResult(
-                ran=True,
-                steps=SIMULATION_PREP_MUJOCO_SMOKE_STEP_COUNT,
-                passed=True,
-                error=None,
-            )
+            smoke_result = _build_smoke_simulation_result(passed=True, error=None)
         except Exception as exc:
-            smoke_result = SimulationPrepSmokeSimResult(
-                ran=True,
-                steps=SIMULATION_PREP_MUJOCO_SMOKE_STEP_COUNT,
-                passed=False,
-                error=str(exc),
-            )
+            smoke_result = _build_smoke_simulation_result(passed=False, error=str(exc))
 
         meshes_ok = all(g.mujoco_loaded is not False for g in geometry_results)
         smoke_ok = smoke_result is None or smoke_result.passed
 
-        return SimulationPrepValidationReport(
+        return _build_simulation_prep_report(
             success=meshes_ok and smoke_ok,
             error=None,
-            geometry_count=len(expectations),
-            geometries=geometry_results,
+            expectations=expectations,
+            geometry_results=geometry_results,
             smoke_simulation=smoke_result,
             mujoco_available=True,
             warnings=warnings,
