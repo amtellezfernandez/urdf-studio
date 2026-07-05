@@ -48,7 +48,10 @@ def _joint_dof_index(joint: Any) -> int | None:
     local_indices = _flatten_finite_floats(getattr(joint, "dofs_idx_local", None))
     if len(local_indices) != 1:
         return None
-    return int(local_indices[0])
+    dof_index = local_indices[0]
+    if not dof_index.is_integer():
+        return None
+    return int(dof_index)
 
 
 def joint_dof_indices_by_name(robot_entity: Any) -> dict[str, int]:

@@ -173,6 +173,17 @@ def test_genesis_joint_dof_indices_ignore_boolean_values() -> None:
     assert joint_dof_indices_by_name(robot_entity) == {"valid": 2, "tensor": 3}
 
 
+def test_genesis_joint_dof_indices_reject_non_integral_values() -> None:
+    robot_entity = SimpleNamespace(
+        joints=[
+            SimpleNamespace(name="valid", dofs_idx_local=[[2]]),
+            SimpleNamespace(name="fractional", dofs_idx_local=[2.5]),
+        ]
+    )
+
+    assert joint_dof_indices_by_name(robot_entity) == {"valid": 2}
+
+
 def test_genesis_apply_joint_values_uses_known_finite_joints_only() -> None:
     class _FakeRobotEntity:
         def __init__(self) -> None:
