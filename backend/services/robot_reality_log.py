@@ -267,7 +267,10 @@ def compile_robot_reality_log_payload(payload: Any) -> PhysicalRolloutTrace:
 
 
 def compile_robot_reality_log_file(path: Path) -> PhysicalRolloutTrace:
-    raw_text = path.read_text(encoding="utf-8")
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Failed to read robot reality log: {path}") from exc
     stripped = raw_text.strip()
     if not stripped:
         raise ValueError(f"Robot reality log is empty: {path}")
@@ -276,7 +279,14 @@ def compile_robot_reality_log_file(path: Path) -> PhysicalRolloutTrace:
             return compile_robot_reality_log_payload(stripped)
         except json.JSONDecodeError:
             pass
-    frames = [json.loads(line) for line in raw_text.splitlines() if line.strip()]
+    frames: list[object] = []
+    for line_number, line in enumerate(raw_text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            frames.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid robot reality log JSONL line {line_number} in {path}: {exc}") from exc
     return compile_robot_reality_log_payload(
         {
             "trace_id": path.stem,

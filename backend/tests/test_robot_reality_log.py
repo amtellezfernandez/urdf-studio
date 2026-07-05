@@ -89,3 +89,19 @@ def test_compile_robot_reality_log_file_rejects_empty_input(tmp_path: Path) -> N
 
     with pytest.raises(ValueError, match="Robot reality log is empty"):
         compile_robot_reality_log_file(path)
+
+
+def test_compile_robot_reality_log_file_rejects_invalid_jsonl_line(tmp_path: Path) -> None:
+    path = tmp_path / "robot-reality.jsonl"
+    path.write_text('{"t_ms":0,"entities":[]}\n{"t_ms":\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Invalid robot reality log JSONL line 2"):
+        compile_robot_reality_log_file(path)
+
+
+def test_compile_robot_reality_log_file_rejects_invalid_encoding(tmp_path: Path) -> None:
+    path = tmp_path / "robot-reality.json"
+    path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read robot reality log:"):
+        compile_robot_reality_log_file(path)
