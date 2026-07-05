@@ -22,7 +22,6 @@ def load_yourdfpy_urdf_loader() -> Any:
 
 def yourdfpy_urdf_loader_available() -> bool:
     try:
-        load_yourdfpy_urdf_loader()
+        return load_yourdfpy_urdf_loader() is not None
     except ValueError:
         return False
-    return True
