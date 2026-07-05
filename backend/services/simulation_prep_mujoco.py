@@ -542,6 +542,19 @@ def _build_smoke_simulation_result(*, passed: bool, error: str | None):
     )
 
 
+def _mujoco_validation_errors() -> tuple[type[BaseException], ...]:
+    try:
+        import mujoco
+    except ImportError:
+        return (AssertionError, ValueError)
+    return (
+        AssertionError,
+        ValueError,
+        mujoco.FatalError,
+        mujoco.UnexpectedError,
+    )
+
+
 def run_simulation_prep_validation(
     urdf_content: str,
     mesh_files_by_name: dict[str, bytes],
@@ -610,13 +623,14 @@ def run_simulation_prep_validation(
 
         compiled_geometries: dict[str, CompiledMujocoMeshGeometry] = {}
         mesh_load_error: str | None = None
+        mujoco_validation_errors = _mujoco_validation_errors()
         if expectations:
             mjcf_path = workspace / SIMULATION_PREP_MUJOCO_STAGE_MJCF_FILENAME
             mjcf_path.write_text(_build_mesh_validation_mjcf(expectations), encoding="utf-8")
             try:
                 mesh_model = load_mujoco_model(mjcf_path)
                 compiled_geometries = collect_compiled_mesh_geometries(mesh_model)
-            except Exception as exc:
+            except mujoco_validation_errors as exc:
                 mesh_load_error = str(exc)
 
         geometry_results = _build_compiled_mujoco_geometry_results(
@@ -630,7 +644,7 @@ def run_simulation_prep_validation(
             full_model = load_mujoco_model(urdf_path)
             run_headless_smoke_simulation(full_model)
             smoke_result = _build_smoke_simulation_result(passed=True, error=None)
-        except Exception as exc:
+        except mujoco_validation_errors as exc:
             smoke_result = _build_smoke_simulation_result(passed=False, error=str(exc))
 
         meshes_ok = all(g.mujoco_loaded is not False for g in geometry_results)
