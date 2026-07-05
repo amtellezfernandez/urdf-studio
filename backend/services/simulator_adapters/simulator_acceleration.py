@@ -19,7 +19,7 @@ SimulatorEnvironment: TypeAlias = dict[str, str]
 
 
 def _truthy_env(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes"}
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _has_display_environment() -> bool:

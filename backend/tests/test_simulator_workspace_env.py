@@ -160,7 +160,7 @@ def test_workspace_env_can_disable_acceleration(monkeypatch, tmp_path: Path) -> 
     assert "CUDA_VISIBLE_DEVICES" not in env
 
 
-@pytest.mark.parametrize("disable_value", ["1", "true", "yes", " TRUE "])
+@pytest.mark.parametrize("disable_value", ["1", "true", "yes", "on", " TRUE "])
 def test_workspace_env_disable_accepts_truthy_values(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
