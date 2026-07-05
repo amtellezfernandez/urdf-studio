@@ -126,7 +126,10 @@ def _successful_workspace_parity_result(
 
 
 def _load_report(path: Path) -> ParityReportPayload:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid parity report {path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
     missing_fields = [

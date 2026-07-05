@@ -135,6 +135,54 @@ def test_simulator_workspace_parity_rejects_missing_robot_urdf_path_and_asset_ro
     assert "missing parity report field(s): robot_urdf_path, asset_roots" in result.detail
 
 
+def test_simulator_workspace_parity_rejects_invalid_report_json(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    invalid_report = tmp_path / "invalid" / "report.json"
+    invalid_report.parent.mkdir(parents=True)
+    invalid_report.write_text("{", encoding="utf-8")
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("Invalid", invalid_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "could not read Invalid validation report" in result.detail
+    assert "invalid parity report" in result.detail
+    assert "report.json" in result.detail
+
+
+def test_simulator_workspace_parity_rejects_invalid_report_encoding(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    invalid_report = tmp_path / "invalid" / "report.json"
+    invalid_report.parent.mkdir(parents=True)
+    invalid_report.write_bytes(b"\xff\xfe\x00")
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("Invalid", invalid_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "could not read Invalid validation report" in result.detail
+    assert "invalid parity report" in result.detail
+    assert "report.json" in result.detail
+
+
 def test_simulator_workspace_parity_rejects_joint_position_mismatch(tmp_path: Path) -> None:
     genesis_report = _write_parity_report(
         tmp_path / "genesis",
