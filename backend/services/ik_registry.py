@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import importlib
 
 from backend.models.ik_solvers import IkSolverInfo
+from backend.services.placo_loader import load_placo_module
 
 IK_SOLVER_REGISTRY_VERSION = "1"
 
@@ -39,15 +39,7 @@ SOLVER_DEFINITIONS: dict[str, SolverDefinition] = {
 
 
 def _placo_available() -> bool:
-    try:
-        placo_module = importlib.import_module("placo")
-    except ModuleNotFoundError as exc:
-        if exc.name != "placo":
-            raise
-        return False
-    return callable(getattr(placo_module, "RobotWrapper", None)) and callable(
-        getattr(placo_module, "KinematicsSolver", None)
-    )
+    return load_placo_module() is not None
 
 
 def _definition_to_info(definition: SolverDefinition) -> IkSolverInfo:

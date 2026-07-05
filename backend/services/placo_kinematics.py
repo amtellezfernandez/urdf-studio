@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import importlib
 import math
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -21,6 +20,7 @@ from backend.models.kinematics import (
 )
 from backend.services.ik_config import get_solver_tuning
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
+from backend.services.placo_loader import load_placo_module
 
 PlacoTaskCache: TypeAlias = dict[str, object]
 
@@ -78,19 +78,8 @@ def _quat_to_matrix(wxyz: list[float]) -> np.ndarray:
 
 
 def _load_placo_module() -> Any:
-    try:
-        placo_module = importlib.import_module("placo")
-    except ModuleNotFoundError as exc:
-        if exc.name != "placo":
-            raise
-        raise HTTPException(
-            status_code=500,
-            detail="placo is not available; install it to enable the Placo IK solver.",
-        ) from exc
-
-    if not callable(getattr(placo_module, "RobotWrapper", None)) or not callable(
-        getattr(placo_module, "KinematicsSolver", None)
-    ):
+    placo_module = load_placo_module()
+    if placo_module is None:
         raise HTTPException(
             status_code=500,
             detail="placo is not available; install it to enable the Placo IK solver.",
