@@ -135,6 +135,7 @@ def _expected_camera(camera_id: str = "cam") -> ExpectedCameraReport:
 
 def _write_report(tmp_path, payload: dict):
     report_path = tmp_path / "report.json"
+    (tmp_path / "robot.urdf").write_text("<robot name='demo'/>", encoding="utf-8")
     objects = payload.get("objects", [])
     enriched_payload = {
         "version": "1.0.0",
@@ -247,6 +248,49 @@ def test_workspace_report_validation_rejects_missing_canonical_header(tmp_path) 
         "simulator validation report missing field(s): "
         "version, requested_frame_map, frame_convention, object_count, "
         "joint_position_count, joint_positions, robot_urdf_path, asset_roots, warnings"
+    )
+
+
+def test_workspace_report_validation_rejects_relative_robot_urdf_path(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "robot_urdf_path": "robot.urdf",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'robot_urdf_path' must be an absolute file path"
+    )
+
+
+def test_workspace_report_validation_rejects_missing_robot_urdf_path_file(tmp_path) -> None:
+    missing_robot_path = tmp_path / "missing.urdf"
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "robot_urdf_path": str(missing_robot_path),
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'robot_urdf_path' must be an existing file"
     )
 
 

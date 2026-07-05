@@ -248,10 +248,16 @@ def _validate_report_simulator(
 
 
 def _validate_report_header(payload: SimulatorWorkspaceReportObject) -> str | None:
-    for field_name in ("package_id", "version", "robot_urdf_path"):
+    for field_name in ("package_id", "version"):
         error = _validate_report_string(payload.get(field_name), field_name)
         if error:
             return error
+    robot_urdf_path_error = _validate_report_existing_file_path(
+        payload.get("robot_urdf_path"),
+        "robot_urdf_path",
+    )
+    if robot_urdf_path_error:
+        return robot_urdf_path_error
     frame_map_error = _validate_report_frame_map(
         payload.get("frame_map"),
         "frame_map",
@@ -435,6 +441,20 @@ def _validate_report_artifact_path(
             return f"simulator validation report artifact '{key}' is not a directory: {path}"
         return None
     return f"simulator validation report artifact '{key}' has unsupported kind: {kind}"
+
+
+def _validate_report_existing_file_path(value: object, path: str) -> str | None:
+    string_error = _validate_report_string(value, path)
+    if string_error:
+        return string_error
+    file_path = Path(cast(str, value)).expanduser()
+    if not file_path.is_absolute():
+        return f"simulator validation report field '{path}' must be an absolute file path"
+    if not file_path.is_file():
+        return f"simulator validation report field '{path}' must be an existing file"
+    if file_path.stat().st_size <= 0:
+        return f"simulator validation report field '{path}' must be a non-empty file"
+    return None
 
 
 def _validate_report_count(
