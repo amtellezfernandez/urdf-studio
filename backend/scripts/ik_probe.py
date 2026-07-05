@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Tuple, List
 
 import numpy as np
+from fastapi import HTTPException
 
 from backend.core.app_config import get_config_value, read_app_config
 from backend.models.kinematics import FKRequest, IKRequest
@@ -273,7 +274,7 @@ def main() -> int:
             args.sweep,
             args.sweep_step,
         )
-    except Exception as exc:
+    except (HTTPException, OSError, RuntimeError, ValueError) as exc:
         print(f"[ik_probe] failed: {exc}", file=sys.stderr)
         return 1
 
