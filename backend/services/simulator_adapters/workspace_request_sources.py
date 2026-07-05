@@ -25,6 +25,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.simulator_adapters import WORKSPACE_SIMULATOR_IDS
 from backend.services.simulator_adapters.robot_repairs import (
     GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY,
     GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
@@ -37,19 +38,10 @@ from backend.services.world_scene_package_digest import (
 
 JsonObject: TypeAlias = dict[str, object]
 JsonObjectRecord: TypeAlias = Mapping[str, object]
-_workspace_simulator_ids: tuple[SimulatorId, ...] | None = None
 
 
 def get_workspace_simulators() -> tuple[SimulatorId, ...]:
-    global _workspace_simulator_ids
-    if _workspace_simulator_ids is not None:
-        return _workspace_simulator_ids
-    from backend.services.simulator_adapters.plugin import get_workspace_plugins
-
-    _workspace_simulator_ids = tuple(
-        plugin.simulator_id for plugin in get_workspace_plugins()
-    )
-    return _workspace_simulator_ids
+    return WORKSPACE_SIMULATOR_IDS
 
 
 def __getattr__(name: str) -> object:
