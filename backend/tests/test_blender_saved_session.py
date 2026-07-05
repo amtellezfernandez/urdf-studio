@@ -5,6 +5,7 @@ from pathlib import Path
 
 from backend.services.simulator_adapters.blender_saved_session import (
     BLENDER_BLEND_VALIDATE_MARKER,
+    read_blender_validate_payload,
     validate_blender_blend_artifact,
 )
 
@@ -132,3 +133,26 @@ def test_blender_blend_validator_rejects_zero_bound_saved_layout_objects(
         expected_object_count=2,
         expected_camera_count=3,
     ) == "Blender saved-session bounded world object count mismatch: 1, expected 2"
+
+
+def test_read_blender_validate_payload_ignores_malformed_marker_before_valid_payload() -> None:
+    payload = read_blender_validate_payload(
+        "\n".join(
+            (
+                f"{BLENDER_BLEND_VALIDATE_MARKER}{{not-json}}",
+                "Blender log noise",
+                (
+                    f"{BLENDER_BLEND_VALIDATE_MARKER}"
+                    '{"bounded_world_object_count": 2, "camera_count": 3, '
+                    '"visible_world_object_count": 2, "world_object_count": 2}'
+                ),
+            )
+        )
+    )
+
+    assert payload == {
+        "bounded_world_object_count": 2,
+        "camera_count": 3,
+        "visible_world_object_count": 2,
+        "world_object_count": 2,
+    }

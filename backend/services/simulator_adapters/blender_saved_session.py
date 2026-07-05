@@ -144,6 +144,7 @@ def read_blender_validate_payload(output: str) -> Mapping[str, object] | None:
         try:
             payload = json.loads(line[len(BLENDER_BLEND_VALIDATE_MARKER) :])
         except json.JSONDecodeError:
-            return None
-        return payload if isinstance(payload, Mapping) else None
+            continue
+        if isinstance(payload, Mapping):
+            return payload
     return None
