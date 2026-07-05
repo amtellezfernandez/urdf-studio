@@ -19,17 +19,31 @@ def render_mujoco_camera_image(
     data: Any,
     camera: SimCameraSpec,
 ) -> np.ndarray:
-    renderer = mujoco.Renderer(model, height=camera.height, width=camera.width)
-    try:
-        renderer.update_scene(data, camera=camera.sim_name)
-        image = renderer.render()
-    finally:
-        renderer.close()
+    image = _render_mujoco_camera_rgba(
+        mujoco,
+        model,
+        data,
+        camera,
+    )
     if image.ndim != 3 or image.shape[-1] < 3:
         raise ValueError(
             f"MuJoCo camera '{camera.sim_name}' returned unsupported image shape {image.shape}."
         )
     return np.clip(image[..., :3], 0, 255).astype(np.uint8)
+
+
+def _render_mujoco_camera_rgba(
+    mujoco: Any,
+    model: Any,
+    data: Any,
+    camera: SimCameraSpec,
+) -> np.ndarray:
+    renderer = mujoco.Renderer(model, height=camera.height, width=camera.width)
+    try:
+        renderer.update_scene(data, camera=camera.sim_name)
+        return renderer.render()
+    finally:
+        renderer.close()
 
 
 def write_mujoco_camera_screenshots(
