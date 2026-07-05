@@ -185,10 +185,10 @@ def write_simulator_validation_report(
 def load_world_package(path: Path) -> WorldScenePackageManifest:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise ValueError(f"Failed to read world package: {path}") from exc
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid world package JSON: {exc}") from exc
+        raise ValueError(f"Invalid world package JSON in {path}: {exc}") from exc
     world_package = WorldScenePackageManifest.model_validate(payload)
     return normalize_and_require_world_snapshot_artifact_digests(
         world_package,

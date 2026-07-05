@@ -7,6 +7,7 @@ import pytest
 
 from backend.models.world_scene_package import WorldArtifactRef
 from backend.services.simulator_adapters.world_scene import (
+    load_world_package,
     prepare_simulator_scene,
     write_simulator_validation_report,
 )
@@ -174,3 +175,19 @@ def test_prepare_simulator_scene_repairs_stale_world_snapshot_artifact_digest(
     assert declared_world_snapshot_digests(scene.world_package) == (
         computed_world_snapshot_digest(scene.world_package),
     )
+
+
+def test_load_world_package_reports_invalid_encoding(tmp_path: Path) -> None:
+    world_package_path = tmp_path / "world-package.json"
+    world_package_path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read world package:"):
+        load_world_package(world_package_path)
+
+
+def test_load_world_package_reports_invalid_json_with_path(tmp_path: Path) -> None:
+    world_package_path = tmp_path / "world-package.json"
+    world_package_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Invalid world package JSON in .*world-package\.json"):
+        load_world_package(world_package_path)
