@@ -37,6 +37,9 @@ def compute_workspace_asset_roots(
 
 def write_workspace_asset_roots(workspace_dir: Path, roots: tuple[Path, ...]) -> None:
     normalized_roots = _dedupe_paths(roots)
+    invalid_root = next((root for root in normalized_roots if not root.is_dir()), None)
+    if invalid_root is not None:
+        raise ValueError(f"workspace asset root is not a directory: {invalid_root}")
     workspace_dir.mkdir(parents=True, exist_ok=True)
     (workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME).write_text(
         f"{json.dumps([str(root) for root in normalized_roots], indent=2)}\n",

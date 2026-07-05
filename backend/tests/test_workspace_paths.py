@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 from backend.services.simulator_adapters.workspace_paths import (
     WORKSPACE_ASSET_ROOTS_FILENAME,
@@ -110,3 +111,12 @@ def test_write_workspace_asset_roots_normalizes_and_dedupes_manifest_entries(tmp
         str(root_a.resolve()),
         str(root_b.resolve()),
     ]
+
+
+def test_write_workspace_asset_roots_rejects_non_directory_root(tmp_path) -> None:
+    workspace_dir = tmp_path / "workspace"
+    invalid_root = tmp_path / "not-a-directory"
+    invalid_root.write_text("not a directory\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="workspace asset root is not a directory"):
+        write_workspace_asset_roots(workspace_dir, (invalid_root,))
