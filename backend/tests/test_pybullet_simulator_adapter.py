@@ -28,6 +28,7 @@ from backend.services.simulator_adapters.workspace_diagnostics import (
     pybullet_glxinfo_warnings,
     pybullet_opengl_warnings,
     pybullet_runtime_opengl_warnings,
+    read_workspace_launch_warnings,
 )
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 
@@ -109,6 +110,23 @@ def test_pybullet_runtime_diagnostic_prefers_current_glxinfo_over_stale_log(
         )
         == ()
     )
+
+
+def test_read_workspace_launch_warnings_ignores_non_pybullet_logs(tmp_path: Path) -> None:
+    log_path = tmp_path / "simulator.log"
+    log_path.write_text("GL_RENDERER=llvmpipe (LLVM 20.1.2, 256 bits)\n", encoding="utf-8")
+
+    assert read_workspace_launch_warnings("mujoco", log_path) == []
+
+
+def test_read_workspace_launch_warnings_reads_pybullet_log_tail(tmp_path: Path) -> None:
+    log_path = tmp_path / "pybullet.log"
+    log_path.write_text("GL_RENDERER=llvmpipe (LLVM 20.1.2, 256 bits)\n", encoding="utf-8")
+
+    warnings = read_workspace_launch_warnings("pybullet", log_path)
+
+    assert len(warnings) == 1
+    assert "software OpenGL" in warnings[0]
 
 
 def test_pybullet_camera_projection_uses_pinhole_intrinsics() -> None:
