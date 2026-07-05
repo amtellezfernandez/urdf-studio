@@ -15,10 +15,13 @@ from backend.services.simulator_adapters.base import (
 def test_is_python_module_available_returns_false_for_import_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def _missing_module(_name: str) -> object:
+        raise ModuleNotFoundError(name="yourdfpy")
+
     monkeypatch.setattr(
         importlib,
         "import_module",
-        lambda _name: (_ for _ in ()).throw(ImportError("broken install")),
+        _missing_module,
     )
 
     assert is_python_module_available("yourdfpy") is False
@@ -30,10 +33,10 @@ def test_is_python_module_available_preserves_unexpected_errors(
     monkeypatch.setattr(
         importlib,
         "import_module",
-        lambda _name: (_ for _ in ()).throw(RuntimeError("unexpected import failure")),
+        lambda _name: (_ for _ in ()).throw(ImportError("unexpected import failure")),
     )
 
-    with pytest.raises(RuntimeError, match="unexpected import failure"):
+    with pytest.raises(ImportError, match="unexpected import failure"):
         is_python_module_available("yourdfpy")
 
 

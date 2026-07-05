@@ -47,9 +47,17 @@ class SimulatorAdapter(Protocol):
 def is_python_module_available(import_name: str) -> bool:
     try:
         importlib.import_module(import_name)
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        if not _module_not_found_matches_import_name(exc.name, import_name):
+            raise
         return False
     return True
+
+
+def _module_not_found_matches_import_name(missing_name: str | None, import_name: str) -> bool:
+    return bool(missing_name) and (
+        missing_name == import_name or import_name.startswith(f"{missing_name}.")
+    )
 
 
 def is_python_module_available_in_python(python_executable: str, import_name: str) -> bool:
