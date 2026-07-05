@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from io import BytesIO
+from urllib import error
+
+import pytest
+
 from backend.world_bridge.types import WorldBridgeEventType
 from backend.world_bridge.worldd_client import (
     NANOSECONDS_PER_MILLISECOND,
+    WorlddClient,
+    WorlddHttpError,
     parse_worldd_ack_payload,
     parse_worldd_session_payload,
     parse_worldd_status_payload,
@@ -27,6 +34,31 @@ TEST_INVALID_ACCEPTED_VALUE = "not-bool"
 TEST_TRANSITION_TIMESTAMP_NS = 3_000_000_000
 
 
+def _request_error_detail(monkeypatch: pytest.MonkeyPatch, body: str) -> str:
+    def fake_urlopen(_request: object, timeout: float) -> None:
+        del timeout
+        raise error.HTTPError(
+            url="http://worldd.test/world-bridge/session/missing",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=BytesIO(body.encode("utf-8")),
+        )
+
+    monkeypatch.setattr(
+        "backend.world_bridge.worldd_client.request.urlopen",
+        fake_urlopen,
+    )
+    try:
+        WorlddClient(host="worldd.test", port=8000, timeout_ms=100).request_json(
+            "GET",
+            "/world-bridge/session/missing",
+        )
+    except WorlddHttpError as exc:
+        return exc.detail
+    raise AssertionError("Expected HTTP errors to raise WorlddHttpError")
+
+
 def test_parse_worldd_status_payload_reads_values() -> None:
     parsed = parse_worldd_status_payload(
         {
@@ -41,6 +73,18 @@ def test_parse_worldd_status_payload_reads_values() -> None:
     assert parsed.active_sessions == TEST_STATUS_ACTIVE_SESSIONS
     assert parsed.max_events_per_session == TEST_STATUS_MAX_EVENTS
     assert parsed.default_scenario_duration_ms == TEST_STATUS_DURATION_MS
+
+
+def test_worldd_http_error_detail_prefers_json_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _request_error_detail(monkeypatch, '{"detail": "session not found"}') == "session not found"
+
+
+def test_worldd_http_error_detail_falls_back_to_json_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _request_error_detail(monkeypatch, '{"message": "worldd unavailable"}') == "worldd unavailable"
+
+
+def test_worldd_http_error_detail_preserves_plain_text_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _request_error_detail(monkeypatch, "plain error body") == "plain error body"
 
 
 def test_parse_worldd_session_payload_skips_unknown_events() -> None:
@@ -270,6 +314,52 @@ def test_parse_worldd_session_payload_strict_rejects_invalid_numeric_fields() ->
         assert "scenario_duration_ms" in str(exc)
         return
     raise AssertionError("Expected strict parser to reject invalid numeric field")
+
+
+def test_parse_worldd_session_payload_strict_rejects_non_string_camera_ids() -> None:
+    try:
+        parse_worldd_session_payload(
+            {
+                "session_id": "wbs-00000001",
+                "robot_name": "so101",
+                "camera_ids": [123],
+                "created_at_ns": TEST_CREATED_AT_NS,
+                "updated_at_ns": TEST_UPDATED_AT_NS,
+                "scenario_duration_ms": TEST_SCENARIO_DURATION_MS,
+                "scenario_time_ms": TEST_SCENARIO_TIME_MS,
+                "joint_state_rad": {},
+                "last_command_sequence": TEST_LAST_COMMAND_SEQUENCE,
+                "recent_events": [],
+            },
+            strict=True,
+        )
+    except ValueError as exc:
+        assert "camera_ids" in str(exc)
+        return
+    raise AssertionError("Expected strict parser to reject non-string camera_ids entries")
+
+
+def test_parse_worldd_session_payload_strict_rejects_blank_camera_ids() -> None:
+    try:
+        parse_worldd_session_payload(
+            {
+                "session_id": "wbs-00000001",
+                "robot_name": "so101",
+                "camera_ids": ["   "],
+                "created_at_ns": TEST_CREATED_AT_NS,
+                "updated_at_ns": TEST_UPDATED_AT_NS,
+                "scenario_duration_ms": TEST_SCENARIO_DURATION_MS,
+                "scenario_time_ms": TEST_SCENARIO_TIME_MS,
+                "joint_state_rad": {},
+                "last_command_sequence": TEST_LAST_COMMAND_SEQUENCE,
+                "recent_events": [],
+            },
+            strict=True,
+        )
+    except ValueError as exc:
+        assert "camera_ids" in str(exc)
+        return
+    raise AssertionError("Expected strict parser to reject blank camera_ids entries")
 
 
 def test_parse_worldd_session_payload_coerces_non_finite_joint_values_to_zero() -> None:

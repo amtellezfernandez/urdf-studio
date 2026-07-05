@@ -127,9 +127,16 @@ def _as_str_list(
         if strict:
             raise ValueError(f"Expected list for {field_name}, received {type(value).__name__}")
         return []
-    items = [str(item) for item in value]
-    if strict and any(item == "" for item in items):
-        raise ValueError(f"Empty string entry in {field_name}")
+    items: list[str] = []
+    for item in value:
+        if strict and not isinstance(item, str):
+            raise ValueError(
+                f"Expected string entries for {field_name}, received {type(item).__name__}"
+            )
+        parsed = str(item)
+        if strict and parsed.strip() == "":
+            raise ValueError(f"Empty string entry in {field_name}")
+        items.append(parsed)
     return items
 
 
@@ -520,6 +527,16 @@ def parse_worldd_ack_payload(
     )
 
 
+def _worldd_http_error_detail(body: str) -> str:
+    try:
+        detail_json = json.loads(body)
+    except json.JSONDecodeError:
+        return body
+    if not isinstance(detail_json, Mapping):
+        return body
+    return str(detail_json.get("detail") or detail_json.get("message") or body)
+
+
 @dataclass
 class WorlddHttpError(Exception):
     status_code: int
@@ -559,12 +576,7 @@ class WorlddClient:
                 return parsed
         except error.HTTPError as exc:
             body = exc.read().decode("utf-8")
-            detail = body
-            try:
-                detail_json = json.loads(body)
-                detail = str(detail_json.get("detail") or detail_json.get("message") or body)
-            except json.JSONDecodeError:
-                pass
+            detail = _worldd_http_error_detail(body)
             raise WorlddHttpError(status_code=exc.code, detail=detail) from exc
         except (error.URLError, TimeoutError, OSError) as exc:
             raise WorlddUnavailableError(str(exc)) from exc
