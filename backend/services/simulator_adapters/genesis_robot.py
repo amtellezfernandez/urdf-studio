@@ -113,17 +113,11 @@ def apply_joint_values(
     )
     if not dof_indices:
         return 0
-    if hasattr(robot_entity, "set_dofs_position"):
-        try:
-            robot_entity.set_dofs_position(
-                positions,
-                dofs_idx_local=dof_indices,
-                zero_velocity=True,
-            )
-        except TypeError:
-            robot_entity.set_dofs_position(positions, dofs_idx_local=dof_indices)
-    if hasattr(robot_entity, "control_dofs_position"):
-        robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
+    _apply_joint_position_targets(
+        robot_entity,
+        dof_indices=dof_indices,
+        positions=positions,
+    )
     return len(dof_indices)
 
 
@@ -140,6 +134,25 @@ def _joint_position_targets(
         dof_indices.append(dof_index)
         positions.append(float(value))
     return dof_indices, positions
+
+
+def _apply_joint_position_targets(
+    robot_entity: Any,
+    *,
+    dof_indices: list[int],
+    positions: list[float],
+) -> None:
+    if hasattr(robot_entity, "set_dofs_position"):
+        try:
+            robot_entity.set_dofs_position(
+                positions,
+                dofs_idx_local=dof_indices,
+                zero_velocity=True,
+            )
+        except TypeError:
+            robot_entity.set_dofs_position(positions, dofs_idx_local=dof_indices)
+    if hasattr(robot_entity, "control_dofs_position"):
+        robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
 
 
 _ATTACHMENT_LINK_NAME_RE = re.compile(
