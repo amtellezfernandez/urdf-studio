@@ -11,6 +11,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_MUJOCO_ID,
     SimulatorDependencySpec,
     SimulatorId,
+    SimulatorRuntimeSpec,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
 )
@@ -21,6 +22,7 @@ from backend.services.simulator_adapters.params import (
     MUJOCO_SCENE_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_REPAIR_PARAMS,
+    SimulatorWorkspaceProcessParams,
 )
 from backend.services.simulator_adapters.plugin import MjcfSimulatorPlugin
 from backend.services.simulator_adapters.workspace_package import (
@@ -49,6 +51,12 @@ class PreparedMujocoWorkspace:
 class StagedMjcfMeshAssets:
     staged_name_by_source: dict[Path, str]
     staged_name_by_mjcf_mesh_name: dict[str, str]
+
+
+@dataclass(frozen=True)
+class MujocoWorkspaceLaunchContext:
+    runtime_spec: SimulatorRuntimeSpec
+    workspace_process: SimulatorWorkspaceProcessParams
 
 
 def _mujoco_error(message: str) -> MujocoWorkspaceError:
@@ -359,6 +367,16 @@ def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Pa
     )
 
 
+def _mujoco_workspace_launch_context(simulator_id: SimulatorId) -> MujocoWorkspaceLaunchContext:
+    from backend.services.simulator_adapters.plugin import get_plugin
+
+    plugin = get_plugin(simulator_id)
+    return MujocoWorkspaceLaunchContext(
+        runtime_spec=plugin.as_runtime_spec(),
+        workspace_process=plugin.require_workspace_process(),
+    )
+
+
 def prepare_mujoco_workspace(
     request: SimulatorWorkspacePrepareRequest,
     *,
@@ -402,21 +420,18 @@ def start_mujoco_workspace(
     simulator_id: SimulatorId,
     simulator_label: str,
 ) -> SimulatorWorkspacePrepareResponse:
-    from backend.services.simulator_adapters.plugin import get_plugin
-    plugin = get_plugin(simulator_id)
-    runtime_spec = plugin.as_runtime_spec()
+    launch_context = _mujoco_workspace_launch_context(simulator_id)
     prepared = prepare_mujoco_workspace(
         request,
         simulator_id=simulator_id,
     )
     shared = prepared.shared_workspace
-    workspace_process = plugin.require_workspace_process()
     return start_prepared_workspace_process(
-        runtime_spec=runtime_spec,
+        runtime_spec=launch_context.runtime_spec,
         prepared=shared,
         simulator_asset_path=prepared.mjcf_path,
         simulator_asset_flag="--robot-mjcf",
-        workspace_process=workspace_process,
+        workspace_process=launch_context.workspace_process,
         error=_mujoco_error,
         simulator_label=simulator_label,
         extra_simulator_args=(

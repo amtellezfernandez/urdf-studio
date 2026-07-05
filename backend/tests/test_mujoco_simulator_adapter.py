@@ -292,6 +292,23 @@ def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
     assert str(fixture.robot_urdf_path) in response.command
 
 
+@pytest.mark.parametrize(
+    "simulator_id,expected_module_name",
+    [
+        ("mujoco", MUJOCO_WORKSPACE_PROCESS_PARAMS.module_name),
+        ("mjlab", MJLAB_WORKSPACE_PROCESS_PARAMS.module_name),
+    ],
+)
+def test_mujoco_workspace_launch_context_uses_plugin_runtime_spec(
+    simulator_id: str,
+    expected_module_name: str,
+) -> None:
+    launch_context = mujoco_adapter._mujoco_workspace_launch_context(simulator_id)
+
+    assert launch_context.runtime_spec.simulator_id == simulator_id
+    assert launch_context.workspace_process.module_name == expected_module_name
+
+
 def test_stage_mjcf_mesh_assets_disambiguates_duplicate_basenames(tmp_path: Path) -> None:
     first_mesh = tmp_path / "first" / "base.stl"
     second_mesh = tmp_path / "second" / "base.stl"
