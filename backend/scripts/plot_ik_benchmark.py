@@ -4,14 +4,13 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-def load_runs(path: Path) -> List[dict]:
-    runs: List[dict] = []
+def load_runs(path: Path) -> list[dict]:
+    runs: list[dict] = []
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
             if not line.strip():
@@ -20,8 +19,8 @@ def load_runs(path: Path) -> List[dict]:
     return runs
 
 
-def plot_latency_cdf(runs: List[dict], output_dir: Path) -> None:
-    by_policy: Dict[str, List[float]] = defaultdict(list)
+def plot_latency_cdf(runs: list[dict], output_dir: Path) -> None:
+    by_policy: defaultdict[str, list[float]] = defaultdict(list)
     for run in runs:
         by_policy[run["solver_policy"]].append(run["duration_ms"])
 
@@ -41,8 +40,8 @@ def plot_latency_cdf(runs: List[dict], output_dir: Path) -> None:
     plt.savefig(output_dir / "latency_cdf.png", dpi=150)
 
 
-def plot_success_rates(runs: List[dict], output_dir: Path) -> None:
-    by_policy: Dict[str, List[bool]] = defaultdict(list)
+def plot_success_rates(runs: list[dict], output_dir: Path) -> None:
+    by_policy: defaultdict[str, list[bool]] = defaultdict(list)
     for run in runs:
         by_policy[run["solver_policy"]].append(bool(run["success"]))
 
@@ -62,8 +61,8 @@ def plot_success_rates(runs: List[dict], output_dir: Path) -> None:
     plt.savefig(output_dir / "success_rate.png", dpi=150)
 
 
-def plot_escalation_hist(runs: List[dict], output_dir: Path) -> None:
-    counts: Dict[str, int] = defaultdict(int)
+def plot_escalation_hist(runs: list[dict], output_dir: Path) -> None:
+    counts: defaultdict[str, int] = defaultdict(int)
     for run in runs:
         reason = run.get("escalation_blocked_reason") or "none"
         counts[reason] += 1

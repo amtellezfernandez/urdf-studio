@@ -6,7 +6,6 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -52,9 +51,9 @@ def load_sample_urdf(sample_id: str) -> str:
     return urdf_path.read_text(encoding="utf-8")
 
 
-def generate_targets(count: int) -> List[Tuple[float, float, float]]:
+def generate_targets(count: int) -> list[tuple[float, float, float]]:
     rng = random.Random(42)
-    targets: List[Tuple[float, float, float]] = []
+    targets: list[tuple[float, float, float]] = []
     for _ in range(count):
         x = 0.18 + rng.uniform(-0.05, 0.08)
         y = rng.uniform(-0.12, 0.12)
@@ -66,10 +65,10 @@ def generate_targets(count: int) -> List[Tuple[float, float, float]]:
 def evaluate_placo(
     urdf_xml: str,
     target_link: str,
-    targets: List[Tuple[float, float, float]],
+    targets: list[tuple[float, float, float]],
 ) -> SolverResult:
-    durations: List[float] = []
-    errors: List[float] = []
+    durations: list[float] = []
+    errors: list[float] = []
     success = 0
     entry = _load_placo(urdf_xml)
     for target in targets:
@@ -103,10 +102,10 @@ def evaluate_placo(
 def evaluate_amik(
     urdf_xml: str,
     target_link: str,
-    targets: List[Tuple[float, float, float]],
+    targets: list[tuple[float, float, float]],
 ) -> SolverResult:
-    durations: List[float] = []
-    errors: List[float] = []
+    durations: list[float] = []
+    errors: list[float] = []
     success = 0
     for target in targets:
         req = IKRequest(
@@ -148,7 +147,7 @@ def main() -> None:
     target_link = find_leaf_link(urdf_xml)
     targets = generate_targets(args.targets)
 
-    results: List[SolverResult] = []
+    results: list[SolverResult] = []
     if "placo" in args.solvers:
         results.append(evaluate_placo(urdf_xml, target_link, targets))
     if "amik" in args.solvers:
