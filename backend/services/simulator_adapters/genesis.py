@@ -82,6 +82,12 @@ class GenesisPlugin(DirectUrdfSimulatorPlugin):
     workspace_error_class = GenesisWorkspaceError
     scene_params = GENESIS_SCENE_PARAMS
 
+    def prepare_workspace_package(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+    ) -> PreparedSimulatorWorkspace:
+        return prepare_genesis_workspace(request)
+
     def build_check_command(
         self,
         request: SimulatorWorkspacePrepareRequest,

@@ -679,11 +679,7 @@ def test_pybullet_plugin_reports_direct_urdf_transfer(monkeypatch, tmp_path: Pat
         def poll(self) -> None:
             return None
 
-    monkeypatch.setattr(
-        workspace_package,
-        "prepare_simulator_workspace_package",
-        lambda _request, **_kwargs: prepared,
-    )
+    monkeypatch.setattr(pybullet_adapter, "prepare_pybullet_workspace", lambda _request: prepared)
     popen_calls = []
 
     def _fake_popen(*args, **kwargs):

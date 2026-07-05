@@ -109,6 +109,12 @@ class PyBulletPlugin(DirectUrdfSimulatorPlugin):
     workspace_error_class = PyBulletWorkspaceError
     scene_params = PYBULLET_SCENE_PARAMS
 
+    def prepare_workspace_package(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+    ) -> PreparedSimulatorWorkspace:
+        return prepare_pybullet_workspace(request)
+
     def runtime_status(self) -> SimulatorRuntimeStatus:
         status = super().runtime_status()
         if not status.available:

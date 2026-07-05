@@ -19,6 +19,7 @@ from backend.services.ilu_urdf import BundleMeshAssetsResult, BundledMeshAsset
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec, Transform
 from backend.services.simulator_adapters import genesis as genesis_adapter
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
+from backend.services.simulator_adapters.plugin import get_plugin
 from backend.services.simulator_adapters.genesis_camera import (
     add_scene_camera,
     attach_scene_camera_to_robot_link,
@@ -58,6 +59,49 @@ from backend.scripts.genesis_workspace_prepare import (
     should_add_genesis_scene_cameras,
     should_step_genesis_workspace,
 )
+
+
+def test_genesis_plugin_prepare_workspace_uses_adapter_prepare_helper(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    workspace_dir = tmp_path / "workspace"
+    robot_dir = workspace_dir / "robot"
+    robot_dir.mkdir(parents=True)
+    world_package_path = workspace_dir / "world-package.json"
+    robot_urdf_path = robot_dir / "robot.urdf"
+    world_package_path.write_text("{}", encoding="utf-8")
+    robot_urdf_path.write_text("<robot name=\"demo\"><link name=\"base\"/></robot>", encoding="utf-8")
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content=robot_urdf_path.read_text(encoding="utf-8"),
+            out_path=str(robot_urdf_path),
+            assets_root=str(robot_dir / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+    )
+    expected_response = object()
+
+    monkeypatch.setattr(genesis_adapter, "prepare_genesis_workspace", lambda _request: prepared)
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_process.start_prepared_workspace_process",
+        lambda **_kwargs: expected_response,
+    )
+
+    response = get_plugin("genesis").prepare_workspace(
+        SimulatorWorkspacePrepareRequest(
+            world_package=make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>"),
+        )
+    )
+
+    assert response is expected_response
 
 
 def _genesis_camera_spec(

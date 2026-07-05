@@ -190,13 +190,27 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
     _abstract = True
     workspace_error_class: type[SimulatorAdapterError] = SimulatorAdapterError
 
+    def prepare_workspace_package(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+    ):
+        from backend.services.simulator_adapters.direct_urdf import (
+            prepare_direct_urdf_workspace,
+        )
+
+        def error(msg: str) -> SimulatorAdapterError:
+            return self.workspace_error_class(msg)
+
+        return prepare_direct_urdf_workspace(
+            request,
+            workspace_process=self.require_workspace_process(),
+            error=error,
+        )
+
     def prepare_workspace(
         self,
         request: SimulatorWorkspacePrepareRequest,
     ) -> SimulatorWorkspacePrepareResponse:
-        from backend.services.simulator_adapters.workspace_package import (
-            prepare_simulator_workspace_package,
-        )
         from backend.services.simulator_adapters.workspace_process import (
             start_prepared_workspace_process,
         )
@@ -205,11 +219,7 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
             return self.workspace_error_class(msg)
 
         workspace_process = self.require_workspace_process()
-        prepared = prepare_simulator_workspace_package(
-            request,
-            workspace_root=workspace_process.workspace_root,
-            error=error,
-        )
+        prepared = self.prepare_workspace_package(request)
         return start_prepared_workspace_process(
             runtime_spec=self.as_runtime_spec(),
             prepared=prepared,
