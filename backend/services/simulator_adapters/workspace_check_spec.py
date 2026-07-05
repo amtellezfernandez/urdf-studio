@@ -82,11 +82,10 @@ def _module_command(
         ),
         *extra_args,
         *_report_command_args(report_path),
-        "--frame-map",
-        frame_map,
-        "--no-viewer",
-        "--duration-sec",
-        str(duration_sec),
+        *_workspace_process_runtime_args(
+            frame_map=frame_map,
+            duration_sec=duration_sec,
+        ),
     ]
 
 
@@ -108,6 +107,20 @@ def _report_command_args(report_path: Path | None) -> tuple[str, ...]:
     if report_path is None:
         return ()
     return ("--report", str(report_path))
+
+
+def _workspace_process_runtime_args(
+    *,
+    frame_map: WorldLayoutFrameMap,
+    duration_sec: float,
+) -> tuple[str, ...]:
+    return (
+        "--frame-map",
+        frame_map,
+        "--no-viewer",
+        "--duration-sec",
+        str(duration_sec),
+    )
 
 
 def _workspace_expectation_fields(
