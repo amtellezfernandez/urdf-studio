@@ -901,6 +901,35 @@ def test_genesis_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
         add_mesh_entity_if_available(object(), object(), primitive, (tmp_path,))
 
 
+def test_genesis_mesh_add_preserves_unexpected_errors(tmp_path: Path) -> None:
+    mesh_path = tmp_path / "assets" / "crate.obj"
+    mesh_path.parent.mkdir()
+    mesh_path.write_text("o crate\n", encoding="utf-8")
+
+    class _BrokenGs:
+        class morphs:
+            @staticmethod
+            def Mesh(**_kwargs):
+                raise KeyError("unexpected mesh failure")
+
+    primitive = SimPrimitive(
+        source_id="crate",
+        source_name="Crate",
+        sim_name="wl_crate",
+        source_type="mesh",
+        sim_type="box",
+        position_xyz=(0.0, 0.0, 0.1),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.2, 0.3, 0.4),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+        asset_ref="assets/crate.obj",
+    )
+
+    with pytest.raises(KeyError, match="unexpected mesh failure"):
+        add_mesh_entity_if_available(_BrokenGs, object(), primitive, (tmp_path,))
+
+
 def test_genesis_wraps_supported_primitive_add_failures() -> None:
     class _FakeBox:
         def __init__(self, **kwargs) -> None:
@@ -962,6 +991,30 @@ def test_genesis_primitive_add_preserves_unsupported_type_error() -> None:
 
     with pytest.raises(ValueError, match="Unsupported Genesis primitive type: capsule"):
         add_primitive_entity(object(), object(), primitive)
+
+
+def test_genesis_primitive_add_preserves_unexpected_errors() -> None:
+    class _BrokenGs:
+        class morphs:
+            @staticmethod
+            def Box(**_kwargs):
+                raise KeyError("unexpected primitive failure")
+
+    primitive = SimPrimitive(
+        source_id="box-1",
+        source_name="Box",
+        sim_name="wl_box",
+        source_type="primitive",
+        sim_type="box",
+        position_xyz=(0.0, 0.0, 0.1),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.2, 0.3, 0.4),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+    )
+
+    with pytest.raises(KeyError, match="unexpected primitive failure"):
+        add_primitive_entity(_BrokenGs, object(), primitive)
 
 
 def test_prepare_genesis_workspace_adds_synthetic_visual_material_colors(

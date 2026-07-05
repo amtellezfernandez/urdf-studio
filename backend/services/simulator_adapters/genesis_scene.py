@@ -122,7 +122,7 @@ def add_mesh_entity_if_available(
             entity_kwargs["material"] = material
         scene.add_entity(**entity_kwargs)
         return True
-    except Exception as exc:
+    except (TypeError, ValueError, RuntimeError) as exc:
         raise WorldLayoutTransferError(
             f"Genesis failed to add mesh object '{primitive.source_id}': {exc}"
         ) from exc
@@ -176,7 +176,7 @@ def add_primitive_entity(
         scene.add_entity(**entity_kwargs)
     except ValueError:
         raise
-    except Exception as exc:
+    except (TypeError, RuntimeError) as exc:
         raise WorldLayoutTransferError(
             f"Genesis failed to add {primitive.sim_type} object '{primitive.source_id}': {exc}"
         ) from exc
