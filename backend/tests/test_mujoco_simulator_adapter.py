@@ -359,6 +359,51 @@ def test_build_staged_mesh_name_map_adds_suffix_for_duplicate_generated_names(tm
     assert staged_name_by_source[second_mesh] == "shared__base__2.stl"
 
 
+def test_plan_staged_mjcf_mesh_assets_builds_mesh_name_rewrite_map(tmp_path: Path) -> None:
+    first_mesh = tmp_path / "first" / "base.stl"
+    second_mesh = tmp_path / "second" / "base.stl"
+    first_mesh.parent.mkdir()
+    second_mesh.parent.mkdir()
+    first_mesh.write_bytes(b"solid first\nendsolid first\n")
+    second_mesh.write_bytes(b"solid second\nendsolid second\n")
+
+    bundle_result = BundleMeshAssetsResult(
+        success=True,
+        content="<robot name=\"demo\"/>",
+        out_path=str(tmp_path / "robot.urdf"),
+        assets_root=str(tmp_path),
+        copied_files=2,
+        bundled=(
+            BundledMeshAsset(
+                original="first/base.stl",
+                rewritten="assets/first/base.stl",
+                source_path=str(first_mesh),
+                target_path=str(first_mesh),
+            ),
+            BundledMeshAsset(
+                original="second/base.stl",
+                rewritten="assets/second/base.stl",
+                source_path=str(second_mesh),
+                target_path=str(second_mesh),
+            ),
+        ),
+        unresolved=(),
+        error=None,
+    )
+
+    plan = mujoco_adapter._plan_staged_mjcf_mesh_assets(
+        bundle_result,
+        robot_dir=tmp_path,
+    )
+
+    assert plan.staged_name_by_source[first_mesh] == "first__base.stl"
+    assert plan.staged_name_by_source[second_mesh] == "second__base.stl"
+    assert plan.staged_name_by_mjcf_mesh_name == {
+        "assets_first_base": "first__base.stl",
+        "assets_second_base": "second__base.stl",
+    }
+
+
 def test_apply_mjcf_workspace_repairs_removes_invalid_frame_body_inertial() -> None:
     mjcf = """
     <mujoco model="demo">

@@ -45,6 +45,12 @@ class PreparedMujocoWorkspace:
     mjcf_path: Path
 
 
+@dataclass(frozen=True)
+class StagedMjcfMeshAssets:
+    staged_name_by_source: dict[Path, str]
+    staged_name_by_mjcf_mesh_name: dict[str, str]
+
+
 def _mujoco_error(message: str) -> MujocoWorkspaceError:
     return MujocoWorkspaceError(message)
 
@@ -279,6 +285,26 @@ def _build_staged_name_by_mjcf_mesh_name(
     }
 
 
+def _plan_staged_mjcf_mesh_assets(
+    bundle_result: BundleMeshAssetsResult,
+    *,
+    robot_dir: Path,
+) -> StagedMjcfMeshAssets:
+    target_paths_by_basename = _group_bundled_mesh_target_paths(bundle_result)
+    staged_name_by_source = _build_staged_mesh_name_map(
+        target_paths_by_basename,
+        robot_dir=robot_dir,
+    )
+    staged_name_by_mjcf_mesh_name = _build_staged_name_by_mjcf_mesh_name(
+        bundle_result,
+        staged_name_by_source,
+    )
+    return StagedMjcfMeshAssets(
+        staged_name_by_source=staged_name_by_source,
+        staged_name_by_mjcf_mesh_name=staged_name_by_mjcf_mesh_name,
+    )
+
+
 def _rewrite_mjcf_mesh_filenames(
     *,
     mjcf_path: Path,
@@ -312,19 +338,17 @@ def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Pa
     mesh_dir = robot_dir / "meshes"
     mesh_dir.mkdir(parents=True, exist_ok=True)
 
-    target_paths_by_basename = _group_bundled_mesh_target_paths(bundle_result)
-    staged_name_by_source = _build_staged_mesh_name_map(
-        target_paths_by_basename,
+    staged_mesh_assets = _plan_staged_mjcf_mesh_assets(
+        bundle_result,
         robot_dir=robot_dir,
     )
-    _copy_staged_mesh_assets(mesh_dir=mesh_dir, staged_name_by_source=staged_name_by_source)
-    staged_name_by_mjcf_mesh_name = _build_staged_name_by_mjcf_mesh_name(
-        bundle_result,
-        staged_name_by_source,
+    _copy_staged_mesh_assets(
+        mesh_dir=mesh_dir,
+        staged_name_by_source=staged_mesh_assets.staged_name_by_source,
     )
     _rewrite_mjcf_mesh_filenames(
         mjcf_path=mjcf_path,
-        staged_name_by_mjcf_mesh_name=staged_name_by_mjcf_mesh_name,
+        staged_name_by_mjcf_mesh_name=staged_mesh_assets.staged_name_by_mjcf_mesh_name,
     )
 
 
