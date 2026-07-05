@@ -61,6 +61,22 @@ def _cleanup_cancelled_launch(
     raise error(_cancelled_launch_error(simulator_label))
 
 
+def _cancel_workspace_launch_if_requested(
+    *,
+    launch_id: str | None,
+    workspace_dir: Path,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+) -> None:
+    if launch_id is None or not is_workspace_launch_cancelled(launch_id):
+        return
+    _cleanup_cancelled_launch(
+        workspace_dir=workspace_dir,
+        simulator_label=simulator_label,
+        error=error,
+    )
+
+
 def _raise_if_launch_cancelled(
     *,
     prepared: PreparedSimulatorWorkspace,
@@ -77,12 +93,12 @@ def _raise_if_launch_cancelled(
             simulator_label=simulator_label,
             error=error,
         )
-    if is_workspace_launch_cancelled(launch_id):
-        _cleanup_cancelled_launch(
-            workspace_dir=prepared.workspace_dir,
-            simulator_label=simulator_label,
-            error=error,
-        )
+    _cancel_workspace_launch_if_requested(
+        launch_id=launch_id,
+        workspace_dir=prepared.workspace_dir,
+        simulator_label=simulator_label,
+        error=error,
+    )
 
 
 def _workspace_process_env(
@@ -108,6 +124,10 @@ def _workspace_process_popen_kwargs(
     prepared: PreparedSimulatorWorkspace,
     simulator_id: str,
 ) -> dict[str, object]:
+    env = _workspace_process_env(
+        prepared=prepared,
+        simulator_id=simulator_id,
+    )
     return {
         "cwd": BASE_DIR,
         "stdin": subprocess.DEVNULL,
@@ -115,10 +135,7 @@ def _workspace_process_popen_kwargs(
         "stderr": subprocess.STDOUT,
         "start_new_session": True,
         "close_fds": True,
-        "env": _workspace_process_env(
-            prepared=prepared,
-            simulator_id=simulator_id,
-        ),
+        "env": env,
     }
 
 
