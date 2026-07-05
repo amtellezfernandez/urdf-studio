@@ -2422,10 +2422,10 @@ def _build_gallery_manifest_from_catalog(source: IluGallerySource, output_root: 
             raw_robot,
             live_candidate_lookup,
         )
-        candidate_path = str(candidate.get("path") or "").strip()
+        candidate_path = _normalize_optional_text(candidate.get("path"))
         if not candidate_path or not _matches_requested_urdf_path(source, candidate_path, raw_robot):
             continue
-        preview_key = f"{repo_key}::{str(raw_robot.get('fileBase') or '').strip()}"
+        preview_key = f"{repo_key}::{_normalize_optional_text(raw_robot.get('fileBase'))}"
         manifest_items.append(
             _build_gallery_manifest_item(
                 source=source,

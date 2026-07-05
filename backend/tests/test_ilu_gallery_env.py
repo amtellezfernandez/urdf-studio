@@ -180,6 +180,42 @@ def test_publish_gallery_job_rejects_non_string_pull_request_url(
         ilu_gallery.publish_gallery_job("job-1")
 
 
+def test_build_gallery_manifest_from_catalog_ignores_non_string_candidate_path_and_file_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = IluGallerySource(owner="acme", repo="demo")
+    selected_repo_entry = {
+        "repoKey": "acme/demo",
+        "robots": [
+            {"file": "robots/demo.urdf", "fileBase": 123, "name": "Demo"},
+        ],
+    }
+    catalog = ilu_gallery._GalleryCatalog(
+        repo_entries={"acme/demo": [selected_repo_entry]},
+        preview_entries={"acme/demo::demo-base": {"repoKey": "acme/demo", "fileBase": "demo-base"}},
+    )
+
+    monkeypatch.setattr(ilu_gallery, "_load_gallery_catalog_for_source", lambda _source: catalog)
+    monkeypatch.setattr(ilu_gallery, "_select_repo_entry", lambda _source, _catalog: selected_repo_entry)
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_load_gallery_live_candidate_lookup",
+        lambda _source: {"robots/demo.urdf": {"path": ["robots/demo.urdf"]}},
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_resolve_catalog_candidate",
+        lambda _source, _repo_entry, _raw_robot, _lookup: {"path": ["robots/demo.urdf"]},
+    )
+    monkeypatch.setattr(ilu_gallery, "_catalog_snapshot_from_catalog", lambda _catalog: None)
+    monkeypatch.setattr(ilu_gallery, "_write_manifest", lambda _output_root, _manifest: None)
+
+    manifest = ilu_gallery._build_gallery_manifest_from_catalog(source, tmp_path)
+
+    assert manifest is None
+
+
 def test_build_repo_robot_index_ignores_non_string_core_fields() -> None:
     index = ilu_gallery._build_repo_robot_index(
         {
