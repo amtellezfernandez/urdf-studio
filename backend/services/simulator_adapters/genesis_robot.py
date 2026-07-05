@@ -44,17 +44,23 @@ def _flatten_finite_floats(value: object) -> list[float]:
     return flattened
 
 
+def _joint_dof_index(joint: Any) -> int | None:
+    local_indices = _flatten_finite_floats(getattr(joint, "dofs_idx_local", None))
+    if len(local_indices) != 1:
+        return None
+    return int(local_indices[0])
+
+
 def joint_dof_indices_by_name(robot_entity: Any) -> dict[str, int]:
     indices: dict[str, int] = {}
     for joint in getattr(robot_entity, "joints", []):
         name = getattr(joint, "name", "")
-        dof_indices = getattr(joint, "dofs_idx_local", None)
         if not isinstance(name, str) or not name:
             continue
-        local_indices = _flatten_finite_floats(dof_indices)
-        if len(local_indices) != 1:
+        dof_index = _joint_dof_index(joint)
+        if dof_index is None:
             continue
-        indices[name] = int(local_indices[0])
+        indices[name] = dof_index
     return indices
 
 
@@ -101,13 +107,10 @@ def apply_joint_values(
     joint_dof_indices: dict[str, int],
     joint_values: Mapping[str, object],
 ) -> int:
-    dof_indices: list[int] = []
-    positions: list[float] = []
-    for joint_name, value in joint_values.items():
-        if joint_name not in joint_dof_indices or not is_finite_number(value):
-            continue
-        dof_indices.append(joint_dof_indices[joint_name])
-        positions.append(float(value))
+    dof_indices, positions = _joint_position_targets(
+        joint_dof_indices,
+        joint_values,
+    )
     if not dof_indices:
         return 0
     if hasattr(robot_entity, "set_dofs_position"):
@@ -122,6 +125,21 @@ def apply_joint_values(
     if hasattr(robot_entity, "control_dofs_position"):
         robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
     return len(dof_indices)
+
+
+def _joint_position_targets(
+    joint_dof_indices: dict[str, int],
+    joint_values: Mapping[str, object],
+) -> tuple[list[int], list[float]]:
+    dof_indices: list[int] = []
+    positions: list[float] = []
+    for joint_name, value in joint_values.items():
+        dof_index = joint_dof_indices.get(joint_name)
+        if dof_index is None or not is_finite_number(value):
+            continue
+        dof_indices.append(dof_index)
+        positions.append(float(value))
+    return dof_indices, positions
 
 
 _ATTACHMENT_LINK_NAME_RE = re.compile(
