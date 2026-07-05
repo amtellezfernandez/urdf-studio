@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import importlib
 import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -324,10 +326,12 @@ def test_build_sim_camera_specs_wraps_missing_yourdfpy_loader(
         }
     ]
 
-    class _LoaderlessUrdf:
-        pass
+    def _fake_import_module(name: str) -> object:
+        if name == "yourdfpy":
+            return SimpleNamespace(URDF=SimpleNamespace(load=None))
+        raise ImportError(name)
 
-    monkeypatch.setattr(camera_transfer_module.yourdfpy, "URDF", _LoaderlessUrdf)
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ValueError, match="Camera transfer failed: Camera transfer could not load robot URDF: yourdfpy.URDF.load is unavailable"):
         build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
@@ -340,6 +344,41 @@ def test_build_sim_camera_specs_wraps_missing_yourdfpy_loader(
 
     assert cameras == ()
     assert warnings == ("Camera transfer could not load robot URDF: yourdfpy.URDF.load is unavailable",)
+
+
+def test_build_sim_camera_specs_wraps_missing_yourdfpy_module(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text("<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>", encoding="utf-8")
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "scene camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {"width": 640, "height": 480, "fov_deg": 60},
+        }
+    ]
+
+    def _fake_import_module(name: str) -> object:
+        raise ImportError(name)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ValueError, match="Camera transfer failed: Camera transfer could not load robot URDF: yourdfpy is not installed"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
+
+    assert cameras == ()
+    assert warnings == ("Camera transfer could not load robot URDF: yourdfpy is not installed",)
 
 
 def test_studio_camera_frame_maps_to_render_camera_frame() -> None:
