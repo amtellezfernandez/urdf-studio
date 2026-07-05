@@ -170,8 +170,8 @@ def _build_camera_spec(
     assert camera_identity is not None
 
     parent_link, warning = _resolve_camera_parent_link(
-        camera_record,
         camera_name=camera_identity.name,
+        parent_joint=camera_identity.parent_joint,
         link_names=link_names,
         joint_child_link_by_name=joint_child_link_by_name,
     )
@@ -251,13 +251,12 @@ def _camera_name_or_id(camera_record: WorldScenePayload) -> str:
 
 
 def _resolve_camera_parent_link(
-    camera_record: WorldScenePayload,
     *,
     camera_name: str,
+    parent_joint: str,
     link_names: set[str],
     joint_child_link_by_name: Mapping[str, str],
 ) -> tuple[str | None, str | None]:
-    parent_joint = _read_string(camera_record.get("parent_joint"))
     parent_link = joint_child_link_by_name.get(parent_joint)
     if parent_link is None and parent_joint in link_names:
         parent_link = parent_joint
