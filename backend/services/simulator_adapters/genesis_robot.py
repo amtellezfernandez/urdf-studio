@@ -170,8 +170,18 @@ def links_to_keep_for_workspace_attachments(
     *,
     robot_urdf_path: Path,
 ) -> tuple[str, ...]:
-    links = set(links_to_keep_for_camera_attachment(cameras))
-    links.update(attachment_links_from_urdf(robot_urdf_path))
+    return _merged_attachment_links(
+        links_to_keep_for_camera_attachment(cameras),
+        attachment_links_from_urdf(robot_urdf_path),
+    )
+
+
+def _merged_attachment_links(
+    camera_links: Sequence[str],
+    urdf_attachment_links: Sequence[str],
+) -> tuple[str, ...]:
+    links = set(camera_links)
+    links.update(urdf_attachment_links)
     return tuple(sorted(links))
 
 
