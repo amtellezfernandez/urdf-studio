@@ -34,6 +34,24 @@ def test_normalize_optional_text_rejects_non_string_values() -> None:
     assert ilu_gallery._normalize_optional_text(False) == ""
 
 
+def test_build_gallery_media_url_rejects_non_string_paths() -> None:
+    assert ilu_gallery._build_gallery_media_url(None) is None
+    assert ilu_gallery._build_gallery_media_url(" previews/demo.png ") is not None
+    assert ilu_gallery._build_gallery_media_url([]) is None  # type: ignore[arg-type]
+
+
+def test_normalize_text_list_ignores_non_string_entries() -> None:
+    assert ilu_gallery._normalize_text_list([" one ", 2, None, "one", False, "two"]) == ["one", "two"]
+
+
+def test_merge_text_lists_ignores_non_string_entries() -> None:
+    assert ilu_gallery._merge_text_lists([" one ", 2, "two"], ["two", None, " three "]) == [
+        "one",
+        "two",
+        "three",
+    ]
+
+
 def test_catalog_from_snapshot_ignores_non_string_repo_keys_and_file_bases() -> None:
     catalog = ilu_gallery._catalog_from_snapshot(
         {
@@ -47,6 +65,23 @@ def test_catalog_from_snapshot_ignores_non_string_repo_keys_and_file_bases() -> 
                 {"repoKey": "acme/demo", "fileBase": "demo-base"},
             ],
         }
+    )
+
+    assert list(catalog.repo_entries) == ["acme/demo"]
+    assert list(catalog.preview_entries) == ["acme/demo::demo-base"]
+
+
+def test_catalog_from_payloads_ignores_non_string_repo_keys_and_file_bases() -> None:
+    catalog = ilu_gallery._catalog_from_payloads(
+        [
+            {"repoKey": 123, "name": "bad"},
+            {"repoKey": "acme/demo", "name": "good"},
+        ],
+        [
+            {"repoKey": 123, "fileBase": "bad-base"},
+            {"repoKey": "acme/demo", "fileBase": []},
+            {"repoKey": "acme/demo", "fileBase": "demo-base"},
+        ],
     )
 
     assert list(catalog.repo_entries) == ["acme/demo"]

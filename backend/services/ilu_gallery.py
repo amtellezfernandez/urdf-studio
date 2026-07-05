@@ -481,15 +481,16 @@ def _catalog_from_payloads(robots_payload: object, previews_payload: object) -> 
     for entry in robots_list:
         if not isinstance(entry, dict):
             continue
-        repo_key = _normalize_repo_or_path(str(entry.get("repoKey") or ""))
+        repo_key = _normalize_repo_or_path(_normalize_optional_text(entry.get("repoKey")))
         if not repo_key:
             continue
         repo_entries.setdefault(repo_key, []).append(entry)
     preview_entries = {
-        f"{_normalize_repo_or_path(str(entry.get('repoKey') or ''))}::{str(entry.get('fileBase') or '').strip()}": entry
+        f"{_normalize_repo_or_path(_normalize_optional_text(entry.get('repoKey')))}::"
+        f"{_normalize_optional_text(entry.get('fileBase'))}": entry
         for entry in preview_entries_list
-        if str(entry.get("repoKey") or "").strip()
-        and str(entry.get("fileBase") or "").strip()
+        if _normalize_optional_text(entry.get("repoKey"))
+        and _normalize_optional_text(entry.get("fileBase"))
     }
     return _GalleryCatalog(repo_entries=repo_entries, preview_entries=preview_entries)
 
@@ -580,7 +581,7 @@ def _load_gallery_catalog_for_source(source: IluGallerySource) -> _GalleryCatalo
 
 
 def _build_gallery_media_url(relative_path: str | None) -> str | None:
-    normalized = str(relative_path or "").strip().lstrip("/")
+    normalized = _normalize_optional_text(relative_path).lstrip("/")
     if not normalized:
         return None
     return f"{GALLERY_DOCS_BASE_URL}/{normalized}"
@@ -591,7 +592,7 @@ def _normalize_text_list(values: object) -> list[str]:
     if not isinstance(values, list):
         return normalized
     for value in values:
-        item = str(value).strip()
+        item = _normalize_optional_text(value)
         if item and item not in normalized:
             normalized.append(item)
     return normalized
@@ -601,7 +602,7 @@ def _merge_text_lists(*lists: list[str]) -> list[str]:
     merged: list[str] = []
     for values in lists:
         for value in values:
-            item = str(value).strip()
+            item = _normalize_optional_text(value)
             if item and item not in merged:
                 merged.append(item)
     return merged
