@@ -278,7 +278,11 @@ def compile_robot_reality_log_file(path: Path) -> PhysicalRolloutTrace:
         try:
             return compile_robot_reality_log_payload(stripped)
         except json.JSONDecodeError:
-            pass
+            return _compile_robot_reality_log_jsonl(raw_text, path)
+    return _compile_robot_reality_log_jsonl(raw_text, path)
+
+
+def _compile_robot_reality_log_jsonl(raw_text: str, path: Path) -> PhysicalRolloutTrace:
     frames: list[object] = []
     for line_number, line in enumerate(raw_text.splitlines(), start=1):
         if not line.strip():

@@ -31,7 +31,11 @@ def _read_payload(path: Path) -> Any:
         try:
             return json.loads(stripped)
         except json.JSONDecodeError:
-            pass
+            return _read_jsonl_payload(raw_text, path)
+    return _read_jsonl_payload(raw_text, path)
+
+
+def _read_jsonl_payload(raw_text: str, path: Path) -> list[Any]:
     records: list[Any] = []
     for line_number, line in enumerate(raw_text.splitlines(), start=1):
         if not line.strip():
