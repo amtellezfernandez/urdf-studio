@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias
@@ -154,6 +155,10 @@ _simulator_workspace_process_params_by_id: SimulatorWorkspaceProcessParamsById |
 _simulator_scene_params_by_id: SimulatorSceneParamsById | None = None
 
 
+def _ensure_simulator_plugins_registered() -> None:
+    importlib.import_module("backend.services.simulator_adapters")
+
+
 GENESIS_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "genesis",
     module_name="backend.scripts.genesis_workspace_prepare",
@@ -284,7 +289,7 @@ def get_simulator_workspace_process_params_by_id() -> SimulatorWorkspaceProcessP
     global _simulator_workspace_process_params_by_id
     if _simulator_workspace_process_params_by_id is not None:
         return _simulator_workspace_process_params_by_id
-    import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
+    _ensure_simulator_plugins_registered()
     from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
     process_params: SimulatorWorkspaceProcessParamsById = {}
@@ -300,7 +305,7 @@ def get_simulator_scene_params_by_id() -> SimulatorSceneParamsById:
     global _simulator_scene_params_by_id
     if _simulator_scene_params_by_id is not None:
         return _simulator_scene_params_by_id
-    import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
+    _ensure_simulator_plugins_registered()
     from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
     _simulator_scene_params_by_id = {

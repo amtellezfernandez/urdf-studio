@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-# Import concrete plugin modules in SIMULATOR_ID_VALUES order to trigger registration.
-import backend.services.simulator_adapters.genesis  # noqa: F401
-import backend.services.simulator_adapters.mjlab  # noqa: F401
-import backend.services.simulator_adapters.mujoco  # noqa: F401
-import backend.services.simulator_adapters.mjx  # noqa: F401
-import backend.services.simulator_adapters.pybullet  # noqa: F401
-import backend.services.simulator_adapters.blender  # noqa: F401
-import backend.services.simulator_adapters.planned_simulators  # noqa: F401
+import importlib
 
 from backend.models.simulator_runtime import (
     SIMULATOR_ID_VALUES,
@@ -27,6 +20,24 @@ from backend.services.simulator_adapters.base import (
 )
 from backend.services.simulator_adapters.plugin import get_all_plugins, get_plugin
 from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
+
+_BUILTIN_PLUGIN_MODULES = (
+    "backend.services.simulator_adapters.genesis",
+    "backend.services.simulator_adapters.mjlab",
+    "backend.services.simulator_adapters.mujoco",
+    "backend.services.simulator_adapters.mjx",
+    "backend.services.simulator_adapters.pybullet",
+    "backend.services.simulator_adapters.blender",
+    "backend.services.simulator_adapters.planned_simulators",
+)
+
+
+def ensure_builtin_simulator_plugins_registered() -> None:
+    for module_name in _BUILTIN_PLUGIN_MODULES:
+        importlib.import_module(module_name)
+
+
+ensure_builtin_simulator_plugins_registered()
 
 _plugins_by_id = {p.simulator_id: p for p in get_all_plugins()}
 
@@ -112,6 +123,7 @@ __all__ = [
     "SimulatorAdapter",
     "SimulatorAdapterError",
     "SimulatorCapabilityError",
+    "ensure_builtin_simulator_plugins_registered",
     "get_simulator_adapter",
     "get_simulator_runtime_status",
     "apply_simulator_workspace_change_set",
