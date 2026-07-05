@@ -998,6 +998,79 @@ def test_read_gallery_thumbnail_file_rejects_invalid_manifest_encoding(
         ilu_gallery.read_gallery_thumbnail_file(response.job_id, "robot.urdf")
 
 
+def test_coerce_gallery_repo_metadata_ignores_validation_errors() -> None:
+    metadata = ilu_gallery._coerce_gallery_repo_metadata({"stars": -1})
+
+    assert metadata == ilu_gallery.IluGalleryRepoMetadata()
+
+
+def test_coerce_gallery_repo_metadata_preserves_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery.IluGalleryRepoMetadata,
+        "model_validate",
+        classmethod(
+            lambda cls, value: (_ for _ in ()).throw(
+                KeyError("unexpected repo metadata failure")
+            )
+        ),
+    )
+
+    with pytest.raises(KeyError, match="unexpected repo metadata failure"):
+        ilu_gallery._coerce_gallery_repo_metadata({"summary": "demo"})
+
+
+def test_coerce_gallery_robot_traits_ignores_validation_errors() -> None:
+    assert ilu_gallery._coerce_gallery_robot_traits({"primaryFamily": ""}) is None
+
+
+def test_coerce_gallery_robot_traits_preserves_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery.IluGalleryRobotTraits,
+        "model_validate",
+        classmethod(
+            lambda cls, value: (_ for _ in ()).throw(
+                KeyError("unexpected robot traits failure")
+            )
+        ),
+    )
+
+    with pytest.raises(KeyError, match="unexpected robot traits failure"):
+        ilu_gallery._coerce_gallery_robot_traits({"primaryFamily": "wheeled"})
+
+
+def test_build_gallery_robot_traits_ignores_expected_morphology_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery,
+        "analyze_robot_morphology",
+        lambda _urdf_xml: (_ for _ in ()).throw(
+            ilu_gallery.IluUrdfBridgeError(502, "bad morphology")
+        ),
+    )
+
+    assert ilu_gallery._build_gallery_robot_traits("<robot name='bad'/>") is None
+
+
+def test_build_gallery_robot_traits_preserves_unexpected_morphology_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery,
+        "analyze_robot_morphology",
+        lambda _urdf_xml: (_ for _ in ()).throw(
+            KeyError("unexpected morphology failure")
+        ),
+    )
+
+    with pytest.raises(KeyError, match="unexpected morphology failure"):
+        ilu_gallery._build_gallery_robot_traits("<robot name='bad'/>")
+
+
 def test_resolve_gallery_robot_traits_uses_archive_snapshot_for_urdf(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1084,6 +1157,81 @@ def test_resolve_gallery_robot_traits_expands_xacro_sources(
     assert traits.primary_family == "wheeled"
     assert traits.wheel_count == 1
     assert traits.dof_count == 1
+
+
+def test_resolve_gallery_robot_traits_ignores_expected_xacro_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ilu_gallery.IluGallerySource(
+        owner=REAL_XACRO_OWNER, repo=REAL_XACRO_REPO, branch=REAL_XACRO_BRANCH
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "expand_github_xacro",
+        lambda _request: (_ for _ in ()).throw(
+            ilu_gallery.IluUrdfBridgeError(502, "bad xacro")
+        ),
+    )
+
+    assert (
+        ilu_gallery._resolve_gallery_robot_traits(
+            source,
+            REAL_XACRO_PATH,
+            "xacro-source",
+        )
+        is None
+    )
+
+
+def test_resolve_gallery_robot_traits_preserves_unexpected_xacro_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ilu_gallery.IluGallerySource(
+        owner=REAL_XACRO_OWNER, repo=REAL_XACRO_REPO, branch=REAL_XACRO_BRANCH
+    )
+    monkeypatch.setattr(
+        ilu_gallery,
+        "expand_github_xacro",
+        lambda _request: (_ for _ in ()).throw(KeyError("unexpected xacro failure")),
+    )
+
+    with pytest.raises(KeyError, match="unexpected xacro failure"):
+        ilu_gallery._resolve_gallery_robot_traits(
+            source,
+            REAL_XACRO_PATH,
+            "xacro-source",
+        )
+
+
+def test_load_gallery_live_candidate_lookup_ignores_expected_repo_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ilu_gallery.IluGallerySource(owner=REAL_GALLERY_OWNER, repo=REAL_GALLERY_REPO)
+    monkeypatch.setattr(
+        ilu_gallery,
+        "list_repo_candidates",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            ilu_gallery.GitHubPublicProxyError(502, "repo lookup failed")
+        ),
+    )
+
+    assert ilu_gallery._load_gallery_live_candidate_lookup(source) == {}
+
+
+def test_load_gallery_live_candidate_lookup_preserves_unexpected_repo_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ilu_gallery.IluGallerySource(owner=REAL_GALLERY_OWNER, repo=REAL_GALLERY_REPO)
+    monkeypatch.setattr(
+        ilu_gallery,
+        "list_repo_candidates",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            KeyError("unexpected repo lookup failure")
+        ),
+    )
+
+    with pytest.raises(KeyError, match="unexpected repo lookup failure"):
+        ilu_gallery._load_gallery_live_candidate_lookup(source)
 
 
 def test_build_gallery_manifest_from_inspection_skips_archive_snapshot_for_xacro_only_repos(

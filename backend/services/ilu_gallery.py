@@ -22,6 +22,8 @@ from urllib.parse import urlencode
 import urllib.request
 from urllib.request import urlopen
 
+from pydantic import ValidationError
+
 from backend.models.ilu_gallery import (
     IluGalleryEntry,
     IluGalleryJobCreateRequest,
@@ -61,7 +63,11 @@ from backend.services.ilu_repo_source import (
     fetch_file_bytes,
     list_repo_candidates,
 )
-from backend.services.ilu_urdf import analyze_robot_morphology, expand_github_xacro
+from backend.services.ilu_urdf import (
+    IluUrdfBridgeError,
+    analyze_robot_morphology,
+    expand_github_xacro,
+)
 
 
 NODE_BIN = os.getenv("URDF_NODE_BIN", "node").strip() or "node"
@@ -599,7 +605,7 @@ def _coerce_gallery_repo_metadata(value: object) -> IluGalleryRepoMetadata:
     if isinstance(value, dict):
         try:
             return IluGalleryRepoMetadata.model_validate(value)
-        except Exception:
+        except ValidationError:
             return IluGalleryRepoMetadata()
     return IluGalleryRepoMetadata()
 
@@ -610,7 +616,7 @@ def _coerce_gallery_robot_traits(value: object) -> IluGalleryRobotTraits | None:
     if isinstance(value, dict):
         try:
             return IluGalleryRobotTraits.model_validate(value)
-        except Exception:
+        except ValidationError:
             return None
     return None
 
@@ -621,7 +627,7 @@ def _build_gallery_robot_traits(urdf_xml: str) -> IluGalleryRobotTraits | None:
         return None
     try:
         morphology = analyze_robot_morphology(normalized_urdf)
-    except Exception:
+    except IluUrdfBridgeError:
         return None
 
     return IluGalleryRobotTraits(
@@ -665,7 +671,7 @@ def _resolve_gallery_robot_traits(
                     branch=source.branch,
                 )
             )
-        except Exception:
+        except IluUrdfBridgeError:
             return None
         return _build_gallery_robot_traits(expanded_urdf)
     if inspection_mode != "urdf":
@@ -907,7 +913,7 @@ def _load_gallery_live_candidate_lookup(source: IluGallerySource) -> dict[str, d
             path=source.path or "",
             branch=source.branch,
         )
-    except Exception:
+    except GitHubPublicProxyError:
         return {}
 
     raw_candidates = payload.get("candidates") if isinstance(payload, dict) else []
