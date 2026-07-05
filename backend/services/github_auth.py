@@ -44,6 +44,10 @@ def _get_env_github_token() -> str | None:
     return _normalize_token(os.getenv("URDF_GITHUB_TOKEN"))
 
 
+def _gh_auth_cache_valid(entry: _GhAuthCacheEntry | None, now: float) -> bool:
+    return entry is not None and now < entry.expires_at
+
+
 def _read_gh_hosts_token(host: str = GH_AUTH_HOST) -> str | None:
     try:
         raw_text = GH_HOSTS_PATH.read_text(encoding="utf-8")
@@ -91,7 +95,7 @@ def _read_gh_auth_token() -> str | None:
 
     cached = _gh_auth_cache
     now = time.time()
-    if cached is not None and now < cached.expires_at:
+    if _gh_auth_cache_valid(cached, now):
         return cached.token
 
     token = _probe_gh_auth_token()
