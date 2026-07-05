@@ -82,9 +82,16 @@ def _normalize_sample_label(value: object, default_label: str) -> str:
     return value.strip() if isinstance(value, str) and value.strip() else default_label
 
 
+def _normalize_sample_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _load_samples_config() -> tuple[str | None, dict[str, SampleDefinition]]:
     config = read_app_config()
-    quickstart_id = get_config_value(config, ["samples", "quickStartId"], None)
+    quickstart_id = _normalize_sample_id(get_config_value(config, ["samples", "quickStartId"], None))
     raw_sample_configs = get_config_value(config, ["samples", "items"], {})
     if not isinstance(raw_sample_configs, Mapping):
         raw_sample_configs = {}
@@ -108,7 +115,7 @@ def _load_samples_config() -> tuple[str | None, dict[str, SampleDefinition]]:
             urdf_path=urdf_path,
         )
     resolved_quickstart_id = (
-        quickstart_id if isinstance(quickstart_id, str) and quickstart_id in definitions else None
+        quickstart_id if quickstart_id in definitions else None
     )
     return resolved_quickstart_id, definitions
 

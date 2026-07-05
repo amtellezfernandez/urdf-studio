@@ -126,6 +126,29 @@ def test_list_samples_drops_quickstart_when_configured_sample_is_unsafe(
     assert entries == []
 
 
+def test_list_samples_normalizes_quickstart_id_whitespace(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    install_sample_root(monkeypatch, tmp_path)
+    install_config(
+        monkeypatch,
+        {
+            TEST_SAMPLE_ID: {
+                "label": TEST_SAMPLE_LABEL,
+                "repoPath": TEST_REPO_PATH,
+                "urdfPath": TEST_URDF_PATH,
+            }
+        },
+        quickstart_id=f"  {TEST_SAMPLE_ID}  ",
+    )
+
+    quickstart_id, entries = list_samples()
+
+    assert quickstart_id == TEST_SAMPLE_ID
+    assert [entry.id for entry in entries] == [TEST_SAMPLE_ID]
+
+
 def test_list_samples_uses_sample_id_when_label_is_not_a_non_empty_string(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
