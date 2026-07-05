@@ -17,6 +17,30 @@ def test_resolve_server_github_token_prefers_explicit_token(monkeypatch) -> None
     assert github_auth.resolve_server_github_token("explicit-token") == "explicit-token"
 
 
+def test_read_float_env_returns_default_for_invalid_values(monkeypatch) -> None:
+    monkeypatch.setenv("URDF_TEST_FLOAT", "not-a-number")
+
+    assert github_auth._read_float_env("URDF_TEST_FLOAT", 5.0) == 5.0
+
+
+def test_read_float_env_returns_default_for_non_finite_values(monkeypatch) -> None:
+    monkeypatch.setenv("URDF_TEST_FLOAT", "inf")
+
+    assert github_auth._read_float_env("URDF_TEST_FLOAT", 5.0) == 5.0
+
+
+def test_read_float_env_returns_default_when_below_minimum(monkeypatch) -> None:
+    monkeypatch.setenv("URDF_TEST_FLOAT", "-1")
+
+    assert github_auth._read_float_env("URDF_TEST_FLOAT", 5.0, minimum=0.0) == 5.0
+
+
+def test_read_float_env_accepts_zero_at_minimum(monkeypatch) -> None:
+    monkeypatch.setenv("URDF_TEST_FLOAT", "0")
+
+    assert github_auth._read_float_env("URDF_TEST_FLOAT", 5.0, minimum=0.0) == 0.0
+
+
 def test_resolve_server_github_token_uses_env_before_gh(monkeypatch) -> None:
     monkeypatch.setenv("URDF_GITHUB_TOKEN", "env-token")
     monkeypatch.setattr(github_auth, "_gh_auth_cache", None)

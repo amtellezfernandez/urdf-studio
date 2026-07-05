@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass
+import math
 from pathlib import Path
 from typing import Literal
 
@@ -11,9 +12,24 @@ from typing import Literal
 GitHubServerAuthMode = Literal["env-token", "gh-cli", "none"]
 
 
+def _read_float_env(name: str, default: float, *, minimum: float | None = None) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    if not math.isfinite(value):
+        return default
+    if minimum is not None and value < minimum:
+        return default
+    return value
+
+
 GH_BIN = os.getenv("URDF_GH_BIN", "gh").strip() or "gh"
-GH_AUTH_TIMEOUT_SECONDS = float(os.getenv("URDF_GH_AUTH_TIMEOUT_SECONDS", "5"))
-GH_AUTH_CACHE_TTL_SECONDS = float(os.getenv("URDF_GH_AUTH_CACHE_TTL_SECONDS", "60"))
+GH_AUTH_TIMEOUT_SECONDS = _read_float_env("URDF_GH_AUTH_TIMEOUT_SECONDS", 5.0, minimum=0.0)
+GH_AUTH_CACHE_TTL_SECONDS = _read_float_env("URDF_GH_AUTH_CACHE_TTL_SECONDS", 60.0, minimum=0.0)
 GH_AUTH_HOST = os.getenv("URDF_GH_AUTH_HOST", "github.com").strip() or "github.com"
 GH_HOSTS_PATH = Path(
     os.getenv("URDF_GH_HOSTS_PATH", str(Path.home() / ".config" / "gh" / "hosts.yml"))
