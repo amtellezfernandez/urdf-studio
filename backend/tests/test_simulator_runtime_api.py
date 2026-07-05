@@ -339,6 +339,14 @@ def test_plugin_require_workspace_process_reports_missing_config() -> None:
         plugin.require_workspace_process()
 
 
+def test_get_plugin_reports_unsupported_simulator() -> None:
+    with pytest.raises(
+        SimulatorCapabilityError,
+        match="Unsupported simulator: definitely-not-a-simulator",
+    ):
+        get_plugin("definitely-not-a-simulator")  # type: ignore[arg-type]
+
+
 def test_mjlab_workspace_status_uses_mujoco_workspace_dependency(monkeypatch) -> None:
     from backend.services.simulator_adapters import base as simulator_adapter_base
 

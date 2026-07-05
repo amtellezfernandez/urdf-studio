@@ -9,7 +9,6 @@ from backend.models.simulator_runtime import (
     SimulatorDependencySpec,
     SimulatorId,
     SimulatorRuntimeCapabilities,
-    SimulatorRuntimeDependency,
     SimulatorRuntimeDescriptor,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
@@ -36,6 +35,12 @@ if TYPE_CHECKING:
     from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
 
 _REGISTRY: dict[SimulatorId, SimulatorPlugin] = {}
+_REQUIRED_PLUGIN_ATTRIBUTES = (
+    "simulator_id",
+    "label",
+    "robot_asset_format",
+    "transfer_strategy",
+)
 
 
 class SimulatorPlugin:
@@ -66,7 +71,7 @@ class SimulatorPlugin:
         super().__init_subclass__(**kwargs)
         if cls.__dict__.get("_abstract"):
             return
-        for attr in ("simulator_id", "label", "robot_asset_format", "transfer_strategy"):
+        for attr in _REQUIRED_PLUGIN_ATTRIBUTES:
             if not hasattr(cls, attr):
                 raise TypeError(
                     f"SimulatorPlugin subclass {cls.__name__!r} is missing required attribute {attr!r}"
