@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
@@ -26,6 +26,11 @@ from backend.services.simulation_prep_mujoco_params import (
     SIMULATION_PREP_MUJOCO_STAGE_URDF_FILENAME,
     SIMULATION_PREP_MUJOCO_VECTOR_COMPONENT_COUNT,
 )
+
+if TYPE_CHECKING:
+    import mujoco
+
+    from backend.models.simulation_prep import SimulationPrepSmokeSimResult
 
 
 Float3 = tuple[float, float, float]
@@ -314,7 +319,7 @@ def prepare_mujoco_simulation_assets(urdf_path: Path) -> Iterator[PreparedMujoco
         )
 
 
-def load_mujoco_model(xml_path: Path):
+def load_mujoco_model(xml_path: Path) -> mujoco.MjModel:
     import mujoco
 
     return mujoco.MjModel.from_xml_path(str(xml_path))
@@ -534,7 +539,9 @@ def _build_compiled_mujoco_geometry_results(
     return geometry_results
 
 
-def _build_smoke_simulation_result(*, passed: bool, error: str | None):
+def _build_smoke_simulation_result(
+    *, passed: bool, error: str | None
+) -> SimulationPrepSmokeSimResult:
     from backend.models.simulation_prep import SimulationPrepSmokeSimResult
 
     return SimulationPrepSmokeSimResult(
