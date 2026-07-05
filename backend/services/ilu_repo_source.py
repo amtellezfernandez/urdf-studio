@@ -390,6 +390,15 @@ def _extract_github_error_detail(status_code: int, body: str, reason: str) -> st
     return detail
 
 
+def _parse_content_length(raw_content_length: str | None) -> int | None:
+    if not raw_content_length:
+        return None
+    try:
+        return int(raw_content_length)
+    except ValueError:
+        return None
+
+
 def _fetch_url_bytes(url: str, *, max_bytes: int, headers: dict[str, str] | None = None) -> bytes:
     request_headers = {"User-Agent": HTTP_USER_AGENT}
     if headers:
@@ -397,13 +406,13 @@ def _fetch_url_bytes(url: str, *, max_bytes: int, headers: dict[str, str] | None
     request = urllib.request.Request(url, headers=request_headers)
     try:
         with urllib.request.urlopen(request, timeout=NODE_TIMEOUT_SECONDS) as response:
-            raw_content_length = response.headers.get("Content-Length")
-            if raw_content_length:
-                try:
-                    if int(raw_content_length) > max_bytes:
-                        raise GitHubPublicProxyError(413, "GitHub response exceeds configured size limit.")
-                except ValueError:
-                    pass
+            declared_content_length = _parse_content_length(
+                response.headers.get("Content-Length")
+            )
+            if declared_content_length is not None and declared_content_length > max_bytes:
+                raise GitHubPublicProxyError(
+                    413, "GitHub response exceeds configured size limit."
+                )
 
             chunks: list[bytes] = []
             total_bytes = 0

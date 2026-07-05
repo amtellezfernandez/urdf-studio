@@ -313,6 +313,57 @@ def test_fetch_url_bytes_preserves_unexpected_urlopen_errors(monkeypatch: pytest
         ilu_repo_source._fetch_url_bytes("https://github.com/acme/robot", max_bytes=128)
 
 
+def test_fetch_url_bytes_rejects_oversized_content_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeResponse:
+        headers = {"Content-Length": "129"}
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, _chunk_size: int) -> bytes:
+            raise AssertionError("oversized Content-Length should fail before reading")
+
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source.urllib.request.urlopen",
+        lambda *_args, **_kwargs: _FakeResponse(),
+    )
+
+    with pytest.raises(GitHubPublicProxyError) as exc_info:
+        ilu_repo_source._fetch_url_bytes("https://github.com/acme/robot", max_bytes=128)
+
+    assert exc_info.value.status_code == 413
+
+
+def test_fetch_url_bytes_ignores_invalid_content_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeResponse:
+        headers = {"Content-Length": "unknown"}
+
+        def __init__(self) -> None:
+            self._chunks = [b"robot", b""]
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, _chunk_size: int) -> bytes:
+            return self._chunks.pop(0)
+
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source.urllib.request.urlopen",
+        lambda *_args, **_kwargs: _FakeResponse(),
+    )
+
+    assert (
+        ilu_repo_source._fetch_url_bytes("https://github.com/acme/robot", max_bytes=128)
+        == b"robot"
+    )
+
+
 def test_load_public_git_tree_files_builds_candidate_discovery_listing(monkeypatch) -> None:
     owner = "google-deepmind"
     repo = "mujoco_menagerie"
