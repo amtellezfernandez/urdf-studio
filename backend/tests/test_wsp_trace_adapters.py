@@ -6,8 +6,10 @@ import sys
 
 import pytest
 
+from backend.scripts import wsp_ingest_trace_adapter
 from backend.services.world_model_dataset import validate_world_model_dataset_samples
 from backend.services.wsp_trace_adapters import (
+    TraceAdapterSource,
     build_trace_adapter_dataset,
     compile_mcap_file,
     compile_simulator_file,
@@ -43,9 +45,20 @@ def _sim_payload(source: str):
     }
 
 
+@pytest.mark.parametrize("source", ["auto", "mujoco", "genesis", "ros", "lerobot"])
+def test_trace_adapter_cli_selected_source_accepts_supported_values(source: str) -> None:
+    assert wsp_ingest_trace_adapter._selected_source(source) == source
+
+
+def test_trace_adapter_cli_selected_source_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="Unsupported trace adapter source"):
+        wsp_ingest_trace_adapter._selected_source("pybullet")
+
+
 def test_mujoco_and_genesis_adapters_emit_wsp_samples() -> None:
-    for source in ("mujoco", "genesis"):
-        trace = compile_trace_adapter_payload(_sim_payload(source), source=source)  # type: ignore[arg-type]
+    sources: tuple[TraceAdapterSource, ...] = ("mujoco", "genesis")
+    for source in sources:
+        trace = compile_trace_adapter_payload(_sim_payload(source), source=source)
         samples = build_trace_adapter_dataset(trace)
         readiness = validate_world_model_dataset_samples(samples)
 

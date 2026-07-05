@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import cast
 
 from backend.services.world_model_dataset import write_world_model_dataset_jsonl
 from backend.services.wsp_trace_adapters import (
+    TraceAdapterSource,
     build_trace_adapter_dataset,
     compile_trace_adapter_file,
 )
@@ -29,9 +31,15 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _selected_source(value: str) -> TraceAdapterSource:
+    if value in ("auto", "mujoco", "genesis", "ros", "lerobot"):
+        return cast(TraceAdapterSource, value)
+    raise ValueError(f"Unsupported trace adapter source: {value}")
+
+
 def main() -> int:
     args = _parse_args()
-    trace = compile_trace_adapter_file(Path(args.input), source=args.source)  # type: ignore[arg-type]
+    trace = compile_trace_adapter_file(Path(args.input), source=_selected_source(args.source))
     samples = build_trace_adapter_dataset(trace)
     artifacts: dict[str, str] = {}
     if args.trace_out:
