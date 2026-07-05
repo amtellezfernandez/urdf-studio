@@ -102,7 +102,7 @@ def validate_simulator_workspace_report(
         return f"missing simulator validation report: {report_path}"
     try:
         raw_payload = json.loads(report_path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return f"invalid simulator validation report {report_path}: {exc}"
     if not isinstance(raw_payload, dict):
         return f"invalid simulator validation report {report_path}: expected JSON object"

@@ -251,6 +251,28 @@ def test_workspace_report_validation_rejects_missing_canonical_header(tmp_path) 
     )
 
 
+def test_workspace_report_validation_rejects_invalid_json(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text("{", encoding="utf-8")
+
+    error = validate_simulator_workspace_report(report_path, _expectations())
+
+    assert error is not None
+    assert "invalid simulator validation report" in error
+    assert "report.json" in error
+
+
+def test_workspace_report_validation_rejects_invalid_encoding(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_bytes(b"\xff\xfe\x00")
+
+    error = validate_simulator_workspace_report(report_path, _expectations())
+
+    assert error is not None
+    assert "invalid simulator validation report" in error
+    assert "report.json" in error
+
+
 def test_workspace_report_validation_rejects_relative_robot_urdf_path(tmp_path) -> None:
     report_path = _write_report(
         tmp_path,
