@@ -14,6 +14,8 @@ from backend.models.simulator_runtime import (
     SimulatorWorkspacePrepareResponse,
 )
 
+PYTHON_MODULE_PROBE_TIMEOUT_SEC = 5
+
 
 class SimulatorAdapterError(RuntimeError):
     status_code = 503
@@ -59,7 +61,7 @@ def is_python_module_available_in_python(python_executable: str, import_name: st
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=5,
+            timeout=PYTHON_MODULE_PROBE_TIMEOUT_SEC,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -101,11 +103,17 @@ def format_runtime_dependency_status(
     missing_status_prefix: str,
     dependencies: list[SimulatorRuntimeDependency],
 ) -> tuple[bool, str]:
-    missing_required_dependencies = [
+    missing_required_dependencies = _missing_required_dependency_names(dependencies)
+    if not missing_required_dependencies:
+        return True, ready_status
+    return False, f"{missing_status_prefix}: {', '.join(missing_required_dependencies)}"
+
+
+def _missing_required_dependency_names(
+    dependencies: list[SimulatorRuntimeDependency],
+) -> list[str]:
+    return [
         dependency.name
         for dependency in dependencies
         if dependency.required and not dependency.available
     ]
-    if not missing_required_dependencies:
-        return True, ready_status
-    return False, f"{missing_status_prefix}: {', '.join(missing_required_dependencies)}"
