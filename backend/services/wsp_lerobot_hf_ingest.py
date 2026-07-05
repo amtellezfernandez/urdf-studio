@@ -11,6 +11,7 @@ Requires: datasets >= 4.0  (already in .venv-lerobot)
 """
 from __future__ import annotations
 
+import importlib
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,22 @@ SO101_DATASET_JOINT_NAMES = [
 # ── URDF entry cache (keyed by robot name) ────────────────────────────────────
 
 _ENTRY_CACHE: dict[str, UrdfEntry] = {}
+
+
+def _load_hf_dataset_loader() -> Any:
+    try:
+        datasets_module = importlib.import_module("datasets")
+    except ImportError as exc:
+        raise ImportError(
+            "Loading HuggingFace datasets requires: pip install datasets"
+        ) from exc
+
+    load_dataset = getattr(datasets_module, "load_dataset", None)
+    if not callable(load_dataset):
+        raise ImportError(
+            "Loading HuggingFace datasets requires: pip install datasets"
+        )
+    return load_dataset
 
 
 def get_robot_urdf_entry(robot: str = "so101") -> UrdfEntry:
@@ -182,12 +199,7 @@ def load_lerobot_hf_episode(
 
     Requires: pip install datasets  (already in .venv-lerobot)
     """
-    try:
-        from datasets import load_dataset  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise ImportError(
-            "Loading HuggingFace datasets requires: pip install datasets"
-        ) from exc
+    load_dataset = _load_hf_dataset_loader()
 
     cfg = _ROBOT_CONFIGS.get(robot)
     if cfg is None:

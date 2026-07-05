@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import importlib
 import importlib.util
 import math
 import sys
@@ -11,6 +12,7 @@ import pytest
 from backend.services.wsp_lerobot_hf_ingest import (
     SO101_DATASET_JOINT_NAMES,
     _ENTRY_CACHE,
+    _load_hf_dataset_loader,
     _ROBOT_CONFIGS,
     _RobotConfig,
     fk_ee_from_degrees,
@@ -119,6 +121,20 @@ def test_hf_integration_available_preserves_unexpected_errors(monkeypatch: pytes
 
     with pytest.raises(KeyError, match="unexpected requests import failure"):
         _hf_integration_available()
+
+
+def test_load_hf_dataset_loader_rejects_incomplete_datasets_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_import_module(name: str) -> object:
+        if name == "datasets":
+            return SimpleNamespace(load_dataset=None)
+        raise ImportError(name)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="pip install datasets"):
+        _load_hf_dataset_loader()
 
 
 @pytest.mark.skipif(
