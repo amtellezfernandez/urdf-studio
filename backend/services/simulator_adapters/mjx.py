@@ -23,6 +23,53 @@ class MjxWorkspaceError(SimulatorAdapterError):
     pass
 
 
+def _build_mjx_workspace_report(
+    *,
+    simulator_id: str,
+    label: str,
+    prepared,
+    episode,
+) -> dict[str, object]:
+    return {
+        "simulator": {"id": simulator_id, "label": label},
+        "world_package_path": str(prepared.shared_workspace.world_package_path),
+        "robot_urdf_path": str(prepared.shared_workspace.robot_urdf_path),
+        "robot_mjcf_path": str(prepared.mjcf_path),
+        "world_object_count": prepared.shared_workspace.world_object_count,
+        "camera_count": prepared.shared_workspace.camera_count,
+        "rollout": {
+            "steps": _MJX_INSPECTION_STEPS,
+            "diverged": episode.diverged,
+            "wall_time_ms": episode.wall_time_ms,
+            "frame_count": len(episode.trace.frames),
+        },
+    }
+
+
+def _build_mjx_workspace_response(*, simulator_id: str, prepared) -> SimulatorWorkspacePrepareResponse:
+    return SimulatorWorkspacePrepareResponse(
+        simulator_id=simulator_id,
+        started=False,
+        pid=os.getpid(),
+        command=[],
+        launch_mode="headless_check",
+        log_path=None,
+        world_package_path=str(prepared.shared_workspace.world_package_path),
+        robot_urdf_path=str(prepared.shared_workspace.robot_urdf_path),
+        simulator_asset_path=None,
+        simulator_asset_format=None,
+        bundled_mesh_count=prepared.shared_workspace.bundle_result.copied_files,
+        unresolved_mesh_refs=list(prepared.shared_workspace.bundle_result.unresolved),
+        workspace_warnings=[
+            f"MJX runs a {_MJX_INSPECTION_STEPS}-step in-process inspection rollout; "
+            "use backend.services.mjx_rollout_runner.run_mjx_rollout_batch directly "
+            "for batch synthetic-data generation."
+        ],
+        world_object_count=prepared.shared_workspace.world_object_count,
+        camera_count=prepared.shared_workspace.camera_count,
+    )
+
+
 class MjxPlugin(SimulatorPlugin):
     simulator_id = SIMULATOR_MJX_ID
     label = "MJX"
@@ -58,41 +105,16 @@ class MjxPlugin(SimulatorPlugin):
         except Exception as exc:
             raise MjxWorkspaceError(f"MJX inspection rollout failed: {exc}") from exc
 
-        report = {
-            "simulator": {"id": self.simulator_id, "label": self.label},
-            "world_package_path": str(prepared.shared_workspace.world_package_path),
-            "robot_urdf_path": str(prepared.shared_workspace.robot_urdf_path),
-            "robot_mjcf_path": str(prepared.mjcf_path),
-            "world_object_count": prepared.shared_workspace.world_object_count,
-            "camera_count": prepared.shared_workspace.camera_count,
-            "rollout": {
-                "steps": _MJX_INSPECTION_STEPS,
-                "diverged": episode.diverged,
-                "wall_time_ms": episode.wall_time_ms,
-                "frame_count": len(episode.trace.frames),
-            },
-        }
+        report = _build_mjx_workspace_report(
+            simulator_id=self.simulator_id,
+            label=self.label,
+            prepared=prepared,
+            episode=episode,
+        )
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(f"{json.dumps(report, indent=2, sort_keys=True)}\n", encoding="utf-8")
 
-        return SimulatorWorkspacePrepareResponse(
+        return _build_mjx_workspace_response(
             simulator_id=self.simulator_id,
-            started=False,
-            pid=os.getpid(),
-            command=[],
-            launch_mode="headless_check",
-            log_path=None,
-            world_package_path=str(prepared.shared_workspace.world_package_path),
-            robot_urdf_path=str(prepared.shared_workspace.robot_urdf_path),
-            simulator_asset_path=None,
-            simulator_asset_format=None,
-            bundled_mesh_count=prepared.shared_workspace.bundle_result.copied_files,
-            unresolved_mesh_refs=list(prepared.shared_workspace.bundle_result.unresolved),
-            workspace_warnings=[
-                f"MJX runs a {_MJX_INSPECTION_STEPS}-step in-process inspection rollout; "
-                "use backend.services.mjx_rollout_runner.run_mjx_rollout_batch directly "
-                "for batch synthetic-data generation."
-            ],
-            world_object_count=prepared.shared_workspace.world_object_count,
-            camera_count=prepared.shared_workspace.camera_count,
+            prepared=prepared,
         )

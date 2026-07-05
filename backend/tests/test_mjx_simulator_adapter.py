@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -67,3 +68,38 @@ def test_mjx_prepare_workspace_runs_inspection_rollout_and_writes_report(
     assert len(report_paths) == 1
     report_text = report_paths[0].read_text(encoding="utf-8")
     assert '"diverged": false' in report_text
+
+
+def test_build_mjx_workspace_report_uses_rollout_summary(tmp_path: Path) -> None:
+    prepared = SimpleNamespace(
+        mjcf_path=tmp_path / "robot.xml",
+        shared_workspace=SimpleNamespace(
+            world_package_path=tmp_path / "world-package.json",
+            robot_urdf_path=tmp_path / "robot.urdf",
+            world_object_count=2,
+            camera_count=1,
+        ),
+    )
+    episode = SimpleNamespace(
+        diverged=False,
+        wall_time_ms=12.5,
+        trace=SimpleNamespace(frames=[object(), object(), object()]),
+    )
+
+    report = mjx_adapter._build_mjx_workspace_report(
+        simulator_id="mjx",
+        label="MJX",
+        prepared=prepared,
+        episode=episode,
+    )
+
+    assert report["simulator"] == {"id": "mjx", "label": "MJX"}
+    assert report["robot_mjcf_path"] == str(tmp_path / "robot.xml")
+    assert report["world_object_count"] == 2
+    assert report["camera_count"] == 1
+    assert report["rollout"] == {
+        "steps": 20,
+        "diverged": False,
+        "wall_time_ms": 12.5,
+        "frame_count": 3,
+    }
