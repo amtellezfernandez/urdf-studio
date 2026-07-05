@@ -136,7 +136,7 @@ def _is_usable_blender_executable(path: Path) -> bool:
             text=True,
             timeout=15.0,
         )
-    except Exception:
+    except (OSError, subprocess.TimeoutExpired):
         return False
     output = "\n".join(part for part in (result.stdout, result.stderr) if part)
     return result.returncode == 0 and "blender python runtime ok" in output

@@ -2180,6 +2180,39 @@ def test_blender_runtime_rejects_windows_executable_on_posix(tmp_path: Path) -> 
     assert resolve_blender_executable(str(tmp_path)) is None
 
 
+def test_blender_runtime_probe_tolerates_timeout(monkeypatch, tmp_path: Path) -> None:
+    from backend.services.simulator_adapters import blender_runtime
+
+    blender_runtime._is_usable_blender_executable.cache_clear()
+    executable_path = tmp_path / "blender"
+    executable_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable_path.chmod(0o755)
+
+    def fake_run(command, **_kwargs):
+        raise blender_runtime.subprocess.TimeoutExpired(command, timeout=15.0)
+
+    monkeypatch.setattr(blender_runtime.subprocess, "run", fake_run)
+
+    assert blender_runtime._is_usable_blender_executable(executable_path) is False
+
+
+def test_blender_runtime_probe_propagates_unexpected_errors(monkeypatch, tmp_path: Path) -> None:
+    from backend.services.simulator_adapters import blender_runtime
+
+    blender_runtime._is_usable_blender_executable.cache_clear()
+    executable_path = tmp_path / "blender"
+    executable_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable_path.chmod(0o755)
+
+    def fake_run(_command, **_kwargs):
+        raise RuntimeError("unexpected blender probe failure")
+
+    monkeypatch.setattr(blender_runtime.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="unexpected blender probe failure"):
+        blender_runtime._is_usable_blender_executable(executable_path)
+
+
 @pytest.mark.parametrize(
     ("windows_path", "wsl_path"),
     (
