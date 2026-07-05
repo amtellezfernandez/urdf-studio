@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import builtins
 import importlib.util
 import math
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -76,9 +79,46 @@ def _hf_integration_available() -> bool:
         return False
     try:
         import requests
-        return requests.head("https://huggingface.co", timeout=3).ok
-    except Exception:
+    except ImportError:
         return False
+    try:
+        return requests.head("https://huggingface.co", timeout=3).ok
+    except requests.RequestException:
+        return False
+
+
+def test_hf_integration_available_returns_false_without_datasets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: None)
+
+    assert _hf_integration_available() is False
+
+
+def test_hf_integration_available_returns_false_on_expected_request_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: object())
+    requests_module = SimpleNamespace(
+        RequestException=RuntimeError,
+        head=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("network unavailable")),
+    )
+    monkeypatch.setitem(sys.modules, "requests", requests_module)
+
+    assert _hf_integration_available() is False
+
+
+def test_hf_integration_available_preserves_unexpected_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: object())
+    original_import = builtins.__import__
+
+    def _failing_import(name, *args, **kwargs):
+        if name == "requests":
+            raise KeyError("unexpected requests import failure")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _failing_import)
+
+    with pytest.raises(KeyError, match="unexpected requests import failure"):
+        _hf_integration_available()
 
 
 @pytest.mark.skipif(
