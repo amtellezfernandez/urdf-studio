@@ -279,7 +279,7 @@ def _collect_urdf_mesh_sources_by_basename(urdf_path: Path) -> dict[str, Path]:
 @contextmanager
 def prepare_mujoco_simulation_assets(urdf_path: Path) -> Iterator[PreparedMujocoSimulationAssets]:
     expectations = collect_urdf_collision_mesh_geometries(urdf_path)
-    if len(expectations) == 0:
+    if not expectations:
         raise ValueError(f"{urdf_path} does not contain any collision mesh geometries to validate.")
     mesh_sources = _collect_urdf_mesh_sources_by_basename(urdf_path)
 

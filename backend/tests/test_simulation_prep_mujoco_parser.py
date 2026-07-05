@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.services.simulation_prep_mujoco import collect_urdf_collision_mesh_geometries
+import pytest
+
+from backend.services.simulation_prep_mujoco import (
+    collect_urdf_collision_mesh_geometries,
+    prepare_mujoco_simulation_assets,
+)
 from backend.services.simulation_prep_mujoco_params import (
     SIMULATION_PREP_MUJOCO_DEFAULT_POSITION,
     SIMULATION_PREP_MUJOCO_DEFAULT_SCALE,
@@ -67,3 +72,27 @@ def test_collision_mesh_parser_resolves_file_scheme_mesh_references(
     geometry = collect_urdf_collision_mesh_geometries(urdf_path)[0]
 
     assert geometry.mesh_file_path == mesh_path.resolve()
+
+
+def test_prepare_mujoco_simulation_assets_rejects_missing_collision_meshes(
+    tmp_path: Path,
+) -> None:
+    urdf_path = tmp_path / "robot.urdf"
+    urdf_path.write_text(
+        """
+<robot name="parser-test">
+  <link name="base">
+    <collision name="base_collision">
+      <geometry>
+        <box size="0.1 0.1 0.1" />
+      </geometry>
+    </collision>
+  </link>
+</robot>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="does not contain any collision mesh geometries"):
+        with prepare_mujoco_simulation_assets(urdf_path):
+            pass
