@@ -522,6 +522,32 @@ def _index_report_entries_by_string_field(
     return indexed_entries
 
 
+def _report_entry_list(
+    payload: SimulatorWorkspaceReportObject,
+    *,
+    list_field_name: str,
+) -> tuple[list[JsonValue] | None, str | None]:
+    report_entries = payload.get(list_field_name)
+    if not isinstance(report_entries, list):
+        return None, f"simulator validation report field '{list_field_name}' must be a list"
+    return report_entries, None
+
+
+def _indexed_report_entries(
+    payload: SimulatorWorkspaceReportObject,
+    *,
+    list_field_name: str,
+    index_field_name: str,
+) -> tuple[dict[str, SimulatorWorkspaceReportObject] | None, str | None]:
+    report_entries, error = _report_entry_list(
+        payload,
+        list_field_name=list_field_name,
+    )
+    if error:
+        return None, error
+    return _index_report_entries_by_string_field(report_entries, index_field_name), None
+
+
 def _validate_expected_object_vectors(
     payload: SimulatorWorkspaceReportObject,
     expectations: SimulatorWorkspaceReportExpectations,
@@ -530,10 +556,14 @@ def _validate_expected_object_vectors(
     expected_sizes = expectations.object_sizes_xyz or {}
     if not expected_positions and not expected_sizes:
         return None
-    objects = payload.get("objects")
-    if not isinstance(objects, list):
-        return "simulator validation report field 'objects' must be a list"
-    objects_by_source_id = _index_report_entries_by_string_field(objects, "source_id")
+    objects_by_source_id, error = _indexed_report_entries(
+        payload,
+        list_field_name="objects",
+        index_field_name="source_id",
+    )
+    if error:
+        return error
+    assert objects_by_source_id is not None
     for source_id, expected_position in expected_positions.items():
         object_report = objects_by_source_id.get(source_id)
         if object_report is None:
@@ -566,10 +596,14 @@ def _validate_expected_object_contracts(
     expected_contracts = expectations.object_contracts or {}
     if not expected_contracts:
         return None
-    objects = payload.get("objects")
-    if not isinstance(objects, list):
-        return "simulator validation report field 'objects' must be a list"
-    objects_by_source_id = _index_report_entries_by_string_field(objects, "source_id")
+    objects_by_source_id, error = _indexed_report_entries(
+        payload,
+        list_field_name="objects",
+        index_field_name="source_id",
+    )
+    if error:
+        return error
+    assert objects_by_source_id is not None
     for source_id, expected_contract in expected_contracts.items():
         object_report = objects_by_source_id.get(source_id)
         if object_report is None:
@@ -657,10 +691,14 @@ def _validate_expected_object_asset_refs(
     expected_asset_refs = expectations.object_asset_refs or {}
     if not expected_asset_refs:
         return None
-    objects = payload.get("objects")
-    if not isinstance(objects, list):
-        return "simulator validation report field 'objects' must be a list"
-    objects_by_source_id = _index_report_entries_by_string_field(objects, "source_id")
+    objects_by_source_id, error = _indexed_report_entries(
+        payload,
+        list_field_name="objects",
+        index_field_name="source_id",
+    )
+    if error:
+        return error
+    assert objects_by_source_id is not None
     for source_id, expected_asset_ref in expected_asset_refs.items():
         object_report = objects_by_source_id.get(source_id)
         if object_report is None:
@@ -681,9 +719,10 @@ def _validate_expected_camera_ids(
     expected_camera_ids = expectations.camera_ids
     if expected_camera_ids is None:
         return None
-    cameras = payload.get("cameras")
-    if not isinstance(cameras, list):
-        return "simulator validation report field 'cameras' must be a list"
+    cameras, error = _report_entry_list(payload, list_field_name="cameras")
+    if error:
+        return error
+    assert cameras is not None
     actual_camera_ids = tuple(
         camera_report.get("camera_id")
         for camera_report in cameras
@@ -704,10 +743,14 @@ def _validate_expected_camera_contracts(
     expected_contracts = expectations.camera_contracts or {}
     if not expected_contracts:
         return None
-    cameras = payload.get("cameras")
-    if not isinstance(cameras, list):
-        return "simulator validation report field 'cameras' must be a list"
-    cameras_by_id = _index_report_entries_by_string_field(cameras, "camera_id")
+    cameras_by_id, error = _indexed_report_entries(
+        payload,
+        list_field_name="cameras",
+        index_field_name="camera_id",
+    )
+    if error:
+        return error
+    assert cameras_by_id is not None
     for camera_id, expected_contract in expected_contracts.items():
         camera_report = cameras_by_id.get(camera_id)
         if camera_report is None:
