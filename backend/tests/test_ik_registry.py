@@ -52,3 +52,15 @@ def test_placo_available_rejects_incomplete_module(
     monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     assert ik_registry._placo_available() is False
+
+
+def test_placo_available_preserves_unexpected_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected placo import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected placo import failure"):
+        ik_registry._placo_available()

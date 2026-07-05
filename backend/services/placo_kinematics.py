@@ -79,7 +79,9 @@ def _quat_to_matrix(wxyz: list[float]) -> np.ndarray:
 def _load_placo_module() -> Any:
     try:
         placo_module = importlib.import_module("placo")
-    except ImportError as exc:
+    except ModuleNotFoundError as exc:
+        if exc.name != "placo":
+            raise
         raise HTTPException(
             status_code=500,
             detail="placo is not available; install it to enable the Placo IK solver.",

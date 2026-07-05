@@ -41,7 +41,9 @@ SOLVER_DEFINITIONS: dict[str, SolverDefinition] = {
 def _placo_available() -> bool:
     try:
         placo_module = importlib.import_module("placo")
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        if exc.name != "placo":
+            raise
         return False
     return callable(getattr(placo_module, "RobotWrapper", None)) and callable(
         getattr(placo_module, "KinematicsSolver", None)

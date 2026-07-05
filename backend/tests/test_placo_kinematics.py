@@ -221,6 +221,20 @@ def test_load_placo_rejects_incomplete_module(monkeypatch) -> None:
     assert exc_info.value.detail == "placo is not available; install it to enable the Placo IK solver."
 
 
+def test_load_placo_preserves_unexpected_import_errors(monkeypatch) -> None:
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected placo import failure")
+
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        _fake_import_module,
+    )
+
+    with pytest.raises(ImportError, match="unexpected placo import failure"):
+        _load_placo("<robot name='demo'/>")
+
+
 def test_placo_inverse_kinematics_wraps_expected_setup_errors(monkeypatch) -> None:
     class _FakeRobot:
         @staticmethod
