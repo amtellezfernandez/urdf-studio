@@ -124,16 +124,7 @@ def pump_pybullet_static_debug_viewer(
         ("camera_state", "getDebugVisualizerCamera"),
     )
     for state_name, method_name in pump_methods:
-        method = getattr(pybullet, method_name, None)
-        if method is None:
-            pump_state[state_name] = False
-            continue
-        try:
-            method()
-        except Exception:
-            pump_state[state_name] = False
-            continue
-        pump_state[state_name] = True
+        pump_state[state_name] = _call_optional_pybullet_viewer_method(pybullet, method_name)
 
     pump_state["render_frame"] = set_debug_visualizer_flag(
         pybullet,
@@ -145,6 +136,17 @@ def pump_pybullet_static_debug_viewer(
 
 def should_step_pybullet_interactive_viewer_loop(*, no_viewer: bool, run_physics: bool) -> bool:
     return not no_viewer and run_physics
+
+
+def _call_optional_pybullet_viewer_method(pybullet: Any, method_name: str) -> bool:
+    method = getattr(pybullet, method_name, None)
+    if method is None:
+        return False
+    try:
+        method()
+    except Exception:
+        return False
+    return True
 
 
 def advance_pybullet_viewer_frame(
