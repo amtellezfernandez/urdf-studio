@@ -371,7 +371,7 @@ def run_world_bridge_conformance() -> WorldBridgeConformanceResult:
         "list_sessions mismatch",
     )
 
-    result.passed = len(result.failures) == 0
+    result.passed = not result.failures
     return result
 
 
@@ -467,5 +467,5 @@ def run_world_bridge_live_conformance(
     except (WorlddUnavailableError, WorlddHttpError, ValueError) as exc:
         result.failures.append(f"live request failed: {exc}")
 
-    result.passed = len(result.failures) == 0
+    result.passed = not result.failures
     return result
