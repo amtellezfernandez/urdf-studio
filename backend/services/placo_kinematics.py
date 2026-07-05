@@ -259,8 +259,8 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
             status_code=500, detail=f"Placo IK setup failed: {exc}"
         ) from exc
 
+    iterations = max(1, int(tuning.solve_iterations))
     try:
-        iterations = max(1, int(tuning.solve_iterations))
         for _solve_iteration in range(iterations):
             entry.solver.solve(True)
             robot.update_kinematics()
@@ -277,7 +277,7 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
     diagnostics = IKDiagnostics(
         termination_reason="placo",
         termination_flags=[True, False, False, False],
-        iterations=1,
+        iterations=iterations,
         cost=0.0,
         lambda_final=0.0,
         validity="valid",

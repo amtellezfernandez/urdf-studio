@@ -408,3 +408,75 @@ def test_placo_inverse_kinematics_preserves_unexpected_solve_errors(monkeypatch)
                 joint_values={"joint_a": 0.0},
             )
         )
+
+
+def test_placo_inverse_kinematics_reports_configured_solve_iterations(monkeypatch) -> None:
+    solve_calls: list[bool] = []
+
+    class _FakeRobot:
+        @staticmethod
+        def set_joint(_joint_name: str, _joint_value: float) -> None:
+            return None
+
+        @staticmethod
+        def update_kinematics() -> None:
+            return None
+
+        @staticmethod
+        def get_joint(_joint_name: str) -> float:
+            return 0.0
+
+    class _FrameTask:
+        T_world_frame = None
+
+        @staticmethod
+        def configure(*_args) -> None:
+            return None
+
+    class _FakeSolver:
+        @staticmethod
+        def add_frame_task(_target_link: str, _frame: np.ndarray) -> object:
+            return _FrameTask()
+
+        @staticmethod
+        def enable_joint_limits(_enabled: bool) -> None:
+            return None
+
+        @staticmethod
+        def solve(allow_limits: bool) -> None:
+            solve_calls.append(allow_limits)
+
+    entry = placo_kinematics_module.PlacoRobotEntry(
+        urdf_hash="demo",
+        urdf_xml="<robot name='demo'/>",
+        robot=_FakeRobot(),
+        solver=_FakeSolver(),
+        joint_names=["joint_a"],
+        joints_task=None,
+    )
+
+    class _FakeTuning:
+        position_weight = 100.0
+        orientation_weight = 0.5
+        posture_weight = 0.0
+        limit_weight = 1.0
+        solve_iterations = 3
+
+    monkeypatch.setattr(placo_kinematics_module, "_load_placo", lambda _urdf_xml: entry)
+    monkeypatch.setattr(
+        placo_kinematics_module,
+        "get_solver_tuning",
+        lambda _solver_id: _FakeTuning(),
+    )
+
+    response = inverse_kinematics(
+        IKRequest(
+            urdf="<robot name='demo'/>",
+            target_link="tool",
+            target_position=[0.0, 0.0, 0.0],
+            joint_values={"joint_a": 0.0},
+        )
+    )
+
+    assert solve_calls == [True, True, True]
+    assert response.diagnostics.iterations == 3
