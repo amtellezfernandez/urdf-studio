@@ -421,7 +421,9 @@ def _validate_report_artifact_path(
     path_error = _validate_report_string(value, f"artifacts.{key}")
     if path_error:
         return path_error
-    path = Path(value)
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        return f"simulator validation report artifact '{key}' is not an absolute path: {path}"
     if kind == "file":
         if not path.is_file():
             return f"simulator validation report artifact '{key}' is not a file: {path}"

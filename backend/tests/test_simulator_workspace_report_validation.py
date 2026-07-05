@@ -911,6 +911,30 @@ def test_workspace_report_validation_rejects_wrong_artifact_kind(tmp_path) -> No
     )
 
 
+def test_workspace_report_validation_rejects_relative_required_artifact_path(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {"camera_screenshot_dir": "artifacts/cameras"},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(required_artifact_dir_keys=("camera_screenshot_dir",)),
+    ) == (
+        "simulator validation report artifact 'camera_screenshot_dir' "
+        "is not an absolute path: artifacts/cameras"
+    )
+
+
 def test_workspace_report_validation_rejects_wrong_simulator_id(tmp_path) -> None:
     report_path = _write_report(
         tmp_path,
