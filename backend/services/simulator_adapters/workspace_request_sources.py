@@ -178,9 +178,39 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
     )
 
 
-def build_studio_y_up_axis_workspace_request() -> SimulatorWorkspacePrepareRequest:
+def _copy_demo_world_package_with_fixture(fixture_name: str) -> WorldScenePackageManifest:
     request = build_demo_workspace_request()
     world_package = request.world_package.model_copy(deep=True)
+    world_package.provenance = {
+        **world_package.provenance,
+        "workspace_check_fixture": fixture_name,
+    }
+    return world_package
+
+
+def _build_fixture_request(
+    *,
+    fixture_name: str,
+    world_package: WorldScenePackageManifest,
+    mesh_assets: Sequence[SimulatorMeshAssetUpload] | None = None,
+    urdf_asset_path: str | None = None,
+) -> SimulatorWorkspacePrepareRequest:
+    request = build_demo_workspace_request()
+    update: dict[str, object] = {"world_package": world_package}
+    if mesh_assets is not None:
+        update["mesh_assets"] = list(mesh_assets)
+    if urdf_asset_path is not None:
+        update["urdf_asset_path"] = urdf_asset_path
+    if "workspace_check_fixture" not in world_package.provenance:
+        world_package.provenance = {
+            **world_package.provenance,
+            "workspace_check_fixture": fixture_name,
+        }
+    return request.model_copy(update=update, deep=True)
+
+
+def build_studio_y_up_axis_workspace_request() -> SimulatorWorkspacePrepareRequest:
+    world_package = _copy_demo_world_package_with_fixture("studio-y-up-axis")
     world_package.package_id = "studio-y-up-axis-workspace-check"
     world_package.title = "Studio Y-Up Axis Workspace Check"
     world_package.interface.frame_convention = "studio-y-up"
@@ -198,11 +228,10 @@ def build_studio_y_up_axis_workspace_request() -> SimulatorWorkspacePrepareReque
             "source": "user",
         }
     ]
-    world_package.provenance = {
-        **world_package.provenance,
-        "workspace_check_fixture": "studio-y-up-axis",
-    }
-    return request.model_copy(update={"world_package": world_package}, deep=True)
+    return _build_fixture_request(
+        fixture_name="studio-y-up-axis",
+        world_package=world_package,
+    )
 
 
 def build_mesh_asset_workspace_request() -> SimulatorWorkspacePrepareRequest:
@@ -237,18 +266,15 @@ def build_mesh_asset_workspace_request() -> SimulatorWorkspacePrepareRequest:
         ).decode("ascii"),
         mime="model/obj",
     )
-    return request.model_copy(
-        update={
-            "world_package": world_package,
-            "mesh_assets": [*request.mesh_assets, mesh_asset],
-        },
-        deep=True,
+    return _build_fixture_request(
+        fixture_name="mesh-asset",
+        world_package=world_package,
+        mesh_assets=[*request.mesh_assets, mesh_asset],
     )
 
 
 def build_hidden_object_workspace_request() -> SimulatorWorkspacePrepareRequest:
-    request = build_demo_workspace_request()
-    world_package = request.world_package.model_copy(deep=True)
+    world_package = _copy_demo_world_package_with_fixture("hidden-object")
     world_package.package_id = "hidden-object-workspace-check"
     world_package.title = "Hidden Object Workspace Check"
     world_package.world_snapshot.objects = [
@@ -265,29 +291,24 @@ def build_hidden_object_workspace_request() -> SimulatorWorkspacePrepareRequest:
             "is_hidden": True,
         },
     ]
-    world_package.provenance = {
-        **world_package.provenance,
-        "workspace_check_fixture": "hidden-object",
-    }
-    return request.model_copy(update={"world_package": world_package}, deep=True)
+    return _build_fixture_request(
+        fixture_name="hidden-object",
+        world_package=world_package,
+    )
 
 
 def build_xacro_source_workspace_request() -> SimulatorWorkspacePrepareRequest:
-    request = build_demo_workspace_request()
-    world_package = request.world_package.model_copy(deep=True)
+    world_package = _copy_demo_world_package_with_fixture("xacro-source")
     world_package.package_id = "xacro-source-workspace-check"
     world_package.title = "Xacro Source Workspace Check"
     world_package.provenance = {
         **world_package.provenance,
-        "workspace_check_fixture": "xacro-source",
         "source_asset_path": "robots/so101.urdf.xacro",
     }
-    return request.model_copy(
-        update={
-            "world_package": world_package,
-            "urdf_asset_path": "robots/so101.urdf.xacro",
-        },
-        deep=True,
+    return _build_fixture_request(
+        fixture_name="xacro-source",
+        world_package=world_package,
+        urdf_asset_path="robots/so101.urdf.xacro",
     )
 
 
