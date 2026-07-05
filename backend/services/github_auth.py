@@ -47,7 +47,7 @@ def _get_env_github_token() -> str | None:
 def _read_gh_hosts_token(host: str = GH_AUTH_HOST) -> str | None:
     try:
         raw_text = GH_HOSTS_PATH.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
 
     active_host: str | None = None

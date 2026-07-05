@@ -114,3 +114,19 @@ def test_resolve_server_github_token_falls_back_to_gh_hosts_file_when_cli_token_
     monkeypatch.setattr("backend.services.github_auth.subprocess.run", _fake_run)
 
     assert github_auth.resolve_server_github_token() == "hosts-token"
+
+
+def test_resolve_server_github_token_ignores_invalid_gh_hosts_encoding(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("URDF_GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(github_auth, "_gh_auth_cache", None)
+    monkeypatch.setattr(github_auth, "GH_HOSTS_PATH", tmp_path / "hosts.yml")
+    github_auth.GH_HOSTS_PATH.write_bytes(b"\x80not-utf8")
+
+    def _fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 1, stdout="", stderr="not logged in")
+
+    monkeypatch.setattr("backend.services.github_auth.subprocess.run", _fake_run)
+
+    assert github_auth.resolve_server_github_token() is None
