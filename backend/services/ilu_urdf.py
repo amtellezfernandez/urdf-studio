@@ -366,8 +366,9 @@ def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
     raw_warnings = response.get("warnings")
     raw_diagnostics = response.get("diagnostics", [])
     raw_stats = response.get("stats")
+    normalized_mjcf_content = mjcf_content.strip() if isinstance(mjcf_content, str) else ""
     if (
-        not isinstance(mjcf_content, str)
+        not normalized_mjcf_content
         or not isinstance(raw_warnings, list)
         or not isinstance(raw_diagnostics, list)
     ):
@@ -381,7 +382,7 @@ def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
             raise IluUrdfBridgeError(502, f"ilu bridge returned invalid MJCF conversion stat: {key}.")
         return value
 
-    warnings = tuple(item for item in raw_warnings if isinstance(item, str))
+    warnings = tuple(item.strip() for item in raw_warnings if isinstance(item, str) and item.strip())
     if len(warnings) != len(raw_warnings):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion warning.")
 
@@ -393,18 +394,22 @@ def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
         severity = item.get("severity")
         link_name = item.get("linkName")
         message = item.get("message")
-        if not all(isinstance(value, str) and value for value in (code, severity, link_name, message)):
+        normalized_values = tuple(
+            value.strip() if isinstance(value, str) else ""
+            for value in (code, severity, link_name, message)
+        )
+        if not all(normalized_values):
             raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion diagnostic.")
         diagnostics.append(
             MjcfConversionDiagnostic(
-                code=code,
-                severity=severity,
-                link_name=link_name,
-                message=message,
+                code=normalized_values[0],
+                severity=normalized_values[1],
+                link_name=normalized_values[2],
+                message=normalized_values[3],
             )
         )
     return MjcfConversionResult(
-        mjcf_content=mjcf_content,
+        mjcf_content=normalized_mjcf_content,
         warnings=warnings,
         diagnostics=tuple(diagnostics),
         stats=MjcfConversionStats(
@@ -420,7 +425,8 @@ def convert_urdf_to_usd(urdf_xml: str) -> UsdConversionResult:
     usd_content = response.get("usdContent")
     raw_warnings = response.get("warnings")
     raw_stats = response.get("stats")
-    if not isinstance(usd_content, str) or not isinstance(raw_warnings, list):
+    normalized_usd_content = usd_content.strip() if isinstance(usd_content, str) else ""
+    if not normalized_usd_content or not isinstance(raw_warnings, list):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid USD conversion response.")
     if not isinstance(raw_stats, dict):
         raise IluUrdfBridgeError(502, "ilu bridge returned invalid USD conversion stats.")
@@ -431,11 +437,11 @@ def convert_urdf_to_usd(urdf_xml: str) -> UsdConversionResult:
             raise IluUrdfBridgeError(502, f"ilu bridge returned invalid USD conversion stat: {key}.")
         return value
 
-    warnings = tuple(item for item in raw_warnings if isinstance(item, str))
+    warnings = tuple(item.strip() for item in raw_warnings if isinstance(item, str) and item.strip())
     if len(warnings) != len(raw_warnings):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid USD conversion warning.")
     return UsdConversionResult(
-        usd_content=usd_content,
+        usd_content=normalized_usd_content,
         warnings=warnings,
         stats=UsdConversionStats(
             links_converted=_read_count("linksConverted"),

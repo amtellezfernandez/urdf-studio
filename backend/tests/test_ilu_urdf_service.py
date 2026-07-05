@@ -264,6 +264,81 @@ def test_convert_urdf_to_mjcf_maps_bridge_response(monkeypatch) -> None:
     assert result.stats.geometries_converted == 2
 
 
+def test_convert_urdf_to_mjcf_trims_string_fields(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "mjcfContent": "  <mujoco model=\"demo\"/>  ",
+            "warnings": [" mesh converted by basename "],
+            "diagnostics": [
+                {
+                    "code": " mjcf.inertial.regularized ",
+                    "severity": " warning ",
+                    "linkName": " arm_link ",
+                    "message": " trimmed message ",
+                }
+            ],
+            "stats": {
+                "bodiesCreated": 1,
+                "jointsConverted": 0,
+                "geometriesConverted": 2,
+            },
+        },
+    )
+
+    result = convert_urdf_to_mjcf("<robot name=\"demo\"/>")
+
+    assert result.mjcf_content == "<mujoco model=\"demo\"/>"
+    assert result.warnings == ("mesh converted by basename",)
+    assert result.diagnostics[0].code == "mjcf.inertial.regularized"
+    assert result.diagnostics[0].severity == "warning"
+    assert result.diagnostics[0].link_name == "arm_link"
+    assert result.diagnostics[0].message == "trimmed message"
+
+
+def test_convert_urdf_to_mjcf_rejects_blank_warning_or_diagnostic_fields(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "mjcfContent": "<mujoco model=\"demo\"/>",
+            "warnings": ["   "],
+            "diagnostics": [],
+            "stats": {
+                "bodiesCreated": 1,
+                "jointsConverted": 0,
+                "geometriesConverted": 2,
+            },
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid MJCF conversion warning"):
+        convert_urdf_to_mjcf("<robot name=\"demo\"/>")
+
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "mjcfContent": "<mujoco model=\"demo\"/>",
+            "warnings": [],
+            "diagnostics": [
+                {
+                    "code": " ",
+                    "severity": "warning",
+                    "linkName": "arm_link",
+                    "message": "message",
+                }
+            ],
+            "stats": {
+                "bodiesCreated": 1,
+                "jointsConverted": 0,
+                "geometriesConverted": 2,
+            },
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid MJCF conversion diagnostic"):
+        convert_urdf_to_mjcf("<robot name=\"demo\"/>")
+
+
 def test_convert_urdf_to_usd_maps_bridge_response(monkeypatch) -> None:
     def _fake_run_bridge(command, payload):
         assert command == "convert-usd"
@@ -285,8 +360,71 @@ def test_convert_urdf_to_usd_maps_bridge_response(monkeypatch) -> None:
 
     result = convert_urdf_to_usd("<robot name=\"demo\"/>")
 
-    assert result.usd_content == "#usda 1.0\n"
+    assert result.usd_content == "#usda 1.0"
     assert result.warnings == ("Skipped unsupported visual mesh meshes/base.stl on link base.",)
     assert result.stats.links_converted == 1
     assert result.stats.visuals_converted == 1
     assert result.stats.unsupported_meshes == 1
+
+
+def test_convert_urdf_to_usd_trims_string_fields(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "usdContent": "  #usda 1.0\n  ",
+            "warnings": [" Skipped unsupported visual mesh meshes/base.stl on link base. "],
+            "stats": {
+                "linksConverted": 1,
+                "jointsConverted": 0,
+                "visualsConverted": 1,
+                "collisionsConverted": 0,
+                "inlineMeshesConverted": 0,
+                "unsupportedMeshes": 1,
+            },
+        },
+    )
+
+    result = convert_urdf_to_usd("<robot name=\"demo\"/>")
+
+    assert result.usd_content == "#usda 1.0"
+    assert result.warnings == ("Skipped unsupported visual mesh meshes/base.stl on link base.",)
+
+
+def test_convert_urdf_to_usd_rejects_blank_warning_or_content(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "usdContent": "   ",
+            "warnings": [],
+            "stats": {
+                "linksConverted": 1,
+                "jointsConverted": 0,
+                "visualsConverted": 1,
+                "collisionsConverted": 0,
+                "inlineMeshesConverted": 0,
+                "unsupportedMeshes": 1,
+            },
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid USD conversion response"):
+        convert_urdf_to_usd("<robot name=\"demo\"/>")
+
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "usdContent": "#usda 1.0\n",
+            "warnings": [" "],
+            "stats": {
+                "linksConverted": 1,
+                "jointsConverted": 0,
+                "visualsConverted": 1,
+                "collisionsConverted": 0,
+                "inlineMeshesConverted": 0,
+                "unsupportedMeshes": 1,
+            },
+        },
+    )
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid USD conversion warning"):
+        convert_urdf_to_usd("<robot name=\"demo\"/>")
