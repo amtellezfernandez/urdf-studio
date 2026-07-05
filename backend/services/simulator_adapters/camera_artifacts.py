@@ -76,11 +76,35 @@ def validate_visible_rgb_image(
         stats = inspect_rgb_image(path)
     except Exception as exc:
         return f"invalid image artifact {path}: {exc}"
-    if expected_size is not None and stats.size != expected_size:
-        return (
-            f"image artifact has wrong size: {path} "
-            f"{stats.size[0]}x{stats.size[1]}, expected {expected_size[0]}x{expected_size[1]}"
-        )
-    if stats.channel_span <= MIN_VISIBLE_CHANNEL_SPAN:
-        return f"blank image artifact: {path}"
-    return None
+    size_error = _validate_image_size(
+        path,
+        stats=stats,
+        expected_size=expected_size,
+    )
+    if size_error:
+        return size_error
+    return _validate_image_visibility(path, stats=stats)
+
+
+def _validate_image_size(
+    path: Path,
+    *,
+    stats: ImageArtifactStats,
+    expected_size: tuple[int, int] | None,
+) -> str | None:
+    if expected_size is None or stats.size == expected_size:
+        return None
+    return (
+        f"image artifact has wrong size: {path} "
+        f"{stats.size[0]}x{stats.size[1]}, expected {expected_size[0]}x{expected_size[1]}"
+    )
+
+
+def _validate_image_visibility(
+    path: Path,
+    *,
+    stats: ImageArtifactStats,
+) -> str | None:
+    if stats.channel_span > MIN_VISIBLE_CHANNEL_SPAN:
+        return None
+    return f"blank image artifact: {path}"
