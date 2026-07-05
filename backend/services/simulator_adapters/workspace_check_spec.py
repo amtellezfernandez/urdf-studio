@@ -70,7 +70,7 @@ def _module_command(
     extra_args: Sequence[str] = (),
     report_path: Path | None = None,
 ) -> list[str]:
-    report_args = ("--report", str(report_path)) if report_path is not None else ()
+    report_args = _report_command_args(report_path)
     return [
         sys.executable,
         "-u",
@@ -90,6 +90,12 @@ def _module_command(
     ]
 
 
+def _report_command_args(report_path: Path | None) -> tuple[str, ...]:
+    if report_path is None:
+        return ()
+    return ("--report", str(report_path))
+
+
 def _workspace_expectation_fields(
     expectations: WorkspaceExpectations,
 ) -> dict[str, object]:
@@ -105,6 +111,52 @@ def _workspace_expectation_fields(
         "expected_joint_positions": expectations.joint_positions,
         "expected_camera_ids": expectations.camera_ids,
         "expected_camera_contracts": expectations.camera_contracts,
+    }
+
+
+def _prepared_workspace_command_kwargs(
+    *,
+    workspace_process: SimulatorWorkspaceProcessParams,
+    prepared: PreparedSimulatorWorkspace,
+    simulator_id: SimulatorId,
+    object_marker: str,
+    expectations: WorkspaceExpectations,
+    camera_log_marker: str | None,
+    extra_expected_markers: tuple[str, ...],
+    extra_args: Sequence[str],
+    expected_image_paths: tuple[Path, ...],
+    expected_image_dirs: tuple[tuple[Path, int], ...],
+    expected_file_paths: tuple[Path, ...],
+    expected_file_validators: tuple[tuple[Path, Callable[[Path], str | None]], ...],
+    expected_report_path: Path | None,
+    expected_report_artifact_file_keys: tuple[str, ...],
+    expected_report_artifact_dir_keys: tuple[str, ...],
+) -> dict[str, object]:
+    expected_camera_log_marker = camera_log_marker or f"cameras={expectations.camera_count}"
+    return {
+        "command": _module_command(
+            workspace_process,
+            world_package_path=prepared.world_package_path,
+            robot_asset_flag="--robot-urdf",
+            robot_asset_path=prepared.robot_urdf_path,
+            duration_sec=expectations.duration_sec,
+            frame_map=expectations.frame_map,
+            extra_args=extra_args,
+            report_path=expected_report_path,
+        ),
+        "ready_marker": workspace_process.ready_log_marker,
+        "expected_object_marker": object_marker,
+        "expected_camera_log_marker": expected_camera_log_marker,
+        "extra_expected_markers": extra_expected_markers,
+        "expected_image_paths": expected_image_paths,
+        "expected_image_dirs": expected_image_dirs,
+        "expected_file_paths": expected_file_paths,
+        "expected_file_validators": expected_file_validators,
+        "expected_report_path": expected_report_path,
+        "expected_simulator_id": simulator_id,
+        "expected_report_artifact_file_keys": expected_report_artifact_file_keys,
+        "expected_report_artifact_dir_keys": expected_report_artifact_dir_keys,
+        **_workspace_expectation_fields(expectations),
     }
 
 
@@ -126,29 +178,22 @@ def _prepare_direct_urdf_command(
     expected_report_artifact_dir_keys: tuple[str, ...] = (),
     expectations: WorkspaceExpectations,
 ) -> PreparedWorkspaceCommand:
-    expected_camera_log_marker = camera_log_marker or f"cameras={expectations.camera_count}"
     return PreparedWorkspaceCommand(
-        command=_module_command(
-            workspace_process,
-            world_package_path=prepared.world_package_path,
-            robot_asset_flag="--robot-urdf",
-            robot_asset_path=prepared.robot_urdf_path,
-            duration_sec=expectations.duration_sec,
-            frame_map=expectations.frame_map,
+        **_prepared_workspace_command_kwargs(
+            workspace_process=workspace_process,
+            prepared=prepared,
+            simulator_id=simulator_id,
+            object_marker=object_marker,
+            expectations=expectations,
+            camera_log_marker=camera_log_marker,
+            extra_expected_markers=extra_expected_markers,
             extra_args=extra_args,
-            report_path=expected_report_path,
-        ),
-        ready_marker=workspace_process.ready_log_marker,
-        expected_object_marker=object_marker,
-        expected_camera_log_marker=expected_camera_log_marker,
-        extra_expected_markers=extra_expected_markers,
-        expected_image_paths=expected_image_paths,
-        expected_image_dirs=expected_image_dirs,
-        expected_file_paths=expected_file_paths,
-        expected_file_validators=expected_file_validators,
-        expected_report_path=expected_report_path,
-        expected_simulator_id=simulator_id,
-        expected_report_artifact_file_keys=expected_report_artifact_file_keys,
-        expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
-        **_workspace_expectation_fields(expectations),
+            expected_image_paths=expected_image_paths,
+            expected_image_dirs=expected_image_dirs,
+            expected_file_paths=expected_file_paths,
+            expected_file_validators=expected_file_validators,
+            expected_report_path=expected_report_path,
+            expected_report_artifact_file_keys=expected_report_artifact_file_keys,
+            expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
+        )
     )
