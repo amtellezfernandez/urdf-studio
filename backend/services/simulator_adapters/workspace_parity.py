@@ -110,6 +110,12 @@ def check_simulator_workspace_parity(
     image_difference = _validate_camera_image_parity(loaded_reports)
     if image_difference is not None:
         return WorkspaceParityResult(passed=False, detail=image_difference)
+    return _successful_workspace_parity_result(loaded_reports)
+
+
+def _successful_workspace_parity_result(
+    loaded_reports: Sequence[LoadedParityReport],
+) -> WorkspaceParityResult:
     labels = ", ".join(parity_input.label for parity_input, _report in loaded_reports)
     return WorkspaceParityResult(
         passed=True,
