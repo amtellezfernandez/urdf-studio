@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
-from backend.services.simulator_adapters.camera_transfer import build_sim_camera_specs
+from backend.services.simulator_adapters.camera_transfer import SimCameraSpec, build_sim_camera_specs
 from backend.services.simulator_adapters.workspace_report_validation import (
     ExpectedCameraReport,
     ExpectedObjectReport,
@@ -19,6 +19,7 @@ from backend.services.world_layout_static_transfer import (
 )
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
+    SimPrimitive,
     StaticWorldLayout,
     WorldLayoutFrameMap,
 )
@@ -126,28 +127,7 @@ def _expected_object_contracts(
         positions_xyz={primitive.source_id: primitive.position_xyz for primitive in primitives},
         sizes_xyz={primitive.source_id: primitive.size_xyz for primitive in primitives},
         asset_refs={primitive.source_id: primitive.asset_ref for primitive in primitives},
-        contracts={
-            primitive.source_id: ExpectedObjectReport(
-                source_id=primitive.source_id,
-                source_name=primitive.source_name,
-                sim_name=primitive.sim_name,
-                source_type=primitive.source_type,
-                sim_type=primitive.sim_type,
-                position_xyz=primitive.position_xyz,
-                quat_wxyz=primitive.quat_wxyz,
-                size_xyz=primitive.size_xyz,
-                rgba=primitive.rgba,
-                collision=primitive.collision,
-                fixed=primitive.fixed,
-                mass_kg=primitive.mass_kg,
-                friction=primitive.friction,
-                restitution=primitive.restitution,
-                semantic_role=primitive.semantic_role,
-                asset_ref=primitive.asset_ref,
-                asset_scale_xyz=primitive.asset_scale_xyz,
-            )
-            for primitive in primitives
-        },
+        contracts={primitive.source_id: _expected_object_report(primitive) for primitive in primitives},
     )
 
 
@@ -191,18 +171,41 @@ def expected_camera_contracts_for_request(
             request.world_package,
             robot_urdf_path=robot_urdf_path,
         )
-    return {
-        camera.camera_id: ExpectedCameraReport(
-            camera_id=camera.camera_id,
-            sim_name=camera.sim_name,
-            parent_joint=camera.parent_joint,
-            parent_link=camera.parent_link,
-            position_xyz=camera.position_xyz,
-            quat_wxyz=camera.quat_wxyz,
-            width=camera.width,
-            height=camera.height,
-            fov_deg=camera.fov_deg,
-            intrinsics_matrix=camera.intrinsics.matrix if camera.intrinsics is not None else (),
-        )
-        for camera in camera_specs
-    }
+    return {camera.camera_id: _expected_camera_report(camera) for camera in camera_specs}
+
+
+def _expected_object_report(primitive: SimPrimitive) -> ExpectedObjectReport:
+    return ExpectedObjectReport(
+        source_id=primitive.source_id,
+        source_name=primitive.source_name,
+        sim_name=primitive.sim_name,
+        source_type=primitive.source_type,
+        sim_type=primitive.sim_type,
+        position_xyz=primitive.position_xyz,
+        quat_wxyz=primitive.quat_wxyz,
+        size_xyz=primitive.size_xyz,
+        rgba=primitive.rgba,
+        collision=primitive.collision,
+        fixed=primitive.fixed,
+        mass_kg=primitive.mass_kg,
+        friction=primitive.friction,
+        restitution=primitive.restitution,
+        semantic_role=primitive.semantic_role,
+        asset_ref=primitive.asset_ref,
+        asset_scale_xyz=primitive.asset_scale_xyz,
+    )
+
+
+def _expected_camera_report(camera: SimCameraSpec) -> ExpectedCameraReport:
+    return ExpectedCameraReport(
+        camera_id=camera.camera_id,
+        sim_name=camera.sim_name,
+        parent_joint=camera.parent_joint,
+        parent_link=camera.parent_link,
+        position_xyz=camera.position_xyz,
+        quat_wxyz=camera.quat_wxyz,
+        width=camera.width,
+        height=camera.height,
+        fov_deg=camera.fov_deg,
+        intrinsics_matrix=camera.intrinsics.matrix if camera.intrinsics is not None else (),
+    )
