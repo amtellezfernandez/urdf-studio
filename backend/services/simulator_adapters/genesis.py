@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
 from backend.models.simulator_runtime import (
     SIMULATOR_GENESIS_ID,
     SimulatorDependencySpec,
@@ -26,6 +29,15 @@ class GenesisWorkspaceError(SimulatorAdapterError):
     pass
 
 
+@dataclass(frozen=True)
+class GenesisWorkspaceCheckArtifacts:
+    screenshot_dir: Path
+    viewer_screenshot_path: Path
+    camera_screenshot_dir: Path
+    sensor_screenshot_dir: Path
+    report_path: Path
+
+
 def _genesis_error(message: str) -> GenesisWorkspaceError:
     return GenesisWorkspaceError(message)
 
@@ -35,6 +47,19 @@ def prepare_genesis_workspace(request: SimulatorWorkspacePrepareRequest) -> Prep
         request,
         workspace_process=GENESIS_WORKSPACE_PROCESS_PARAMS,
         error=_genesis_error,
+    )
+
+
+def _build_genesis_workspace_check_artifacts(
+    prepared: PreparedSimulatorWorkspace,
+) -> GenesisWorkspaceCheckArtifacts:
+    screenshot_dir = prepared.workspace_dir / "artifacts"
+    return GenesisWorkspaceCheckArtifacts(
+        screenshot_dir=screenshot_dir,
+        viewer_screenshot_path=screenshot_dir / "viewer.png",
+        camera_screenshot_dir=screenshot_dir / "cameras",
+        sensor_screenshot_dir=screenshot_dir / "sensors",
+        report_path=screenshot_dir / "report.json",
     )
 
 
@@ -55,10 +80,7 @@ class GenesisPlugin(DirectUrdfSimulatorPlugin):
         expectations: WorkspaceExpectations,
     ) -> PreparedWorkspaceCommand:
         prepared = prepare_genesis_workspace(request)
-        screenshot_dir = prepared.workspace_dir / "artifacts"
-        camera_screenshot_dir = screenshot_dir / "cameras"
-        sensor_screenshot_dir = screenshot_dir / "sensors"
-        report_path = screenshot_dir / "report.json"
+        artifacts = _build_genesis_workspace_check_artifacts(prepared)
         return _prepare_direct_urdf_command(
             prepared,
             simulator_id=SIMULATOR_GENESIS_ID,
@@ -74,19 +96,19 @@ class GenesisPlugin(DirectUrdfSimulatorPlugin):
             ),
             extra_args=(
                 "--screenshot",
-                str(screenshot_dir / "viewer.png"),
+                str(artifacts.viewer_screenshot_path),
                 "--camera-screenshot-dir",
-                str(camera_screenshot_dir),
+                str(artifacts.camera_screenshot_dir),
                 "--sensor-screenshot-dir",
-                str(sensor_screenshot_dir),
+                str(artifacts.sensor_screenshot_dir),
             ),
             expectations=expectations,
-            expected_image_paths=(screenshot_dir / "viewer.png",),
+            expected_image_paths=(artifacts.viewer_screenshot_path,),
             expected_image_dirs=(
-                (camera_screenshot_dir, expectations.camera_count),
-                (sensor_screenshot_dir, expectations.camera_count),
+                (artifacts.camera_screenshot_dir, expectations.camera_count),
+                (artifacts.sensor_screenshot_dir, expectations.camera_count),
             ),
-            expected_report_path=report_path,
+            expected_report_path=artifacts.report_path,
             expected_report_artifact_file_keys=("viewer_screenshot",),
             expected_report_artifact_dir_keys=("camera_screenshot_dir", "sensor_screenshot_dir"),
         )

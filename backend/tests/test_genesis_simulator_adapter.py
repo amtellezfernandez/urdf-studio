@@ -34,6 +34,8 @@ from backend.services.simulator_adapters.genesis_robot import (
     robot_urdf_morph_kwargs,
 )
 from backend.services.simulator_adapters.genesis_scene import add_mesh_entity_if_available
+from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
+from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.simulator_adapters import workspace_package
 from backend.services.simulator_adapters.urdf_material_policy import (
     materialize_urdf_visual_material_colors,
@@ -909,3 +911,58 @@ def test_prepare_genesis_simulator_workspace_rejects_failed_bundle(
         match="could not bundle robot mesh assets",
     ):
         genesis_adapter.prepare_genesis_workspace(request)
+
+
+def test_genesis_plugin_build_check_command_uses_expected_artifact_paths(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=tmp_path / "workspace",
+        world_package_path=tmp_path / "workspace" / "world-package.json",
+        robot_urdf_path=tmp_path / "workspace" / "robot" / "robot.urdf",
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content="<robot name='demo'/>",
+            out_path=str(tmp_path / "workspace" / "robot" / "robot.urdf"),
+            assets_root=str(tmp_path / "workspace" / "robot" / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+        world_object_count=2,
+        camera_count=3,
+    )
+    prepared.world_package_path.parent.mkdir(parents=True, exist_ok=True)
+    prepared.robot_urdf_path.parent.mkdir(parents=True, exist_ok=True)
+    prepared.world_package_path.write_text("{}", encoding="utf-8")
+    prepared.robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+
+    monkeypatch.setattr(genesis_adapter, "prepare_genesis_workspace", lambda request: prepared)
+
+    command = genesis_adapter.GenesisPlugin().build_check_command(
+        SimulatorWorkspacePrepareRequest(
+            world_package=make_world_package("<robot name='demo'><link name='base'/></robot>")
+        ),
+        WorkspaceExpectations(
+            duration_sec=0.25,
+            frame_map="auto",
+            resolved_frame_map="urdf_studio/v1",
+            object_count=2,
+            camera_count=3,
+            object_positions_xyz={},
+            object_sizes_xyz={},
+            object_asset_refs={},
+            object_contracts={},
+            joint_positions={},
+            camera_ids=(),
+            camera_contracts={},
+        ),
+    )
+
+    assert "--screenshot" in command.command
+    assert str(prepared.workspace_dir / "artifacts" / "viewer.png") in command.command
+    assert str(prepared.workspace_dir / "artifacts" / "cameras") in command.command
+    assert str(prepared.workspace_dir / "artifacts" / "sensors") in command.command
+    assert command.expected_report_path == prepared.workspace_dir / "artifacts" / "report.json"
