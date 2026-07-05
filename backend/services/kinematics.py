@@ -61,7 +61,7 @@ def _get_or_create_entry(urdf_xml: str) -> KinematicsEntry:
         return cached_entry
     try:
         robot_model = _load_urdf_from_xml(sanitized_urdf)
-    except Exception as exc:
+    except (ValueError, OSError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=f"Failed to load URDF: {exc}") from exc
     entry = KinematicsEntry(
         urdf_hash=urdf_hash,
