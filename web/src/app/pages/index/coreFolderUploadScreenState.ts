@@ -4,6 +4,7 @@ export const CORE_FOLDER_UPLOAD_SCREEN_PARAMS = {
     "grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start",
   setupEntryStackClass: "space-y-4",
   recentCameraConfigsStorageKey: "urdfstudio:recent-camera-configs",
+  recentRobotSourcesStorageKey: "urdfstudio:recent-robot-sources",
   recentWorldLayoutsStorageKey: "urdfstudio:recent-world-layouts",
   lastLocalCameraConfigStorageKey: "urdfstudio:last-local-camera-config",
   lastLocalRobotSourceStorageKey: "urdfstudio:last-local-robot-source",
@@ -64,6 +65,77 @@ export const removeRecentValue = (storageKey: string, value: string): string[] =
   return nextValues;
 };
 
+export type RecentRobotSource =
+  | { kind: "github"; repoUrl: string; urdfPath?: string }
+  | { kind: "url"; url: string };
+
+export type RecentLinkEntry = {
+  key: string;
+  label: string;
+  title: string;
+};
+
+export const recentRobotSourceKey = (source: RecentRobotSource): string =>
+  source.kind === "github"
+    ? `github:${source.repoUrl}#${source.urdfPath ?? ""}`
+    : `url:${source.url}`;
+
+const isRecentRobotSource = (value: unknown): value is RecentRobotSource => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.kind === "github") {
+    return (
+      typeof candidate.repoUrl === "string" &&
+      (candidate.urdfPath === undefined || typeof candidate.urdfPath === "string")
+    );
+  }
+  return candidate.kind === "url" && typeof candidate.url === "string";
+};
+
+export const readRecentRobotSources = (storageKey: string): RecentRobotSource[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = window.localStorage.getItem(storageKey);
+    if (!value) return [];
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(isRecentRobotSource) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeRecentRobotSources = (storageKey: string, sources: RecentRobotSource[]): void => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(storageKey, JSON.stringify(sources));
+};
+
+export const addRecentRobotSource = (
+  storageKey: string,
+  source: RecentRobotSource,
+  maxItems = 3
+): RecentRobotSource[] => {
+  const sourceKey = recentRobotSourceKey(source);
+  const nextSources = [
+    source,
+    ...readRecentRobotSources(storageKey).filter(
+      (item) => recentRobotSourceKey(item) !== sourceKey
+    ),
+  ].slice(0, maxItems);
+  writeRecentRobotSources(storageKey, nextSources);
+  return nextSources;
+};
+
+export const removeRecentRobotSource = (
+  storageKey: string,
+  sourceKey: string
+): RecentRobotSource[] => {
+  const nextSources = readRecentRobotSources(storageKey).filter(
+    (item) => recentRobotSourceKey(item) !== sourceKey
+  );
+  writeRecentRobotSources(storageKey, nextSources);
+  return nextSources;
+};
+
 export const deriveSourceLabel = (value: string, fallback: string): string => {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
@@ -76,6 +148,28 @@ export const deriveSourceLabel = (value: string, fallback: string): string => {
     return segment || fallback;
   }
 };
+
+export const toRecentLinkEntries = (urls: string[]): RecentLinkEntry[] =>
+  urls.map((url) => ({
+    key: url,
+    label: deriveSourceLabel(url, url),
+    title: url,
+  }));
+
+export const toRecentRobotSourceEntries = (sources: RecentRobotSource[]): RecentLinkEntry[] =>
+  sources.map((source) =>
+    source.kind === "github"
+      ? {
+          key: recentRobotSourceKey(source),
+          label: deriveSourceLabel(source.urdfPath || source.repoUrl, "GitHub robot"),
+          title: source.urdfPath ? `${source.repoUrl} · ${source.urdfPath}` : source.repoUrl,
+        }
+      : {
+          key: recentRobotSourceKey(source),
+          label: deriveSourceLabel(source.url, "Remote robot"),
+          title: source.url,
+        }
+  );
 
 const getFileRelativePath = (file: File): string =>
   ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(

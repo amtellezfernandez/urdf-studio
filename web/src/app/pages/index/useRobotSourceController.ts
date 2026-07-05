@@ -2,12 +2,17 @@ import { useCallback, useRef, useState, type ChangeEvent, type DragEvent, type F
 import { toast } from "sonner";
 
 import {
+  addRecentRobotSource,
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
   deriveLocalSourceLabel,
   deriveSourceLabel,
   fileListToArray,
+  readRecentRobotSources,
   readStoredString,
+  recentRobotSourceKey,
+  removeRecentRobotSource as removeStoredRecentRobotSource,
   writeStoredString,
+  type RecentRobotSource,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
 
@@ -44,6 +49,9 @@ export const useRobotSourceController = ({
   const [stagedRobot, setStagedRobot] = useState<StagedRobotSource | null>(null);
   const [lastLocalFolder, setLastLocalFolder] = useState<string | null>(() =>
     readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey)
+  );
+  const [recentRobotSources, setRecentRobotSources] = useState<RecentRobotSource[]>(() =>
+    readRecentRobotSources(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentRobotSourcesStorageKey)
   );
 
   const stageRobot = useCallback((source: StagedRobotSource): void => {
@@ -102,15 +110,14 @@ export const useRobotSourceController = ({
     [stageLocalRobotFiles]
   );
 
-  const stageGithubRobot = useCallback(
-    (event?: FormEvent<HTMLFormElement>): void => {
-      event?.preventDefault();
-      const repoUrl = githubUrl.trim();
-      if (!repoUrl) {
-        toast.error("Paste a GitHub repository link first.");
-        return;
-      }
-      const urdfPath = githubUrdfPath.trim();
+  const rememberRecentRobotSource = useCallback((source: RecentRobotSource): void => {
+    setRecentRobotSources(
+      addRecentRobotSource(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentRobotSourcesStorageKey, source)
+    );
+  }, []);
+
+  const stageGithubRobotSource = useCallback(
+    (repoUrl: string, urdfPath: string): void => {
       const label = deriveSourceLabel(urdfPath || repoUrl, "GitHub robot");
       stageRobot({
         label,
@@ -120,13 +127,52 @@ export const useRobotSourceController = ({
           try {
             await onGitHubSelected({ repoUrl, urdfPath: urdfPath || undefined });
             setLoadedRobotName(label);
+            rememberRecentRobotSource({
+              kind: "github",
+              repoUrl,
+              urdfPath: urdfPath || undefined,
+            });
           } finally {
             setIsLoadingGithub(false);
           }
         },
       });
     },
-    [githubUrl, githubUrdfPath, onGitHubSelected, stageRobot]
+    [onGitHubSelected, rememberRecentRobotSource, stageRobot]
+  );
+
+  const stageGithubRobot = useCallback(
+    (event?: FormEvent<HTMLFormElement>): void => {
+      event?.preventDefault();
+      const repoUrl = githubUrl.trim();
+      if (!repoUrl) {
+        toast.error("Paste a GitHub repository link first.");
+        return;
+      }
+      stageGithubRobotSource(repoUrl, githubUrdfPath.trim());
+    },
+    [githubUrl, githubUrdfPath, stageGithubRobotSource]
+  );
+
+  const stageUrlRobotSource = useCallback(
+    (url: string): void => {
+      const label = deriveSourceLabel(url, "Remote robot");
+      stageRobot({
+        label,
+        kind: "url",
+        load: async () => {
+          setIsLoadingUrl(true);
+          try {
+            await onUrlSelected(url);
+            setLoadedRobotName(label);
+            rememberRecentRobotSource({ kind: "url", url });
+          } finally {
+            setIsLoadingUrl(false);
+          }
+        },
+      });
+    },
+    [onUrlSelected, rememberRecentRobotSource, stageRobot]
   );
 
   const stageUrlRobot = useCallback(
@@ -137,23 +183,37 @@ export const useRobotSourceController = ({
         toast.error("Paste a URDF, Xacro, Hugging Face, or raw URL first.");
         return;
       }
-      const label = deriveSourceLabel(url, "Remote robot");
-      stageRobot({
-        label,
-        kind: "url",
-        load: async () => {
-          setIsLoadingUrl(true);
-          try {
-            await onUrlSelected(url);
-            setLoadedRobotName(label);
-          } finally {
-            setIsLoadingUrl(false);
-          }
-        },
-      });
+      stageUrlRobotSource(url);
     },
-    [onUrlSelected, stageRobot, urlSource]
+    [stageUrlRobotSource, urlSource]
   );
+
+  const stageRecentRobotSource = useCallback(
+    (sourceKey: string): void => {
+      const source = recentRobotSources.find(
+        (candidate) => recentRobotSourceKey(candidate) === sourceKey
+      );
+      if (!source) return;
+      if (source.kind === "github") {
+        setGithubUrl(source.repoUrl);
+        setGithubUrdfPath(source.urdfPath ?? "");
+        stageGithubRobotSource(source.repoUrl, source.urdfPath ?? "");
+        return;
+      }
+      setUrlSource(source.url);
+      stageUrlRobotSource(source.url);
+    },
+    [recentRobotSources, stageGithubRobotSource, stageUrlRobotSource]
+  );
+
+  const removeRecentRobotSource = useCallback((sourceKey: string): void => {
+    setRecentRobotSources(
+      removeStoredRecentRobotSource(
+        CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentRobotSourcesStorageKey,
+        sourceKey
+      )
+    );
+  }, []);
 
   const clearLastLocalFolder = useCallback((): void => {
     setLastLocalFolder(null);
@@ -182,6 +242,8 @@ export const useRobotSourceController = ({
     lastLocalFolder,
     loadedRobotName,
     loadStagedRobot,
+    recentRobotSources,
+    removeRecentRobotSource,
     robotSourceDropActive,
     setGithubUrl,
     setGithubUrdfPath,
@@ -189,6 +251,7 @@ export const useRobotSourceController = ({
     setUrlSource,
     stageGithubRobot,
     stageLocalRobotFiles,
+    stageRecentRobotSource,
     stageUrlRobot,
     stagedRobot,
     urlSource,

@@ -30,6 +30,8 @@ import {
 } from "@/app/pages/index/coreFolderUploadScreenParts";
 import {
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
+  toRecentLinkEntries,
+  toRecentRobotSourceEntries,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
 import { useCameraConfigSourceController } from "@/app/pages/index/useCameraConfigSourceController";
@@ -72,12 +74,15 @@ export const CoreFolderUploadScreen = ({
     lastLocalFolder,
     loadedRobotName,
     loadStagedRobot,
+    recentRobotSources,
+    removeRecentRobotSource,
     robotSourceDropActive,
     setGithubUrl,
     setGithubUrdfPath,
     setRobotSourceDropActive,
     setUrlSource,
     stageGithubRobot,
+    stageRecentRobotSource,
     stageUrlRobot,
     stagedRobot,
     urlSource,
@@ -265,10 +270,10 @@ export const CoreFolderUploadScreen = ({
       ) : (
         <RecentLinkPanel
           title="Recent Robot Sources"
-          emptyLabel="No recent local robot folder yet."
-          entries={[]}
-          onLoadUrl={() => undefined}
-          onRemoveUrl={() => undefined}
+          emptyLabel="No recent robot sources yet."
+          entries={toRecentRobotSourceEntries(recentRobotSources)}
+          onLoadEntry={stageRecentRobotSource}
+          onRemoveEntry={removeRecentRobotSource}
           lastLocalLabel={lastLocalFolder}
           onBrowseLocal={() => folderInputRef.current?.click()}
           onClearLocal={clearLastLocalFolder}
@@ -350,9 +355,9 @@ export const CoreFolderUploadScreen = ({
         <RecentLinkPanel
           title="Recent Camera Configs"
           emptyLabel="No recent camera configs yet."
-          entries={recentCameraConfigs}
-          onLoadUrl={loadCameraConfigFromUrl}
-          onRemoveUrl={removeRecentCameraConfig}
+          entries={toRecentLinkEntries(recentCameraConfigs)}
+          onLoadEntry={loadCameraConfigFromUrl}
+          onRemoveEntry={removeRecentCameraConfig}
           lastLocalLabel={lastLocalCameraConfig}
           onBrowseLocal={() => cameraConfigFileInputRef.current?.click()}
           onClearLocal={clearLastLocalCameraConfig}
@@ -409,11 +414,11 @@ export const CoreFolderUploadScreen = ({
         <RecentLinkPanel
           title="Recent World Layouts"
           emptyLabel="No recent world layouts yet."
-          entries={recentWorldLayouts}
-          onLoadUrl={(url) => {
+          entries={toRecentLinkEntries(recentWorldLayouts)}
+          onLoadEntry={(url) => {
             void loadWorldLayoutFromUrl(url);
           }}
-          onRemoveUrl={removeRecentWorldLayout}
+          onRemoveEntry={removeRecentWorldLayout}
           lastLocalLabel={lastLocalWorldLayout}
           onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
           onClearLocal={clearLastLocalWorldLayout}
