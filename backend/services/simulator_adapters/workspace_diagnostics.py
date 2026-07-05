@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 import re
 import subprocess
 from pathlib import Path
@@ -62,7 +63,7 @@ def pybullet_latest_workspace_log_warnings(
 
 def latest_workspace_log_path(*, workspace_root: Path, log_name: str) -> Path | None:
     try:
-        candidate_paths = tuple(workspace_root.glob(f"workspace-*/{log_name}"))
+        candidate_paths = workspace_root.glob(f"workspace-*/{log_name}")
     except OSError:
         return None
     return _latest_existing_path_by_mtime(candidate_paths)
@@ -98,7 +99,7 @@ def _pybullet_log_warnings(log_path: Path) -> tuple[str, ...]:
     )
 
 
-def _latest_existing_path_by_mtime(candidate_paths: tuple[Path, ...]) -> Path | None:
+def _latest_existing_path_by_mtime(candidate_paths: Iterable[Path]) -> Path | None:
     latest_path: Path | None = None
     latest_mtime = float("-inf")
     for path in candidate_paths:

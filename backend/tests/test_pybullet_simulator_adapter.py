@@ -112,6 +112,38 @@ def test_pybullet_runtime_diagnostic_prefers_current_glxinfo_over_stale_log(
     )
 
 
+def test_pybullet_runtime_diagnostic_uses_latest_workspace_log_when_glxinfo_is_unavailable(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    older_workspace_dir = tmp_path / "workspace-1"
+    older_workspace_dir.mkdir()
+    older_log_path = older_workspace_dir / "pybullet.log"
+    older_log_path.write_text("GL_RENDERER=NVIDIA GPU Renderer\n", encoding="utf-8")
+
+    latest_workspace_dir = tmp_path / "workspace-2"
+    latest_workspace_dir.mkdir()
+    latest_log_path = latest_workspace_dir / "pybullet.log"
+    latest_log_path.write_text(
+        "GL_RENDERER=llvmpipe (LLVM 20.1.2, 256 bits)\n",
+        encoding="utf-8",
+    )
+    latest_log_path.touch()
+
+    def fake_run(*_args, **_kwargs):
+        raise OSError("glxinfo missing")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    warnings = pybullet_runtime_opengl_warnings(
+        workspace_root=tmp_path,
+        log_name="pybullet.log",
+    )
+
+    assert len(warnings) == 1
+    assert "software OpenGL" in warnings[0]
+
+
 def test_read_workspace_launch_warnings_ignores_non_pybullet_logs(tmp_path: Path) -> None:
     log_path = tmp_path / "simulator.log"
     log_path.write_text("GL_RENDERER=llvmpipe (LLVM 20.1.2, 256 bits)\n", encoding="utf-8")
