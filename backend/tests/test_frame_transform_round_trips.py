@@ -278,6 +278,11 @@ def test_camera_convention_self_inverse(convention):
     )
 
 
+def test_camera_convention_rejects_unsupported_self_identity_shortcut():
+    with pytest.raises(ValueError, match="Unsupported camera frame convention: bogus"):
+        camera_frame_conversion_rotation("bogus", "bogus")  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(("a", "b"), [
     ("world", "opengl"),
     ("opengl", "ros"),

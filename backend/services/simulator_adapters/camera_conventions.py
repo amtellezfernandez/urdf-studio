@@ -48,9 +48,9 @@ def camera_frame_conversion_rotation(
     origin: CameraFrameConvention,
     target: CameraFrameConvention,
 ) -> Rotation:
+    origin_to_opengl = _camera_frame_to_opengl_rotation(origin)
     if origin == target:
         return Rotation.identity()
-    origin_to_opengl = _camera_frame_to_opengl_rotation(origin)
     opengl_to_target = _opengl_to_camera_frame_rotation(target)
     return origin_to_opengl * opengl_to_target
 
