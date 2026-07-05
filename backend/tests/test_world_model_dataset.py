@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.models.physical_state import ActionToken, PhysicalEntity, PhysicalStateFrame
 from backend.services.physical_rollout_baseline import rollout_action
 from backend.services.world_model_dataset import (
     build_world_model_dataset_manifest,
     build_world_model_training_samples,
+    load_world_model_dataset_jsonl,
     validate_world_model_dataset_samples,
 )
 
@@ -70,3 +73,20 @@ def test_world_model_dataset_readiness_rejects_feature_dim_drift() -> None:
 
     assert report.ready is False
     assert any("expected 18" in error for error in report.errors)
+
+
+def test_load_world_model_dataset_jsonl_reports_invalid_line_number(tmp_path) -> None:
+    dataset_path = tmp_path / "dataset.jsonl"
+    sample = build_world_model_training_samples(_simple_trace())[0]
+    dataset_path.write_text(sample.model_dump_json() + '\n{"sample_id":\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"line 2"):
+        load_world_model_dataset_jsonl(dataset_path)
+
+
+def test_load_world_model_dataset_jsonl_reports_invalid_encoding(tmp_path) -> None:
+    dataset_path = tmp_path / "dataset.jsonl"
+    dataset_path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read world model dataset JSONL"):
+        load_world_model_dataset_jsonl(dataset_path)

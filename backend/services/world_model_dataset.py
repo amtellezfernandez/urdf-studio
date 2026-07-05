@@ -206,11 +206,23 @@ def validate_world_model_dataset_samples(
 
 
 def load_world_model_dataset_jsonl(path: Path) -> list[WorldModelTrainingSample]:
-    return [
-        WorldModelTrainingSample.model_validate(json.loads(line))
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Failed to read world model dataset JSONL: {path}") from exc
+
+    samples: list[WorldModelTrainingSample] = []
+    for line_number, line in enumerate(raw_text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Invalid world model dataset JSONL line {line_number} in {path}: {exc}"
+            ) from exc
+        samples.append(WorldModelTrainingSample.model_validate(payload))
+    return samples
 
 
 def write_world_model_dataset_jsonl(
