@@ -618,6 +618,42 @@ def test_quadrants_backend_supported_preserves_unexpected_runtime_errors(
         genesis_workspace_prepare._quadrants_backend_supported("cuda")
 
 
+def test_torch_backend_probe_returns_false_when_torch_module_is_missing(
+    monkeypatch,
+) -> None:
+    original_import = builtins.__import__
+
+    def _missing_import(name, *args, **kwargs):
+        if name == "torch" or name.startswith("torch."):
+            raise ImportError("torch unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _missing_import)
+
+    assert genesis_workspace_prepare._torch_cuda_available() is False
+    assert genesis_workspace_prepare._torch_hip_available() is False
+    assert genesis_workspace_prepare._torch_mps_available() is False
+
+
+def test_torch_backend_probe_preserves_unexpected_runtime_errors(
+    monkeypatch,
+) -> None:
+    class _FailingCuda:
+        @staticmethod
+        def is_available():
+            raise RuntimeError("unexpected torch probe failure")
+
+    torch_module = SimpleNamespace(
+        cuda=_FailingCuda(),
+        version=SimpleNamespace(cuda="12.0", hip=None),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: True)),
+    )
+    monkeypatch.setitem(sys.modules, "torch", torch_module)
+
+    with pytest.raises(RuntimeError, match="unexpected torch probe failure"):
+        genesis_workspace_prepare._torch_cuda_available()
+
+
 def test_genesis_workspace_camera_uses_native_gui_camera_when_visible() -> None:
     class _FakeScene:
         def __init__(self) -> None:

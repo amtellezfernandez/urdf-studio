@@ -87,7 +87,7 @@ def _torch_cuda_available() -> bool:
         import torch
 
         return bool(torch.cuda.is_available() and torch.version.cuda)
-    except Exception:
+    except (ImportError, AttributeError):
         return False
 
 
@@ -96,7 +96,7 @@ def _torch_hip_available() -> bool:
         import torch
 
         return bool(torch.cuda.is_available() and torch.version.hip)
-    except Exception:
+    except (ImportError, AttributeError):
         return False
 
 
@@ -105,7 +105,7 @@ def _torch_mps_available() -> bool:
         import torch
 
         return bool(torch.backends.mps.is_available())
-    except Exception:
+    except (ImportError, AttributeError):
         return False
 
 
