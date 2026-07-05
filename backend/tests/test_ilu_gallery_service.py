@@ -2351,7 +2351,7 @@ def test_generate_gallery_job_retries_after_missing_github_target(
         nonlocal asset_call_count
         asset_call_count += 1
         if asset_call_count == 1:
-            raise RuntimeError(
+            raise ilu_gallery._GalleryRenderMissingTargetError(
                 "page.waitForFunction: Error: Unable to find the requested URDF target in the GitHub repository."
             )
         thumbnail_path = output_root / "generated" / f"{REAL_BARKOUR_FILE_BASE}.png"
@@ -2434,7 +2434,7 @@ def test_generate_gallery_job_surfaces_sane_error_after_live_repo_refresh_misses
         on_candidate_generated=None,
         on_render_step_started=None,
     ):
-        raise RuntimeError(
+        raise ilu_gallery._GalleryRenderMissingTargetError(
             "page.waitForFunction: Error: Unable to find the requested URDF target in the GitHub repository."
         )
 
@@ -2464,6 +2464,80 @@ def test_generate_gallery_job_surfaces_sane_error_after_live_repo_refresh_misses
         f"The live GitHub source {REAL_GALLERY_REPO_URL} "
         "does not expose a loadable URDF/Xacro target for gallery rendering. "
         "This source may only contain MuJoCo MJCF/XML assets or other non-URDF files."
+    )
+
+
+def test_generate_gallery_job_does_not_retry_untyped_missing_target_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inspect_call_count = 0
+    asset_call_count = 0
+
+    def _fake_gallery_generate(source, output_root: pathlib.Path):
+        nonlocal inspect_call_count
+        inspect_call_count += 1
+        output_root.mkdir(parents=True, exist_ok=True)
+        manifest = {
+            "outputRoot": str(output_root),
+            "items": [
+                {
+                    "candidatePath": REAL_BARKOUR_PATH,
+                    "displayName": "Barkour V0",
+                    "fileBase": REAL_BARKOUR_FILE_BASE,
+                    "sourceFile": REAL_BARKOUR_FILE,
+                    "status": "repo not in gallery catalog | urdf, renderable",
+                    "thumbnailPath": "",
+                    "thumbnailUrl": "",
+                    "previewUrl": "",
+                    "videoUrl": "",
+                }
+            ],
+        }
+        (output_root / "manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        return manifest
+
+    def _fail_asset_generation(
+        source,
+        output_root: pathlib.Path,
+        candidate_paths: list[str],
+        asset_kinds: list[str],
+        on_candidate_generated=None,
+        on_render_step_started=None,
+    ):
+        nonlocal asset_call_count
+        asset_call_count += 1
+        raise ValueError(
+            "page.waitForFunction: Error: Unable to find the requested URDF target in the GitHub repository."
+        )
+
+    monkeypatch.setattr(
+        ilu_gallery, "_run_ilu_gallery_generate", _fake_gallery_generate
+    )
+    monkeypatch.setattr(
+        ilu_gallery, "_run_ilu_gallery_generate_from_repo", _fake_gallery_generate
+    )
+    monkeypatch.setattr(
+        ilu_gallery, "_run_gallery_asset_generation", _fail_asset_generation
+    )
+    monkeypatch.setattr(ilu_gallery.threading.Thread, "start", lambda self: self.run())
+
+    response = ilu_gallery.create_gallery_job(
+        IluGalleryJobCreateRequest(
+            source={"owner": REAL_GALLERY_OWNER, "repo": REAL_GALLERY_REPO}
+        )
+    )
+    generated = ilu_gallery.generate_gallery_job(
+        response.job_id,
+        IluGalleryJobGenerateRequest(mode="repo"),
+    )
+
+    assert inspect_call_count == 2
+    assert asset_call_count == 1
+    assert generated.status == "failed"
+    assert generated.error == (
+        "page.waitForFunction: Error: Unable to find the requested URDF target in the GitHub repository."
     )
 
 
@@ -3486,6 +3560,45 @@ def test_run_gallery_asset_generation_chunks_repeated_cli_values_for_progress(
         assert args.count("--asset") == 1
         assert [args[index + 1] for index in asset_positions] == [expected_asset_kind]
         assert args[args.index("--urdf") + 1] == expected_candidate_path
+
+
+def test_run_gallery_asset_generation_raises_typed_missing_target_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_cli_path = tmp_path / "cli.js"
+    fake_cli_path.write_text("// test cli", encoding="utf-8")
+
+    def _fake_run(args, **_kwargs):
+        return CompletedProcess(
+            args=args,
+            returncode=1,
+            stdout="",
+            stderr=f"Error: {ilu_gallery.GALLERY_RENDER_MISSING_TARGET_ERROR}",
+        )
+
+    @contextmanager
+    def _fake_render_app_url():
+        yield "http://127.0.0.1:43123"
+
+    monkeypatch.setattr(ilu_gallery, "_resolve_ilu_cli_path", lambda: fake_cli_path)
+    monkeypatch.setattr(
+        ilu_gallery, "_resolve_gallery_render_app_url", _fake_render_app_url
+    )
+    monkeypatch.setattr(ilu_gallery.subprocess, "run", _fake_run)
+
+    with pytest.raises(
+        ilu_gallery._GalleryRenderMissingTargetError,
+        match="requested URDF target",
+    ):
+        ilu_gallery._run_gallery_asset_generation(
+            ilu_gallery.IluGallerySource(
+                owner=REAL_GALLERY_OWNER,
+                repo=REAL_GALLERY_REPO,
+            ),
+            tmp_path / "output",
+            [REAL_BARKOUR_PATH],
+            ["image"],
+        )
 
 
 def test_resolve_gallery_render_app_url_builds_fresh_preview_when_unset(

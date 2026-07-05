@@ -125,6 +125,10 @@ GALLERY_INSPECT_CACHE_SCHEMA_VERSION = 2
 GALLERY_RENDER_MISSING_TARGET_ERROR = "Unable to find the requested URDF target in the GitHub repository."
 
 
+class _GalleryRenderMissingTargetError(RuntimeError):
+    """Raised when gallery rendering cannot load a requested URDF target."""
+
+
 @dataclass(frozen=True)
 class _GalleryCatalog:
     repo_entries: dict[str, list[dict]]
@@ -1749,6 +1753,8 @@ def _run_gallery_asset_generation(
                 )
                 if process.returncode != 0:
                     detail = (process.stderr or process.stdout or "ilu gallery generation failed").strip()
+                    if GALLERY_RENDER_MISSING_TARGET_ERROR in detail:
+                        raise _GalleryRenderMissingTargetError(detail)
                     raise RuntimeError(detail)
                 try:
                     generated_manifest = json.loads(process.stdout)
@@ -2602,9 +2608,7 @@ def _execute_gallery_generation_job(job_id: str, request: IluGalleryJobGenerateR
                 on_candidate_generated=_mark_candidate_generated,
                 on_render_step_started=_mark_render_step_started,
             )
-        except Exception as error:
-            if GALLERY_RENDER_MISSING_TARGET_ERROR not in str(error):
-                raise
+        except _GalleryRenderMissingTargetError:
             refreshed_manifest = _run_ilu_gallery_generate_from_repo(record.source, output_root)
             refreshed_items, _resolved_output_root = _map_gallery_items(job_id, record.source, refreshed_manifest)
             refreshed_record = record.__class__(
@@ -2644,9 +2648,7 @@ def _execute_gallery_generation_job(job_id: str, request: IluGalleryJobGenerateR
                     on_candidate_generated=_mark_candidate_generated,
                     on_render_step_started=_mark_render_step_started,
                 )
-            except Exception as retry_error:
-                if GALLERY_RENDER_MISSING_TARGET_ERROR not in str(retry_error):
-                    raise
+            except _GalleryRenderMissingTargetError as retry_error:
                 raise RuntimeError(_build_gallery_live_source_missing_target_message(record.source)) from retry_error
         merged_manifest = _merge_generated_manifest(
             record.source,
@@ -2673,6 +2675,7 @@ def _execute_gallery_generation_job(job_id: str, request: IluGalleryJobGenerateR
             clear_progress_current=True,
         )
     except Exception as error:
+        # Worker boundary: persist failures so async generation jobs never stay running forever.
         _update_job_record(
             job_id,
             status="failed",
