@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.models.ilu_gallery import IluGallerySource
 from backend.services import ilu_gallery
 
 
@@ -47,3 +48,45 @@ def test_catalog_from_snapshot_ignores_non_string_repo_keys_and_file_bases() -> 
 
     assert list(catalog.repo_entries) == ["acme/demo"]
     assert list(catalog.preview_entries) == ["acme/demo::demo-base"]
+
+
+def test_build_repo_robot_index_ignores_non_string_core_fields() -> None:
+    index = ilu_gallery._build_repo_robot_index(
+        {
+            "robots": [
+                {"fileBase": 123, "file": "robots/bad.urdf", "name": "bad"},
+                {"fileBase": "demo-base", "file": ["robots", "demo.urdf"], "name": "bad"},
+                {"fileBase": "demo-base", "file": "robots/demo.urdf", "name": 456},
+            ]
+        }
+    )
+
+    assert set(index) == {"robots/demo.urdf", "demo.urdf", "demo"}
+    assert index["robots/demo.urdf"]["name"] == ""
+
+
+def test_resolve_gallery_preview_entry_ignores_non_string_file_base() -> None:
+    catalog = ilu_gallery._GalleryCatalog(
+        repo_entries={
+            "acme/demo": [
+                {
+                    "repoKey": "acme/demo",
+                    "robots": [
+                        {"fileBase": 123, "file": "robots/demo.urdf", "name": "bad"},
+                    ],
+                }
+            ]
+        },
+        preview_entries={"acme/demo::123": {"repoKey": "acme/demo", "fileBase": "123"}},
+    )
+    source = IluGallerySource(owner="acme", repo="demo")
+
+    repo_entry, preview_entry, robot_entry = ilu_gallery._resolve_gallery_preview_entry(
+        catalog,
+        source,
+        "robots/demo.urdf",
+    )
+
+    assert isinstance(repo_entry, dict)
+    assert preview_entry is None
+    assert robot_entry is None

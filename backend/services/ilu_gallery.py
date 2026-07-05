@@ -824,9 +824,9 @@ def _build_repo_robot_index(repo_entry: dict) -> dict[str, dict]:
     for robot in robots:
         if not isinstance(robot, dict):
             continue
-        file_base = str(robot.get("fileBase") or "").strip()
-        file_path = _normalize_repo_or_path(str(robot.get("file") or ""))
-        robot_name = str(robot.get("name") or "").strip()
+        file_base = _normalize_optional_text(robot.get("fileBase"))
+        file_path = _normalize_repo_or_path(_normalize_optional_text(robot.get("file")))
+        robot_name = _normalize_optional_text(robot.get("name"))
         if not file_base or not file_path:
             continue
         robot_record = {
@@ -893,7 +893,7 @@ def _resolve_gallery_preview_entry(
     if not isinstance(robot_entry, dict):
         return repo_entry, None, None
 
-    preview_key = f"{repo_key}::{str(robot_entry.get('fileBase') or '').strip()}"
+    preview_key = f"{repo_key}::{_normalize_optional_text(robot_entry.get('fileBase'))}"
     return repo_entry, catalog.preview_entries.get(preview_key), robot_entry
 
 
@@ -979,32 +979,32 @@ def _resolve_catalog_candidate(
     ) or catalog_candidate_path
     resolved_basename = resolved_path.split("/")[-1] if resolved_path else ""
     inspection_mode = (
-        str(live_candidate.get("inspectionMode") or "").strip()
+        _normalize_optional_text(live_candidate.get("inspectionMode"))
         if isinstance(live_candidate, dict)
         else ""
     ) or ("xacro-source" if resolved_basename.lower().endswith(".xacro") else "urdf")
     return {
         "path": resolved_path,
         "sourceFile": (
-            str(live_candidate.get("sourceFile") or "").strip()
+            _normalize_optional_text(live_candidate.get("sourceFile"))
             if isinstance(live_candidate, dict)
             else ""
         )
-        or str(robot_entry.get("file") or "").strip(),
+        or _normalize_optional_text(robot_entry.get("file")),
         "displayName": (
-            str(live_candidate.get("displayName") or "").strip()
+            _normalize_optional_text(live_candidate.get("displayName"))
             if isinstance(live_candidate, dict)
             else ""
         )
-        or str(robot_entry.get("name") or "").strip(),
-        "fileBase": str(robot_entry.get("fileBase") or "").strip()
+        or _normalize_optional_text(robot_entry.get("name")),
+        "fileBase": _normalize_optional_text(robot_entry.get("fileBase"))
         or (
-            str(live_candidate.get("fileBase") or "").strip()
+            _normalize_optional_text(live_candidate.get("fileBase"))
             if isinstance(live_candidate, dict)
             else ""
         ),
         "inspectionMode": inspection_mode,
-        "hasRenderableGeometry": True if str(robot_entry.get("fileBase") or "").strip() else None,
+        "hasRenderableGeometry": True if _normalize_optional_text(robot_entry.get("fileBase")) else None,
         "unresolvedMeshReferenceCount": 0,
     }
 
