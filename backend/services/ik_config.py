@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping
 from typing import TypeAlias
@@ -79,9 +80,12 @@ def _read_float(key: str, default_value: float) -> float:
     if not raw:
         return default_value
     try:
-        return float(raw)
+        parsed = float(raw)
     except ValueError:
         return default_value
+    if not math.isfinite(parsed):
+        return default_value
+    return parsed
 
 
 def _apply_config_overrides_timeouts(

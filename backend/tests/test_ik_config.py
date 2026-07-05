@@ -11,6 +11,7 @@ IK_ENV_KEYS = (
     "URDF_IK_AMIK_POS_WEIGHT",
     "URDF_IK_AMIK_SOLVE_ITER",
     "URDF_IK_TIMEOUT_REQUEST_MS",
+    "URDF_IK_DRAG_MAX_SPEED",
 )
 
 
@@ -93,3 +94,16 @@ def test_get_ik_config_ignores_invalid_env_override(
     config = ik_config.get_ik_config()
 
     assert config.solver_tuning["amik"].solve_iterations == 9
+
+
+@pytest.mark.parametrize("raw_value", ["nan", "inf", "-inf"])
+def test_get_ik_config_ignores_non_finite_float_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+    raw_value: str,
+) -> None:
+    _install_config(monkeypatch, {})
+    monkeypatch.setenv("URDF_IK_DRAG_MAX_SPEED", raw_value)
+
+    config = ik_config.get_ik_config()
+
+    assert config.drag.max_drag_speed == 0.8
