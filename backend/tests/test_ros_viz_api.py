@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from backend.api.ros_viz import (
+    runtime,
     create_ros_viz_session,
     get_ros_viz_clock_state,
     get_ros_viz_session_state,
@@ -22,16 +23,26 @@ from backend.models.ros_viz import (
     RosVizSessionCreateRequest,
     RosVizSubscriptionRequest,
 )
+from backend.core.simulator_security import DEV_PROXY_CLIENT_HOST_HEADER
 
 
-def _build_request(path: str, *, request_id: str) -> Request:
+def _build_request(
+    path: str,
+    *,
+    request_id: str,
+    client_host: str = "127.0.0.1",
+    headers: list[tuple[bytes, bytes]] | None = None,
+) -> Request:
     return Request(
         {
             "type": "http",
             "method": "POST",
             "path": path,
-            "headers": [(b"x-request-id", request_id.encode("utf-8"))],
-            "client": ("127.0.0.1", 1234),
+            "headers": [
+                (b"x-request-id", request_id.encode("utf-8")),
+                *(headers or []),
+            ],
+            "client": (client_host, 1234),
         }
     )
 
@@ -106,6 +117,32 @@ def test_ros_viz_stream_ticket_endpoint_issues_short_lived_ticket() -> None:
     assert ticket_response.session_id == session.session_id
     assert ticket_response.ticket
     assert ticket_response.expires_at_ms >= session.created_at_ms
+
+
+def test_ros_viz_stream_ticket_endpoint_uses_resolved_backend_client_host() -> None:
+    session = _run_api(create_ros_viz_session(RosVizSessionCreateRequest()))
+
+    ticket_response = _run_api(
+        issue_ros_viz_stream_ticket(
+            _build_request(
+                f"/ros-viz/sessions/{session.session_id}/stream-ticket",
+                request_id="rosviz-api-ticket-proxy-1",
+                headers=[
+                    (
+                        DEV_PROXY_CLIENT_HOST_HEADER.lower().encode("utf-8"),
+                        b"192.168.1.44",
+                    )
+                ],
+            ),
+            session.session_id,
+        )
+    )
+
+    runtime.consume_stream_ticket(
+        session.session_id,
+        ticket=ticket_response.ticket,
+        client_host="192.168.1.44",
+    )
 
 
 def test_ros_viz_clock_control_rejects_live_debug_pause() -> None:

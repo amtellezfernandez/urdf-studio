@@ -10,6 +10,7 @@ from backend.core.request_audit import (
     log_websocket_security_event,
     resolve_websocket_request_id,
 )
+from backend.core.simulator_security import resolve_backend_client_host
 from backend.models.ros_viz import (
     RosVizClockControlRequest,
     RosVizClockState,
@@ -41,11 +42,6 @@ def _is_ws_connected(websocket: WebSocket) -> bool:
         websocket.client_state == WebSocketState.CONNECTED
         and websocket.application_state == WebSocketState.CONNECTED
     )
-
-
-def _client_host(websocket: WebSocket) -> str:
-    client = websocket.client
-    return client.host if client is not None else ""
 
 
 def _extract_stream_ticket(websocket: WebSocket) -> str:
@@ -169,7 +165,7 @@ async def issue_ros_viz_stream_ticket(request: Request, session_id: str) -> RosV
     try:
         return runtime.issue_stream_ticket(
             session_id,
-            client_host=request.client.host if request.client is not None else "",
+            client_host=resolve_backend_client_host(request),
             request_id=get_request_id_for_http_request(request),
         )
     except KeyError as exc:
@@ -184,7 +180,7 @@ async def stream_ros_viz(websocket: WebSocket, session_id: str) -> None:
         runtime.consume_stream_ticket(
             session_id,
             ticket=ticket,
-            client_host=_client_host(websocket),
+            client_host=resolve_backend_client_host(websocket),
         )
     except (PermissionError, WebSocketException) as exc:
         reason = str(exc)
