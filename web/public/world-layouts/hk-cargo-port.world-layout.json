@@ -38,7 +38,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -79,7 +79,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -120,7 +120,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -161,7 +161,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -202,7 +202,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -243,7 +243,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -284,7 +284,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -325,7 +325,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -366,7 +366,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -407,7 +407,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -448,7 +448,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -489,7 +489,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -530,7 +530,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -571,7 +571,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -612,7 +612,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -653,7 +653,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -694,7 +694,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -735,7 +735,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -776,7 +776,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -817,7 +817,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -858,7 +858,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -899,7 +899,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -940,7 +940,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -981,7 +981,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1022,7 +1022,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1063,7 +1063,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1104,7 +1104,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1145,7 +1145,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1186,7 +1186,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1227,7 +1227,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1268,7 +1268,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1309,7 +1309,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1350,7 +1350,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1391,7 +1391,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1432,7 +1432,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1473,7 +1473,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1514,7 +1514,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1555,7 +1555,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1596,7 +1596,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1637,7 +1637,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1678,7 +1678,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1719,7 +1719,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1760,7 +1760,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1801,7 +1801,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1842,7 +1842,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1883,7 +1883,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1924,7 +1924,7 @@
           "restitution": 0,
           "semantic_role": "obstacle"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -1965,7 +1965,7 @@
           "restitution": 0,
           "semantic_role": "manipulation_target"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
@@ -2003,7 +2003,7 @@
           "collision": false,
           "semantic_role": "environment"
         },
-        "source": "hk-cargo-port",
+        "source": "demo-world",
         "tracked_joint_name": null,
         "is_ik_target": false,
         "ik_target_type": "punctual"
