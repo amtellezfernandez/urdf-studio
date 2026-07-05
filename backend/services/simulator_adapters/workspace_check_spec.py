@@ -147,15 +147,12 @@ def _prepared_workspace_command_kwargs(
     expected_report_artifact_dir_keys: tuple[str, ...],
 ) -> dict[str, object]:
     return {
-        "command": _module_command(
-            workspace_process,
-            world_package_path=prepared.world_package_path,
-            robot_asset_flag="--robot-urdf",
-            robot_asset_path=prepared.robot_urdf_path,
-            duration_sec=expectations.duration_sec,
-            frame_map=expectations.frame_map,
+        "command": _prepared_workspace_command(
+            workspace_process=workspace_process,
+            prepared=prepared,
+            expectations=expectations,
             extra_args=extra_args,
-            report_path=expected_report_path,
+            expected_report_path=expected_report_path,
         ),
         "ready_marker": workspace_process.ready_log_marker,
         "expected_object_marker": object_marker,
@@ -174,6 +171,26 @@ def _prepared_workspace_command_kwargs(
         "expected_report_artifact_dir_keys": expected_report_artifact_dir_keys,
         **_workspace_expectation_fields(expectations),
     }
+
+
+def _prepared_workspace_command(
+    *,
+    workspace_process: SimulatorWorkspaceProcessParams,
+    prepared: PreparedSimulatorWorkspace,
+    expectations: WorkspaceExpectations,
+    extra_args: Sequence[str],
+    expected_report_path: Path | None,
+) -> list[str]:
+    return _module_command(
+        workspace_process,
+        world_package_path=prepared.world_package_path,
+        robot_asset_flag="--robot-urdf",
+        robot_asset_path=prepared.robot_urdf_path,
+        duration_sec=expectations.duration_sec,
+        frame_map=expectations.frame_map,
+        extra_args=extra_args,
+        report_path=expected_report_path,
+    )
 
 
 def _expected_camera_log_marker(
