@@ -101,8 +101,6 @@ type ViewerPaneParams = {
   setIsPlaying: ViewerLayoutProps["setIsPlaying"];
   setHasAnimationFrames: ViewerLayoutProps["setHasAnimationFrames"];
   setRobotBoundingBox: ViewerLayoutProps["setRobotBoundingBox"];
-  robotBoundingBox: ViewerLayoutProps["robotBoundingBox"];
-  robot: ViewerLayoutProps["robot"];
   setRobot: ViewerLayoutProps["setRobot"];
   onIkApplied: ViewerLayoutProps["handleIkApplied"];
   ikDragSuppressed: ViewerLayoutProps["ikDragSuppressed"];
@@ -137,6 +135,7 @@ type RightSidebarParams = {
   onGenerateInertialDraft: RightSidebarProps["onGenerateInertialDraft"];
   simulationPrepPanelOpen: RightSidebarProps["simulationPrepPanelOpen"];
   voxelDerivedInertialLinks: RightSidebarProps["voxelDerivedInertialLinks"];
+  robot: RightSidebarProps["robot"];
   onRightSidebarResizeStart: RightSidebarProps["onRightSidebarResizeStart"];
   onToggleRightSidebarCollapse: RightSidebarProps["onToggleCollapse"];
 };
@@ -229,8 +228,6 @@ const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLa
   setHasAnimationFrames: params.setHasAnimationFrames,
   handleFrameChange: params.handleFrameChange,
   setRobotBoundingBox: params.setRobotBoundingBox,
-  robotBoundingBox: params.robotBoundingBox,
-  robot: params.robot,
   setRobot: params.setRobot,
   handleIkApplied: params.onIkApplied,
   ikDragSuppressed: params.ikDragSuppressed,

@@ -1,4 +1,3 @@
-import type React from "react";
 import { Suspense } from "react";
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
 import type { RepeatedInertiaSymmetryChain } from "@/features/layout/page/repeatedInertiaSymmetry";
@@ -9,14 +8,12 @@ import type {
   UrdfViewMode,
 } from "@/shared/types/feature";
 import type { URDFRobot } from "urdf-loader";
-import type * as THREE from "three";
+import type { Box3 } from "three";
 import type { JointAxisMap, JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { AssemblySecondaryModel } from "@/features/assembly/types";
 import type { WorkspaceMode } from "@/features/workspace/types";
-import {
-} from "@/features/layout/page/constants";
 import { ViewerHost } from "@/features/layout/page/ViewerHost";
 import { WorkspaceViewerContent } from "@/features/layout/page/WorkspaceViewerContent";
 import { toViewer3DProps } from "@/features/layout/page/viewer3DProps";
@@ -76,9 +73,7 @@ type ViewerLayoutProps = {
   setIsPlaying: (isPlaying: boolean) => void;
   setHasAnimationFrames: (hasFrames: boolean) => void;
   handleFrameChange: (frame: number, total: number) => void;
-  setRobotBoundingBox: (box: THREE.Box3 | null) => void;
-  robotBoundingBox: THREE.Box3 | null;
-  robot: URDFRobot | null;
+  setRobotBoundingBox: (box: Box3 | null) => void;
   setRobot: (robot: URDFRobot | null) => void;
   handleIkApplied: (
     values: Record<string, number>,
@@ -149,8 +144,6 @@ export const ViewerLayout = ({
   setHasAnimationFrames,
   handleFrameChange,
   setRobotBoundingBox,
-  robotBoundingBox,
-  robot,
   setRobot,
   handleIkApplied,
   ikDragSuppressed = false,
@@ -163,7 +156,9 @@ export const ViewerLayout = ({
   handleVizUrdfChange,
   updateUrdfFile,
   getExportUrdfContent,
+  onObjectSelect,
   onInertiaReliabilityChange,
+  enableObjectActionsInReadOnly = false,
   thumbnailMode = false,
   onFixMissingMeshRefs,
 }: ViewerLayoutProps) => {
@@ -212,7 +207,9 @@ export const ViewerLayout = ({
     ikDragSuppressed,
     vizUrdfContent,
     updateUrdfFile,
+    onObjectSelect,
     onInertiaReliabilityChange,
+    enableObjectActionsInReadOnly,
     thumbnailMode,
     preferStudioRuntime: true,
   });
@@ -222,6 +219,12 @@ export const ViewerLayout = ({
     rightSidebarWidth,
     sidebarWidth,
   });
+  const primaryRobotName = urdfFile
+    ? urdfFile.name.replace(/^viz-/, "")
+    : "No primary robot";
+  const viewerFallbackClassName = thumbnailMode
+    ? "h-full w-full bg-transparent"
+    : "h-full w-full bg-background";
 
   if (thumbnailMode) {
     return (
@@ -229,7 +232,7 @@ export const ViewerLayout = ({
         <ViewerHost
           viewerKey={viewerKey}
           viewerProps={viewerProps}
-          fallbackClassName="h-full w-full bg-transparent"
+          fallbackClassName={viewerFallbackClassName}
         />
       </main>
     );
@@ -247,7 +250,7 @@ export const ViewerLayout = ({
               <ViewerHost
                 viewerKey={viewerKey}
                 viewerProps={viewerProps}
-                fallbackClassName="h-full w-full bg-background"
+                fallbackClassName={viewerFallbackClassName}
               />
             </div>
             <div className="flex-1 min-h-0">
@@ -277,11 +280,10 @@ export const ViewerLayout = ({
             workspaceMode={workspaceMode}
             viewerKey={viewerKey}
             viewerProps={viewerProps}
-            showUrdfEditor={false}
             assemblyIssueReportUrl={assemblyIssueReportUrl}
             assemblyContactPairCount={assemblyContactPairCount}
             assemblySecondaryModelsCount={assemblySecondaryModels.length}
-            primaryRobotName={urdfFile ? urdfFile.name.replace(/^viz-/, "") : "No primary robot"}
+            primaryRobotName={primaryRobotName}
             jointLimits={jointLimits}
           />
         )}

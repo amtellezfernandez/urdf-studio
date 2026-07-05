@@ -1,7 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
-import type { Box3 } from "three";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/layout/page/ViewerHost", async () => {
@@ -10,13 +9,24 @@ vi.mock("@/features/layout/page/ViewerHost", async () => {
     ViewerHost: ({
       fallbackClassName,
       viewerKey,
+      viewerProps,
     }: {
       fallbackClassName: string;
       viewerKey: string;
+      viewerProps: {
+        enableObjectActionsInReadOnly?: boolean;
+        onObjectSelect?: unknown;
+      };
     }) =>
       React.createElement("div", {
         "data-viewer-host": viewerKey,
         "data-viewer-host-fallback": fallbackClassName,
+        "data-viewer-host-read-only-object-actions": String(
+          viewerProps.enableObjectActionsInReadOnly ?? false
+        ),
+        "data-viewer-host-has-object-select": String(
+          typeof viewerProps.onObjectSelect === "function"
+        ),
       }),
   };
 });
@@ -27,16 +37,14 @@ vi.mock("@/features/layout/page/WorkspaceViewerContent", async () => {
     WorkspaceViewerContent: ({
       assemblySecondaryModelsCount,
       primaryRobotName,
-      showUrdfEditor,
       workspaceMode,
     }: {
       assemblySecondaryModelsCount: number;
       primaryRobotName: string;
-      showUrdfEditor: boolean;
       workspaceMode: string;
     }) =>
       React.createElement("div", {
-        "data-workspace-viewer-content": `${workspaceMode}:${primaryRobotName}:${assemblySecondaryModelsCount}:${showUrdfEditor}`,
+        "data-workspace-viewer-content": `${workspaceMode}:${primaryRobotName}:${assemblySecondaryModelsCount}`,
       }),
   };
 });
@@ -95,8 +103,6 @@ const createProps = (overrides: Partial<ViewerLayoutProps> = {}): ViewerLayoutPr
   meshFiles: {},
   originalUrdfContent: "<robot name='test' />",
   rightSidebarWidth: 280,
-  robot: null,
-  robotBoundingBox: null as Box3 | null,
   rotationPlaneVisible: false,
   selectedJoint: null,
   selectedLink: null,
@@ -159,6 +165,28 @@ describe("ViewerLayout", () => {
     });
   });
 
+  it("forwards object selection controls into the viewer runtime props", async () => {
+    const { container, root } = await renderViewerLayout(
+      createProps({
+        enableObjectActionsInReadOnly: true,
+        onObjectSelect: vi.fn(),
+        thumbnailMode: true,
+      })
+    );
+
+    const viewerHost = container.querySelector('[data-viewer-host="urdf-7"]');
+    expect(
+      viewerHost?.getAttribute("data-viewer-host-read-only-object-actions")
+    ).toBe("true");
+    expect(viewerHost?.getAttribute("data-viewer-host-has-object-select")).toBe(
+      "true"
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("renders the viewer and inline URDF comparison when the editor is open", async () => {
     const { container, root } = await renderViewerLayout(
       createProps({
@@ -189,7 +217,7 @@ describe("ViewerLayout", () => {
     expect(main?.style.marginRight).toBe("0px");
     expect(main?.style.marginTop).toBe("28px");
     expect(
-      container.querySelector('[data-workspace-viewer-content="studio:robot.urdf:0:false"]')
+      container.querySelector('[data-workspace-viewer-content="studio:robot.urdf:0"]')
     ).toBeTruthy();
 
     await act(async () => {

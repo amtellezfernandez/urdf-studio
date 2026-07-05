@@ -7,7 +7,6 @@ type WorkspaceViewerContentProps = {
   workspaceMode: WorkspaceMode;
   viewerKey: string;
   viewerProps: Viewer3DProps;
-  showUrdfEditor: boolean;
   assemblyIssueReportUrl?: string;
   assemblyContactPairCount: number;
   assemblySecondaryModelsCount: number;
@@ -19,7 +18,6 @@ export const WorkspaceViewerContent = ({
   workspaceMode,
   viewerKey,
   viewerProps,
-  showUrdfEditor,
   assemblyIssueReportUrl,
   assemblyContactPairCount,
   assemblySecondaryModelsCount,
@@ -28,16 +26,6 @@ export const WorkspaceViewerContent = ({
 }: WorkspaceViewerContentProps) => {
   const workspaceModeUi = getWorkspaceModeUiPolicy(workspaceMode);
   void jointLimits;
-
-  if (showUrdfEditor) {
-    return (
-      <ViewerHost
-        viewerKey={viewerKey}
-        viewerProps={viewerProps}
-        fallbackClassName="h-full w-full bg-background"
-      />
-    );
-  }
 
   if (workspaceModeUi.isAssembly) {
     return (

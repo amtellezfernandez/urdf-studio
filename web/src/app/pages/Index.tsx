@@ -1558,7 +1558,6 @@ const Index = () => {
     setIsPlaying,
     setHasAnimationFrames,
     setRobotBoundingBox,
-    robotBoundingBox,
     robot,
     setRobot,
     onIkApplied: handleIkApplied,
