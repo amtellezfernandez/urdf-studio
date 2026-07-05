@@ -321,7 +321,7 @@ def _rewrite_mjcf_mesh_filenames(
         return
     try:
         root = ET.fromstring(mjcf_path.read_text(encoding="utf-8"))
-    except ET.ParseError:
+    except (ET.ParseError, OSError, UnicodeDecodeError):
         return
     changed = False
     for mesh_el in root.findall(".//mesh"):

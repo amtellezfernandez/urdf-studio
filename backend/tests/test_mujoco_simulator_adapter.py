@@ -392,6 +392,39 @@ def test_stage_mjcf_mesh_assets_disambiguates_duplicate_basenames(tmp_path: Path
     assert 'name="assets_second_base" file="second__base.stl"' in mjcf_content
 
 
+def test_stage_mjcf_mesh_assets_ignores_invalid_mjcf_encoding(tmp_path: Path) -> None:
+    first_mesh = tmp_path / "first" / "base.stl"
+    first_mesh.parent.mkdir()
+    first_mesh.write_bytes(b"solid first\nendsolid first\n")
+
+    mjcf_path = tmp_path / "robot.xml"
+    mjcf_path.write_bytes(b"\xff\xfe\x00")
+
+    bundle_result = BundleMeshAssetsResult(
+        success=True,
+        content="<robot name=\"demo\"/>",
+        out_path=str(tmp_path / "robot.urdf"),
+        assets_root=str(tmp_path),
+        copied_files=1,
+        bundled=(
+            BundledMeshAsset(
+                original="first/base.stl",
+                rewritten="assets/first/base.stl",
+                source_path=str(first_mesh),
+                target_path=str(first_mesh),
+            ),
+        ),
+        unresolved=(),
+        error=None,
+    )
+
+    mujoco_adapter._stage_mjcf_mesh_assets(bundle_result, mjcf_path)
+
+    mesh_dir = mjcf_path.parent / "meshes"
+    assert sorted(p.name for p in mesh_dir.iterdir()) == ["base.stl"]
+    assert mjcf_path.read_bytes() == b"\xff\xfe\x00"
+
+
 def test_build_staged_mesh_name_map_adds_suffix_for_duplicate_generated_names(tmp_path: Path) -> None:
     robot_dir = tmp_path / "robot"
     first_mesh = tmp_path / "first" / "shared" / "base.stl"
