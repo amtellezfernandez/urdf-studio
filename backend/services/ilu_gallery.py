@@ -1171,7 +1171,7 @@ def _build_gallery_manifest_from_inspection(source: IluGallerySource, output_roo
         for candidate in raw_candidates:
             if not isinstance(candidate, dict):
                 continue
-            candidate_path = str(candidate.get("path") or "").strip()
+            candidate_path = _normalize_optional_text(candidate.get("path"))
             if not candidate_path:
                 continue
             if catalog is not None:
@@ -1544,18 +1544,18 @@ def _path_exists(path_value: str) -> bool:
 def _sanitize_generated_gallery_item(raw_item: dict, asset_kinds: list[str]) -> dict:
     item = dict(raw_item)
     if GALLERY_GENERATE_ASSET_KIND_IMAGE in asset_kinds:
-        thumbnail_path = str(item.get("thumbnailPath") or "").strip()
+        thumbnail_path = _normalize_optional_text(item.get("thumbnailPath"))
         item["thumbnailPath"] = thumbnail_path if thumbnail_path and _path_exists(thumbnail_path) else ""
     if GALLERY_GENERATE_ASSET_KIND_VIDEO in asset_kinds:
-        video_path = str(item.get("videoPath") or "").strip()
+        video_path = _normalize_optional_text(item.get("videoPath"))
         item["videoPath"] = video_path if video_path and _path_exists(video_path) else ""
     return item
 
 
 def _count_generated_gallery_item_assets(item: dict, asset_kinds: list[str]) -> int:
     generated_count = 0
-    thumbnail_path = str(item.get("thumbnailPath") or "").strip()
-    video_path = str(item.get("videoPath") or "").strip()
+    thumbnail_path = _normalize_optional_text(item.get("thumbnailPath"))
+    video_path = _normalize_optional_text(item.get("videoPath"))
     if GALLERY_GENERATE_ASSET_KIND_IMAGE in asset_kinds and thumbnail_path and _path_exists(thumbnail_path):
         generated_count += 1
     if GALLERY_GENERATE_ASSET_KIND_VIDEO in asset_kinds and video_path and _path_exists(video_path):
@@ -1577,16 +1577,16 @@ def _count_generated_gallery_manifest_assets(generated_manifest: dict, asset_kin
 def _merge_generated_gallery_items_by_candidate_path(generated_items: list[dict]) -> list[dict]:
     merged_by_candidate_path: dict[str, dict] = {}
     for item in generated_items:
-        candidate_path = str(item.get("candidatePath") or "").strip()
+        candidate_path = _normalize_optional_text(item.get("candidatePath"))
         if not candidate_path:
             continue
         merged_item = merged_by_candidate_path.setdefault(candidate_path, {"candidatePath": candidate_path})
         for key, value in item.items():
             if key in {"thumbnailPath", "videoPath"}:
-                if str(value or "").strip():
+                if _normalize_optional_text(value):
                     merged_item[key] = value
                 continue
-            if key not in merged_item or not str(merged_item.get(key) or "").strip():
+            if key not in merged_item or not _normalize_optional_text(merged_item.get(key)):
                 merged_item[key] = value
     return list(merged_by_candidate_path.values())
 

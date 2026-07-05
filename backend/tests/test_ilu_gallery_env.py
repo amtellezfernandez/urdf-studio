@@ -241,6 +241,95 @@ def test_merge_generated_gallery_manifest_ignores_non_string_generated_paths(
     assert merged_item["galleryPngPath"] == ""
 
 
+def test_build_gallery_manifest_from_inspection_skips_non_string_candidate_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = IluGallerySource(owner="acme", repo="demo")
+
+    monkeypatch.setattr(ilu_gallery, "_load_gallery_catalog_for_source", lambda _source: None)
+    monkeypatch.setattr(ilu_gallery, "_catalog_snapshot_from_catalog", lambda _catalog: None)
+    monkeypatch.setattr(ilu_gallery, "_build_candidate_lookup", lambda _raw_candidates: {})
+    monkeypatch.setattr(ilu_gallery, "_write_manifest", lambda _output_root, _manifest: None)
+
+    manifest = ilu_gallery._build_gallery_manifest_from_inspection(
+        source,
+        tmp_path,
+        {
+            "candidates": [
+                {"path": ["robots/ignored.urdf"], "inspectionMode": "urdf"},
+                {"path": "robots/demo.urdf", "inspectionMode": "urdf"},
+            ]
+        },
+    )
+
+    assert [item["candidatePath"] for item in manifest["items"]] == ["robots/demo.urdf"]
+
+
+def test_sanitize_generated_gallery_item_ignores_non_string_paths(
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "demo.webm"
+    video_path.write_bytes(b"webm")
+
+    sanitized = ilu_gallery._sanitize_generated_gallery_item(
+        {
+            "thumbnailPath": ["demo.png"],
+            "videoPath": str(video_path),
+        },
+        [ilu_gallery.GALLERY_GENERATE_ASSET_KIND_IMAGE, ilu_gallery.GALLERY_GENERATE_ASSET_KIND_VIDEO],
+    )
+
+    assert sanitized["thumbnailPath"] == ""
+    assert sanitized["videoPath"] == str(video_path)
+
+
+def test_count_generated_gallery_item_assets_ignores_non_string_paths(
+    tmp_path: Path,
+) -> None:
+    thumbnail_path = tmp_path / "demo.png"
+    thumbnail_path.write_bytes(b"png")
+
+    generated_count = ilu_gallery._count_generated_gallery_item_assets(
+        {
+            "thumbnailPath": str(thumbnail_path),
+            "videoPath": {"path": "demo.webm"},
+        },
+        [ilu_gallery.GALLERY_GENERATE_ASSET_KIND_IMAGE, ilu_gallery.GALLERY_GENERATE_ASSET_KIND_VIDEO],
+    )
+
+    assert generated_count == 1
+
+
+def test_merge_generated_gallery_items_by_candidate_path_ignores_non_string_values() -> None:
+    merged = ilu_gallery._merge_generated_gallery_items_by_candidate_path(
+        [
+            {
+                "candidatePath": ["robots/demo.urdf"],
+                "thumbnailPath": "/tmp/ignored.png",
+            },
+            {
+                "candidatePath": "robots/demo.urdf",
+                "thumbnailPath": {"path": "/tmp/ignored.png"},
+                "videoPath": "/tmp/demo.webm",
+                "status": [],
+            },
+            {
+                "candidatePath": "robots/demo.urdf",
+                "status": "ready",
+            },
+        ]
+    )
+
+    assert merged == [
+        {
+            "candidatePath": "robots/demo.urdf",
+            "videoPath": "/tmp/demo.webm",
+            "status": "ready",
+        }
+    ]
+
+
 def test_get_gallery_repo_preview_ignores_non_string_preview_item_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
