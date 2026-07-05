@@ -141,10 +141,10 @@ def _expected_joint_positions(
 
 
 def expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
-    camera_ids: list[str] = []
-    for index, camera in enumerate(request.world_package.world_snapshot.cameras):
-        camera_ids.append(_expected_camera_id(camera, index=index))
-    return tuple(camera_ids)
+    return tuple(
+        _expected_camera_id(camera, index=index)
+        for index, camera in enumerate(request.world_package.world_snapshot.cameras)
+    )
 
 
 def expected_camera_contracts_for_request(
