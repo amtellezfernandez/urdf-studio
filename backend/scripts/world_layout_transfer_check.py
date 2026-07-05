@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import cast
 
 from backend.core.paths import BASE_DIR
 from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
@@ -13,7 +14,10 @@ from backend.services.world_layout_static_transfer import (
     SIZE_TOLERANCE_M,
     check_static_world_layout_file,
 )
-from backend.services.world_layout_transfer_types import StaticTransferValidationBackend
+from backend.services.world_layout_transfer_types import (
+    StaticTransferValidationBackend,
+    WorldLayoutFrameMap,
+)
 
 
 DEFAULT_LAYOUT_PATH = Path("web/public/world-layouts/static-transfer-smoke.world-layout.json")
@@ -76,7 +80,15 @@ def _parse_args() -> argparse.Namespace:
 def _selected_backends(value: str) -> tuple[StaticTransferValidationBackend, ...]:
     if value == "all":
         return ("mujoco", "genesis")
-    return (value,)  # type: ignore[return-value]
+    if value in ("mujoco", "genesis"):
+        return (cast(StaticTransferValidationBackend, value),)
+    raise ValueError(f"Unsupported static transfer backend: {value}")
+
+
+def _selected_frame_map(value: str) -> WorldLayoutFrameMap:
+    if value in ("auto", "studio-y-up-to-z-up", "identity"):
+        return cast(WorldLayoutFrameMap, value)
+    raise ValueError(f"Unsupported static transfer frame map: {value}")
 
 
 def main() -> int:
@@ -85,7 +97,7 @@ def main() -> int:
     report = check_static_world_layout_file(
         Path(args.layout),
         backends=_selected_backends(args.backend),
-        frame_map=args.frame_map,  # type: ignore[arg-type]
+        frame_map=_selected_frame_map(args.frame_map),
         include_hidden=args.include_hidden,
         write_mjcf_path=Path(args.write_mjcf) if args.write_mjcf else None,
         position_tolerance_m=args.position_tolerance_m,
