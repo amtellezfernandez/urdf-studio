@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import math
 import re
 import shutil
@@ -565,7 +566,7 @@ def run_simulation_prep_validation(
 
     mujoco_available = False
     try:
-        import mujoco  # noqa: F401
+        importlib.import_module("mujoco")
         mujoco_available = True
     except ImportError:
         warnings.append("MuJoCo is not installed. Install with: uv pip install --python .venv/bin/python3 mujoco")
