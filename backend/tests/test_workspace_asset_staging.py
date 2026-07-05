@@ -47,6 +47,18 @@ def test_write_workspace_asset_file_rejects_conflicting_content(tmp_path) -> Non
         )
 
 
+def test_write_workspace_asset_file_rejects_directory_conflict(tmp_path) -> None:
+    (tmp_path / "meshes" / "crate.stl").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="Conflicting uploaded asset path"):
+        write_workspace_asset_file(
+            tmp_path,
+            "meshes/crate.stl",
+            b"solid crate\nendsolid crate\n",
+            error=ValueError,
+        )
+
+
 def test_unique_workspace_asset_paths_preserves_normalized_order() -> None:
     assert unique_workspace_asset_paths(
         (

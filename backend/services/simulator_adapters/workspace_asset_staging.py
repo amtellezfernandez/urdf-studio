@@ -40,6 +40,8 @@ def write_workspace_asset_file(
 ) -> Path:
     output_path = resolve_workspace_asset_path(root, relative_path, error=error)
     if output_path.exists():
+        if not output_path.is_file():
+            raise error(f"Conflicting uploaded asset path: {relative_path}")
         existing = output_path.read_bytes()
         if existing != content:
             raise error(f"Conflicting uploaded asset path: {relative_path}")
