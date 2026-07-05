@@ -159,6 +159,13 @@ def _ensure_simulator_plugins_registered() -> None:
     importlib.import_module("backend.services.simulator_adapters")
 
 
+def _workspace_plugins():
+    _ensure_simulator_plugins_registered()
+    from backend.services.simulator_adapters.plugin import get_workspace_plugins
+
+    return get_workspace_plugins()
+
+
 GENESIS_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "genesis",
     module_name="backend.scripts.genesis_workspace_prepare",
@@ -289,11 +296,9 @@ def get_simulator_workspace_process_params_by_id() -> SimulatorWorkspaceProcessP
     global _simulator_workspace_process_params_by_id
     if _simulator_workspace_process_params_by_id is not None:
         return _simulator_workspace_process_params_by_id
-    _ensure_simulator_plugins_registered()
-    from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
     process_params: SimulatorWorkspaceProcessParamsById = {}
-    for plugin in get_workspace_plugins():
+    for plugin in _workspace_plugins():
         workspace_process = plugin.workspace_process
         if workspace_process is not None:
             process_params[plugin.simulator_id] = workspace_process
@@ -305,12 +310,10 @@ def get_simulator_scene_params_by_id() -> SimulatorSceneParamsById:
     global _simulator_scene_params_by_id
     if _simulator_scene_params_by_id is not None:
         return _simulator_scene_params_by_id
-    _ensure_simulator_plugins_registered()
-    from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
     _simulator_scene_params_by_id = {
         plugin.simulator_id: plugin.scene_params
-        for plugin in get_workspace_plugins()
+        for plugin in _workspace_plugins()
         if hasattr(plugin, "scene_params")
     }
     return _simulator_scene_params_by_id
