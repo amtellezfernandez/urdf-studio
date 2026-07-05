@@ -91,12 +91,12 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
       'Unified Python runtime in .venv',
       'Backend Python packages used by URDF Studio services',
       'MJLab when this machine is compatible',
-      'Blender runtime when supported and not already installed',
     ],
   });
   assert.deepEqual(sections[2], {
     heading: 'Optional Extras',
     lines: [
+      'Blender is not downloaded unless URDF_STUDIO_INSTALL_BLENDER=1 is set for setup.',
       'Genesis is not installed unless URDF_STUDIO_INSTALL_GENESIS=1 is set for setup.',
       'PyBullet is not installed unless URDF_STUDIO_INSTALL_PYBULLET=1 is set for setup.',
       `Simulator containers are not built unless ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 is set for setup.`,
@@ -145,7 +145,7 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
   assert.ok(sections[0].lines.includes('Unified Python backend runtime'));
   assert.ok(sections[0].lines.includes('Simulator compatibility preflight'));
   assert.ok(sections[0].lines.includes('Backend Python packages for URDF Studio services'));
-  assert.ok(sections[0].lines.includes('Default managed extras: MJLab when compatible and Blender when supported'));
-  assert.ok(sections[0].lines.includes('Optional extras not installed by default: Genesis, PyBullet, and simulator containers'));
+  assert.ok(sections[0].lines.includes('Default managed extras: MJLab when compatible'));
+  assert.ok(sections[0].lines.includes('Optional extras not installed by default: Blender, Genesis, PyBullet, and simulator containers'));
   assert.equal(sections.length, 1);
 });

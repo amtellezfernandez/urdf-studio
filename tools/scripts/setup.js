@@ -307,8 +307,8 @@ async function runSetupSequence(overrides = {}) {
 async function main() {
   try {
     logArrow('URDF Studio setup');
-    logInfo('Default install: node_modules, .venv, backend Python packages, MJLab when compatible, and Blender when supported.');
-    logInfo('Optional extras not installed by default: Genesis, PyBullet, and simulator containers.');
+    logInfo('Default install: node_modules, .venv, backend Python packages, and MJLab when compatible.');
+    logInfo('Optional extras not installed by default: Blender, Genesis, PyBullet, and simulator containers.');
     logInfo('npm and uv commands stream live output below so long installs do not look stalled.');
     renderSetupSections(buildSetupRoadmapSections());
     const setupResult = await runSetupSequence();

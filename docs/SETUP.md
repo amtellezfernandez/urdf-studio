@@ -37,13 +37,13 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. The first run can take several minutes.
 
-By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, MJLab when compatible, and Blender when supported.
+By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, and MJLab when compatible.
 
-Genesis, PyBullet, and simulator containers are optional and are not installed unless you explicitly opt in. The base app remains usable if an optional target runtime cannot be installed on the current laptop.
+Blender, Genesis, PyBullet, and simulator containers are optional and are not installed unless you explicitly opt in. The base app remains usable if an optional target runtime cannot be installed on the current laptop.
 
 During setup, `npm` and `uv` stream live output in the terminal so long installs do not look stalled.
 
-Blender layout round-trip sessions use a local Blender runtime. On Linux and WSL x64, setup installs a managed Blender 4.5 LTS runtime under `.cache/blender-runtime` when Blender is not already on PATH. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory only for custom locations.
+Blender layout round-trip sessions use a local Blender runtime. Set `URDF_STUDIO_INSTALL_BLENDER=1` when running setup to install the managed Blender 4.5 LTS runtime under `.cache/blender-runtime` on Linux and WSL x64. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory.
 
 Optional setup commands:
 
@@ -73,10 +73,10 @@ Default `npm run setup` install inventory:
 - `.venv` with the unified Python runtime used by backend services
 - Backend Python packages required by URDF Studio
 - MJLab when the current machine is compatible
-- Blender runtime when supported and Blender is not already available
 
 Not installed by default:
 
+- Blender runtime
 - Genesis
 - PyBullet
 - Simulator container images

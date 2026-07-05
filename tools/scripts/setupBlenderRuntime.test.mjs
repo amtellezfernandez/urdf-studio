@@ -152,7 +152,7 @@ test('Blender install policy honors skip and force env vars', () => {
     shouldInstallBlenderRuntime({ env: { [BLENDER_FORCE_INSTALL_ENV]: '1' } }),
     true
   );
-  assert.equal(shouldInstallBlenderRuntime({ env: {} }), true);
+  assert.equal(shouldInstallBlenderRuntime({ env: {} }), false);
 });
 
 test('managed Blender installer reuses an already verified executable', () => {
@@ -237,10 +237,27 @@ test('Blender runtime setup returns existing compatible executable before instal
   assert.equal(installCalled, false);
 });
 
-test('Blender runtime setup reports nonfatal managed install failures by default', async () => {
+test('Blender runtime setup skips managed install by default', async () => {
+  let installCalled = false;
+
   const result = await installBlenderRuntime(null, {
     rootDir: '/repo',
     env: {},
+    resolveBlenderExecutableForSetupImpl: () => null,
+    installManagedLinuxBlenderRuntimeImpl: () => {
+      installCalled = true;
+    },
+  });
+
+  assert.equal(result.installed, false);
+  assert.equal(result.skipped, true);
+  assert.equal(installCalled, false);
+});
+
+test('Blender runtime setup reports fatal managed install failures when requested', async () => {
+  const result = await installBlenderRuntime(null, {
+    rootDir: '/repo',
+    env: { [BLENDER_FORCE_INSTALL_ENV]: '1' },
     resolveBlenderExecutableForSetupImpl: () => null,
     buildCompatibilityResult: () => null,
     installManagedLinuxBlenderRuntimeImpl: () => {
@@ -249,6 +266,6 @@ test('Blender runtime setup reports nonfatal managed install failures by default
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.fatal, false);
+  assert.equal(result.fatal, true);
   assert.equal(result.error, 'download failed');
 });

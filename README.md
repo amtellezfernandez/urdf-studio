@@ -74,13 +74,13 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. It can take a while the first time.
 
-By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, MJLab when compatible, and Blender when supported.
+By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, and MJLab when compatible.
 
-Genesis, PyBullet, and simulator containers are optional and are not installed unless you explicitly opt in. The base app remains usable if an optional target runtime is absent on the current laptop.
+Blender, Genesis, PyBullet, and simulator containers are optional and are not installed unless you explicitly opt in. The base app remains usable if an optional target runtime is absent on the current laptop.
 
 During setup, `npm` and `uv` stream live output in the terminal so long installs do not look stalled.
 
-Blender layout round-trip sessions use a local Blender runtime. On Linux and WSL x64, setup installs a managed Blender 4.5 LTS runtime under `.cache/blender-runtime` when Blender is not already on PATH. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory only for custom locations.
+Blender layout round-trip sessions use a local Blender runtime. Set `URDF_STUDIO_INSTALL_BLENDER=1` when running setup to install the managed Blender 4.5 LTS runtime under `.cache/blender-runtime` on Linux and WSL x64. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory.
 
 Useful setup commands:
 
@@ -110,10 +110,10 @@ Default `npm run setup` install inventory:
 - `.venv` with the unified Python runtime used by backend services
 - Backend Python packages required by URDF Studio
 - MJLab when the current machine is compatible
-- Blender runtime when supported and Blender is not already available
 
 Not installed by default:
 
+- Blender runtime
 - Genesis
 - PyBullet
 - Simulator container images
@@ -121,7 +121,7 @@ Not installed by default:
 
 ## WSL2 Simulator Setup
 
-Use WSL2, not WSL1. The core app, URDF loading, PyBullet, MuJoCo, MJLab, Genesis, MJX containers, and managed Blender are the supported WSL path when the host has the required display, GPU, and Docker features. Setup detects the machine first and installs only the default managed runtimes unless you explicitly opt into more.
+Use WSL2, not WSL1. The core app, URDF loading, PyBullet, MuJoCo, MJLab, Genesis, MJX containers, and managed Blender are the supported WSL path when the host has the required display, GPU, and Docker features. Setup detects the machine first and installs only the default managed runtimes unless you explicitly opt into more with flags such as `URDF_STUDIO_INSTALL_BLENDER=1`.
 
 Before installing heavy simulator runtimes, check the basics inside WSL:
 
@@ -148,7 +148,7 @@ WSL target behavior:
 - Isaac Sim is intentionally blocked inside WSL. Use native Linux with the official NVIDIA workflow, or an official Isaac Sim container on a compatible native Linux GPU host.
 - SAPIEN Vulkan rendering is intentionally blocked inside WSL. Use a native Linux GPU host with a Vulkan render device.
 
-Do not install every simulator globally. Run `npm run setup` and let URDF Studio install the default managed runtimes for the current machine. Add other simulator runtimes only when you need them. Use `npm run simulator:container:plan -- <simulator-id>` to see the exact Docker command for simulator targets that should run in a container.
+Do not install every simulator globally. Run `npm run setup` and let URDF Studio install the default managed runtimes for the current machine. Add Blender or other simulator runtimes only when you need them. Use `npm run simulator:container:plan -- <simulator-id>` to see the exact Docker command for simulator targets that should run in a container.
 
 To inspect one simulator target before installing or launching it:
 

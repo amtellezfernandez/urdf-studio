@@ -1,4 +1,5 @@
 import {
+  BLENDER_FORCE_INSTALL_ENV,
   GITHUB_CLI_LOGIN_COMMAND,
   GLOBAL_ILU_INSTALL_COMMAND,
   GLOBAL_ILU_INSTALL_ENV,
@@ -47,8 +48,8 @@ export function buildSetupRoadmapSections() {
         'Unified Python backend runtime',
         'Simulator compatibility preflight',
         'Backend Python packages for URDF Studio services',
-        'Default managed extras: MJLab when compatible and Blender when supported',
-        'Optional extras not installed by default: Genesis, PyBullet, and simulator containers',
+        'Default managed extras: MJLab when compatible',
+        'Optional extras not installed by default: Blender, Genesis, PyBullet, and simulator containers',
         'Hugging Face and GitHub access',
       ],
     },
@@ -143,12 +144,12 @@ export function buildSetupSummarySections({
         'Unified Python runtime in .venv',
         'Backend Python packages used by URDF Studio services',
         'MJLab when this machine is compatible',
-        'Blender runtime when supported and not already installed',
       ],
     },
     {
       heading: 'Optional Extras',
       lines: [
+        `Blender is not downloaded unless ${BLENDER_FORCE_INSTALL_ENV}=1 is set for setup.`,
         'Genesis is not installed unless URDF_STUDIO_INSTALL_GENESIS=1 is set for setup.',
         'PyBullet is not installed unless URDF_STUDIO_INSTALL_PYBULLET=1 is set for setup.',
         `Simulator containers are not built unless ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 is set for setup.`,

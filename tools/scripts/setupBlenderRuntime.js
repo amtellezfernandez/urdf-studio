@@ -155,7 +155,7 @@ export function shouldInstallBlenderRuntime({ env = process.env } = {}) {
   if (isTruthyEnvValue(env[BLENDER_FORCE_INSTALL_ENV])) {
     return true;
   }
-  return true;
+  return false;
 }
 
 export function installManagedLinuxBlenderRuntime({
@@ -282,7 +282,7 @@ export async function installBlenderRuntime(
     logInfo(error?.message || String(error));
     logInfo(`Set ${BLENDER_PATH_ENV}=/path/to/blender if Blender is already installed.`);
     if (!isTruthyEnvValue(env[BLENDER_FORCE_INSTALL_ENV])) {
-      logInfo(`Continuing without Blender. Set ${BLENDER_FORCE_INSTALL_ENV}=1 to require it during setup.`);
+      logInfo(`Continuing without Blender. Set ${BLENDER_FORCE_INSTALL_ENV}=1 to install it during setup.`);
     }
     return buildOptionalRuntimeInstallFailureImpl({
       forceInstallEnv: BLENDER_FORCE_INSTALL_ENV,
