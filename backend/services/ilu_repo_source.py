@@ -190,9 +190,31 @@ def _has_path_segment(path: str, expected_segment: str) -> bool:
     return any(segment.lower() == expected_segment.lower() for segment in path.split("/") if segment)
 
 
+def _read_entry_str(entry: RepositoryFileEntry, key: str) -> str:
+    value = entry.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def _read_entry_int(entry: RepositoryFileEntry, key: str, default: int = 0) -> int:
+    value = entry.get(key)
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default
+        try:
+            return int(candidate)
+        except ValueError:
+            return default
+    return default
+
+
 def _is_ignorable_repository_metadata_file(entry: RepositoryFileEntry) -> bool:
-    name = str(entry.get("name", "")).lower()
-    path = str(entry.get("path", ""))
+    name = _read_entry_str(entry, "name").lower()
+    path = _read_entry_str(entry, "path")
     return name.startswith("._") or name == ".ds_store" or _has_path_segment(path, "__macosx")
 
 
@@ -230,17 +252,17 @@ def _build_candidate_file_base(candidate_path: str) -> str:
 def _find_mesh_folder(files: list[RepositoryFileEntry], dir_path: str) -> str | None:
     normalized_dir = dir_path.lower().strip("/")
     for entry in files:
-        if str(entry.get("type")) != "dir":
+        if _read_entry_str(entry, "type") != "dir":
             continue
-        file_path = str(entry.get("path", "")).lower().strip("/")
-        file_name = str(entry.get("name", "")).lower()
+        file_path = _read_entry_str(entry, "path").lower().strip("/")
+        file_name = _read_entry_str(entry, "name").lower()
         if file_name not in {"meshes", "assets"}:
             continue
         if file_path in {
             f"{normalized_dir}/meshes".strip("/"),
             f"{normalized_dir}/assets".strip("/"),
         }:
-            return str(entry.get("path", "")).strip("/")
+            return _read_entry_str(entry, "path").strip("/")
     return None
 
 
@@ -350,17 +372,19 @@ def _find_repo_candidates_from_files(
 ) -> list[RepositoryCandidate]:
     candidates: list[RepositoryCandidate] = []
     for entry in files:
-        if str(entry.get("type")) != "file":
+        if _read_entry_str(entry, "type") != "file":
             continue
         if _is_ignorable_repository_metadata_file(entry):
             continue
-        file_name = str(entry.get("name", ""))
+        file_name = _read_entry_str(entry, "name")
         lowered_name = file_name.lower()
         if _is_support_xacro_file(lowered_name):
             continue
         if not (lowered_name.endswith(".urdf") or _is_xacro_path(lowered_name)):
             continue
-        candidate_path = _normalize_repository_path(str(entry.get("path", "")))
+        candidate_path = _normalize_repository_path(_read_entry_str(entry, "path"))
+        if not candidate_path:
+            continue
         meshes_folder = _find_meshes_folder_for_candidate(files, candidate_path)
         candidates.append(
             {
@@ -522,10 +546,10 @@ def _load_public_git_tree_files(
     for raw_entry in raw_tree:
         if not isinstance(raw_entry, dict):
             continue
-        normalized_path = _normalize_repository_path(str(raw_entry.get("path", "")))
+        normalized_path = _normalize_repository_path(_read_entry_str(raw_entry, "path"))
         if not normalized_path:
             continue
-        entry_type = str(raw_entry.get("type", "")).strip().lower()
+        entry_type = _read_entry_str(raw_entry, "type").strip().lower()
         if entry_type == "tree":
             directories[normalized_path] = {
                 "name": normalized_path.split("/")[-1],
@@ -560,8 +584,8 @@ def _load_public_git_tree_files(
             "path": normalized_path,
             "type": "file",
             "download_url": None,
-            "size": int(raw_entry.get("size") or 0),
-            "sha": str(raw_entry.get("sha") or "").strip() or None,
+            "size": _read_entry_int(raw_entry, "size", 0),
+            "sha": _read_entry_str(raw_entry, "sha").strip() or None,
             "encoding": None,
         }
 

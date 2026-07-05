@@ -317,6 +317,36 @@ def test_list_repo_candidates_falls_back_when_bridge_process_fails(monkeypatch) 
     assert payload["candidates"][0]["meshesFolderPath"] == "robots/demo/assets"
 
 
+def test_find_repo_candidates_from_files_ignores_non_string_entry_fields() -> None:
+    candidates = ilu_repo_source._find_repo_candidates_from_files(
+        [
+            {
+                "name": 123,
+                "path": "robots/bad.urdf",
+                "type": "file",
+            },
+            {
+                "name": "fake.urdf",
+                "path": ["robots", "fake.urdf"],
+                "type": "file",
+            },
+            {
+                "name": "demo.urdf",
+                "path": "robots/demo/demo.urdf",
+                "type": "file",
+            },
+            {
+                "name": "assets",
+                "path": "robots/demo/assets",
+                "type": "dir",
+            },
+        ]
+    )
+
+    assert [candidate["path"] for candidate in candidates] == ["robots/demo/demo.urdf"]
+    assert candidates[0]["hasMeshesFolder"] is True
+
+
 def test_fetch_url_bytes_wraps_url_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise_url_error(*_args, **_kwargs):
         raise ilu_repo_source.urllib.error.URLError("offline")
@@ -453,6 +483,30 @@ def test_load_public_git_tree_files_quotes_refs_with_slashes(monkeypatch) -> Non
     assert requested_urls == [
         f"https://api.github.com/repos/{owner}/{repo}/git/trees/refs%2Fpull%2F1%2Fhead?recursive=1",
     ]
+
+
+def test_load_public_git_tree_files_ignores_non_string_and_invalid_numeric_fields(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda explicit_token=None: None)
+    monkeypatch.setattr("backend.services.ilu_repo_source._resolve_default_branch_from_html", lambda owner, repo: "main")
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._fetch_url_bytes",
+        lambda url, *, max_bytes, headers=None: json.dumps(
+            {
+                "truncated": False,
+                "tree": [
+                    {"path": ["robots", "fake.urdf"], "type": "blob", "size": 12, "sha": "bad"},
+                    {"path": "robots/demo/demo.urdf", "type": "blob", "size": True, "sha": 7},
+                ],
+            }
+        ).encode("utf-8"),
+    )
+
+    resolved_ref, files = ilu_repo_source._load_public_git_tree_files("acme", "robot")
+
+    assert resolved_ref == "main"
+    assert [file["path"] for file in files] == ["robots", "robots/demo", "robots/demo/demo.urdf"]
+    assert files[-1]["size"] == 0
+    assert files[-1]["sha"] is None
 
 
 def test_list_repo_candidates_falls_back_to_public_git_tree_when_archive_is_too_large(monkeypatch) -> None:
