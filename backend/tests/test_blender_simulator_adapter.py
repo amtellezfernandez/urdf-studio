@@ -484,7 +484,7 @@ def test_blender_change_set_applies_camera_pose(tmp_path: Path) -> None:
 
     updated_camera = result.world_package.world_snapshot.cameras[0]
     assert result.applied_change_count == 2
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert updated_camera["pose"]["xyz"] == [0.2, 0.3, 1.4]
     assert updated_camera["intrinsics"]["fov_deg"] == 60.0
     assert all(
@@ -582,7 +582,7 @@ def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
     added_object = result.world_package.world_snapshot.objects[1]
 
     assert result.applied_change_count == 3
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert added_object == {
         "id": "blender_added_cube",
         "name": "Added cube",
@@ -624,7 +624,7 @@ def test_blender_change_set_imports_new_mesh_world_objects(tmp_path: Path) -> No
 
     added_object = result.world_package.world_snapshot.objects[1]
     assert result.applied_change_count == 3
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert added_object["id"] == "blender_added_mesh"
     assert added_object["type"] == "mesh"
     assert added_object["asset_ref"] == "assets/added_mesh.obj"
@@ -682,7 +682,7 @@ def test_blender_change_set_assigns_unique_ids_to_imported_world_objects(
     )
 
     assert result.applied_change_count == 4
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert [item["id"] for item in result.world_package.world_snapshot.objects] == [
         "crate",
         "blender_added_cube",
@@ -796,7 +796,7 @@ def test_blender_change_set_applies_deleted_world_object(tmp_path: Path) -> None
     )
 
     assert result.applied_change_count == 1
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert result.world_package.world_snapshot.objects == []
 
 
@@ -811,7 +811,7 @@ def test_blender_change_set_accepts_source_camera_update(tmp_path: Path) -> None
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
     assert result.applied_change_count == 2
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
 
 
 def test_blender_change_set_applies_deleted_camera(tmp_path: Path) -> None:
@@ -832,7 +832,7 @@ def test_blender_change_set_applies_deleted_camera(tmp_path: Path) -> None:
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
     assert result.applied_change_count == 2
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert result.world_package.world_snapshot.cameras == []
 
 
@@ -1444,7 +1444,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
     assert result.applied_change_count == 3
-    assert result.review_only_count == 0
+    assert result.review_only_count == 1
     assert result.world_package.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
     assert result.world_package.world_snapshot.objects[0]["size_xyz"] == [0.5, 0.6, 0.7]
     assert result.world_package.world_snapshot.objects[0]["color"] == "#e61a33"
@@ -1506,7 +1506,7 @@ def test_generated_blender_export_applies_deleted_studio_entities(
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
     assert result.applied_change_count == 2
-    assert result.review_only_count == 0
+    assert result.review_only_count == 2
     assert result.world_package.world_snapshot.objects == []
     assert result.world_package.world_snapshot.cameras == []
 

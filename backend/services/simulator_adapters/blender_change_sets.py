@@ -269,9 +269,6 @@ def _validate_blender_change_set(
         deleted_camera_ids=deleted_camera_ids,
     )
 
-    applied_auxiliary_entry_count = (
-        len(new_world_objects) + len(deleted_world_object_ids) + len(deleted_camera_ids)
-    )
     return (
         source,
         object_updates,
@@ -279,7 +276,7 @@ def _validate_blender_change_set(
         tuple(new_world_objects),
         frozenset(deleted_world_object_ids),
         frozenset(deleted_camera_ids),
-        len(review_only) - applied_auxiliary_entry_count,
+        len(review_only),
     )
 
 
