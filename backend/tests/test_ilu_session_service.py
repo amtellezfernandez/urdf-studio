@@ -83,6 +83,22 @@ def test_session_snapshot_rejects_non_object_metadata(monkeypatch, tmp_path: Pat
         raise AssertionError("Expected non-object session metadata to be rejected.")
 
 
+def test_session_snapshot_rejects_invalid_metadata_encoding(monkeypatch, tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    session_dir = session_root / "session-1"
+    session_dir.mkdir(parents=True)
+    (session_dir / "session.json").write_bytes(b"\x80not-utf8")
+    monkeypatch.setattr(ilu_session_service, "ILU_SESSION_ROOT", session_root)
+
+    try:
+        ilu_session_service.get_ilu_session_snapshot("session-1")
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 500
+        assert exc.detail == "Failed to read ilu session metadata."
+    else:
+        raise AssertionError("Expected invalid session metadata encoding to be rejected.")
+
+
 def test_local_session_manifest_exposes_working_urdf_and_filtered_assets(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -149,6 +165,37 @@ def test_local_session_manifest_exposes_working_urdf_and_filtered_assets(
             "mime": "application/xml",
         },
     ]
+
+
+def test_session_snapshot_rejects_invalid_working_urdf_encoding(monkeypatch, tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    session_dir = session_root / "session-1"
+    session_dir.mkdir(parents=True)
+    working_urdf_path = session_dir / "working.urdf"
+    working_urdf_path.write_bytes(b"\x80not-utf8")
+    (session_dir / "session.json").write_text(
+        json.dumps(
+            {
+                "schema": "ilu-shared-session",
+                "schemaVersion": 1,
+                "sessionId": "session-1",
+                "createdAt": "2026-03-23T00:00:00Z",
+                "updatedAt": "2026-03-23T00:00:01Z",
+                "workingUrdfPath": str(working_urdf_path),
+                "lastUrdfPath": str(working_urdf_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ilu_session_service, "ILU_SESSION_ROOT", session_root)
+
+    try:
+        ilu_session_service.get_ilu_session_snapshot("session-1")
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 500
+        assert exc.detail == "Failed to read ilu working URDF."
+    else:
+        raise AssertionError("Expected invalid working URDF encoding to be rejected.")
 
 
 def test_github_session_manifest_exposes_working_urdf_and_repo_assets(

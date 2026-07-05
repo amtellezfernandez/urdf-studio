@@ -118,7 +118,7 @@ def _read_session_payload(session_id: str) -> IluSessionMetadataPayload:
         raise IluSessionError(status_code=404, detail=f"ilu session not found: {session_id}")
     try:
         payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
         raise IluSessionError(status_code=500, detail="Failed to read ilu session metadata.") from exc
     if not isinstance(payload, dict):
         raise IluSessionError(status_code=500, detail="ilu session metadata is incomplete.")
@@ -303,7 +303,7 @@ def _read_working_urdf(working_urdf_path: Path) -> str:
         )
     try:
         return working_urdf_path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise IluSessionError(status_code=500, detail="Failed to read ilu working URDF.") from exc
 
 
