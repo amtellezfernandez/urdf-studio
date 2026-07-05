@@ -56,6 +56,11 @@ BYTES_PER_MIB = 1_048_576.0
 PERCENTILE_50 = 50
 PERCENTILE_95 = 95
 PERCENTILE_99 = 99
+_RETRYABLE_BENCHMARK_ERRORS = (
+    KeyError,
+    RuntimeError,
+    ValueError,
+)
 
 
 def _ns_to_ms(duration_ns: int) -> float:
@@ -215,7 +220,7 @@ def _run_with_retry(
                 retries_used=retries_used,
                 error=None,
             )
-        except Exception as exc:  # noqa: BLE001
+        except _RETRYABLE_BENCHMARK_ERRORS as exc:
             last_error = str(exc)
             if retries_used >= max_retries:
                 break
