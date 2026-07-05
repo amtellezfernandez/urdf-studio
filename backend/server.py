@@ -9,6 +9,7 @@ import importlib
 
 from backend.app import app, create_app
 from backend.core.settings import settings
+from backend.services.import_utils import module_not_found_matches_import_name
 
 
 __all__ = ["app", "create_app"]
@@ -18,7 +19,7 @@ def _run_uvicorn_app() -> None:
     try:
         uvicorn = importlib.import_module("uvicorn")
     except ModuleNotFoundError as exc:
-        if exc.name != "uvicorn":
+        if not module_not_found_matches_import_name(exc.name, "uvicorn"):
             raise
         raise RuntimeError("Running backend.server requires uvicorn to be installed") from exc
     run_server = getattr(uvicorn, "run", None)

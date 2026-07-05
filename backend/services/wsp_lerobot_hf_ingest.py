@@ -25,6 +25,7 @@ from backend.models.physical_state import (
     WorldModelTrainingSample,
 )
 from backend.services.robot_rollout_generator import UrdfEntry, fk_position, load_urdf_entry
+from backend.services.import_utils import module_not_found_matches_import_name
 from backend.services.world_model_dataset import build_world_model_training_samples
 
 # ── Robot configuration registry ─────────────────────────────────────────────
@@ -75,7 +76,7 @@ def _load_hf_dataset_loader() -> Any:
     try:
         datasets_module = importlib.import_module("datasets")
     except ModuleNotFoundError as exc:
-        if exc.name != "datasets":
+        if not module_not_found_matches_import_name(exc.name, "datasets"):
             raise
         raise ImportError(
             "Loading HuggingFace datasets requires: pip install datasets"

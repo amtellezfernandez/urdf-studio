@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from backend.models.physical_state import ActionToken, PhysicalRolloutTrace
+from backend.services.import_utils import module_not_found_matches_any_import_name
 from backend.services.robot_reality_log import compile_robot_reality_log_payload
 from backend.services.world_model_dataset import build_world_model_training_samples
 
@@ -364,7 +365,10 @@ def _load_mcap_decoder_tools() -> tuple[Any, Any]:
         reader_module = importlib.import_module("mcap.reader")
         decoder_module = importlib.import_module("mcap_ros2.decoder")
     except ModuleNotFoundError as exc:
-        if exc.name not in _MCAP_DEPENDENCY_MODULE_NAMES:
+        if not module_not_found_matches_any_import_name(
+            exc.name,
+            _MCAP_DEPENDENCY_MODULE_NAMES,
+        ):
             raise
         raise ImportError(_MCAP_DEPENDENCY_ERROR) from exc
 
