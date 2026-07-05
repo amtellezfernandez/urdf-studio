@@ -176,3 +176,44 @@ def test_blender_blend_validator_reports_timeout(monkeypatch, tmp_path: Path) ->
         expected_object_count=2,
         expected_camera_count=3,
     ) == "Blender saved-session validation timed out after 60.0s"
+
+
+def test_blender_blend_validator_script_only_suppresses_bound_math_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
+    captured_command: list[str] = []
+
+    def fake_run(command, **_kwargs):
+        captured_command.extend(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                f"{BLENDER_BLEND_VALIDATE_MARKER}"
+                '{"bounded_world_object_count": 1, "camera_count": 1, '
+                '"visible_world_object_count": 1, "world_object_count": 1}\n'
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.blender_saved_session.subprocess.run",
+        fake_run,
+    )
+
+    assert (
+        validate_blender_blend_artifact(
+            blend_path,
+            blender_executable="/usr/bin/blender",
+            expected_object_count=1,
+            expected_camera_count=1,
+        )
+        is None
+    )
+
+    script_argument = captured_command[captured_command.index("--python-expr") + 1]
+    assert "except (AttributeError, TypeError, ValueError):" in script_argument
+    assert ("except " + "Exception:") not in script_argument

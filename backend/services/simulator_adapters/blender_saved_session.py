@@ -48,7 +48,7 @@ def object_world_bound_points(obj):
         return []
     try:
         return [matrix_world @ Vector(corner) for corner in bound_box]
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return []
 
 
