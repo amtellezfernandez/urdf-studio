@@ -52,6 +52,11 @@ _COLLABORATION_TRANSLATED_EXCEPTIONS = (
     CollaborationValidationError,
     CollaborationCapacityError,
 )
+_COLLABORATION_WEBSOCKET_SEND_EXCEPTIONS = (
+    TimeoutError,
+    RuntimeError,
+    WebSocketDisconnect,
+)
 
 
 def _translate_collaboration_error(exc: Exception) -> HTTPException:
@@ -121,7 +126,7 @@ async def _send_preencoded_event(
             websocket.send_text(message_json),
             timeout=COLLABORATION_BROADCAST_PEER_TIMEOUT_SECONDS,
         )
-    except Exception:
+    except _COLLABORATION_WEBSOCKET_SEND_EXCEPTIONS:
         collaboration_service.disconnect_peer(session_id, peer_id)
 
 
@@ -144,7 +149,7 @@ async def _close_revoked_collaboration_peer(peer: CollaborationPeerDisconnect) -
             ),
             timeout=COLLABORATION_BROADCAST_PEER_TIMEOUT_SECONDS,
         )
-    except Exception:
+    except _COLLABORATION_WEBSOCKET_SEND_EXCEPTIONS:
         return
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import pytest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from backend.app import create_app
+from backend.api import collaboration as collaboration_api
 from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
 from backend.services.collaboration import collaboration_service
 from backend.services.collaboration_params import (
@@ -627,3 +629,46 @@ def test_collaboration_websocket_relays_events_to_connected_peer() -> None:
             assert relayed_to_b["type"] == "event"
             assert relayed_to_b["event"]["client_id"] == "editor-a"
             assert relayed_to_b["event"]["payload"] == {"joint": "elbow", "value": 1.25}
+
+
+def test_send_preencoded_event_disconnects_peer_on_expected_transport_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    disconnected: list[tuple[str, str]] = []
+
+    class _FailingWebSocket:
+        async def send_text(self, _message: str) -> None:
+            raise RuntimeError("socket closed")
+
+    monkeypatch.setattr(
+        collaboration_api.collaboration_service,
+        "disconnect_peer",
+        lambda session_id, peer_id: disconnected.append((session_id, peer_id)),
+    )
+
+    asyncio.run(
+        collaboration_api._send_preencoded_event(
+            "session-1",
+            "peer-1",
+            _FailingWebSocket(),
+            "{}",
+        )
+    )
+
+    assert disconnected == [("session-1", "peer-1")]
+
+
+def test_send_preencoded_event_preserves_unexpected_transport_failures() -> None:
+    class _ExplodingWebSocket:
+        async def send_text(self, _message: str) -> None:
+            raise KeyError("unexpected send failure")
+
+    with pytest.raises(KeyError, match="unexpected send failure"):
+        asyncio.run(
+            collaboration_api._send_preencoded_event(
+                "session-1",
+                "peer-1",
+                _ExplodingWebSocket(),
+                "{}",
+            )
+        )
