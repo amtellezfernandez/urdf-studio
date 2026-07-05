@@ -99,6 +99,19 @@ def test_session_snapshot_rejects_invalid_metadata_encoding(monkeypatch, tmp_pat
         raise AssertionError("Expected invalid session metadata encoding to be rejected.")
 
 
+def test_session_snapshot_rejects_non_string_session_id(monkeypatch, tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    monkeypatch.setattr(ilu_session_service, "ILU_SESSION_ROOT", session_root)
+
+    try:
+        ilu_session_service.get_ilu_session_snapshot(123)  # type: ignore[arg-type]
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Invalid ilu session id."
+    else:
+        raise AssertionError("Expected non-string session id to be rejected.")
+
+
 def test_local_session_manifest_exposes_working_urdf_and_filtered_assets(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -314,3 +327,51 @@ def test_local_session_asset_resolution_restricts_paths(monkeypatch, tmp_path: P
         assert exc.status_code == 400
     else:
         raise AssertionError("Expected invalid asset path to be rejected")
+
+
+def test_local_session_asset_resolution_rejects_non_string_asset_inputs(monkeypatch, tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    session_dir = session_root / "session-1"
+    session_dir.mkdir(parents=True)
+    working_urdf_path = session_dir / "working.urdf"
+    working_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+
+    robot_root = tmp_path / "robot"
+    robot_root.mkdir(parents=True)
+
+    (session_dir / "session.json").write_text(
+        json.dumps(
+            {
+                "schema": "ilu-shared-session",
+                "schemaVersion": 1,
+                "sessionId": "session-1",
+                "createdAt": "2026-03-23T00:00:00Z",
+                "updatedAt": "2026-03-23T00:00:01Z",
+                "workingUrdfPath": str(working_urdf_path),
+                "lastUrdfPath": str(working_urdf_path),
+                "loadedSource": {
+                    "source": "local-file",
+                    "urdfPath": str(working_urdf_path),
+                    "localPath": str(robot_root / "robot.urdf"),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ilu_session_service, "ILU_SESSION_ROOT", session_root)
+
+    try:
+        ilu_session_service.resolve_ilu_session_asset_file("session-1", ["robot.urdf"], "working")  # type: ignore[arg-type]
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Invalid ilu session asset path."
+    else:
+        raise AssertionError("Expected non-string asset path to be rejected.")
+
+    try:
+        ilu_session_service.resolve_ilu_session_asset_file("session-1", "robot.urdf", None)  # type: ignore[arg-type]
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Invalid ilu session asset kind."
+    else:
+        raise AssertionError("Expected non-string asset kind to be rejected.")

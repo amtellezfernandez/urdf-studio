@@ -97,6 +97,8 @@ class IluSessionGitHubSourceContext:
 
 
 def _validate_session_id(session_id: str) -> str:
+    if not isinstance(session_id, str):
+        raise IluSessionError(status_code=400, detail="Invalid ilu session id.")
     normalized = session_id.strip()
     if not normalized or not SESSION_ID_PATTERN.match(normalized):
         raise IluSessionError(status_code=400, detail="Invalid ilu session id.")
@@ -170,6 +172,8 @@ def _normalize_working_asset_path(value: str | None, default_asset_path: str) ->
 
 
 def _normalize_session_asset_path(raw_path: str) -> str:
+    if not isinstance(raw_path, str):
+        raise IluSessionError(status_code=400, detail="Invalid ilu session asset path.")
     candidate = raw_path.replace("\\", "/").strip()
     candidate = re.sub(r"/+", "/", candidate).lstrip("/")
     if not candidate:
@@ -431,6 +435,8 @@ def get_ilu_session_asset_manifest(session_id: str) -> IluSessionAssetManifestRe
 def resolve_ilu_session_asset_file(session_id: str, asset_path: str, kind: str) -> IluSessionAssetFile:
     _, working_file, local_context = _read_asset_source_context(session_id)
 
+    if not isinstance(kind, str):
+        raise IluSessionError(status_code=400, detail="Invalid ilu session asset kind.")
     normalized_kind = kind.strip().lower()
     normalized_asset_path = _normalize_session_asset_path(asset_path)
     if normalized_kind == WORKING_ASSET_KIND:
