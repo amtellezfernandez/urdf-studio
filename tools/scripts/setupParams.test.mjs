@@ -42,6 +42,7 @@ import {
   PYBULLET_VERIFY_IMPORT_SCRIPT,
   SETUP_NPM_INSTALL_FLAGS,
   SIMULATOR_CONTAINER_FORCE_ENV,
+  SIMULATOR_CONTAINER_INSTALL_ENV,
   SIMULATOR_CONTAINER_SETUP,
   SIMULATOR_CONTAINER_SKIP_ENV,
 } from './setupParams.js';
@@ -142,12 +143,14 @@ test('Blender setup pins a managed LTS runtime for Linux WSL release checks', ()
 });
 
 test('setup npm installs suppress funding and audit noise', () => {
-  assert.deepEqual(SETUP_NPM_INSTALL_FLAGS, ['--no-fund', '--audit=false', '--loglevel=error']);
+  assert.deepEqual(SETUP_NPM_INSTALL_FLAGS, ['--no-fund', '--audit=false', '--loglevel=notice']);
 });
 
 test('simulator container setup env names live in setup params', () => {
+  assert.equal(SIMULATOR_CONTAINER_SETUP.installEnv, 'URDF_STUDIO_BUILD_SIMULATOR_CONTAINERS');
   assert.equal(SIMULATOR_CONTAINER_SETUP.skipEnv, 'URDF_STUDIO_SKIP_SIMULATOR_CONTAINERS');
   assert.equal(SIMULATOR_CONTAINER_SETUP.forceEnv, 'URDF_STUDIO_FORCE_SIMULATOR_CONTAINERS');
+  assert.equal(SIMULATOR_CONTAINER_INSTALL_ENV, SIMULATOR_CONTAINER_SETUP.installEnv);
   assert.equal(SIMULATOR_CONTAINER_SKIP_ENV, SIMULATOR_CONTAINER_SETUP.skipEnv);
   assert.equal(SIMULATOR_CONTAINER_FORCE_ENV, SIMULATOR_CONTAINER_SETUP.forceEnv);
 });

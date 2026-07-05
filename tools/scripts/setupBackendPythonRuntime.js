@@ -148,6 +148,7 @@ export async function installBackendDeps(
 ) {
   const venvPython = getManagedPythonPath();
   const uvPath = findUvImpl({ env });
+  logArrow('Checking backend Python runtime');
 
   if (!existsSyncImpl(venvPython)) {
     logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
@@ -213,11 +214,12 @@ export async function installBackendDeps(
 
   const existingBackendCheck = runPythonImportCheckImpl(venvPython, backendVerifyImportScript);
   if (existingBackendCheck.ok) {
+    logSuccess('Backend Python runtime ready');
     return buildSetupResult({ changed });
   }
-  logArrow('Installing backend Python runtime');
   logInfo('Installing or repairing backend Python packages...');
   logInfo(`Installing: ${backendPythonDependencies.join(', ')}`);
+  logInfo('Streaming uv pip output below.');
 
   try {
     execFileSyncImpl(uvPath, ['pip', 'install', '--python', venvPython, ...backendPythonDependencies], {

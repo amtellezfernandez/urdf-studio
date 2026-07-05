@@ -110,6 +110,131 @@ def test_world_snapshot_accepts_valid_world_object_contract() -> None:
     assert manifest.world_snapshot.objects[0]["id"] == "crate"
 
 
+def test_world_snapshot_accepts_v1_1_appearance_physics_consistency_contract() -> None:
+    payload = _manifest_payload()
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "mesh",
+            "appearance": {
+                "representations": [
+                    {
+                        "id": "crate-splat",
+                        "kind": "splat",
+                        "asset_ref": "assets/crate.spz",
+                        "scale_xyz": [1.0, 1.0, 1.0],
+                    }
+                ]
+            },
+            "physics": {
+                "fixed": True,
+                "collision": True,
+                "mass_kg": 1.5,
+                "friction": 0.8,
+                "restitution": 0.1,
+                "semantic_role": "fixture",
+                "collision_geometry": {
+                    "id": "crate-proxy",
+                    "kind": "box",
+                    "size_xyz": [0.2, 0.3, 0.4],
+                },
+                "inertia": {
+                    "ixx": 0.01,
+                    "iyy": 0.02,
+                    "izz": 0.03,
+                },
+            },
+            "consistency": {
+                "appearance_ref": "crate-splat",
+                "physics_ref": "crate-proxy",
+                "method": "bbox-fit",
+                "metrics": {"coverage": 0.95},
+                "status": "valid",
+            },
+        }
+    ]
+
+    manifest = WorldScenePackageManifest.model_validate(payload)
+
+    world_object = manifest.world_snapshot.objects[0]
+    assert world_object["appearance"]["representations"][0]["kind"] == "splat"
+    assert world_object["physics"]["collision_geometry"]["kind"] == "box"
+
+
+def test_world_snapshot_rejects_splat_without_physics_collision_geometry() -> None:
+    payload = _manifest_payload()
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "mesh",
+            "appearance": {
+                "representations": [
+                    {
+                        "id": "crate-splat",
+                        "kind": "splat",
+                        "asset_ref": "assets/crate.spz",
+                    }
+                ]
+            },
+        }
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert "splat representations require physics.collision_geometry" in str(exc_info.value)
+
+
+def test_world_snapshot_rejects_mesh_with_primitive_only_appearance_ref() -> None:
+    payload = _manifest_payload()
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "mesh",
+            "appearance": {
+                "representations": [
+                    {
+                        "id": "crate-primitive",
+                        "kind": "primitive",
+                        "asset_ref": "assets/crate.json",
+                    }
+                ]
+            },
+        }
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert "mesh asset reference is required for mesh objects" in str(exc_info.value)
+
+
+def test_world_snapshot_rejects_nonportable_physics_collision_mesh_asset_ref() -> None:
+    payload = _manifest_payload()
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "physics": {
+                "collision_geometry": {
+                    "id": "crate-proxy",
+                    "kind": "mesh",
+                    "asset_ref": "../crate.stl",
+                }
+            },
+        }
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert "physics.collision_geometry.asset_ref" in str(exc_info.value)
+    assert "portable relative asset reference" in str(exc_info.value)
+
+
 def test_world_interface_preserves_extension_metadata() -> None:
     payload = _manifest_payload()
     payload["interface"]["planning"] = {

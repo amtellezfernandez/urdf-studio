@@ -9,7 +9,7 @@ import {
   STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS,
   STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS,
   WORLD_SCENE_PACKAGE_LIMITS,
-  WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
+  WORLD_SCENE_PACKAGE_SUPPORTED_SCHEMA_VERSIONS,
   WORLD_SCENE_PACKAGE_PATTERNS,
   WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS,
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_DURATION_MS,
@@ -75,6 +75,44 @@ const WORLD_OBJECT_MESH_FIELDS = [
   "scale",
   "scale_xyz",
 ] as const;
+const WORLD_OBJECT_APPEARANCE_FIELDS = ["representations"] as const;
+const WORLD_OBJECT_APPEARANCE_REPRESENTATION_FIELDS = [
+  "id",
+  "kind",
+  "asset_ref",
+  "scale_xyz",
+  "semantic_role",
+] as const;
+const WORLD_OBJECT_APPEARANCE_REPRESENTATION_KINDS = ["mesh", "primitive", "splat"] as const;
+const WORLD_OBJECT_PHYSICS_FIELDS = [
+  "fixed",
+  "collision",
+  "mass_kg",
+  "friction",
+  "restitution",
+  "semantic_role",
+  "collision_geometry",
+  "inertia",
+] as const;
+const WORLD_OBJECT_PHYSICS_GEOMETRY_FIELDS = [
+  "id",
+  "kind",
+  "asset_ref",
+  "size_xyz",
+  "radius",
+  "length",
+  "scale_xyz",
+] as const;
+const WORLD_OBJECT_PHYSICS_GEOMETRY_KINDS = ["box", "sphere", "cylinder", "mesh"] as const;
+const WORLD_OBJECT_INERTIA_FIELDS = ["ixx", "iyy", "izz", "ixy", "ixz", "iyz"] as const;
+const WORLD_OBJECT_CONSISTENCY_FIELDS = [
+  "appearance_ref",
+  "physics_ref",
+  "method",
+  "metrics",
+  "status",
+] as const;
+const WORLD_OBJECT_CONSISTENCY_STATUSES = ["valid", "warning", "missing", "unchecked"] as const;
 
 type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
@@ -283,9 +321,22 @@ const readWorldObjectMeshAssetRef = (value: Record<string, unknown>): string | n
     return normalizePortableWorldAssetRef(value.asset_ref);
   }
   const mesh = value.mesh;
-  if (!isRecord(mesh)) return null;
-  const meshAssetRef = mesh.asset_ref ?? mesh.path ?? mesh.uri ?? mesh.filename;
-  return isNonEmptyString(meshAssetRef) ? normalizePortableWorldAssetRef(meshAssetRef) : null;
+  if (isRecord(mesh)) {
+    const meshAssetRef = mesh.asset_ref ?? mesh.path ?? mesh.uri ?? mesh.filename;
+    if (isNonEmptyString(meshAssetRef)) {
+      return normalizePortableWorldAssetRef(meshAssetRef);
+    }
+  }
+  const appearance = value.appearance;
+  if (!isRecord(appearance) || !Array.isArray(appearance.representations)) return null;
+  for (const representation of appearance.representations) {
+    if (!isRecord(representation)) continue;
+    if (!isOneOf(representation.kind, ["mesh", "splat"] as const)) continue;
+    if (isNonEmptyString(representation.asset_ref)) {
+      return normalizePortableWorldAssetRef(representation.asset_ref);
+    }
+  }
+  return null;
 };
 
 const validateWorldObjectMeshMetadata = (
@@ -342,6 +393,179 @@ const validateWorldObjectMeshMetadata = (
 
   if (value.type === "mesh" && readWorldObjectMeshAssetRef(value) === null) {
     errors.push(`${objectLabel}.mesh asset reference is required for mesh objects`);
+  }
+  return errors;
+};
+
+const hasPhysicsCollisionGeometry = (value: Record<string, unknown>): boolean =>
+  isRecord(value.physics) && isRecord(value.physics.collision_geometry);
+
+const validateWorldObjectAppearance = (
+  value: Record<string, unknown>,
+  objectLabel: string
+): string[] => {
+  if (value.appearance === undefined) return [];
+  if (!isRecord(value.appearance)) return [`${objectLabel}.appearance must be an object`];
+  const appearance = value.appearance;
+  const errors: string[] = [];
+  errors.push(
+    ...validateAllowedFields(appearance, WORLD_OBJECT_APPEARANCE_FIELDS, `${objectLabel}.appearance`)
+  );
+  if (!Array.isArray(appearance.representations) || appearance.representations.length === 0) {
+    errors.push(`${objectLabel}.appearance.representations must be a non-empty array`);
+    return errors;
+  }
+  let hasSplat = false;
+  appearance.representations.forEach((representation, index) => {
+    const representationLabel = `${objectLabel}.appearance.representations[${index}]`;
+    if (!isRecord(representation)) {
+      errors.push(`${representationLabel} must be an object`);
+      return;
+    }
+    errors.push(
+      ...validateAllowedFields(
+        representation,
+        WORLD_OBJECT_APPEARANCE_REPRESENTATION_FIELDS,
+        representationLabel
+      )
+    );
+    errors.push(...validateNonEmptyString(representation.id, `${representationLabel}.id`));
+    if (!isOneOf(representation.kind, WORLD_OBJECT_APPEARANCE_REPRESENTATION_KINDS)) {
+      errors.push(
+        `${representationLabel}.kind must be one of: ${WORLD_OBJECT_APPEARANCE_REPRESENTATION_KINDS.join(", ")}`
+      );
+    }
+    if (representation.kind === "mesh" || representation.kind === "splat") {
+      errors.push(
+        ...validatePortableWorldAssetRef(
+          representation.asset_ref,
+          `${representationLabel}.asset_ref`
+        )
+      );
+    } else if (representation.asset_ref !== undefined) {
+      errors.push(
+        ...validatePortableWorldAssetRef(
+          representation.asset_ref,
+          `${representationLabel}.asset_ref`
+        )
+      );
+    }
+    if (representation.scale_xyz !== undefined) {
+      errors.push(
+        ...validateFiniteVector(representation.scale_xyz, `${representationLabel}.scale_xyz`, {
+          requirePositive: true,
+        })
+      );
+    }
+    errors.push(...validateOptionalString(representation.semantic_role, `${representationLabel}.semantic_role`));
+    hasSplat = hasSplat || representation.kind === "splat";
+  });
+  if (hasSplat && !hasPhysicsCollisionGeometry(value)) {
+    errors.push(`${objectLabel}.appearance splat representations require physics.collision_geometry`);
+  }
+  return errors;
+};
+
+const validateWorldObjectPhysicsCollisionGeometry = (
+  value: unknown,
+  fieldLabel: string
+): string[] => {
+  if (!isRecord(value)) return [`${fieldLabel} must be an object`];
+  const errors: string[] = [];
+  errors.push(...validateAllowedFields(value, WORLD_OBJECT_PHYSICS_GEOMETRY_FIELDS, fieldLabel));
+  if (value.id !== undefined) {
+    errors.push(...validateNonEmptyString(value.id, `${fieldLabel}.id`));
+  }
+  if (!isOneOf(value.kind, WORLD_OBJECT_PHYSICS_GEOMETRY_KINDS)) {
+    errors.push(`${fieldLabel}.kind must be one of: ${WORLD_OBJECT_PHYSICS_GEOMETRY_KINDS.join(", ")}`);
+    return errors;
+  }
+  if (value.kind === "box") {
+    errors.push(...validateFiniteVector(value.size_xyz, `${fieldLabel}.size_xyz`, { requirePositive: true }));
+  }
+  if (value.kind === "sphere") {
+    errors.push(...validatePositiveNumber(value.radius, `${fieldLabel}.radius`));
+  }
+  if (value.kind === "cylinder") {
+    errors.push(...validatePositiveNumber(value.radius, `${fieldLabel}.radius`));
+    errors.push(...validatePositiveNumber(value.length, `${fieldLabel}.length`));
+  }
+  if (value.kind === "mesh") {
+    errors.push(...validatePortableWorldAssetRef(value.asset_ref, `${fieldLabel}.asset_ref`));
+  } else if (value.asset_ref !== undefined) {
+    errors.push(...validatePortableWorldAssetRef(value.asset_ref, `${fieldLabel}.asset_ref`));
+  }
+  if (value.scale_xyz !== undefined) {
+    errors.push(...validateFiniteVector(value.scale_xyz, `${fieldLabel}.scale_xyz`, { requirePositive: true }));
+  }
+  return errors;
+};
+
+const validateWorldObjectPhysicsInertia = (value: unknown, fieldLabel: string): string[] => {
+  if (!isRecord(value)) return [`${fieldLabel} must be an object`];
+  const errors: string[] = [];
+  errors.push(...validateAllowedFields(value, WORLD_OBJECT_INERTIA_FIELDS, fieldLabel));
+  for (const fieldName of ["ixx", "iyy", "izz"] as const) {
+    if (!isNumber(value[fieldName])) {
+      errors.push(`${fieldLabel}.${fieldName} must be a finite number >= 0`);
+    } else if (value[fieldName] < 0) {
+      errors.push(`${fieldLabel}.${fieldName} must be >= 0`);
+    }
+  }
+  for (const fieldName of ["ixy", "ixz", "iyz"] as const) {
+    errors.push(...validateOptionalFiniteNumber(value[fieldName], `${fieldLabel}.${fieldName}`));
+  }
+  return errors;
+};
+
+const validateWorldObjectPhysics = (value: unknown, objectLabel: string): string[] => {
+  if (value === undefined) return [];
+  if (!isRecord(value)) return [`${objectLabel}.physics must be an object`];
+  const errors: string[] = [];
+  errors.push(...validateAllowedFields(value, WORLD_OBJECT_PHYSICS_FIELDS, `${objectLabel}.physics`));
+  errors.push(...validateOptionalBoolean(value.fixed, `${objectLabel}.physics.fixed`));
+  errors.push(...validateOptionalBoolean(value.collision, `${objectLabel}.physics.collision`));
+  errors.push(...validateOptionalFiniteNumber(value.mass_kg, `${objectLabel}.physics.mass_kg`, { minimum: 0 }));
+  errors.push(
+    ...validateOptionalFiniteNumber(value.friction, `${objectLabel}.physics.friction`, {
+      minimum: 0.01,
+      maximum: 5,
+    })
+  );
+  errors.push(
+    ...validateOptionalFiniteNumber(value.restitution, `${objectLabel}.physics.restitution`, {
+      minimum: 0,
+      maximum: 1,
+    })
+  );
+  errors.push(...validateOptionalString(value.semantic_role, `${objectLabel}.physics.semantic_role`));
+  if (value.collision_geometry !== undefined) {
+    errors.push(
+      ...validateWorldObjectPhysicsCollisionGeometry(
+        value.collision_geometry,
+        `${objectLabel}.physics.collision_geometry`
+      )
+    );
+  }
+  if (value.inertia !== undefined) {
+    errors.push(...validateWorldObjectPhysicsInertia(value.inertia, `${objectLabel}.physics.inertia`));
+  }
+  return errors;
+};
+
+const validateWorldObjectConsistency = (value: unknown, objectLabel: string): string[] => {
+  if (value === undefined) return [];
+  if (!isRecord(value)) return [`${objectLabel}.consistency must be an object`];
+  const errors: string[] = [];
+  errors.push(...validateAllowedFields(value, WORLD_OBJECT_CONSISTENCY_FIELDS, `${objectLabel}.consistency`));
+  for (const fieldName of ["appearance_ref", "physics_ref", "method"] as const) {
+    errors.push(...validateNonEmptyString(value[fieldName], `${objectLabel}.consistency.${fieldName}`));
+  }
+  if (!isOneOf(value.status, WORLD_OBJECT_CONSISTENCY_STATUSES)) {
+    errors.push(`${objectLabel}.consistency.status must be one of: ${WORLD_OBJECT_CONSISTENCY_STATUSES.join(", ")}`);
+  }
+  if (value.metrics !== undefined && !isRecord(value.metrics)) {
+    errors.push(`${objectLabel}.consistency.metrics must be an object`);
   }
   return errors;
 };
@@ -434,6 +658,9 @@ const validateSerializableWorldObject = (value: unknown, objectIndex: number): s
   }
   errors.push(...validateWorldObjectSimulation(value.simulation, objectLabel));
   errors.push(...validateWorldObjectMeshMetadata(value, objectLabel));
+  errors.push(...validateWorldObjectAppearance(value, objectLabel));
+  errors.push(...validateWorldObjectPhysics(value.physics, objectLabel));
+  errors.push(...validateWorldObjectConsistency(value.consistency, objectLabel));
 
   const ikTargetType = value.ik_target_type ?? "punctual";
   if (!isOneOf(ikTargetType, WORLD_LAYOUT_SUPPORTED_IK_TARGET_TYPES)) {
@@ -746,8 +973,10 @@ export const validateLocalWorldSceneManifest = (
   if (isRecord(manifest)) {
     errors.push(...validateAllowedFields(manifest, WORLD_SCENE_PACKAGE_FIELDS, "manifest"));
   }
-  if (manifest.schema_version !== WORLD_SCENE_PACKAGE_SCHEMA_VERSION) {
-    errors.push(`schema_version must be ${WORLD_SCENE_PACKAGE_SCHEMA_VERSION}`);
+  if (!isOneOf(manifest.schema_version, WORLD_SCENE_PACKAGE_SUPPORTED_SCHEMA_VERSIONS)) {
+    errors.push(
+      `schema_version must be one of: ${WORLD_SCENE_PACKAGE_SUPPORTED_SCHEMA_VERSIONS.join(", ")}`
+    );
   }
   if (!isString(manifest.package_id) || !manifest.package_id.trim()) {
     errors.push("package_id is required");

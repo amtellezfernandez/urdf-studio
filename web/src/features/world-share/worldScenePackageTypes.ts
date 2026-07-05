@@ -1,6 +1,6 @@
 import type { Camera } from "@/shared/types/camera";
 import type { WorldObjectSource } from "@/shared/types/worldObject";
-import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
+import { WORLD_SCENE_PACKAGE_SUPPORTED_SCHEMA_VERSIONS } from "@/features/world-share/worldScenePackageParams";
 
 export type WorldRuntimeTargetMode = "native" | "python" | "container";
 
@@ -47,6 +47,50 @@ export type SerializableWorldObjectMeshSpec = {
   scale_xyz?: [number, number, number];
 };
 
+export type SerializableWorldObjectAppearanceRepresentation = {
+  id: string;
+  kind: "mesh" | "primitive" | "splat";
+  asset_ref?: string;
+  scale_xyz?: [number, number, number];
+  semantic_role?: string | null;
+};
+
+export type SerializableWorldObjectAppearanceSpec = {
+  representations: SerializableWorldObjectAppearanceRepresentation[];
+};
+
+export type SerializableWorldObjectPhysicsCollisionGeometry = {
+  id?: string;
+  kind: "box" | "sphere" | "cylinder" | "mesh";
+  asset_ref?: string;
+  size_xyz?: [number, number, number];
+  radius?: number;
+  length?: number;
+  scale_xyz?: [number, number, number];
+};
+
+export type SerializableWorldObjectPhysicsInertia = {
+  ixx: number;
+  iyy: number;
+  izz: number;
+  ixy?: number;
+  ixz?: number;
+  iyz?: number;
+};
+
+export type SerializableWorldObjectPhysicsSpec = SerializableWorldObjectSimulationSpec & {
+  collision_geometry?: SerializableWorldObjectPhysicsCollisionGeometry;
+  inertia?: SerializableWorldObjectPhysicsInertia;
+};
+
+export type SerializableWorldObjectConsistencySpec = {
+  appearance_ref: string;
+  physics_ref: string;
+  method: string;
+  status: "valid" | "warning" | "missing" | "unchecked";
+  metrics?: Record<string, unknown>;
+};
+
 export type SerializableWorldObject = {
   id: string;
   name: string;
@@ -57,6 +101,9 @@ export type SerializableWorldObject = {
   color: string;
   is_hidden?: boolean;
   simulation?: SerializableWorldObjectSimulationSpec;
+  appearance?: SerializableWorldObjectAppearanceSpec;
+  physics?: SerializableWorldObjectPhysicsSpec;
+  consistency?: SerializableWorldObjectConsistencySpec;
   asset_ref?: string;
   asset_scale_xyz?: [number, number, number];
   mesh?: SerializableWorldObjectMeshSpec;
@@ -81,7 +128,7 @@ export type WorldSnapshot = {
 };
 
 export type WorldScenePackageManifest = {
-  schema_version: typeof WORLD_SCENE_PACKAGE_SCHEMA_VERSION;
+  schema_version: (typeof WORLD_SCENE_PACKAGE_SUPPORTED_SCHEMA_VERSIONS)[number];
   package_id: string;
   version: string;
   title: string;

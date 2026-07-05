@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   SIMULATOR_CONTAINER_FORCE_ENV,
+  SIMULATOR_CONTAINER_INSTALL_ENV,
   SIMULATOR_CONTAINER_SKIP_ENV,
   installSimulatorContainers,
   simulatorContainerImageExists,
@@ -50,7 +51,7 @@ test('container image existence probes Docker inspect in the requested root', ()
   assert.equal(calls[0].options.stdio, 'ignore');
 });
 
-test('container setup skips when disabled or when images already exist', async () => {
+test('container setup skips when disabled or not explicitly requested', async () => {
   assert.deepEqual(
     await installSimulatorContainers(managedContainerReport(), {
       env: { [SIMULATOR_CONTAINER_SKIP_ENV]: '1' },
@@ -65,8 +66,23 @@ test('container setup skips when disabled or when images already exist', async (
     }
   );
 
+  let imageProbeCalled = false;
+  const defaultResult = await installSimulatorContainers(managedContainerReport(), {
+    imageExists: () => {
+      imageProbeCalled = true;
+      return false;
+    },
+  });
+
+  assert.equal(defaultResult.skipped, true);
+  assert.equal(defaultResult.installed, false);
+  assert.equal(imageProbeCalled, false);
+});
+
+test('container setup reports already available images when explicitly requested', async () => {
   let buildCalled = false;
   const readyResult = await installSimulatorContainers(managedContainerReport(), {
+    env: { [SIMULATOR_CONTAINER_INSTALL_ENV]: '1' },
     imageExists: () => true,
     runBuildPlan: () => {
       buildCalled = true;
@@ -85,7 +101,7 @@ test('container setup builds missing compatible images and reports ready targets
   const plans = [];
   const result = await installSimulatorContainers(managedContainerReport(), {
     rootDir: '/repo',
-    env: { DOCKER_PROGRESS: 'plain' },
+    env: { [SIMULATOR_CONTAINER_INSTALL_ENV]: '1', DOCKER_PROGRESS: 'plain' },
     imageExists: () => false,
     runBuildPlan: (plan, options) => {
       plans.push({ plan, options });
@@ -107,6 +123,7 @@ test('container setup builds missing compatible images and reports ready targets
 
 test('container setup treats build failures as nonfatal unless forced', async () => {
   const nonfatal = await installSimulatorContainers(managedContainerReport(), {
+    env: { [SIMULATOR_CONTAINER_INSTALL_ENV]: '1' },
     imageExists: () => false,
     runBuildPlan: () => ({ status: 1, signal: null }),
   });

@@ -111,16 +111,22 @@ test('backend Python resolution supports managed default and explicit Python 3.1
 });
 
 test('Python backend environment setup reuses existing managed venv', async () => {
+  const arrows = [];
+  const success = [];
   const result = await setupPythonBackendEnvironment({
     rootDir: '/repo',
     findUv: () => '/usr/bin/uv',
     existsSyncImpl: (candidatePath) => candidatePath === '/repo/.venv/bin/python3',
+    logArrow: (message) => arrows.push(message),
+    logSuccess: (message) => success.push(message),
     execFileSyncImpl: () => {
       throw new Error('uv venv should not run');
     },
   });
 
   assert.deepEqual(result, { ok: true, changed: false });
+  assert.deepEqual(arrows, ['Checking Python backend runtime']);
+  assert.deepEqual(success, ['Python backend environment ready']);
 });
 
 test('Python backend environment setup reports missing uv before creating venv', async () => {

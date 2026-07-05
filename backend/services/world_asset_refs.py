@@ -12,6 +12,7 @@ WORLD_OBJECT_ASSET_REF_KEYS = (
     "meshReference",
 )
 WORLD_OBJECT_MESH_ASSET_REF_KEYS = ("asset_ref", "path", "uri", "filename")
+WORLD_OBJECT_APPEARANCE_ASSET_REF_KINDS = {"mesh", "splat"}
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,16 @@ def normalize_portable_world_asset_ref(value: str) -> str:
 
 
 def read_world_object_asset_ref(value: Mapping[str, object]) -> WorldObjectAssetRef | None:
+    physics = value.get("physics")
+    if isinstance(physics, Mapping):
+        collision_geometry = physics.get("collision_geometry")
+        if isinstance(collision_geometry, Mapping):
+            asset_ref = collision_geometry.get("asset_ref")
+            if isinstance(asset_ref, str) and asset_ref.strip():
+                return WorldObjectAssetRef(
+                    value=asset_ref,
+                    field_path="physics.collision_geometry.asset_ref",
+                )
     for key in WORLD_OBJECT_ASSET_REF_KEYS:
         asset_ref = value.get(key)
         if isinstance(asset_ref, str) and asset_ref.strip():
@@ -60,5 +71,20 @@ def read_world_object_asset_ref(value: Mapping[str, object]) -> WorldObjectAsset
                     return WorldObjectAssetRef(
                         value=asset_ref,
                         field_path=f"geometry.mesh.{key}",
+                    )
+    appearance = value.get("appearance")
+    if isinstance(appearance, Mapping):
+        representations = appearance.get("representations")
+        if isinstance(representations, list):
+            for index, representation in enumerate(representations):
+                if not isinstance(representation, Mapping):
+                    continue
+                if representation.get("kind") not in WORLD_OBJECT_APPEARANCE_ASSET_REF_KINDS:
+                    continue
+                asset_ref = representation.get("asset_ref")
+                if isinstance(asset_ref, str) and asset_ref.strip():
+                    return WorldObjectAssetRef(
+                        value=asset_ref,
+                        field_path=f"appearance.representations[{index}].asset_ref",
                     )
     return None

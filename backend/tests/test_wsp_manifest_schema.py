@@ -166,6 +166,145 @@ def test_wsp_manifest_schema_accepts_portable_mesh_asset_refs() -> None:
     assert _schema_errors(payload) == []
 
 
+def test_wsp_manifest_schema_accepts_v1_1_appearance_physics_consistency_layers() -> None:
+    payload = copy.deepcopy(_manifest())
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "mesh",
+            "position_xyz": [0.0, 0.0, 0.1],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+            "appearance": {
+                "representations": [
+                    {
+                        "id": "crate-splat",
+                        "kind": "splat",
+                        "asset_ref": "assets/crate.spz",
+                        "scale_xyz": [1.0, 1.0, 1.0],
+                    }
+                ]
+            },
+            "physics": {
+                "fixed": True,
+                "collision": True,
+                "mass_kg": 1.5,
+                "friction": 0.8,
+                "restitution": 0.1,
+                "semantic_role": "fixture",
+                "collision_geometry": {
+                    "id": "crate-proxy",
+                    "kind": "box",
+                    "size_xyz": [0.2, 0.3, 0.4],
+                },
+                "inertia": {
+                    "ixx": 0.01,
+                    "iyy": 0.02,
+                    "izz": 0.03,
+                },
+            },
+            "consistency": {
+                "appearance_ref": "crate-splat",
+                "physics_ref": "crate-proxy",
+                "method": "bbox-fit",
+                "metrics": {"coverage": 0.95},
+                "status": "valid",
+            },
+        }
+    ]
+
+    assert _schema_errors(payload) == []
+
+
+def test_wsp_manifest_schema_rejects_malformed_physics_collision_geometry() -> None:
+    payload = copy.deepcopy(_manifest())
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "cube",
+            "position_xyz": [0.0, 0.0, 0.1],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+            "physics": {
+                "collision_geometry": {
+                    "id": "crate-proxy",
+                    "kind": "mesh",
+                    "asset_ref": "../crate.stl",
+                }
+            },
+        }
+    ]
+
+    errors = _schema_errors(payload)
+
+    assert "../crate.stl" in errors[0]
+    assert "does not match" in errors[0]
+
+
+def test_wsp_manifest_schema_rejects_splat_without_physics_collision_geometry() -> None:
+    payload = copy.deepcopy(_manifest())
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "mesh",
+            "position_xyz": [0.0, 0.0, 0.1],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+            "appearance": {
+                "representations": [
+                    {
+                        "id": "crate-splat",
+                        "kind": "splat",
+                        "asset_ref": "assets/crate.spz",
+                    }
+                ]
+            },
+        }
+    ]
+
+    errors = _schema_errors(payload)
+
+    assert "'physics' is a required property" in errors
+
+
+def test_wsp_manifest_schema_rejects_mesh_with_primitive_only_appearance_ref() -> None:
+    payload = copy.deepcopy(_manifest())
+    payload["schema_version"] = "1.1.0"
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "mesh",
+            "position_xyz": [0.0, 0.0, 0.1],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+            "appearance": {
+                "representations": [
+                    {
+                        "id": "crate-primitive",
+                        "kind": "primitive",
+                        "asset_ref": "assets/crate.json",
+                    }
+                ]
+            },
+        }
+    ]
+
+    errors = _schema_errors(payload)
+
+    assert any("not valid under any of the given schemas" in error for error in errors)
+
+
 def test_wsp_manifest_schema_accepts_local_relative_mesh_asset_refs() -> None:
     payload = _manifest_with_mesh_asset_ref("./assets/crate.obj")
 

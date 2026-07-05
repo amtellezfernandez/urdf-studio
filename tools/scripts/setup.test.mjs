@@ -6,10 +6,12 @@ import {
   didSpawnSyncFail,
   installSimulatorContainers,
   prependNativeLibraryPath,
+  renderSetupSections,
   resolveBlenderExecutableForSetup,
   resolveManagedCmeelLibPathFromSitePackages,
   resolvePythonForBackendVenv,
 } from './setup.js';
+import { SIMULATOR_CONTAINER_INSTALL_ENV } from './setupParams.js';
 
 test('setup uses uv-managed Python 3.12 by default', () => {
   const originalBootstrapPython = process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON;
@@ -148,11 +150,31 @@ async function withMutedConsole(callback) {
   }
 }
 
-test('setup prepares missing compatible managed simulator container images', async () => {
+test('setup skips compatible managed simulator container images unless requested', async () => {
+  let imageProbeCalled = false;
+
+  const result = await withMutedConsole(() =>
+    installSimulatorContainers(managedContainerReport(), {
+      imageExists: () => {
+        imageProbeCalled = true;
+        return false;
+      },
+    })
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, false);
+  assert.equal(result.installed, false);
+  assert.equal(result.skipped, true);
+  assert.equal(imageProbeCalled, false);
+});
+
+test('setup prepares missing compatible managed simulator container images when requested', async () => {
   const observedPlans = [];
 
   const result = await withMutedConsole(() =>
     installSimulatorContainers(managedContainerReport(), {
+      env: { [SIMULATOR_CONTAINER_INSTALL_ENV]: '1' },
       imageExists: () => false,
       runBuildPlan: (plan) => {
         observedPlans.push(plan);
@@ -174,6 +196,7 @@ test('setup skips simulator container builds when images already exist', async (
   let buildCalled = false;
 
   const result = await installSimulatorContainers(managedContainerReport(), {
+    env: { [SIMULATOR_CONTAINER_INSTALL_ENV]: '1' },
     imageExists: () => true,
     runBuildPlan: () => {
       buildCalled = true;
@@ -187,4 +210,27 @@ test('setup skips simulator container builds when images already exist', async (
   assert.deepEqual(result.built, []);
   assert.deepEqual(result.ready, ['mjx']);
   assert.equal(buildCalled, false);
+});
+
+test('setup section renderer prints headings and lines in order', () => {
+  const lines = [];
+  renderSetupSections(
+    [
+      {
+        heading: 'Installed By Setup',
+        lines: ['Node app dependencies in node_modules', 'Unified Python runtime in .venv'],
+      },
+    ],
+    {
+      logImpl: (line) => lines.push(line),
+      logArrowImpl: (line) => lines.push(line),
+      logInfoImpl: (line) => lines.push(line),
+    }
+  );
+
+  assert.equal(lines.length, 4);
+  assert.equal(lines[0], '');
+  assert.match(lines[1], /Installed By Setup/);
+  assert.match(lines[2], /Node app dependencies in node_modules/);
+  assert.match(lines[3], /Unified Python runtime in \.venv/);
 });

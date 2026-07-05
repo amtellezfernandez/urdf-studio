@@ -157,7 +157,7 @@ def add_observation_camera_sensor(gs: Any, scene: Any, robot_entity: Any, camera
         import genesis.engine.sensors.camera  # noqa: F401
 
         return scene.add_sensor(gs.options.sensors.RasterizerCameraOptions(**kwargs))
-    except Exception as exc:
+    except (ImportError, ModuleNotFoundError, TypeError, ValueError, RuntimeError) as exc:
         print(
             "[genesis-workspace] warning: "
             f"failed to add observation camera sensor '{camera.sim_name}': {exc}",
@@ -197,7 +197,7 @@ def read_observation_camera_sensor_images(
     for camera_spec, sensor in sensor_entries:
         try:
             reading = sensor.read()
-        except Exception as exc:
+        except (TypeError, ValueError, RuntimeError) as exc:
             print(
                 "[genesis-workspace] warning: "
                 f"failed to read observation camera sensor '{camera_spec.sim_name}': {exc}",

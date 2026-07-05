@@ -37,7 +37,11 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. The first run can take several minutes.
 
-Setup also prepares supported workspace transfer targets when the platform packages are available. The base app remains usable if a local target runtime cannot be installed on the current laptop.
+By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, MJLab when compatible, and Blender when supported.
+
+Genesis, PyBullet, and simulator containers are optional and are not installed unless you explicitly opt in. The base app remains usable if an optional target runtime cannot be installed on the current laptop.
+
+During setup, `npm` and `uv` stream live output in the terminal so long installs do not look stalled.
 
 Blender layout round-trip sessions use a local Blender runtime. On Linux and WSL x64, setup installs a managed Blender 4.5 LTS runtime under `.cache/blender-runtime` when Blender is not already on PATH. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory only for custom locations.
 
@@ -47,6 +51,36 @@ Optional setup commands:
 npm run setup:check
 npm run setup -- --twin
 ```
+
+Optional simulator installs:
+
+```bash
+URDF_STUDIO_INSTALL_GENESIS=1 npm run setup
+URDF_STUDIO_INSTALL_PYBULLET=1 npm run setup
+URDF_STUDIO_BUILD_SIMULATOR_CONTAINERS=1 npm run setup
+```
+
+Direct manual installs into the managed Python environment:
+
+```bash
+uv pip install --python .venv/bin/python3 genesis-world==1.1.0 imgui-bundle==1.92.801 "torch>=2.8"
+uv pip install --python .venv/bin/python3 pybullet
+```
+
+Default `npm run setup` install inventory:
+
+- `node_modules` for the web app and local tooling
+- `.venv` with the unified Python runtime used by backend services
+- Backend Python packages required by URDF Studio
+- MJLab when the current machine is compatible
+- Blender runtime when supported and Blender is not already available
+
+Not installed by default:
+
+- Genesis
+- PyBullet
+- Simulator container images
+- Every simulator globally
 
 On macOS, setup attempts the app and workspace viewer runtimes. Some optional native collision and simulation packages are skipped when their wheels are not portable across local Python environments.
 

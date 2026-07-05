@@ -20,24 +20,22 @@ import {
 
 export function shouldInstallGenesisRuntime({
   env = process.env,
-  platform = process.platform,
 } = {}) {
   return shouldInstallOptionalPythonRuntime({
     skipAutoInstallEnv: GENESIS_SKIP_AUTO_INSTALL_ENV,
     forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
-    defaultInstall: platform !== 'win32',
+    defaultInstall: false,
     env,
   });
 }
 
 export function shouldInstallPybulletRuntime({
   env = process.env,
-  platform = process.platform,
 } = {}) {
   return shouldInstallOptionalPythonRuntime({
     skipAutoInstallEnv: PYBULLET_SKIP_AUTO_INSTALL_ENV,
     forceInstallEnv: PYBULLET_FORCE_INSTALL_ENV,
-    defaultInstall: platform !== 'darwin',
+    defaultInstall: false,
     env,
   });
 }

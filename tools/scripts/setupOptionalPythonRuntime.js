@@ -91,6 +91,7 @@ export async function installOptionalPythonRuntime({
   if (existingRuntimeCheck.output) {
     logInfo(`${displayName} check failed; reinstalling packages.`);
   }
+  logInfo('Streaming uv pip output below.');
 
   try {
     logInfo(`Installing ${displayName} packages in ${PYTHON_ENV_DIRNAME}...`);

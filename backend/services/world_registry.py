@@ -25,7 +25,7 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
     WORLD_SCENE_PACKAGE_TRUST_SIGNED_METADATA,
-    WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
+    WORLD_SCENE_PACKAGE_SCHEMA_VERSIONS,
 )
 from backend.services.world_scene_package_digest import (
     canonical_world_scene_package_json,
@@ -179,10 +179,11 @@ class WorldRegistryService:
         warnings: list[str] = []
         digest = world_scene_package_digest(manifest)
 
-        if manifest.schema_version != WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1:
+        if manifest.schema_version not in WORLD_SCENE_PACKAGE_SCHEMA_VERSIONS:
             errors.append(
                 "Unsupported schema_version. "
-                f"Expected {WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1}, received {manifest.schema_version}."
+                f"Expected one of {', '.join(WORLD_SCENE_PACKAGE_SCHEMA_VERSIONS)}, "
+                f"received {manifest.schema_version}."
             )
         if not manifest.runtime_targets:
             warnings.append("No runtime_targets declared. Cross-runtime compatibility cannot be inferred.")

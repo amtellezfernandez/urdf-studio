@@ -108,7 +108,11 @@ test('backend verification script follows selected runtime stacks', () => {
 test('backend install removes superseded packages before repairing dependencies', async () => {
   const execCalls = [];
   const importChecks = [{ ok: false }, { ok: true }];
+  const arrows = [];
+  const success = [];
   const result = await installBackendDeps(null, quietRuntimeOptions({
+    logArrow: (message) => arrows.push(message),
+    logSuccess: (message) => success.push(message),
     listInstalledPythonPackageNamesImpl: () => ['libcoal', 'fastapi'],
     runPythonImportCheckImpl: () => importChecks.shift(),
     execFileSyncImpl: (command, args, options) => {
@@ -124,6 +128,26 @@ test('backend install removes superseded packages before repairing dependencies'
   assert.ok(execCalls[0].args.includes('libcoal'));
   assert.deepEqual(execCalls[1].args.slice(0, 4), ['pip', 'install', '--python', '/repo/.venv/bin/python3']);
   assert.deepEqual(execCalls[1].env, { UV_CACHE_DIR: '/repo/.uv-cache' });
+  assert.deepEqual(arrows, ['Checking backend Python runtime']);
+  assert.deepEqual(success, ['Backend dependencies installed']);
+});
+
+test('backend install reports ready when backend packages already verify', async () => {
+  const arrows = [];
+  const success = [];
+  const result = await installBackendDeps(null, quietRuntimeOptions({
+    logArrow: (message) => arrows.push(message),
+    logSuccess: (message) => success.push(message),
+    listInstalledPythonPackageNamesImpl: () => [],
+    runPythonImportCheckImpl: () => ({ ok: true }),
+    execFileSyncImpl: () => {
+      throw new Error('backend install should not run');
+    },
+  }));
+
+  assert.deepEqual(result, { ok: true, changed: false });
+  assert.deepEqual(arrows, ['Checking backend Python runtime']);
+  assert.deepEqual(success, ['Backend Python runtime ready']);
 });
 
 test('backend install blocks forced native dependencies on incompatible hosts', async () => {

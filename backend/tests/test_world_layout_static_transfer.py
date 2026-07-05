@@ -228,6 +228,76 @@ def test_build_primitives_preserves_object_simulation_metadata() -> None:
     assert primitives[0].semantic_role == "manipulation_target"
 
 
+def test_build_primitives_prefers_physics_layer_collision_geometry() -> None:
+    payload = {
+        "schema_version": "1.1.0",
+        "package_id": "splat_proxy_world",
+        "version": "1.0.0",
+        "interface": {
+            "frame_convention": "ros-rep-103",
+        },
+        "world_snapshot": {
+            "objects": [
+                {
+                    "id": "splat-crate",
+                    "name": "Splat crate",
+                    "type": "mesh",
+                    "position_xyz": [0.2, -0.1, 0.15],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [2.0, 2.0, 2.0],
+                    "color": "#22c55e",
+                    "appearance": {
+                        "representations": [
+                            {
+                                "id": "crate-splat",
+                                "kind": "splat",
+                                "asset_ref": "assets/crate.spz",
+                            }
+                        ]
+                    },
+                    "physics": {
+                        "fixed": False,
+                        "collision": True,
+                        "mass_kg": 4.5,
+                        "friction": 0.8,
+                        "restitution": 0.1,
+                        "semantic_role": "manipulation_target",
+                        "collision_geometry": {
+                            "id": "crate-proxy",
+                            "kind": "box",
+                            "size_xyz": [0.4, 0.2, 0.3],
+                        },
+                    },
+                    "consistency": {
+                        "appearance_ref": "crate-splat",
+                        "physics_ref": "crate-proxy",
+                        "method": "bbox-fit",
+                        "status": "valid",
+                    },
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
+
+    assert warnings == ()
+    assert len(primitives) == 1
+    assert layout.objects[0].primitive_type == "cube"
+    assert layout.objects[0].size_xyz == (0.4, 0.2, 0.3)
+    assert primitives[0].source_type == "cube"
+    assert primitives[0].sim_type == "box"
+    assert primitives[0].size_xyz == (0.4, 0.2, 0.3)
+    assert primitives[0].asset_ref is None
+    assert primitives[0].fixed is False
+    assert primitives[0].mass_kg == 4.5
+    assert primitives[0].friction == 0.8
+    assert primitives[0].semantic_role == "manipulation_target"
+
+
 def test_build_primitives_warns_for_duplicate_object_ids_and_names() -> None:
     payload = {
         "world_layout": {

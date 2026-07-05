@@ -45,12 +45,14 @@ test('runNpmInstall forwards npm output on failure', () => {
           assert.equal(command, 'npm');
           assert.deepEqual(args, ['install']);
           assert.equal(options.cwd, '/repo');
+          assert.equal(options.stdio, 'pipe');
           return {
             status: 1,
             stdout: 'install out',
             stderr: 'install err',
           };
         },
+        stdio: 'pipe',
         stdout: { write: (value) => stdoutWrites.push(value) },
         stderr: { write: (value) => stderrWrites.push(value) },
       }),
@@ -63,9 +65,15 @@ test('runNpmInstall forwards npm output on failure', () => {
 
 test('dependency setup installs full dependencies or only missing setup dependency', async () => {
   const calls = [];
+  const info = [];
+  const arrows = [];
+  const success = [];
   const missingAll = await installDependencies({
     rootDir: '/repo',
     existsSyncImpl: () => false,
+    logArrow: (message) => arrows.push(message),
+    logInfo: (message) => info.push(message),
+    logSuccess: (message) => success.push(message),
     runNpmInstallImpl: (args, options) => calls.push({ args, options }),
   });
   const missingInquirer = await installDependencies({
@@ -75,26 +83,39 @@ test('dependency setup installs full dependencies or only missing setup dependen
         join('/repo', 'node_modules'),
         join('/repo', 'node_modules', '.bin', 'vite'),
       ].includes(candidatePath),
+    logArrow: (message) => arrows.push(message),
+    logInfo: (message) => info.push(message),
+    logSuccess: (message) => success.push(message),
     runNpmInstallImpl: (args, options) => calls.push({ args, options }),
   });
 
   assert.equal(missingAll.changed, true);
   assert.equal(missingInquirer.changed, true);
-  assert.deepEqual(calls[0].args, ['install', '--no-fund', '--audit=false', '--loglevel=error']);
-  assert.deepEqual(calls[1].args, ['install', 'inquirer', '--no-fund', '--audit=false', '--loglevel=error']);
+  assert.deepEqual(calls[0].args, ['install', '--no-fund', '--audit=false', '--loglevel=notice']);
+  assert.deepEqual(calls[1].args, ['install', 'inquirer', '--no-fund', '--audit=false', '--loglevel=notice']);
   assert.equal(calls[0].options.rootDir, '/repo');
+  assert.equal(arrows[0], 'Checking Node dependencies');
+  assert.equal(arrows[1], 'Checking Node dependencies');
+  assert.match(info.join('\n'), /Streaming npm install output below/);
+  assert.equal(success.filter((message) => message === 'Node dependencies ready').length, 2);
 });
 
 test('dependency setup reports no changes when node runtime is ready', async () => {
+  const arrows = [];
+  const success = [];
   const result = await installDependencies({
     rootDir: '/repo',
     existsSyncImpl: () => true,
+    logArrow: (message) => arrows.push(message),
+    logSuccess: (message) => success.push(message),
     runNpmInstallImpl: () => {
       throw new Error('npm install should not run');
     },
   });
 
   assert.equal(result.changed, false);
+  assert.deepEqual(arrows, ['Checking Node dependencies']);
+  assert.deepEqual(success, ['Node dependencies ready']);
 });
 
 test('optional global ilu install handles skipped, missing, success, and failure states', async () => {
@@ -138,7 +159,7 @@ test('optional global ilu install handles skipped, missing, success, and failure
     join('/repo', 'node_modules', 'i-love-urdf'),
     '--no-fund',
     '--audit=false',
-    '--loglevel=error',
+    '--loglevel=notice',
   ]);
   assert.equal(failed.attempted, true);
   assert.equal(failed.installed, false);

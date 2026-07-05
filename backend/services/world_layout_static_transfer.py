@@ -222,6 +222,16 @@ def _read_world_object(value: object, index: int) -> WorldLayoutObject:
         raise WorldLayoutTransferError(
             f"objects[{index}].type must be one of: {', '.join(sorted(SUPPORTED_WORLD_OBJECT_TYPES))}"
         )
+    physics = value.get("physics")
+    if physics is not None and not _is_record(physics):
+        raise WorldLayoutTransferError(f"objects[{index}].physics must be an object")
+    physics = physics if _is_record(physics) else {}
+    collision_geometry = physics.get("collision_geometry")
+    if collision_geometry is not None and not _is_record(collision_geometry):
+        raise WorldLayoutTransferError(
+            f"objects[{index}].physics.collision_geometry must be an object"
+        )
+    collision_geometry = collision_geometry if _is_record(collision_geometry) else {}
     raw_name = value.get("name")
     position = _read_vector3(value.get("position_xyz"), f"objects[{index}].position_xyz")
     rotation = (
@@ -229,48 +239,55 @@ def _read_world_object(value: object, index: int) -> WorldLayoutObject:
         if "rotation_rpy_rad" in value
         else (0.0, 0.0, 0.0)
     )
-    size = _read_vector3(value.get("size_xyz"), f"objects[{index}].size_xyz", positive=True)
+    size = _read_physics_geometry_size(
+        collision_geometry,
+        index,
+    ) or _read_vector3(value.get("size_xyz"), f"objects[{index}].size_xyz", positive=True)
+    primitive_type = _read_physics_geometry_primitive_type(collision_geometry, raw_type, index)
     raw_color = value.get("color")
     simulation = value.get("simulation")
     if simulation is not None and not _is_record(simulation):
         raise WorldLayoutTransferError(f"objects[{index}].simulation must be an object")
     simulation = simulation if _is_record(simulation) else {}
     fixed = _read_optional_bool(
-        simulation.get("fixed", value.get("fixed", value.get("is_fixed"))),
+        physics.get("fixed", simulation.get("fixed", value.get("fixed", value.get("is_fixed")))),
         True,
         f"objects[{index}].simulation.fixed",
     )
     collision = _read_optional_bool(
-        simulation.get("collision", value.get("collision")),
+        physics.get("collision", simulation.get("collision", value.get("collision"))),
         True,
         f"objects[{index}].simulation.collision",
     )
     mass_kg = _read_optional_finite_number(
-        simulation.get("mass_kg", value.get("mass_kg")),
+        physics.get("mass_kg", simulation.get("mass_kg", value.get("mass_kg"))),
         f"objects[{index}].simulation.mass_kg",
         minimum=0.0,
     )
     friction = _read_optional_finite_number(
-        simulation.get("friction", value.get("friction")),
+        physics.get("friction", simulation.get("friction", value.get("friction"))),
         f"objects[{index}].simulation.friction",
         minimum=0.01,
         maximum=5.0,
     )
     restitution = _read_optional_finite_number(
-        simulation.get("restitution", value.get("restitution")),
+        physics.get("restitution", simulation.get("restitution", value.get("restitution"))),
         f"objects[{index}].simulation.restitution",
         minimum=0.0,
         maximum=1.0,
     )
     semantic_role = _read_optional_string(
-        simulation.get("semantic_role", value.get("semantic_role", value.get("role")))
+        physics.get(
+            "semantic_role",
+            simulation.get("semantic_role", value.get("semantic_role", value.get("role"))),
+        )
     )
-    asset_ref = _read_object_asset_ref(value, index)
+    asset_ref = _read_simulator_asset_ref(value, collision_geometry, index)
     asset_scale = _read_object_asset_scale(value, index)
     return WorldLayoutObject(
         id=raw_id.strip(),
         name=raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else raw_id.strip(),
-        primitive_type=raw_type,
+        primitive_type=primitive_type,
         position_xyz=position,
         rotation_rpy_rad=rotation,
         size_xyz=size,
@@ -287,6 +304,66 @@ def _read_world_object(value: object, index: int) -> WorldLayoutObject:
     )
 
 
+def _read_physics_geometry_primitive_type(
+    collision_geometry: WorldLayoutPayloadRecord,
+    fallback_type: object,
+    index: int,
+) -> str:
+    raw_kind = collision_geometry.get("kind")
+    if raw_kind is None:
+        return str(fallback_type)
+    if raw_kind == "box":
+        return "cube"
+    if raw_kind in {"sphere", "cylinder", "mesh"}:
+        return raw_kind
+    raise WorldLayoutTransferError(
+        "objects[{}].physics.collision_geometry.kind must be one of: box, cylinder, mesh, sphere".format(index)
+    )
+
+
+def _read_physics_geometry_size(
+    collision_geometry: WorldLayoutPayloadRecord,
+    index: int,
+) -> tuple[float, float, float] | None:
+    raw_kind = collision_geometry.get("kind")
+    if raw_kind == "box":
+        return _read_vector3(
+            collision_geometry.get("size_xyz"),
+            f"objects[{index}].physics.collision_geometry.size_xyz",
+            positive=True,
+        )
+    if raw_kind == "sphere":
+        radius = _read_finite_number(
+            collision_geometry.get("radius"),
+            f"objects[{index}].physics.collision_geometry.radius",
+        )
+        if radius <= 0.0:
+            raise WorldLayoutTransferError(
+                f"objects[{index}].physics.collision_geometry.radius must be > 0"
+            )
+        diameter = radius * 2.0
+        return (diameter, diameter, diameter)
+    if raw_kind == "cylinder":
+        radius = _read_finite_number(
+            collision_geometry.get("radius"),
+            f"objects[{index}].physics.collision_geometry.radius",
+        )
+        length = _read_finite_number(
+            collision_geometry.get("length"),
+            f"objects[{index}].physics.collision_geometry.length",
+        )
+        if radius <= 0.0:
+            raise WorldLayoutTransferError(
+                f"objects[{index}].physics.collision_geometry.radius must be > 0"
+            )
+        if length <= 0.0:
+            raise WorldLayoutTransferError(
+                f"objects[{index}].physics.collision_geometry.length must be > 0"
+            )
+        return (radius * 2.0, radius * 2.0, length)
+    return None
+
+
 def _read_optional_string(value: object) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
@@ -301,6 +378,16 @@ def _read_object_asset_ref(value: WorldLayoutPayloadRecord, index: int) -> str |
         asset_ref_entry.value,
         f"objects[{index}].{asset_ref_entry.field_path}",
     )
+
+
+def _read_simulator_asset_ref(
+    value: WorldLayoutPayloadRecord,
+    collision_geometry: WorldLayoutPayloadRecord,
+    index: int,
+) -> str | None:
+    if collision_geometry.get("kind") in {"box", "sphere", "cylinder"}:
+        return None
+    return _read_object_asset_ref(value, index)
 
 
 def _read_portable_asset_ref(value: str, field: str) -> str:

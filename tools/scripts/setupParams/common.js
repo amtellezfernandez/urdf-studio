@@ -12,10 +12,11 @@ export const GLOBAL_ILU_SETUP = {
 };
 
 export const NODE_INSTALL_SETUP = {
-  npmInstallFlags: ['--no-fund', '--audit=false', '--loglevel=error'],
+  npmInstallFlags: ['--no-fund', '--audit=false', '--loglevel=notice'],
 };
 
 export const SIMULATOR_CONTAINER_SETUP = {
+  installEnv: 'URDF_STUDIO_BUILD_SIMULATOR_CONTAINERS',
   skipEnv: 'URDF_STUDIO_SKIP_SIMULATOR_CONTAINERS',
   forceEnv: 'URDF_STUDIO_FORCE_SIMULATOR_CONTAINERS',
 };
@@ -32,6 +33,7 @@ export const GLOBAL_ILU_INSTALL_FLAG = GLOBAL_ILU_SETUP.installFlag;
 export const GLOBAL_ILU_INSTALL_ENV = GLOBAL_ILU_SETUP.installEnv;
 export const GLOBAL_ILU_INSTALL_COMMAND = GLOBAL_ILU_SETUP.installCommand;
 export const SETUP_NPM_INSTALL_FLAGS = NODE_INSTALL_SETUP.npmInstallFlags;
+export const SIMULATOR_CONTAINER_INSTALL_ENV = SIMULATOR_CONTAINER_SETUP.installEnv;
 export const SIMULATOR_CONTAINER_SKIP_ENV = SIMULATOR_CONTAINER_SETUP.skipEnv;
 export const SIMULATOR_CONTAINER_FORCE_ENV = SIMULATOR_CONTAINER_SETUP.forceEnv;
 export const PYTHON_ENV_DIRNAME = PYTHON_TOOLCHAIN_SETUP.backendEnvDirname;

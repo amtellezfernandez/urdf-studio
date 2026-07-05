@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://urdf.studio/specs/wsp/manifest-1.0.0.schema.json",
+  "$id": "https://urdf.studio/specs/wsp/manifest-1.1.0.schema.json",
   "title": "World Scene Package Manifest",
   "type": "object",
   "$defs": {
@@ -100,6 +100,133 @@
         "scale_xyz": { "$ref": "#/$defs/positiveVector3" }
       }
     },
+    "worldObjectAppearanceRepresentation": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["mesh", "primitive", "splat"] },
+        "asset_ref": { "$ref": "#/$defs/portableAssetRef" },
+        "scale_xyz": { "$ref": "#/$defs/positiveVector3" },
+        "semantic_role": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "enum": ["mesh", "splat"] } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["asset_ref"] }
+        }
+      ]
+    },
+    "worldObjectAppearance": {
+      "type": "object",
+      "required": ["representations"],
+      "additionalProperties": false,
+      "properties": {
+        "representations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/worldObjectAppearanceRepresentation" }
+        }
+      }
+    },
+    "worldObjectPhysicsCollisionGeometry": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["box", "sphere", "cylinder", "mesh"] },
+        "asset_ref": { "$ref": "#/$defs/portableAssetRef" },
+        "size_xyz": { "$ref": "#/$defs/positiveVector3" },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "length": { "type": "number", "exclusiveMinimum": 0 },
+        "scale_xyz": { "$ref": "#/$defs/positiveVector3" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "box" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["size_xyz"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "sphere" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["radius"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "cylinder" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["radius", "length"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "mesh" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["asset_ref"] }
+        }
+      ]
+    },
+    "worldObjectPhysicsInertia": {
+      "type": "object",
+      "required": ["ixx", "iyy", "izz"],
+      "additionalProperties": false,
+      "properties": {
+        "ixx": { "type": "number", "minimum": 0 },
+        "iyy": { "type": "number", "minimum": 0 },
+        "izz": { "type": "number", "minimum": 0 },
+        "ixy": { "type": "number" },
+        "ixz": { "type": "number" },
+        "iyz": { "type": "number" }
+      }
+    },
+    "worldObjectPhysics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fixed": { "type": "boolean" },
+        "collision": { "type": "boolean" },
+        "collision_geometry": { "$ref": "#/$defs/worldObjectPhysicsCollisionGeometry" },
+        "mass_kg": { "type": ["number", "null"], "minimum": 0 },
+        "inertia": { "$ref": "#/$defs/worldObjectPhysicsInertia" },
+        "friction": {
+          "type": ["number", "null"],
+          "minimum": 0.01,
+          "maximum": 5
+        },
+        "restitution": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "semantic_role": { "type": ["string", "null"] }
+      }
+    },
+    "worldObjectConsistency": {
+      "type": "object",
+      "required": ["appearance_ref", "physics_ref", "method", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "appearance_ref": { "type": "string", "minLength": 1 },
+        "physics_ref": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "minLength": 1 },
+        "metrics": { "type": "object" },
+        "status": {
+          "type": "string",
+          "enum": ["valid", "warning", "missing", "unchecked"]
+        }
+      }
+    },
     "worldObject": {
       "type": "object",
       "required": ["id", "name", "type", "position_xyz", "size_xyz", "color"],
@@ -136,6 +263,9 @@
           "enum": ["center", "primary", "secondary"]
         },
         "simulation": { "$ref": "#/$defs/worldObjectSimulation" },
+        "appearance": { "$ref": "#/$defs/worldObjectAppearance" },
+        "physics": { "$ref": "#/$defs/worldObjectPhysics" },
+        "consistency": { "$ref": "#/$defs/worldObjectConsistency" },
         "asset_ref": { "$ref": "#/$defs/portableAssetRef" },
         "asset_scale_xyz": { "$ref": "#/$defs/positiveVector3" },
         "mesh": { "$ref": "#/$defs/worldObjectMesh" }
@@ -150,6 +280,25 @@
             "anyOf": [
               { "required": ["asset_ref"] },
               {
+                "required": ["appearance"],
+                "properties": {
+                  "appearance": {
+                    "properties": {
+                      "representations": {
+                        "contains": {
+                          "type": "object",
+                          "properties": {
+                            "kind": { "enum": ["mesh", "splat"] }
+                          },
+                          "required": ["kind"]
+                        }
+                      }
+                    },
+                    "required": ["representations"]
+                  }
+                }
+              },
+              {
                 "required": ["mesh"],
                 "properties": {
                   "mesh": {
@@ -163,6 +312,35 @@
                 }
               }
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "appearance": {
+                "properties": {
+                  "representations": {
+                    "contains": {
+                      "type": "object",
+                      "properties": {
+                        "kind": { "const": "splat" }
+                      },
+                      "required": ["kind"]
+                    }
+                  }
+                },
+                "required": ["representations"]
+              }
+            },
+            "required": ["appearance"]
+          },
+          "then": {
+            "required": ["physics"],
+            "properties": {
+              "physics": {
+                "required": ["collision_geometry"]
+              }
+            }
           }
         }
       ]
@@ -185,7 +363,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1.0.0"
+      "enum": ["1.0.0", "1.1.0"]
     },
     "package_id": {
       "type": "string",

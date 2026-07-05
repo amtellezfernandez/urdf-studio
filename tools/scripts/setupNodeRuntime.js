@@ -40,6 +40,7 @@ export function runNpmInstall(
     platform = process.platform,
     execPath = process.execPath,
     spawnSyncImpl = spawnSync,
+    stdio = 'inherit',
     stdout = process.stdout,
     stderr = process.stderr,
     ...options
@@ -48,7 +49,8 @@ export function runNpmInstall(
   const { command, argsPrefix } = getNpmCommand({ env, platform, execPath });
   const result = spawnSyncImpl(command, [...argsPrefix, ...args], {
     cwd: rootDir,
-    encoding: 'utf-8',
+    encoding: stdio === 'inherit' ? undefined : 'utf-8',
+    stdio,
     ...options,
   });
   if (result.status === 0 && !result.error) {
@@ -68,28 +70,29 @@ export async function installDependencies({
   existsSyncImpl = existsSync,
   runNpmInstallImpl = runNpmInstall,
   logArrow = () => {},
+  logInfo = () => {},
   logSuccess = () => {},
   logWarning = () => {},
 } = {}) {
   try {
+    logArrow('Checking Node dependencies');
     let changed = false;
     const nodeModulesPath = join(rootDir, 'node_modules');
     const viteBin = join(nodeModulesPath, '.bin', 'vite');
     if (!existsSyncImpl(nodeModulesPath) || !existsSyncImpl(viteBin)) {
-      logArrow('Installing Node dependencies');
+      logInfo('Streaming npm install output below. This can take a while on the first run.');
       runNpmInstallImpl(['install', ...SETUP_NPM_INSTALL_FLAGS], { rootDir });
       changed = true;
     } else {
       const inquirerPath = join(rootDir, 'node_modules', 'inquirer');
       if (!existsSyncImpl(inquirerPath)) {
-        logArrow('Installing missing setup dependency');
+        logInfo('Installing missing setup dependency: inquirer');
+        logInfo('Streaming npm install output below.');
         runNpmInstallImpl(['install', 'inquirer', ...SETUP_NPM_INSTALL_FLAGS], { rootDir });
         changed = true;
       }
     }
-    if (changed) {
-      logSuccess('Node dependencies ready');
-    }
+    logSuccess('Node dependencies ready');
     return buildSetupResult({ changed });
   } catch (error) {
     logWarning('✗ Failed to install dependencies');
@@ -127,6 +130,7 @@ export async function installOptionalGlobalIlu({
 
   log('');
   logArrow('Installing global i-love-urdf CLI');
+  logInfo('Streaming npm install output below.');
   log('');
 
   try {

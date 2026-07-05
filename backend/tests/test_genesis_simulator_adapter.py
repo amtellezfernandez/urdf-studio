@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import builtins
 import os
 import shutil
 from dataclasses import replace
@@ -21,10 +22,12 @@ from backend.services.simulator_adapters import genesis as genesis_adapter
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
 from backend.services.simulator_adapters.plugin import get_plugin
 from backend.services.simulator_adapters.genesis_camera import (
+    add_observation_camera_sensor,
     add_scene_camera,
     attach_scene_camera_to_robot_link,
     camera_viewer_pose,
     observation_camera_sensor_kwargs,
+    read_observation_camera_sensor_images,
     rgb_to_image_array,
     write_camera_screenshots,
     write_viewer_screenshot,
@@ -829,6 +832,52 @@ def test_genesis_observation_camera_sensor_rejects_boolean_indices() -> None:
     kwargs = observation_camera_sensor_kwargs(_FakeRobotEntity(), _genesis_camera_spec())
 
     assert kwargs is None
+
+
+def test_genesis_add_observation_camera_sensor_preserves_unexpected_errors(monkeypatch) -> None:
+    class _FakeLink:
+        name = "wrist_link"
+        idx_local = 4
+
+    class _FakeRobotEntity:
+        idx = 2
+        links = [_FakeLink()]
+
+    class _FakeOptions:
+        class sensors:
+            @staticmethod
+            def RasterizerCameraOptions(**_kwargs):
+                raise KeyError("unexpected sensor setup failure")
+
+    class _FakeGs:
+        options = _FakeOptions()
+
+    class _FakeScene:
+        @staticmethod
+        def add_sensor(_sensor):
+            return object()
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "genesis.engine.sensors.camera":
+            return object()
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(KeyError, match="unexpected sensor setup failure"):
+        add_observation_camera_sensor(_FakeGs, _FakeScene(), _FakeRobotEntity(), _genesis_camera_spec())
+
+
+def test_genesis_sensor_image_read_preserves_unexpected_errors() -> None:
+    class _BrokenSensor:
+        @staticmethod
+        def read():
+            raise KeyError("unexpected sensor read failure")
+
+    with pytest.raises(KeyError, match="unexpected sensor read failure"):
+        read_observation_camera_sensor_images(((_genesis_camera_spec(), _BrokenSensor()),))
 
 
 def test_genesis_adds_mesh_object_when_asset_resolves(tmp_path: Path) -> None:

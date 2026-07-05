@@ -19,6 +19,8 @@ validates against that exact path; only the prose spec was renamed and consolida
 
 A World is one manifest describing a scene independent of any one robot or simulator: the robot's
 URDF, its joint positions, a list of cameras, and a list of scene objects in world coordinates.
+The format is the source of truth: users author, store, diff, and exchange Worlds; simulators are
+adapters that consume the World instead of becoming the place where the scene is defined.
 Two shapes exist, both validated by the same object rules described below:
 
 - `world-layout.json` — the lightweight shape (`{ world_layout: { name, objects, scenario_time_ms,
@@ -55,12 +57,49 @@ id, name, type, position_xyz, size_xyz, color        # required
 rotation_rpy_rad                                     # when orientation matters
 type: "cube" | "sphere" | "cylinder" | "point" | "mesh"
 
-# present when type is "mesh", or the object is otherwise asset-backed
+# v1.0 compatibility fields, present when type is "mesh" or otherwise asset-backed
 asset_ref, asset_scale_xyz
 mesh: { asset_ref | path | uri | filename, scale, scale_xyz }
 
-# present when the object carries physics intent
+# v1.0 compatibility physics fields
 simulation: { fixed, collision, mass_kg, friction, restitution, semantic_role }
+
+# v1.1 source-of-truth fields
+appearance: {
+  representations: [
+    {
+      id,
+      kind: "primitive" | "mesh" | "splat",
+      asset_ref,
+      scale_xyz,
+      semantic_role
+    }
+  ]
+}
+physics: {
+  collision_geometry: {
+    id,
+    kind: "box" | "sphere" | "cylinder" | "mesh",
+    size_xyz,       # box
+    radius, length, # sphere/cylinder
+    asset_ref,      # mesh collider
+    scale_xyz
+  },
+  fixed,
+  collision,
+  mass_kg,
+  inertia: { ixx, iyy, izz, ixy, ixz, iyz },
+  friction,
+  restitution,
+  semantic_role
+}
+consistency: {
+  appearance_ref,
+  physics_ref,
+  method,
+  metrics,
+  status: "valid" | "warning" | "missing" | "unchecked"
+}
 ```
 
 Field notes:
@@ -73,11 +112,36 @@ Field notes:
 | `mesh.uri` | string | Relative path to the real asset file, resolved at import time. |
 | `asset_scale_xyz` / `mesh.scale` | vec3 \| number | Uniform or per-axis scale on top of the loaded geometry's native units. |
 | `simulation.semantic_role` | string | Free-form tag a simulator adapter can key off, e.g. `manipulation_target`. |
+| `appearance.representations[]` | object[] | Render/perception layer. It may point at visual meshes or Gaussian splats. |
+| `physics.collision_geometry` | object | Simulator layer. Adapters must use this when present instead of guessing physics from appearance. |
+| `consistency` | object | Link between the visual representation and the simulator geometry, including the method/status of the fit. |
+
+## Appearance/physics split
+
+The format supports splats and meshes without pretending they are the same thing. A Gaussian splat
+has appearance but no surface that a physics engine can collide against. For that reason v1.1
+objects have two linked layers:
+
+- `appearance` is for rendering, perception, labels, and high-fidelity visual assets.
+- `physics` is for collision geometry, inertia, mass, friction, restitution, and simulator import.
+- `consistency` records how the appearance and physics layers correspond, for example a bounding
+  box fit, convex decomposition, hand-authored collider, or unchecked import.
+
+Rule: any `appearance.representations[].kind = "splat"` must also provide
+`physics.collision_geometry`. A splat can be the visual source of truth, but a simulator receives
+the linked physics proxy. Current simulator transfer code follows that rule by reading
+`physics.collision_geometry` first; if it is a primitive proxy, appearance asset refs are not passed
+to the simulator as geometry.
+
+The legacy `asset_ref`, `mesh`, and `simulation` fields remain accepted for v1.0 packages and
+existing world layouts. New package authors should prefer `appearance`, `physics`, and
+`consistency` when a world object must survive across renderers and physics engines.
 
 **Portable-reference rule**: every asset reference — top-level `asset_ref`, and each of
-`mesh.asset_ref` / `mesh.path` / `mesh.uri` / `mesh.filename` — must be a portable relative path:
-no leading slash, no `http://`/`file://` scheme, no `.`/`..` traversal, no empty segments. This is
-enforced identically on the frontend (`worldSceneManifest.ts`) and backend
+`mesh.asset_ref` / `mesh.path` / `mesh.uri` / `mesh.filename`,
+`appearance.representations[].asset_ref`, and `physics.collision_geometry.asset_ref` — must be a
+portable relative path: no leading slash, no `http://`/`file://` scheme, no `.`/`..` traversal, no
+empty segments. This is enforced identically on the frontend (`worldSceneManifest.ts`) and backend
 (`backend/services/world_asset_refs.py::normalize_portable_world_asset_ref`). It's what makes
 folder-based delivery work: every reference resolves against whatever directory the manifest came
 from, nothing is hard-coded to one machine or server.
@@ -101,12 +165,13 @@ is packaged for a target, not that the target can load or render that extension.
 | `.dae` | no | no | no | unverified | yes |
 | `.ply` | yes | no | no | unverified | yes |
 | `.usd` / `.usda` / `.usdc` | no | no | no | no | yes |
-| `.spz` (Gaussian splat) | deferred | no | no | no | no |
+| `.spz` (Gaussian splat) | deferred | no, appearance only | no, appearance only | no, appearance only | no |
 
 Splat rendering (`@sparkjsdev/spark`) requires bumping `three` to `^0.180.0`. That version change
-is a separate, deliberate decision — not bundled into the World format itself. Entries marked
-`unverified` must be validated against the target runtime before they are treated as release
-support.
+is a separate, deliberate decision — not bundled into the World format itself. Splats are valid
+`appearance` assets, not physics geometry; they require a linked `physics.collision_geometry`
+proxy before the object is portable to simulators. Entries marked `unverified` must be validated
+against the target runtime before they are treated as release support.
 
 Implementation: `web/src/features/viewer/components/MeshAssetBody.tsx` (viewer),
 `backend/services/simulator_adapters/{mujoco,genesis,pybullet}_scene.py` and

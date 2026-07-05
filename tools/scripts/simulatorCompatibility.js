@@ -7,6 +7,7 @@ import {
   SIMULATOR_COMPATIBILITY_IDS,
   SIMULATOR_SETUP_MODES,
 } from './simulatorCompatibilityParams.js';
+import { SIMULATOR_CONTAINER_INSTALL_ENV } from './setupParams.js';
 import {
   buildBlenderDeployment,
   buildGenesisDeployment,
@@ -426,17 +427,18 @@ export function formatSimulatorCompatibilitySummary(report) {
   const lines = [];
   lines.push(
     summary.managedReady.length > 0
-      ? `Managed setup allowed: ${summary.managedReady.map((target) => target.label).join(', ')}`
-      : 'Managed setup allowed: none'
+      ? `Managed runtimes available on this machine: ${summary.managedReady.map((target) => target.label).join(', ')}`
+      : 'Managed runtimes available on this machine: none'
   );
   if (summary.notInstalled.length > 0) {
-    lines.push(`Not installed by setup: ${summary.notInstalled.map(summarizeTarget).join(', ')}`);
+    lines.push(`Not managed by setup: ${summary.notInstalled.map(summarizeTarget).join(', ')}`);
   }
   if (summary.deploymentTargets.length > 0) {
     lines.push(`Fast path: ${summary.deploymentTargets.map(summarizeDeploymentTarget).join(', ')}`);
   }
   if (summary.containerTargets.length > 0) {
-    lines.push(`Container images: ${summary.containerTargets.map(summarizeContainerTarget).join(', ')}`);
+    lines.push(`Opt-in container images: ${summary.containerTargets.map(summarizeContainerTarget).join(', ')}`);
+    lines.push(`Container build opt-in: ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 npm run setup`);
     lines.push('Container launch plan: npm run simulator:container:plan -- <simulator-id> --workspace <path>');
   }
   if (report?.host?.docker) {

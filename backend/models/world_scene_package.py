@@ -25,6 +25,7 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
     WORLD_SCENE_PACKAGE_TRUST_SIGNED_METADATA,
     WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
+    WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1_1,
 )
 
 WorldScenePayload: TypeAlias = JsonObject
@@ -261,6 +262,39 @@ WORLD_OBJECT_MESH_FIELDS = {
     "scale",
     "scale_xyz",
 }
+WORLD_OBJECT_APPEARANCE_FIELDS = {"representations"}
+WORLD_OBJECT_APPEARANCE_REPRESENTATION_FIELDS = {
+    "id",
+    "kind",
+    "asset_ref",
+    "scale_xyz",
+    "semantic_role",
+}
+WORLD_OBJECT_APPEARANCE_REPRESENTATION_KINDS = {"mesh", "primitive", "splat"}
+WORLD_OBJECT_PHYSICS_FIELDS = {
+    *WORLD_OBJECT_SIMULATION_FIELDS,
+    "collision_geometry",
+    "inertia",
+}
+WORLD_OBJECT_PHYSICS_GEOMETRY_FIELDS = {
+    "id",
+    "kind",
+    "asset_ref",
+    "size_xyz",
+    "radius",
+    "length",
+    "scale_xyz",
+}
+WORLD_OBJECT_PHYSICS_GEOMETRY_KINDS = {"box", "sphere", "cylinder", "mesh"}
+WORLD_OBJECT_INERTIA_FIELDS = {"ixx", "iyy", "izz", "ixy", "ixz", "iyz"}
+WORLD_OBJECT_CONSISTENCY_FIELDS = {
+    "appearance_ref",
+    "physics_ref",
+    "method",
+    "metrics",
+    "status",
+}
+WORLD_OBJECT_CONSISTENCY_STATUSES = {"valid", "warning", "missing", "unchecked"}
 
 
 def _raise_for_invalid_object_payloads(objects: list[WorldScenePayload]) -> None:
@@ -289,6 +323,9 @@ def _raise_for_invalid_object_payload(world_object: WorldScenePayload, index: in
     _raise_for_invalid_object_optional_fields(world_object, object_path)
     _raise_for_invalid_object_simulation(world_object.get("simulation"), object_path)
     _raise_for_invalid_object_mesh_metadata(world_object, object_path)
+    _raise_for_invalid_object_appearance(world_object.get("appearance"), world_object, object_path)
+    _raise_for_invalid_object_physics(world_object.get("physics"), object_path)
+    _raise_for_invalid_object_consistency(world_object.get("consistency"), object_path)
 
 
 def _raise_for_invalid_object_optional_fields(
@@ -376,16 +413,176 @@ def _raise_for_invalid_object_mesh_metadata(
         raise ValueError(f"{object_path}.mesh asset reference is required for mesh objects.")
 
 
+def _raise_for_invalid_object_appearance(
+    value: object,
+    world_object: WorldScenePayload,
+    object_path: str,
+) -> None:
+    if value is None:
+        return
+    if not _is_record(value):
+        raise ValueError(f"{object_path}.appearance must be an object.")
+    _raise_for_extra_fields(value, WORLD_OBJECT_APPEARANCE_FIELDS, f"{object_path}.appearance")
+    representations = value.get("representations")
+    if not isinstance(representations, list) or not representations:
+        raise ValueError(f"{object_path}.appearance.representations must be a non-empty array.")
+    has_splat = False
+    for index, representation in enumerate(representations):
+        representation_path = f"{object_path}.appearance.representations[{index}]"
+        if not _is_record(representation):
+            raise ValueError(f"{representation_path} must be an object.")
+        _raise_for_extra_fields(
+            representation,
+            WORLD_OBJECT_APPEARANCE_REPRESENTATION_FIELDS,
+            representation_path,
+        )
+        if not _is_non_empty_string(representation.get("id")):
+            raise ValueError(f"{representation_path}.id must be a non-empty string.")
+        kind = representation.get("kind")
+        if kind not in WORLD_OBJECT_APPEARANCE_REPRESENTATION_KINDS:
+            allowed = ", ".join(sorted(WORLD_OBJECT_APPEARANCE_REPRESENTATION_KINDS))
+            raise ValueError(f"{representation_path}.kind must be one of: {allowed}.")
+        if kind in {"mesh", "splat"}:
+            _raise_for_portable_asset_ref(
+                representation.get("asset_ref"),
+                f"{representation_path}.asset_ref",
+            )
+        elif "asset_ref" in representation:
+            _raise_for_portable_asset_ref(
+                representation.get("asset_ref"),
+                f"{representation_path}.asset_ref",
+            )
+        if "scale_xyz" in representation:
+            _raise_for_positive_vector3(
+                representation.get("scale_xyz"),
+                f"{representation_path}.scale_xyz",
+            )
+        if "semantic_role" in representation and representation.get("semantic_role") is not None:
+            if not isinstance(representation.get("semantic_role"), str):
+                raise ValueError(f"{representation_path}.semantic_role must be a string or null.")
+        has_splat = has_splat or kind == "splat"
+    if has_splat and not _has_physics_collision_geometry(world_object):
+        raise ValueError(
+            f"{object_path}.appearance splat representations require physics.collision_geometry."
+        )
+
+
+def _raise_for_invalid_object_physics(value: object, object_path: str) -> None:
+    if value is None:
+        return
+    if not _is_record(value):
+        raise ValueError(f"{object_path}.physics must be an object.")
+    _raise_for_extra_fields(value, WORLD_OBJECT_PHYSICS_FIELDS, f"{object_path}.physics")
+    for field_name in ("fixed", "collision"):
+        if field_name in value and not _is_boolean(value.get(field_name)):
+            raise ValueError(f"{object_path}.physics.{field_name} must be a boolean.")
+    _raise_for_optional_finite_number(
+        value.get("mass_kg"),
+        f"{object_path}.physics.mass_kg",
+        minimum=0.0,
+    )
+    _raise_for_optional_finite_number(
+        value.get("friction"),
+        f"{object_path}.physics.friction",
+        minimum=0.01,
+        maximum=5.0,
+    )
+    _raise_for_optional_finite_number(
+        value.get("restitution"),
+        f"{object_path}.physics.restitution",
+        minimum=0.0,
+        maximum=1.0,
+    )
+    if "semantic_role" in value and value.get("semantic_role") is not None:
+        if not isinstance(value.get("semantic_role"), str):
+            raise ValueError(f"{object_path}.physics.semantic_role must be a string or null.")
+    if "collision_geometry" in value:
+        _raise_for_invalid_physics_collision_geometry(
+            value.get("collision_geometry"),
+            f"{object_path}.physics.collision_geometry",
+        )
+    if "inertia" in value:
+        _raise_for_invalid_physics_inertia(value.get("inertia"), f"{object_path}.physics.inertia")
+
+
+def _raise_for_invalid_physics_collision_geometry(value: object, path: str) -> None:
+    if not _is_record(value):
+        raise ValueError(f"{path} must be an object.")
+    _raise_for_extra_fields(value, WORLD_OBJECT_PHYSICS_GEOMETRY_FIELDS, path)
+    if "id" in value and not _is_non_empty_string(value.get("id")):
+        raise ValueError(f"{path}.id must be a non-empty string.")
+    kind = value.get("kind")
+    if kind not in WORLD_OBJECT_PHYSICS_GEOMETRY_KINDS:
+        allowed = ", ".join(sorted(WORLD_OBJECT_PHYSICS_GEOMETRY_KINDS))
+        raise ValueError(f"{path}.kind must be one of: {allowed}.")
+    if kind == "box":
+        _raise_for_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz")
+    if kind == "sphere":
+        _raise_for_positive_number_field(value.get("radius"), f"{path}.radius")
+    if kind == "cylinder":
+        _raise_for_positive_number_field(value.get("radius"), f"{path}.radius")
+        _raise_for_positive_number_field(value.get("length"), f"{path}.length")
+    if kind == "mesh":
+        _raise_for_portable_asset_ref(value.get("asset_ref"), f"{path}.asset_ref")
+    if "asset_ref" in value:
+        _raise_for_portable_asset_ref(value.get("asset_ref"), f"{path}.asset_ref")
+    if "scale_xyz" in value:
+        _raise_for_positive_vector3(value.get("scale_xyz"), f"{path}.scale_xyz")
+
+
+def _raise_for_invalid_physics_inertia(value: object, path: str) -> None:
+    if not _is_record(value):
+        raise ValueError(f"{path} must be an object.")
+    _raise_for_extra_fields(value, WORLD_OBJECT_INERTIA_FIELDS, path)
+    for field_name in ("ixx", "iyy", "izz"):
+        if not _is_finite_number(value.get(field_name)) or value.get(field_name) < 0:
+            raise ValueError(f"{path}.{field_name} must be a finite number >= 0.")
+    for field_name in ("ixy", "ixz", "iyz"):
+        if field_name in value and not _is_finite_number(value.get(field_name)):
+            raise ValueError(f"{path}.{field_name} must be a finite number.")
+
+
+def _raise_for_invalid_object_consistency(value: object, object_path: str) -> None:
+    if value is None:
+        return
+    if not _is_record(value):
+        raise ValueError(f"{object_path}.consistency must be an object.")
+    _raise_for_extra_fields(value, WORLD_OBJECT_CONSISTENCY_FIELDS, f"{object_path}.consistency")
+    for field_name in ("appearance_ref", "physics_ref", "method"):
+        if not _is_non_empty_string(value.get(field_name)):
+            raise ValueError(f"{object_path}.consistency.{field_name} must be a non-empty string.")
+    status = value.get("status")
+    if status not in WORLD_OBJECT_CONSISTENCY_STATUSES:
+        allowed = ", ".join(sorted(WORLD_OBJECT_CONSISTENCY_STATUSES))
+        raise ValueError(f"{object_path}.consistency.status must be one of: {allowed}.")
+    if "metrics" in value and not _is_record(value.get("metrics")):
+        raise ValueError(f"{object_path}.consistency.metrics must be an object.")
+
+
 def _has_wsp_mesh_asset_ref(world_object: WorldScenePayload) -> bool:
     if _is_non_empty_string(world_object.get("asset_ref")):
         return _is_portable_asset_ref(world_object.get("asset_ref"))
     mesh = world_object.get("mesh")
-    if not _is_record(mesh):
-        return False
-    return any(
+    if _is_record(mesh) and any(
         _is_non_empty_string(mesh.get(field_name)) and _is_portable_asset_ref(mesh.get(field_name))
         for field_name in WORLD_OBJECT_MESH_ASSET_KEYS
+    ):
+        return True
+    appearance = world_object.get("appearance")
+    if not _is_record(appearance) or not isinstance(appearance.get("representations"), list):
+        return False
+    return any(
+        _is_record(representation)
+        and representation.get("kind") in {"mesh", "splat"}
+        and _is_non_empty_string(representation.get("asset_ref"))
+        and _is_portable_asset_ref(representation.get("asset_ref"))
+        for representation in appearance["representations"]
     )
+
+
+def _has_physics_collision_geometry(world_object: WorldScenePayload) -> bool:
+    physics = world_object.get("physics")
+    return _is_record(physics) and _is_record(physics.get("collision_geometry"))
 
 
 def _is_portable_asset_ref(value: object) -> bool:
@@ -445,7 +642,10 @@ def _raise_for_extra_fields(value: WorldScenePayload, allowed_fields: set[str], 
 class WorldScenePackageManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1]
+    schema_version: Literal[
+        WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
+        WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1_1,
+    ]
     package_id: str = Field(..., min_length=1)
     version: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1)

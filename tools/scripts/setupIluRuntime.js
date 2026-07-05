@@ -49,12 +49,16 @@ export function assertIluRuntimeContract(
 export async function verifyIluRuntimeContract({
   importRuntimeModules = () => import('./urdfCoreModules.js'),
   domGlobals = globalThis,
+  logArrow = () => {},
+  logSuccess = () => {},
   logWarning = () => {},
   logInfo = () => {},
 } = {}) {
+  logArrow('Checking i-love-urdf runtime');
   try {
     const modules = await importRuntimeModules();
     assertIluRuntimeContract(modules, domGlobals);
+    logSuccess('i-love-urdf runtime ready');
     return buildSetupResult();
   } catch (error) {
     logWarning('✗ i-love-urdf runtime check failed');

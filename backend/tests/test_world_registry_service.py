@@ -15,6 +15,7 @@ from backend.models.world_scene_package import (
 from backend.services.world_scene_package_params import (
     MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES,
     WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
+    WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1_1,
     WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
 )
@@ -142,6 +143,55 @@ def test_validate_accepts_static_scene_snapshot() -> None:
 
         assert validation.valid is True
         assert validation.errors == []
+
+
+def test_publish_accepts_v1_1_appearance_physics_world() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        payload = build_manifest("splat-world", "1.1.0").model_dump(mode="json")
+        payload["schema_version"] = WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1_1
+        payload["world_snapshot"]["objects"] = [
+            {
+                "id": "crate",
+                "name": "Crate",
+                "type": "mesh",
+                "position_xyz": [0.0, 0.0, 0.1],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.2, 0.3, 0.4],
+                "color": "#22c55e",
+                "appearance": {
+                    "representations": [
+                        {
+                            "id": "crate-splat",
+                            "kind": "splat",
+                            "asset_ref": "assets/crate.spz",
+                        }
+                    ]
+                },
+                "physics": {
+                    "collision_geometry": {
+                        "id": "crate-proxy",
+                        "kind": "box",
+                        "size_xyz": [0.2, 0.3, 0.4],
+                    }
+                },
+                "consistency": {
+                    "appearance_ref": "crate-splat",
+                    "physics_ref": "crate-proxy",
+                    "method": "bbox-fit",
+                    "status": "valid",
+                },
+            }
+        ]
+        manifest = WorldScenePackageManifest.model_validate(payload)
+
+        validation = service.validate(manifest)
+        publish_result = service.publish(manifest)
+
+        assert validation.valid is True
+        assert validation.errors == []
+        assert publish_result.created is True
 
 
 def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:

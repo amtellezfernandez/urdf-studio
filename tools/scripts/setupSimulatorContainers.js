@@ -6,11 +6,13 @@ import { isTruthyEnvValue } from './setupHelpers.js';
 import { buildSetupResult, didSpawnSyncFail } from './setupCommandResults.js';
 import {
   SIMULATOR_CONTAINER_FORCE_ENV,
+  SIMULATOR_CONTAINER_INSTALL_ENV,
   SIMULATOR_CONTAINER_SKIP_ENV,
 } from './setupParams.js';
 
 export {
   SIMULATOR_CONTAINER_FORCE_ENV,
+  SIMULATOR_CONTAINER_INSTALL_ENV,
   SIMULATOR_CONTAINER_SKIP_ENV,
 };
 
@@ -60,6 +62,10 @@ export async function installSimulatorContainers(
   if (isTruthyEnvValue(env[SIMULATOR_CONTAINER_SKIP_ENV])) {
     return buildSetupResult({ installed: false, skipped: true, built: [], ready: [] });
   }
+  const forced = isTruthyEnvValue(env[SIMULATOR_CONTAINER_FORCE_ENV]);
+  if (!forced && !isTruthyEnvValue(env[SIMULATOR_CONTAINER_INSTALL_ENV])) {
+    return buildSetupResult({ installed: false, skipped: true, built: [], ready: [] });
+  }
 
   const targets = managedBuildTargets(simulatorCompatibilityReport || { targets: {} });
   if (targets.length === 0) {
@@ -83,7 +89,6 @@ export async function installSimulatorContainers(
     logInfo(`Building ${target.label}: ${formatDockerRunCommand(plan)}`);
     const result = runBuildPlan(plan, { spawnSyncImpl, rootDir });
     if (didSpawnSyncFail(result)) {
-      const forced = isTruthyEnvValue(env[SIMULATOR_CONTAINER_FORCE_ENV]);
       logWarning(
         forced
           ? `✗ Failed to build ${target.label} container image`

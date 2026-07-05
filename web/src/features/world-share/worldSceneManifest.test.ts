@@ -186,7 +186,7 @@ describe("worldSceneManifest static scene validation", () => {
     } as unknown as WorldScenePackageManifest);
 
     expect(errors).toContain("manifest has unsupported field(s): debug");
-    expect(errors).toContain("schema_version must be 1.0.0");
+    expect(errors).toContain("schema_version must be one of: 1.0.0, 1.1.0");
     expect(errors).toContain("title is required");
     expect(errors).toContain("description must be a string");
     expect(errors).toContain("created_at must be an ISO date-time string");
@@ -500,6 +500,86 @@ describe("worldSceneManifest static scene validation", () => {
       })
     );
     expect(errors).toEqual([]);
+  });
+
+  it("accepts v1.1 world objects with linked appearance, physics, and consistency layers", () => {
+    const errors = validateLocalWorldSceneManifest({
+      ...createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            id: "splat-crate",
+            name: "Splat crate",
+            type: "mesh",
+            appearance: {
+              representations: [
+                {
+                  id: "crate-splat",
+                  kind: "splat",
+                  asset_ref: "assets/crate.spz",
+                  scale_xyz: [1, 1, 1],
+                },
+              ],
+            },
+            physics: {
+              fixed: true,
+              collision: true,
+              mass_kg: 1.5,
+              friction: 0.8,
+              restitution: 0.1,
+              semantic_role: "fixture",
+              collision_geometry: {
+                id: "crate-proxy",
+                kind: "box",
+                size_xyz: [0.2, 0.3, 0.4],
+              },
+              inertia: {
+                ixx: 0.01,
+                iyy: 0.02,
+                izz: 0.03,
+              },
+            },
+            consistency: {
+              appearance_ref: "crate-splat",
+              physics_ref: "crate-proxy",
+              method: "bbox-fit",
+              metrics: { coverage: 0.95 },
+              status: "valid",
+            },
+          },
+        ],
+      }),
+      schema_version: "1.1.0",
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects splat appearance representations without physics collision geometry", () => {
+    const errors = validateLocalWorldSceneManifest({
+      ...createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            type: "mesh",
+            appearance: {
+              representations: [
+                {
+                  id: "crate-splat",
+                  kind: "splat",
+                  asset_ref: "assets/crate.spz",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      schema_version: "1.1.0",
+    });
+
+    expect(errors).toContain(
+      "world layout objects[0].appearance splat representations require physics.collision_geometry"
+    );
   });
 
   it("accepts portable mesh asset refs with local relative syntax", () => {

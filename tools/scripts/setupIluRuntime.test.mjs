@@ -34,6 +34,35 @@ test('setup validates the i-love-urdf simulator transfer contract', () => {
   );
 });
 
+test('setup reports i-love-urdf runtime as ready when imports validate', async () => {
+  const arrows = [];
+  const success = [];
+  const result = await verifyIluRuntimeContract({
+    importRuntimeModules: async () => ({
+      urdfCore: {
+        convertURDFToMJCF: () => ({ mjcfContent: '<mujoco />' }),
+        convertURDFToUSD: () => ({ usdContent: '#usda 1.0' }),
+      },
+      urdfCoreBundleMeshAssetsNode: {
+        bundleMeshAssetsForUrdfFile: () => {},
+      },
+      urdfCoreNodeDomRuntime: {
+        installNodeDomGlobals: () => {},
+      },
+    }),
+    domGlobals: {
+      DOMParser: function DOMParser() {},
+      XMLSerializer: function XMLSerializer() {},
+    },
+    logArrow: (message) => arrows.push(message),
+    logSuccess: (message) => success.push(message),
+  });
+
+  assert.deepEqual(result, { ok: true, changed: false });
+  assert.deepEqual(arrows, ['Checking i-love-urdf runtime']);
+  assert.deepEqual(success, ['i-love-urdf runtime ready']);
+});
+
 test('setup rejects an incomplete i-love-urdf simulator transfer contract', () => {
   assert.throws(
     () =>

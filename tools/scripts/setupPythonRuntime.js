@@ -196,6 +196,7 @@ export async function setupPythonBackendEnvironment({
   const venvPath = join(rootDir, PYTHON_ENV_DIRNAME);
   const venvPython = getManagedPythonPathImpl(rootDir);
   const uvPath = findUv();
+  logArrow('Checking Python backend runtime');
   if (!uvPath) {
     logWarning('✗ uv not found. Please install uv first:');
     logWarning('');
@@ -206,6 +207,7 @@ export async function setupPythonBackendEnvironment({
   }
 
   if (existsSyncImpl(venvPython)) {
+    logSuccess('Python backend environment ready');
     return buildSetupResult();
   }
 
@@ -216,12 +218,12 @@ export async function setupPythonBackendEnvironment({
     return buildSetupResult({ ok: false });
   }
 
-  logArrow('Setting up Python backend');
   if (pythonResolution.usesUvManagedPython) {
     logInfo('Using uv-managed Python 3.12 for the unified runtime.');
   }
 
   logInfo(`Creating ${venvPath} with ${pythonResolution.python}`);
+  logInfo('Streaming uv environment setup output below.');
   try {
     execFileSyncImpl(uvPath, ['venv', '--python', pythonResolution.python, venvPath], {
       cwd: rootDir,

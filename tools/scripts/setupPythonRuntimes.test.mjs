@@ -34,8 +34,8 @@ test('named simulator Python runtime install policy honors skip, force, and plat
     }),
     true
   );
-  assert.equal(shouldPybulletDarwinDefault(), false);
-  assert.equal(shouldInstallGenesisRuntime({ env: {}, platform: 'win32' }), false);
+  assert.equal(shouldInstallPybulletRuntime({ env: {}, platform: 'linux' }), false);
+  assert.equal(shouldInstallGenesisRuntime({ env: {}, platform: 'linux' }), false);
   assert.equal(
     shouldInstallGenesisRuntime({
       env: { [GENESIS_FORCE_INSTALL_ENV]: '1' },
@@ -95,7 +95,3 @@ test('simulator compatibility result distinguishes skipped and forced failures',
     /external runtime/
   );
 });
-
-function shouldPybulletDarwinDefault() {
-  return shouldInstallPybulletRuntime({ env: {}, platform: 'darwin' });
-}

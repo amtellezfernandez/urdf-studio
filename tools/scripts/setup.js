@@ -7,6 +7,10 @@ import {
   getSimulatorCompatibilityReport,
 } from './simulatorCompatibility.js';
 import {
+  buildSetupRoadmapSections,
+  buildSetupSummarySections,
+} from './setupHelpers.js';
+import {
   buildSetupResult,
   didSpawnSyncFail,
 } from './setupCommandResults.js';
@@ -68,6 +72,7 @@ async function installDependencies() {
   return installDependenciesWithOptions({
     rootDir,
     logArrow,
+    logInfo,
     logSuccess,
     logWarning: (message) => log(message, colors.yellow),
   });
@@ -75,6 +80,8 @@ async function installDependencies() {
 
 async function verifyIluRuntimeContract() {
   return verifyIluRuntimeContractWithOptions({
+    logArrow,
+    logSuccess,
     logWarning: (message) => log(message, colors.yellow),
     logInfo,
   });
@@ -247,6 +254,23 @@ function simulatorContainerImageExists(image, options = {}) {
   });
 }
 
+function renderSetupSections(
+  sections = [],
+  {
+    logImpl = log,
+    logArrowImpl = logArrow,
+    logInfoImpl = logInfo,
+  } = {}
+) {
+  for (const section of sections) {
+    logImpl('');
+    logArrowImpl(section.heading);
+    for (const line of section.lines || []) {
+      logInfoImpl(line);
+    }
+  }
+}
+
 async function installTwinDepsIfRequested() {
   return installTwinDepsIfRequestedWithOptions({
     rootDir,
@@ -282,7 +306,22 @@ async function runSetupSequence(overrides = {}) {
 
 async function main() {
   try {
-    const { changed } = await runSetupSequence();
+    logArrow('URDF Studio setup');
+    logInfo('Default install: node_modules, .venv, backend Python packages, MJLab when compatible, and Blender when supported.');
+    logInfo('Optional extras not installed by default: Genesis, PyBullet, and simulator containers.');
+    logInfo('npm and uv commands stream live output below so long installs do not look stalled.');
+    renderSetupSections(buildSetupRoadmapSections());
+    const setupResult = await runSetupSequence();
+    renderSetupSections(buildSetupSummarySections({
+      globalIluAttempted: setupResult.globalIluResult?.attempted,
+      globalIluInstalled: setupResult.globalIluResult?.installed,
+      genesisRuntimeResult: setupResult.genesisRuntimeResult,
+      mjlabRuntimeResult: setupResult.mjlabRuntimeResult,
+      pybulletRuntimeResult: setupResult.pybulletRuntimeResult,
+      blenderRuntimeResult: setupResult.blenderRuntimeResult,
+      simulatorContainerResult: setupResult.simulatorContainerResult,
+    }));
+    const { changed } = setupResult;
     logSuccess(changed ? 'Setup complete' : 'All up to date');
     logInfo('Run: npm run start');
   } catch (error) {
@@ -315,6 +354,7 @@ export {
   resolveBlenderExecutableForSetup,
   resolveManagedCmeelLibPathFromSitePackages,
   resolvePythonForBackendVenv,
+  renderSetupSections,
   runSetupSequence,
   verifyIluRuntimeContract,
 };

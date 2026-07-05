@@ -3,6 +3,8 @@
 ## Purpose
 
 `WSP` is the portable world-sharing package format for URDF Studio.
+For current prose, use `docs/specs/WORLD_FORMAT.md`; this file remains as the historical v0.1
+summary while the JSON schema continues to live at `docs/specs/WSP_manifest.schema.json`.
 
 It standardizes:
 
@@ -53,6 +55,15 @@ Each `world_snapshot.objects[]` entry is a simulator-transfer object with:
 - `rotation_rpy_rad` when orientation matters.
 - `simulation` for physics metadata: `fixed`, `collision`, `mass_kg`, `friction`, `restitution`, and `semantic_role`.
 - `asset_ref`, `asset_scale_xyz`, or `mesh` metadata when the object is backed by a mesh asset. Mesh objects must include a portable relative asset reference inside the package; absolute paths, URI schemes, traversal, empty segments, and `.`/`..` segments are invalid.
+
+Schema v1.1 adds the source-of-truth split used by the current World format:
+
+- `appearance.representations[]` for render/perception assets such as meshes and Gaussian splats.
+- `physics.collision_geometry` plus mass/friction/inertia fields for what simulator adapters consume.
+- `consistency` to link an appearance representation to its physics proxy and record fit status.
+
+Gaussian splats are appearance-only; they must be paired with `physics.collision_geometry` before
+the object is simulator-portable.
 
 Blender-added mesh objects enter Studio as `type = "mesh"` when the Blender object carries a portable relative `asset_ref`; otherwise they enter as cube world objects with `simulation.semantic_role = "blender_import"`. Existing object transforms, dimensions, display colors, camera poses, camera FOV, new objects, and deleted source objects/cameras can be applied automatically. Robot kinematics, inertials, collisions, transmissions, material-domain edits, and mesh-domain edits remain outside automatic package apply.
 
