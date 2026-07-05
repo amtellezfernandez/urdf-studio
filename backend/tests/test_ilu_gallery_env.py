@@ -154,3 +154,21 @@ def test_rehydrate_gallery_manifest_item_ignores_non_string_preview_and_robot_fi
     assert rehydrated["sourceFile"] == ""
     assert rehydrated["galleryRepoKey"] == ""
     assert rehydrated["galleryFileBase"] == ""
+
+
+def test_resolve_candidate_file_base_rejects_non_string_values() -> None:
+    with pytest.raises(RuntimeError, match="Gallery file base is missing"):
+        ilu_gallery._resolve_candidate_file_base(
+            "robots/demo.urdf",
+            {"galleryFileBase": 123, "fileBase": False},
+        )
+
+
+def test_resolve_candidate_file_base_accepts_string_values() -> None:
+    assert (
+        ilu_gallery._resolve_candidate_file_base(
+            "robots/demo.urdf",
+            {"galleryFileBase": " demo-base "},
+        )
+        == "demo-base"
+    )

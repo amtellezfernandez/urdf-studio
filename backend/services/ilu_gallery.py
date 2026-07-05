@@ -1147,7 +1147,7 @@ def _build_gallery_manifest_from_inspection(source: IluGallerySource, output_roo
                     "unresolvedMeshReferenceCount": 0,
                 }
             )
-            candidate_path = _normalize_repo_or_path(str(candidate.get("path") or "")) or catalog_candidate_path
+            candidate_path = _normalize_repo_or_path(_normalize_optional_text(candidate.get("path"))) or catalog_candidate_path
             preview_entry = (
                 catalog.preview_entries.get(
                     f"{repo_key}::{_normalize_optional_text(raw_robot.get('fileBase'))}"
@@ -1664,7 +1664,9 @@ def _increment_gallery_generation_progress(job_id: str, increment: int) -> None:
 
 
 def _resolve_candidate_file_base(candidate_path: str, raw_item: dict) -> str:
-    configured = str(raw_item.get("galleryFileBase") or raw_item.get("fileBase") or "").strip()
+    configured = _normalize_optional_text(raw_item.get("galleryFileBase")) or _normalize_optional_text(
+        raw_item.get("fileBase")
+    )
     if configured:
         return configured
     raise RuntimeError(f"Gallery file base is missing for {candidate_path}")
