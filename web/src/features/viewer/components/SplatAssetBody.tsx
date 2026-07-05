@@ -1,4 +1,13 @@
-import { Component, createElement, useMemo, type ReactNode } from "react";
+import {
+  Component,
+  createElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { Html } from "@react-three/drei";
 import { extend, useThree, type ThreeEvent } from "@react-three/fiber";
 import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 
@@ -62,8 +71,9 @@ class SplatAssetErrorBoundary extends Component<
 /**
  * Renders a gaussian-splat asset (.spz) as a first-class world object, so splat
  * environments flow through the same object pipeline as mesh objects. The splat is
- * mounted inside a SparkRenderer and positioned/rotated/scaled by the object's
- * transform (assetScale carries the metric scale factor).
+ * mounted inside a SparkRenderer with LOD enabled and positioned/rotated/scaled by
+ * the object's transform (assetScale carries the metric scale factor). Load
+ * failures surface as an inline badge instead of silently rendering nothing.
  */
 export function SplatAssetBody({
   object,
@@ -73,10 +83,37 @@ export function SplatAssetBody({
   fallback,
 }: SplatAssetBodyProps) {
   const renderer = useThree((state) => state.gl);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [splatInstance, setSplatInstance] = useState<SplatMesh | null>(null);
   const uri = resolveSplatAssetUri(object);
 
-  const sparkArgs = useMemo(() => ({ renderer }), [renderer]);
-  const splatArgs = useMemo(() => ({ url: uri ?? "" }), [uri]);
+  const handleSplatRef = useCallback((instance: SplatMesh | null) => {
+    setSplatInstance(instance);
+  }, []);
+
+  const sparkArgs = useMemo(
+    () => ({
+      renderer,
+      enableLod: true,
+      lodRenderScale: 2,
+      encodeLinear: false,
+    }),
+    [renderer]
+  );
+  const splatArgs = useMemo(() => ({ url: uri ?? "", lod: true }), [uri]);
+
+  useEffect(() => {
+    setLoadError(null);
+    if (!splatInstance) return;
+    let cancelled = false;
+    void splatInstance.initialized.catch((error) => {
+      if (cancelled) return;
+      setLoadError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [splatInstance]);
 
   if (!uri || !isSplatAssetUri(uri)) {
     return <>{fallback}</>;
@@ -99,9 +136,16 @@ export function SplatAssetBody({
             scale,
             ...pointerHandlers,
           },
-          createElement("splatMesh", { args: [splatArgs] })
+          createElement("splatMesh", { ref: handleSplatRef, args: [splatArgs] })
         )
       )}
+      {loadError ? (
+        <Html center position={objectPosition}>
+          <div className="rounded-md border border-destructive/50 bg-background/95 px-2 py-1 text-[10px] text-destructive shadow">
+            {`World splat failed: ${loadError}`}
+          </div>
+        </Html>
+      ) : null}
     </SplatAssetErrorBoundary>
   );
 }
