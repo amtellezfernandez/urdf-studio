@@ -87,7 +87,52 @@ def test_simulator_workspace_parity_rejects_missing_required_report_fields(
     assert result is not None
     assert result.passed is False
     assert "could not read Invalid validation report" in result.detail
-    assert "missing parity report field(s): requested_frame_map" in result.detail
+    assert "missing parity report field(s): requested_frame_map, frame_map" in result.detail
+
+
+def test_simulator_workspace_parity_rejects_missing_robot_urdf_path_and_asset_roots(
+    tmp_path: Path,
+) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    invalid_report = tmp_path / "invalid" / "report.json"
+    invalid_report.parent.mkdir(parents=True)
+    invalid_report.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_MUJOCO_ID, "label": "mujoco", "runtime": {}},
+                "package_id": "demo",
+                "version": "1.0.0",
+                "requested_frame_map": "identity",
+                "frame_map": "identity",
+                "frame_convention": "ros-rep-103",
+                "object_count": 1,
+                "primitive_count": 1,
+                "camera_count": 0,
+                "joint_position_count": 0,
+                "joint_positions": {},
+                "warnings": [],
+                "objects": [],
+                "cameras": [],
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("Invalid", invalid_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "missing parity report field(s): robot_urdf_path, asset_roots" in result.detail
 
 
 def test_simulator_workspace_parity_rejects_joint_position_mismatch(tmp_path: Path) -> None:
@@ -320,6 +365,8 @@ def _write_parity_report(
         }
     ] if include_camera else []
     report_path = root / "report.json"
+    robot_urdf_path = root / "robot.urdf"
+    robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
     report_path.write_text(
         json.dumps(
             {
@@ -334,6 +381,8 @@ def _write_parity_report(
                 "camera_count": len(camera_entries),
                 "joint_position_count": len(joint_positions or {}),
                 "joint_positions": joint_positions or {},
+                "robot_urdf_path": str(robot_urdf_path),
+                "asset_roots": [str(root)],
                 "warnings": [],
                 "objects": [
                     {

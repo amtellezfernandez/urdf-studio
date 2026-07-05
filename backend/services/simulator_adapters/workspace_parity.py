@@ -28,6 +28,8 @@ PARITY_REPORT_FIELDS = (
 )
 PARITY_REQUIRED_REPORT_FIELDS = (
     *PARITY_REPORT_FIELDS,
+    "robot_urdf_path",
+    "asset_roots",
     "warnings",
     "objects",
     "cameras",
