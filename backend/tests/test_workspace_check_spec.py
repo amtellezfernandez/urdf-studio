@@ -5,6 +5,7 @@ from pathlib import Path
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.params import PYBULLET_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.workspace_check_spec import (
+    _module_command,
     _prepare_direct_urdf_command,
 )
 from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
@@ -64,3 +65,15 @@ def test_prepare_direct_urdf_command_propagates_expectations_and_report_path(
     assert command.expected_object_asset_refs == {"crate": "assets/crate.obj"}
     assert command.expected_joint_positions == {"joint_a": 0.5}
     assert command.expected_camera_ids == ("cam-1",)
+
+
+def test_module_command_omits_report_flag_when_report_path_is_not_provided(tmp_path: Path) -> None:
+    command = _module_command(
+        PYBULLET_WORKSPACE_PROCESS_PARAMS,
+        world_package_path=tmp_path / "world-package.json",
+        robot_asset_flag="--robot-urdf",
+        robot_asset_path=tmp_path / "robot.urdf",
+        duration_sec=0.25,
+    )
+
+    assert "--report" not in command
