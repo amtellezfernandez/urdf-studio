@@ -18,7 +18,7 @@ def _read_float_env(name: str, default: float, *, minimum: float | None = None) 
         return default
     try:
         value = float(raw)
-    except ValueError:
+    except (TypeError, ValueError):
         return default
     if not math.isfinite(value):
         return default

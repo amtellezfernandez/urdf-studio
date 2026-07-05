@@ -29,6 +29,16 @@ def test_read_float_env_returns_default_for_non_finite_values(monkeypatch) -> No
     assert github_auth._read_float_env("URDF_TEST_FLOAT", 5.0) == 5.0
 
 
+def test_read_float_env_returns_default_for_non_string_values(monkeypatch) -> None:
+    monkeypatch.setattr(
+        github_auth.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_FLOAT" else None,
+    )
+
+    assert github_auth._read_float_env("URDF_TEST_FLOAT", 5.0) == 5.0
+
+
 def test_read_float_env_returns_default_when_below_minimum(monkeypatch) -> None:
     monkeypatch.setenv("URDF_TEST_FLOAT", "-1")
 
