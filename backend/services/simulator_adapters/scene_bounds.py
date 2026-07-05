@@ -25,26 +25,12 @@ def scene_bounds_from_aabbs(
     min_radius_m: float,
 ) -> SceneBounds:
     if not aabbs:
-        center = _vector3(default_center_xyz)
-        radius = float(default_radius_m)
-        return SceneBounds(
-            center_xyz=center,
-            radius_m=radius,
-            min_xyz=(
-                center[0] - radius,
-                center[1] - radius,
-                center[2] - radius,
-            ),
-            max_xyz=(
-                center[0] + radius,
-                center[1] + radius,
-                center[2] + radius,
-            ),
-            item_count=0,
+        return _default_scene_bounds(
+            center_xyz=default_center_xyz,
+            radius_m=default_radius_m,
         )
 
-    mins = tuple(min(aabb[0][axis] for aabb in aabbs) for axis in range(3))
-    maxs = tuple(max(aabb[1][axis] for aabb in aabbs) for axis in range(3))
+    mins, maxs = _enclosing_aabb(aabbs)
     center = tuple((mins[axis] + maxs[axis]) * 0.5 for axis in range(3))
     half_span = tuple((maxs[axis] - mins[axis]) * 0.5 for axis in range(3))
     radius = max(
@@ -63,9 +49,37 @@ def scene_bounds_from_aabbs(
 def combine_aabbs(aabbs: Sequence[Aabb]) -> Aabb | None:
     if not aabbs:
         return None
+    return _enclosing_aabb(aabbs)
+
+
+def _default_scene_bounds(
+    *,
+    center_xyz: Sequence[float],
+    radius_m: float,
+) -> SceneBounds:
+    center = _vector3(center_xyz)
+    radius = float(radius_m)
+    return SceneBounds(
+        center_xyz=center,
+        radius_m=radius,
+        min_xyz=_offset_vector3(center, -radius),
+        max_xyz=_offset_vector3(center, radius),
+        item_count=0,
+    )
+
+
+def _enclosing_aabb(aabbs: Sequence[Aabb]) -> Aabb:
     return (
         tuple(min(aabb[0][axis] for aabb in aabbs) for axis in range(3)),
         tuple(max(aabb[1][axis] for aabb in aabbs) for axis in range(3)),
+    )
+
+
+def _offset_vector3(value: Vector3, offset: float) -> Vector3:
+    return (
+        value[0] + offset,
+        value[1] + offset,
+        value[2] + offset,
     )
 
 
