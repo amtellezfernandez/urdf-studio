@@ -75,6 +75,10 @@ def _joint_name_from_info(joint_info: Sequence[Any]) -> str:
     return raw_name.decode("utf-8", errors="replace") if isinstance(raw_name, bytes) else str(raw_name)
 
 
+def _joint_type_from_info(joint_info: Sequence[Any]) -> Any:
+    return joint_info[2] if len(joint_info) > 2 else None
+
+
 def set_debug_visualizer_flag(pybullet: Any, flag_name: str, value: int) -> bool:
     configure_debug_visualizer = getattr(pybullet, "configureDebugVisualizer", None)
     flag = getattr(pybullet, flag_name, None)
@@ -255,7 +259,7 @@ def hold_pybullet_current_joint_positions(pybullet: Any, robot_id: int) -> int:
     held_count = 0
     for joint_index in range(pybullet.getNumJoints(robot_id)):
         joint_info = pybullet.getJointInfo(robot_id, joint_index)
-        if fixed_joint_type is not None and joint_info[2] == fixed_joint_type:
+        if fixed_joint_type is not None and _joint_type_from_info(joint_info) == fixed_joint_type:
             continue
         joint_state = get_joint_state(robot_id, joint_index)
         target_position = float(joint_state[0])

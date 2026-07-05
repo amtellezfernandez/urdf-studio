@@ -269,6 +269,36 @@ def test_pybullet_static_robot_holds_current_non_fixed_joint_positions() -> None
     ]
 
 
+def test_pybullet_static_robot_ignores_short_joint_info_when_holding_positions() -> None:
+    class _FakeRuntime:
+        JOINT_FIXED = 4
+        POSITION_CONTROL = 7
+        control_calls: list[dict[str, object]] = []
+
+        @classmethod
+        def getNumJoints(cls, _robot_id: int) -> int:
+            return 2
+
+        @classmethod
+        def getJointInfo(cls, _robot_id: int, joint_index: int):
+            if joint_index == 0:
+                return (0, b"shoulder")
+            return (1, b"elbow", 0, 0, 0, 0, 0, 0, -1.0, 1.0, 12.0)
+
+        @classmethod
+        def getJointState(cls, _robot_id: int, joint_index: int):
+            return (0.25 if joint_index == 0 else -0.5, 0.0, (0.0, 0.0, 0.0), 0.0)
+
+        @classmethod
+        def setJointMotorControl2(cls, robot_id: int, jointIndex: int, **kwargs) -> None:
+            cls.control_calls.append({"robot_id": robot_id, "joint_index": jointIndex, **kwargs})
+
+    held_count = hold_pybullet_current_joint_positions(_FakeRuntime, robot_id=99)
+
+    assert held_count == 2
+    assert [call["joint_index"] for call in _FakeRuntime.control_calls] == [0, 1]
+
+
 def test_pybullet_default_gui_workspace_does_not_step_static_debug_view() -> None:
     assert should_step_pybullet_workspace_once(
         no_viewer=False,
