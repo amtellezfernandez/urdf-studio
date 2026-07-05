@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
+import backend.services.world_layout_static_transfer as static_transfer_module
 from backend.services.world_layout_static_transfer import (
     append_primitives_to_mujoco_mjcf,
     build_sim_primitives,
@@ -698,6 +699,45 @@ def test_end_to_end_report_can_skip_genesis_for_fast_checks() -> None:
     assert report["ok"] is True
     assert report["layout"]["active_object_count"] == 3
     assert report["backends"]["mujoco"]["ok"] is True
+
+
+def test_static_transfer_report_records_expected_backend_errors(monkeypatch) -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+
+    def _raise_transfer_error(*_args, **_kwargs):
+        raise static_transfer_module.WorldLayoutTransferError("backend unavailable")
+
+    monkeypatch.setattr(
+        static_transfer_module,
+        "check_mujoco_transfer",
+        _raise_transfer_error,
+    )
+
+    report = build_static_transfer_report(layout, backends=("mujoco",))
+
+    assert report["ok"] is False
+    assert report["backends"]["mujoco"] == {
+        "backend": "mujoco",
+        "ok": False,
+        "error": "backend unavailable",
+        "error_type": "WorldLayoutTransferError",
+    }
+
+
+def test_static_transfer_report_preserves_unexpected_backend_errors(monkeypatch) -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+
+    def _raise_unexpected_error(*_args, **_kwargs):
+        raise KeyError("unexpected backend bookkeeping failure")
+
+    monkeypatch.setattr(
+        static_transfer_module,
+        "check_mujoco_transfer",
+        _raise_unexpected_error,
+    )
+
+    with pytest.raises(KeyError, match="unexpected backend bookkeeping failure"):
+        build_static_transfer_report(layout, backends=("mujoco",))
 
 
 def test_varied_static_layout_primitives_and_rotations_load_in_mujoco() -> None:

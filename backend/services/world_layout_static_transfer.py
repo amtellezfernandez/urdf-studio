@@ -74,6 +74,12 @@ class BackendTransferErrorReport(TypedDict):
 
 BackendTransferReport: TypeAlias = PrimitiveCheckReport | BackendTransferErrorReport
 BackendTransferReports: TypeAlias = dict[StaticTransferValidationBackend, BackendTransferReport]
+_BACKEND_REPORT_ERROR_TYPES = (
+    WorldLayoutTransferError,
+    ImportError,
+    OSError,
+    RuntimeError,
+)
 
 
 class StaticTransferLayoutReport(TypedDict):
@@ -961,7 +967,7 @@ def build_static_transfer_report(
                 )
             else:
                 raise WorldLayoutTransferError(f"Unsupported backend: {backend}")
-        except Exception as exc:
+        except _BACKEND_REPORT_ERROR_TYPES as exc:
             backend_reports[backend] = {
                 "backend": backend,
                 "ok": False,
