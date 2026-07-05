@@ -608,6 +608,7 @@ def _validate_expected_object_contracts(
         object_report = objects_by_source_id.get(source_id)
         if object_report is None:
             return f"simulator validation report missing object source_id {source_id!r}"
+        object_path = f"objects[{source_id}]"
         for field_name, expected_value in (
             ("source_name", expected_contract.source_name),
             ("sim_name", expected_contract.sim_name),
@@ -616,22 +617,27 @@ def _validate_expected_object_contracts(
             ("semantic_role", expected_contract.semantic_role),
             ("asset_ref", expected_contract.asset_ref),
         ):
-            actual_value = object_report.get(field_name)
-            if actual_value != expected_value:
-                return (
-                    f"simulator validation report field 'objects[{source_id}].{field_name}' "
-                    f"is {actual_value!r}, expected {expected_value!r}"
-                )
+            error = _validate_expected_scalar_field(
+                object_report,
+                field_name=field_name,
+                expected_value=expected_value,
+                path=object_path,
+            )
+            if error:
+                return error
         for field_name, expected_value in (
             ("collision", expected_contract.collision),
             ("fixed", expected_contract.fixed),
         ):
-            actual_value = object_report.get(field_name)
-            if actual_value is not expected_value:
-                return (
-                    f"simulator validation report field 'objects[{source_id}].{field_name}' "
-                    f"is {actual_value!r}, expected {expected_value!r}"
-                )
+            error = _validate_expected_scalar_field(
+                object_report,
+                field_name=field_name,
+                expected_value=expected_value,
+                path=object_path,
+                identity=True,
+            )
+            if error:
+                return error
         for field_name, expected_value in (
             ("mass_kg", expected_contract.mass_kg),
             ("friction", expected_contract.friction),
@@ -755,27 +761,32 @@ def _validate_expected_camera_contracts(
         camera_report = cameras_by_id.get(camera_id)
         if camera_report is None:
             return f"simulator validation report missing camera_id {camera_id!r}"
+        camera_path = f"cameras[{camera_id}]"
         for field_name, expected_value in (
             ("sim_name", expected_contract.sim_name),
             ("parent_joint", expected_contract.parent_joint),
             ("parent_link", expected_contract.parent_link),
         ):
-            actual_value = camera_report.get(field_name)
-            if actual_value != expected_value:
-                return (
-                    f"simulator validation report field 'cameras[{camera_id}].{field_name}' "
-                    f"is {actual_value!r}, expected {expected_value!r}"
-                )
+            error = _validate_expected_scalar_field(
+                camera_report,
+                field_name=field_name,
+                expected_value=expected_value,
+                path=camera_path,
+            )
+            if error:
+                return error
         for field_name, expected_value in (
             ("width", expected_contract.width),
             ("height", expected_contract.height),
         ):
-            actual_value = camera_report.get(field_name)
-            if actual_value != expected_value:
-                return (
-                    f"simulator validation report field 'cameras[{camera_id}].{field_name}' "
-                    f"is {actual_value!r}, expected {expected_value!r}"
-                )
+            error = _validate_expected_scalar_field(
+                camera_report,
+                field_name=field_name,
+                expected_value=expected_value,
+                path=camera_path,
+            )
+            if error:
+                return error
         fov_error = _validate_expected_number(
             camera_report.get("fov_deg"),
             expected_contract.fov_deg,
@@ -954,6 +965,24 @@ def _validate_expected_optional_number(
             return f"simulator validation report field '{path}' is {value!r}, expected None"
         return None
     return _validate_expected_number(value, expected, path)
+
+
+def _validate_expected_scalar_field(
+    report_entry: SimulatorWorkspaceReportObject,
+    *,
+    field_name: str,
+    expected_value: object,
+    path: str,
+    identity: bool = False,
+) -> str | None:
+    actual_value = report_entry.get(field_name)
+    matches = actual_value is expected_value if identity else actual_value == expected_value
+    if matches:
+        return None
+    return (
+        f"simulator validation report field '{path}.{field_name}' "
+        f"is {actual_value!r}, expected {expected_value!r}"
+    )
 
 
 def _validate_report_unique_item_values(
