@@ -318,6 +318,19 @@ def _raise_workspace_launch_cancelled(
     _raise(error, f"{simulator_label} workspace launch was cancelled.")
 
 
+def _raise_if_workspace_launch_cancelled(
+    *,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+    should_cancel: Callable[[], bool] | None,
+) -> None:
+    if should_cancel is not None and should_cancel():
+        _raise_workspace_launch_cancelled(
+            simulator_label=simulator_label,
+            error=error,
+        )
+
+
 def _raise_on_workspace_process_exit(
     process: subprocess.Popen,
     *,
@@ -340,6 +353,38 @@ def _raise_on_workspace_process_exit(
     )
 
 
+def _raise_if_workspace_process_not_ready(
+    process: subprocess.Popen,
+    *,
+    simulator_label: str,
+    log_path: Path,
+    log_tail_chars: int,
+    error: Callable[[str], Exception],
+    should_cancel: Callable[[], bool] | None,
+) -> None:
+    _raise_if_workspace_launch_cancelled(
+        simulator_label=simulator_label,
+        error=error,
+        should_cancel=should_cancel,
+    )
+    _raise_on_workspace_process_exit(
+        process,
+        simulator_label=simulator_label,
+        log_path=log_path,
+        log_tail_chars=log_tail_chars,
+        error=error,
+    )
+
+
+def _workspace_ready_log_marker_seen(
+    *,
+    log_path: Path,
+    ready_log_marker: str,
+    log_tail_chars: int,
+) -> bool:
+    return ready_log_marker in read_log_tail(log_path, tail_chars=log_tail_chars)
+
+
 def wait_for_workspace_readiness(
     process: subprocess.Popen,
     *,
@@ -355,39 +400,35 @@ def wait_for_workspace_readiness(
 ) -> None:
     deadline = time.monotonic() + ready_timeout_sec
     while time.monotonic() < deadline:
-        if should_cancel is not None and should_cancel():
-            _raise_workspace_launch_cancelled(
-                simulator_label=simulator_label,
-                error=error,
-            )
-        _raise_on_workspace_process_exit(
+        _raise_if_workspace_process_not_ready(
             process,
             simulator_label=simulator_label,
             log_path=log_path,
             log_tail_chars=log_tail_chars,
             error=error,
+            should_cancel=should_cancel,
         )
-        if ready_log_marker in read_log_tail(log_path, tail_chars=log_tail_chars):
+        if _workspace_ready_log_marker_seen(
+            log_path=log_path,
+            ready_log_marker=ready_log_marker,
+            log_tail_chars=log_tail_chars,
+        ):
             time.sleep(post_ready_grace_sec)
-            if should_cancel is not None and should_cancel():
-                _raise_workspace_launch_cancelled(
-                    simulator_label=simulator_label,
-                    error=error,
-                )
-            _raise_on_workspace_process_exit(
+            _raise_if_workspace_process_not_ready(
                 process,
                 simulator_label=simulator_label,
                 log_path=log_path,
                 log_tail_chars=log_tail_chars,
                 error=error,
+                should_cancel=should_cancel,
             )
             return
         time.sleep(poll_sec)
-    if should_cancel is not None and should_cancel():
-        _raise_workspace_launch_cancelled(
-            simulator_label=simulator_label,
-            error=error,
-        )
+    _raise_if_workspace_launch_cancelled(
+        simulator_label=simulator_label,
+        error=error,
+        should_cancel=should_cancel,
+    )
     _raise(
         error,
         f"{simulator_label} workspace did not become ready within {ready_timeout_sec:.0f}s. "
