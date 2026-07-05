@@ -1471,7 +1471,13 @@ def _read_job_manifest(output_root: Path) -> dict:
     manifest_path = _manifest_path(output_root)
     if not manifest_path.exists():
         raise FileNotFoundError("Gallery manifest is missing.")
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Gallery manifest is unreadable: {manifest_path}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Gallery manifest is invalid: {manifest_path}")
+    return payload
 
 
 def _resolve_selected_candidate_paths(record: _GalleryJobRecord, request: IluGalleryJobGenerateRequest) -> list[str]:

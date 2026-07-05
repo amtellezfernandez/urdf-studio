@@ -957,6 +957,47 @@ def test_build_gallery_job_bundle_and_pr_draft(monkeypatch: pytest.MonkeyPatch) 
     assert media_type == "image/png"
 
 
+def test_read_gallery_thumbnail_file_rejects_invalid_manifest_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    def _fake_gallery_generate(source, output_root: pathlib.Path):
+        output_root.mkdir(parents=True, exist_ok=True)
+        thumbnail_path = output_root / "robots" / "robot" / "thumbnail.png"
+        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        thumbnail_path.write_bytes(b"png-bytes")
+        manifest = {
+            "outputRoot": str(output_root),
+            "items": [
+                {
+                    "candidatePath": "robot.urdf",
+                    "displayName": "robot",
+                    "fileBase": "robot--9tgkfi",
+                    "sourceFile": "robot.urdf",
+                    "status": "generated",
+                    "thumbnailPath": str(thumbnail_path),
+                }
+            ],
+        }
+        (output_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        return manifest
+
+    monkeypatch.setattr(ilu_gallery, "_run_ilu_gallery_generate", _fake_gallery_generate)
+    monkeypatch.setattr(ilu_gallery, "_run_ilu_gallery_generate_from_repo", _fake_gallery_generate)
+    monkeypatch.setattr(ilu_gallery.threading.Thread, "start", lambda self: self.run())
+
+    response = ilu_gallery.create_gallery_job(
+        IluGalleryJobCreateRequest(
+            source={"owner": REAL_GALLERY_OWNER, "repo": REAL_GALLERY_REPO}
+        )
+    )
+    output_root = pathlib.Path(ilu_gallery._get_job_record(response.job_id).output_root or "")
+    (output_root / "manifest.json").write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(RuntimeError, match=r"Gallery manifest is unreadable:"):
+        ilu_gallery.read_gallery_thumbnail_file(response.job_id, "robot.urdf")
+
+
 def test_resolve_gallery_robot_traits_uses_archive_snapshot_for_urdf(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
