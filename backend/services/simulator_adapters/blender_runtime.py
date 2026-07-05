@@ -15,6 +15,9 @@ BLENDER_PATH_ENV = "URDF_STUDIO_BLENDER_PATH"
 BLENDER_PORTABLE_VERSION = "4.5.10"
 BLENDER_PORTABLE_PLATFORM = "linux-x64"
 WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"^([A-Za-z]):[\\/](.+)$")
+WINDOWS_BLENDER_EXECUTABLE_NAME = "blender.exe"
+POSIX_BLENDER_EXECUTABLE_NAME = "blender"
+MACOS_APP_BUNDLE_SUFFIX = ".app"
 
 
 def resolve_blender_executable(configured_path: str = "") -> str | None:
@@ -34,9 +37,8 @@ def resolve_blender_executable(configured_path: str = "") -> str | None:
 
 def _blender_executable_candidates() -> Iterable[str]:
     seen: set[str] = set()
-    executable_names = ("blender.exe",) if os.name == "nt" else ("blender",)
     for candidate in (
-        *executable_names,
+        *_blender_executable_names(),
         *_portable_blender_candidates(),
         *_common_macos_blender_candidates(),
         *_common_windows_blender_candidates(),
@@ -66,25 +68,46 @@ def _windows_drive_path_to_wsl_path(candidate: str) -> str:
     return f"/mnt/{drive.lower()}/{normalized_relative_path}"
 
 
+def _blender_executable_names() -> tuple[str, ...]:
+    if os.name == "nt":
+        return (WINDOWS_BLENDER_EXECUTABLE_NAME,)
+    return (POSIX_BLENDER_EXECUTABLE_NAME,)
+
+
 def _resolve_blender_candidate(candidate: str) -> str | None:
     path = Path(candidate).expanduser()
     if path.suffix.lower() == ".exe" and os.name != "nt":
         return None
-    if path.suffix == ".app" and path.is_dir():
-        app_binary = path / "Contents" / "MacOS" / "Blender"
-        if _is_usable_blender_executable(app_binary):
-            return str(app_binary.resolve())
-    if path.is_dir():
-        executable_names = ("blender.exe",) if os.name == "nt" else ("blender",)
-        for executable_name in executable_names:
-            executable_path = path / executable_name
-            if _is_usable_blender_executable(executable_path):
-                return str(executable_path.resolve())
+    app_bundle_executable = _resolve_app_bundle_executable(path)
+    if app_bundle_executable:
+        return app_bundle_executable
+    install_directory_executable = _resolve_install_directory_executable(path)
+    if install_directory_executable:
+        return install_directory_executable
     if _is_usable_blender_executable(path):
         return str(path.resolve())
     resolved = shutil.which(candidate)
     if resolved and _is_usable_blender_executable(Path(resolved)):
         return resolved
+    return None
+
+
+def _resolve_app_bundle_executable(path: Path) -> str | None:
+    if path.suffix != MACOS_APP_BUNDLE_SUFFIX or not path.is_dir():
+        return None
+    app_binary = path / "Contents" / "MacOS" / "Blender"
+    if _is_usable_blender_executable(app_binary):
+        return str(app_binary.resolve())
+    return None
+
+
+def _resolve_install_directory_executable(path: Path) -> str | None:
+    if not path.is_dir():
+        return None
+    for executable_name in _blender_executable_names():
+        executable_path = path / executable_name
+        if _is_usable_blender_executable(executable_path):
+            return str(executable_path.resolve())
     return None
 
 
