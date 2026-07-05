@@ -78,7 +78,10 @@ def get_robot_urdf_entry(robot: str = "so101") -> UrdfEntry:
             raise ValueError(
                 f"Unknown robot {robot!r}. Available: {list(_ROBOT_CONFIGS)}"
             )
-        urdf_text = cfg.urdf_path.read_text(encoding="utf-8")
+        try:
+            urdf_text = cfg.urdf_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ValueError(f"Failed to read LeRobot URDF: {cfg.urdf_path}") from exc
         _ENTRY_CACHE[robot] = load_urdf_entry(urdf_text)
     return _ENTRY_CACHE[robot]
 

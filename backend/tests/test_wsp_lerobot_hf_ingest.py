@@ -7,7 +7,11 @@ import pytest
 
 from backend.services.wsp_lerobot_hf_ingest import (
     SO101_DATASET_JOINT_NAMES,
+    _ENTRY_CACHE,
+    _ROBOT_CONFIGS,
+    _RobotConfig,
     fk_ee_from_degrees,
+    get_robot_urdf_entry,
     joint_dict_from_degrees,
 )
 
@@ -47,6 +51,24 @@ def test_fk_ee_pan_sweeps_y_axis() -> None:
     assert pos_neg[1] > 0, "negative pan should move EE toward +Y"
     assert pos_pos[1] < 0, "positive pan should move EE toward -Y"
     assert pos_neg[1] > pos_pos[1], "pan sweep must be monotone in Y"
+
+
+def test_get_robot_urdf_entry_rejects_invalid_urdf_encoding(tmp_path) -> None:
+    urdf_path = tmp_path / "bad.urdf"
+    urdf_path.write_bytes(b"\xff\xfe\x00")
+    _ENTRY_CACHE.pop("test-bad", None)
+    _ROBOT_CONFIGS["test-bad"] = _RobotConfig(
+        urdf_path=urdf_path,
+        ee_link="tool0",
+        entity_id="test-bad",
+    )
+
+    try:
+        with pytest.raises(ValueError, match=r"Failed to read LeRobot URDF:"):
+            get_robot_urdf_entry("test-bad")
+    finally:
+        _ENTRY_CACHE.pop("test-bad", None)
+        _ROBOT_CONFIGS.pop("test-bad", None)
 
 
 def _hf_integration_available() -> bool:
