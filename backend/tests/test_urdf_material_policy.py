@@ -230,3 +230,19 @@ def test_load_urdf_material_policy_rejects_non_string_semantic_terms(tmp_path) -
 
     with pytest.raises(ValueError, match=r"semanticSyntheticColors\[0\]\.terms\[1\]"):
         load_urdf_material_policy(policy_path)
+
+
+def test_load_urdf_material_policy_rejects_invalid_json(tmp_path) -> None:
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Failed to read URDF material policy:"):
+        load_urdf_material_policy(policy_path)
+
+
+def test_load_urdf_material_policy_rejects_invalid_encoding(tmp_path) -> None:
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read URDF material policy:"):
+        load_urdf_material_policy(policy_path)

@@ -210,7 +210,10 @@ def _fnv1a_32(data: Sequence[int], *, offset_basis: int, prime: int) -> int:
 
 
 def _load_policy_payload(path: Path) -> JsonObject:
-    raw_payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw_payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Failed to read URDF material policy: {path}") from exc
     if not isinstance(raw_payload, dict):
         raise ValueError("URDF material policy must be a JSON object")
     return cast(JsonObject, raw_payload)
