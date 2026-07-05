@@ -1867,6 +1867,39 @@ def test_generated_blender_script_rejects_mesh_import_fallback(
     ]
 
 
+def test_blender_workspace_script_only_suppresses_parent_inverse_reset_errors(
+    tmp_path: Path,
+) -> None:
+    urdf_xml = (
+        "<robot name='demo'>"
+        "<link name='base'/>"
+        "</robot>"
+    )
+    world_package = make_world_package(urdf_xml)
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    write_world_package_file(world_package_path, world_package)
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+
+    script_text = artifacts.open_script_path.read_text(encoding="utf-8")
+
+    assert "except (AttributeError, TypeError, ValueError):" in script_text
+    assert "def clear_parent_inverse(obj):" in script_text
+    assert "except Exception:\n                    return" not in script_text
+
+
 class _FakeBlenderProcess:
     def __init__(self, lines: list[str], returncode: int = 0):
         self.stdout = iter(lines)

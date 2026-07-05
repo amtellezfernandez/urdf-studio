@@ -650,7 +650,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     return
                 try:
                     identity()
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     return
 
 
