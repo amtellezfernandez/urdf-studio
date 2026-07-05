@@ -46,7 +46,10 @@ def load_urdf_entry(urdf_xml: str) -> UrdfEntry:
         tmp.write(urdf_xml)
         tmp_path = tmp.name
     try:
-        urdf = yourdfpy.URDF.load(tmp_path)
+        load_urdf = getattr(yourdfpy.URDF, "load", None)
+        if not callable(load_urdf):
+            raise ValueError("yourdfpy.URDF.load is unavailable")
+        urdf = load_urdf(tmp_path)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
     joint_names = list(urdf.actuated_joint_names)
