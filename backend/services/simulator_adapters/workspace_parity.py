@@ -140,7 +140,43 @@ def _load_report(path: Path) -> ParityReportPayload:
             "missing parity report field(s): "
             f"{', '.join(missing_fields)}"
         )
+    payload_error = _validate_parity_report_payload(cast(ParityReportView, payload))
+    if payload_error is not None:
+        raise ValueError(payload_error)
     return cast(ParityReportPayload, payload)
+
+
+def _validate_parity_report_payload(report: ParityReportView) -> str | None:
+    robot_urdf_path = report.get("robot_urdf_path")
+    if not isinstance(robot_urdf_path, str) or not robot_urdf_path.strip():
+        return "parity report field 'robot_urdf_path' must be a non-empty string"
+
+    asset_roots = report.get("asset_roots")
+    if not isinstance(asset_roots, list):
+        return "parity report field 'asset_roots' must be a list"
+    for index, asset_root in enumerate(asset_roots):
+        if not isinstance(asset_root, str) or not asset_root.strip():
+            return f"parity report field 'asset_roots[{index}]' must be a non-empty string"
+
+    warnings = report.get("warnings")
+    if not isinstance(warnings, list):
+        return "parity report field 'warnings' must be a list"
+    for index, warning in enumerate(warnings):
+        if not isinstance(warning, str):
+            return f"parity report field 'warnings[{index}]' must be a string"
+
+    objects = report.get("objects")
+    if not isinstance(objects, list):
+        return "parity report field 'objects' must be a list"
+
+    cameras = report.get("cameras")
+    if not isinstance(cameras, list):
+        return "parity report field 'cameras' must be a list"
+
+    artifacts = report.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        return "parity report field 'artifacts' must be an object"
+    return None
 
 
 def _parity_report_signature(report: ParityReportView) -> ParitySignature:

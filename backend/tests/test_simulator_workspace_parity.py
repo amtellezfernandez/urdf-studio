@@ -138,6 +138,50 @@ def test_simulator_workspace_parity_rejects_missing_robot_urdf_path_and_asset_ro
     assert "missing parity report field(s): robot_urdf_path, asset_roots" in result.detail
 
 
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "expected_error"),
+    [
+        ("robot_urdf_path", "   ", "parity report field 'robot_urdf_path' must be a non-empty string"),
+        ("asset_roots", "not-a-list", "parity report field 'asset_roots' must be a list"),
+        ("warnings", [1], "parity report field 'warnings[0]' must be a string"),
+        ("objects", {}, "parity report field 'objects' must be a list"),
+        ("cameras", {}, "parity report field 'cameras' must be a list"),
+        ("artifacts", [], "parity report field 'artifacts' must be an object"),
+    ],
+)
+def test_simulator_workspace_parity_rejects_invalid_report_field_types(
+    tmp_path: Path,
+    field_name: str,
+    field_value: object,
+    expected_error: str,
+) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    invalid_report = _write_parity_report(
+        tmp_path / "invalid",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+    )
+    payload = json.loads(invalid_report.read_text(encoding="utf-8"))
+    payload[field_name] = field_value
+    invalid_report.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("Invalid", invalid_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "could not read Invalid validation report" in result.detail
+    assert expected_error in result.detail
+
+
 def test_simulator_workspace_parity_rejects_invalid_report_json(tmp_path: Path) -> None:
     genesis_report = _write_parity_report(
         tmp_path / "genesis",
