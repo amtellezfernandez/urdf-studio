@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from copy import copy
 
@@ -9,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIWebSocketRoute, APIRoute, request_response
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
 from starlette.routing import BaseRoute
 
 from backend.api.attestation import router as attestation_router
@@ -76,7 +78,7 @@ API_ROUTERS = (
 
 
 @asynccontextmanager
-async def app_lifespan(_app: FastAPI):
+async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     zra_orchestrator_service.start()
     try:
         yield
@@ -98,7 +100,10 @@ def create_app() -> FastAPI:
     )
 
     @app.middleware("http")
-    async def simulator_security_middleware(request: Request, call_next):
+    async def simulator_security_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
         request_id = get_request_id_for_http_request(request)
         try:
             enforce_backend_http_access_policy(request)
@@ -125,7 +130,10 @@ def create_app() -> FastAPI:
     if settings.enable_metrics:
 
         @app.middleware("http")
-        async def timing_middleware(request: Request, call_next):
+        async def timing_middleware(
+            request: Request,
+            call_next: Callable[[Request], Awaitable[Response]],
+        ) -> Response:
             start = time.perf_counter()
             response = await call_next(request)
             duration_ms = (time.perf_counter() - start) * 1000
@@ -138,7 +146,10 @@ def create_app() -> FastAPI:
     register_api_routers(app)
 
     @app.exception_handler(NotImplementedError)
-    async def not_implemented_handler(request: Request, exc: NotImplementedError):
+    async def not_implemented_handler(
+        _request: Request,
+        exc: NotImplementedError,
+    ) -> Response:
         return JSONResponse(
             status_code=501,
             content={"detail": str(exc) or "This feature is not yet available."},
