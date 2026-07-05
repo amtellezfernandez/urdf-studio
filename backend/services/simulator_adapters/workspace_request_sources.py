@@ -351,8 +351,11 @@ def build_workspace_request_from_files(
 
 
 def _load_json(path: Path) -> JsonObject:
-    with path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Failed to read JSON object: {path}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
     return payload

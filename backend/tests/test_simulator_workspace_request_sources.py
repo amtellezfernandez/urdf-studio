@@ -227,6 +227,36 @@ def test_workspace_request_from_files_keeps_robot_directory_when_extra_asset_roo
     ]
 
 
+def test_workspace_request_from_files_rejects_invalid_world_package_json(
+    tmp_path,
+) -> None:
+    robot_urdf_path = tmp_path / "robot.urdf"
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+    world_package_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Failed to read JSON object:"):
+        build_workspace_request_from_files(
+            world_package_path=world_package_path,
+            robot_urdf_path=robot_urdf_path,
+        )
+
+
+def test_workspace_request_from_files_rejects_invalid_world_package_encoding(
+    tmp_path,
+) -> None:
+    robot_urdf_path = tmp_path / "robot.urdf"
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+    world_package_path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read JSON object:"):
+        build_workspace_request_from_files(
+            world_package_path=world_package_path,
+            robot_urdf_path=robot_urdf_path,
+        )
+
+
 def test_resolve_workspace_asset_roots_dedupes_robot_root_and_extra_roots(tmp_path) -> None:
     robot_root = tmp_path / "robot_scene"
     robot_urdf_path = robot_root / "robot.urdf"
