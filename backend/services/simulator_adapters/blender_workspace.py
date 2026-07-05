@@ -613,7 +613,8 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
 
 
             def safe_artifact_name(value, default_name):
-                normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value).strip()).strip("._")
+                raw_value = value.strip() if isinstance(value, str) else ""
+                normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw_value).strip("._")
                 return normalized or default_name
 
 
@@ -1012,7 +1013,7 @@ def build_blender_export_script(
                 if getter is None:
                     return ""
                 value = getter(key)
-                return str(value).strip() if isinstance(value, str) and value.strip() else ""
+                return value.strip() if isinstance(value, str) and value.strip() else ""
 
 
             def portable_asset_ref_value(value):

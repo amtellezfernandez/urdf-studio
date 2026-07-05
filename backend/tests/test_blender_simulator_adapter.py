@@ -2037,10 +2037,14 @@ def test_blender_workspace_script_only_suppresses_parent_inverse_reset_errors(
     )
 
     script_text = artifacts.open_script_path.read_text(encoding="utf-8")
+    export_script_text = artifacts.export_script_path.read_text(encoding="utf-8")
 
     assert "except (AttributeError, TypeError, ValueError):" in script_text
     assert "def clear_parent_inverse(obj):" in script_text
     assert "except Exception:\n                    return" not in script_text
+    assert 'raw_value = value.strip() if isinstance(value, str) else ""' in script_text
+    assert "custom_string(owner, key)" in export_script_text
+    assert "if isinstance(value, str) and value.strip()" in export_script_text
 
 
 class _FakeBlenderProcess:
