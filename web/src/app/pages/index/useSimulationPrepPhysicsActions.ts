@@ -68,6 +68,41 @@ type GeneratePhysicsDraftOptions = Omit<
   "canonicalizeRepeatedMeshes" | "meshFiles" | "packageRoots" | "sourceUrdf" | "urdfBasePath"
 >;
 
+const collectExcludedLinkNamesByDisposition = (
+  physicsPreflightSession: PhysicsPreflightSession | null,
+  recoveryDisposition: "recover" | "regularize"
+): string[] =>
+  physicsPreflightSession?.plausibilitySummary.excludedLinks
+    .filter((entry) => entry.recoveryDisposition === recoveryDisposition)
+    .map((entry) => entry.linkName) ?? [];
+
+const formatPhysicsGenerationSuccessMessage = (synthesizedCount: number): string =>
+  `Physics generated for ${synthesizedCount} link${synthesizedCount === 1 ? "" : "s"}. Review in Modified view when ready.`;
+
+const formatVoxelRecoverySuccessMessage = ({
+  skippedCount,
+  synthesizedCount,
+  targetedCount,
+  unresolvedCount,
+}: {
+  skippedCount: number;
+  synthesizedCount: number;
+  targetedCount: number;
+  unresolvedCount: number;
+}): string =>
+  `Voxel recovery targeted ${targetedCount} of ${skippedCount} skipped link${skippedCount === 1 ? "" : "s"}, synthesized ${synthesizedCount}, and left ${unresolvedCount} unresolved. Review in Modified view when ready.`;
+
+const formatPsdRegularizationSuccessMessage = ({
+  synthesizedCount,
+  targetedCount,
+  unresolvedCount,
+}: {
+  synthesizedCount: number;
+  targetedCount: number;
+  unresolvedCount: number;
+}): string =>
+  `PSD regularization targeted ${targetedCount} near-miss link${targetedCount === 1 ? "" : "s"}, synthesized ${synthesizedCount}, and left ${unresolvedCount} unresolved. Review in Modified view when ready.`;
+
 export const useSimulationPrepPhysicsActions = ({
   externalActionInFlight,
   inertialDraftBaseContent,
@@ -204,17 +239,15 @@ export const useSimulationPrepPhysicsActions = ({
             densityPresetId: request.densityPresetId,
             repairMode: request.repairMode,
           });
-          toast.success(
-            `Physics generated for ${synthesizedNames.length} link${synthesizedNames.length === 1 ? "" : "s"}. Review in Modified view when ready.`
-          );
+          toast.success(formatPhysicsGenerationSuccessMessage(synthesizedNames.length));
           return;
         }
 
         if (request.key === "voxel-recovery") {
-          const voxelRecoveryLinkNames =
-            physicsPreflightSession?.plausibilitySummary.excludedLinks
-              .filter((entry) => entry.recoveryDisposition === "recover")
-              .map((entry) => entry.linkName) ?? [];
+          const voxelRecoveryLinkNames = collectExcludedLinkNamesByDisposition(
+            physicsPreflightSession,
+            "recover"
+          );
           if (voxelRecoveryLinkNames.length === 0) {
             toast.error("No links currently need volumetric voxel recovery.");
             return;
@@ -227,17 +260,24 @@ export const useSimulationPrepPhysicsActions = ({
           });
           const skippedCount = physicsPreflightSession?.plausibilitySummary.excludedLinks.length ?? 0;
           const targetedCount = result.synthesisResult.results.length;
-          const unresolvedCount = result.synthesisResult.results.filter((entry) => entry.status === "skipped").length;
+          const unresolvedCount = result.synthesisResult.results.filter(
+            (entry) => entry.status === "skipped"
+          ).length;
           toast.success(
-            `Voxel recovery targeted ${targetedCount} of ${skippedCount} skipped link${skippedCount === 1 ? "" : "s"}, synthesized ${synthesizedNames.length}, and left ${unresolvedCount} unresolved. Review in Modified view when ready.`
+            formatVoxelRecoverySuccessMessage({
+              skippedCount,
+              synthesizedCount: synthesizedNames.length,
+              targetedCount,
+              unresolvedCount,
+            })
           );
           return;
         }
 
-        const regularizableLinkNames =
-          physicsPreflightSession?.plausibilitySummary.excludedLinks
-            .filter((entry) => entry.recoveryDisposition === "regularize")
-            .map((entry) => entry.linkName) ?? [];
+        const regularizableLinkNames = collectExcludedLinkNamesByDisposition(
+          physicsPreflightSession,
+          "regularize"
+        );
         if (regularizableLinkNames.length === 0) {
           toast.error("No near-miss links are currently available for PSD regularization.");
           return;
@@ -250,9 +290,15 @@ export const useSimulationPrepPhysicsActions = ({
           regularizeNearMissTensors: true,
         });
         const targetedCount = result.synthesisResult.results.length;
-        const unresolvedCount = result.synthesisResult.results.filter((entry) => entry.status === "skipped").length;
+        const unresolvedCount = result.synthesisResult.results.filter(
+          (entry) => entry.status === "skipped"
+        ).length;
         toast.success(
-          `PSD regularization targeted ${targetedCount} near-miss link${targetedCount === 1 ? "" : "s"}, synthesized ${synthesizedNames.length}, and left ${unresolvedCount} unresolved. Review in Modified view when ready.`
+          formatPsdRegularizationSuccessMessage({
+            synthesizedCount: synthesizedNames.length,
+            targetedCount,
+            unresolvedCount,
+          })
         );
       } catch (error) {
         toast.error(
