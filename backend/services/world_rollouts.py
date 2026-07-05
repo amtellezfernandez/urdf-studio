@@ -357,17 +357,8 @@ class WorldRolloutService:
         trace_records: list[WorldRolloutTraceRecord],
         decisions: list[WorldRolloutDecisionRecord],
     ) -> WorldRolloutImportResponse:
-        reject_count = sum(
-            1 for decision in decisions if decision.decision == WORLD_ROLLOUT_DECISION_REJECT
-        )
-        warn_count = sum(
-            1 for decision in decisions if decision.decision == WORLD_ROLLOUT_DECISION_WARN
-        )
-        stop_count = sum(
-            1 for decision in decisions if decision.decision == WORLD_ROLLOUT_DECISION_STOP
-        )
-        escalation_count = sum(
-            1 for decision in decisions if decision.decision == WORLD_ROLLOUT_DECISION_ESCALATE
+        reject_count, warn_count, stop_count, escalation_count = _count_decisions(
+            decisions
         )
         return WorldRolloutImportResponse(
             campaign=campaign,
@@ -504,6 +495,25 @@ def _model_json_bytes(payload: BaseModel) -> bytes:
 
 def _sha256_bytes(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def _count_decisions(
+    decisions: Sequence[WorldRolloutDecisionRecord],
+) -> tuple[int, int, int, int]:
+    reject_count = 0
+    warn_count = 0
+    stop_count = 0
+    escalation_count = 0
+    for decision in decisions:
+        if decision.decision == WORLD_ROLLOUT_DECISION_REJECT:
+            reject_count += 1
+        elif decision.decision == WORLD_ROLLOUT_DECISION_WARN:
+            warn_count += 1
+        elif decision.decision == WORLD_ROLLOUT_DECISION_STOP:
+            stop_count += 1
+        elif decision.decision == WORLD_ROLLOUT_DECISION_ESCALATE:
+            escalation_count += 1
+    return reject_count, warn_count, stop_count, escalation_count
 
 
 world_rollout_service = WorldRolloutService(
