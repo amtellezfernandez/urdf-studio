@@ -57,6 +57,21 @@ class PreparedSimulatorWorkspace:
     camera_count: int = 0
 
 
+@dataclass(frozen=True)
+class StagedWorkspaceRobotSource:
+    requested_asset_path: str
+    staged_urdf_relative_path: str
+    staged_urdf_path: Path
+    robot_urdf_xml: str
+
+
+@dataclass(frozen=True)
+class WorkspaceRobotBundleInputs:
+    source_urdf_path: Path
+    bundled_urdf_path: Path
+    workspace_asset_roots: tuple[Path, ...]
+
+
 def _timestamped_workspace_dir(workspace_root: Path) -> Path:
     path = workspace_root / f"workspace-{time.time_ns()}"
     path.mkdir(parents=True, exist_ok=False)
@@ -90,6 +105,83 @@ def _transferable_world_object_count(request: SimulatorWorkspacePrepareRequest) 
     return count_transferable_world_objects(layout, include_hidden=False)
 
 
+def _write_workspace_world_package(
+    request: SimulatorWorkspacePrepareRequest,
+    *,
+    workspace_dir: Path,
+) -> Path:
+    world_package_path = workspace_dir / "world-package.json"
+    world_package_path.write_text(
+        f"{json.dumps(world_scene_package_json_payload(request.world_package), indent=2)}\n",
+        encoding="utf-8",
+    )
+    return world_package_path
+
+
+def _stage_workspace_robot_source(
+    request: SimulatorWorkspacePrepareRequest,
+    *,
+    source_root: Path,
+    error: Callable[[str], Exception],
+) -> StagedWorkspaceRobotSource:
+    requested_asset_path = request.urdf_asset_path or "robot.urdf"
+    staged_urdf_relative_path = normalize_resolved_urdf_asset_path(requested_asset_path)
+    staged_urdf_path = source_root / staged_urdf_relative_path
+    robot_urdf_xml = normalize_root_relative_urdf_mesh_filenames(
+        request.world_package.world_snapshot.urdf_xml
+    )
+    write_workspace_asset_file(
+        source_root,
+        staged_urdf_relative_path,
+        robot_urdf_xml.encode("utf-8"),
+        error=error,
+    )
+    return StagedWorkspaceRobotSource(
+        requested_asset_path=requested_asset_path,
+        staged_urdf_relative_path=staged_urdf_relative_path,
+        staged_urdf_path=staged_urdf_path,
+        robot_urdf_xml=robot_urdf_xml,
+    )
+
+
+def _resolve_workspace_robot_bundle_inputs(
+    request: SimulatorWorkspacePrepareRequest,
+    *,
+    workspace_dir: Path,
+    source_root: Path,
+    staged_robot_source: StagedWorkspaceRobotSource,
+) -> WorkspaceRobotBundleInputs:
+    source_urdf_path = staged_robot_source.staged_urdf_path
+    uploaded_asset_sources: list[Path] = [source_root, staged_robot_source.staged_urdf_path.parent]
+    requested_asset_parent = (
+        source_root / normalize_workspace_asset_path(staged_robot_source.requested_asset_path)
+    ).parent
+    if requested_asset_parent != staged_robot_source.staged_urdf_path.parent:
+        uploaded_asset_sources.append(requested_asset_parent)
+    if request.ilu_session_id:
+        try:
+            session_context = get_ilu_session_local_urdf_source_context(request.ilu_session_id)
+        except IluSessionError:
+            session_context = None
+        if session_context is not None:
+            source_urdf_path = session_context.source_urdf_path
+            uploaded_asset_sources.extend(session_context.extra_search_roots)
+
+    uploaded_asset_sources.extend(package_root_hint_paths(source_root, request.package_roots))
+
+    bundled_urdf_path = workspace_dir / "robot" / "robot.urdf"
+    workspace_asset_roots = compute_workspace_asset_roots(
+        workspace_dir=workspace_dir,
+        robot_urdf_path=bundled_urdf_path,
+        uploaded_asset_sources=tuple(uploaded_asset_sources),
+    )
+    return WorkspaceRobotBundleInputs(
+        source_urdf_path=source_urdf_path,
+        bundled_urdf_path=bundled_urdf_path,
+        workspace_asset_roots=workspace_asset_roots,
+    )
+
+
 def prepare_simulator_workspace_package(
     request: SimulatorWorkspacePrepareRequest,
     *,
@@ -121,55 +213,25 @@ def _prepare_simulator_workspace_package_inner(
 ) -> PreparedSimulatorWorkspace:
     write_uploaded_workspace_assets(source_root, request.mesh_assets, error=error)
     write_package_root_hints(source_root, request.package_roots)
-
-    world_package_path = workspace_dir / "world-package.json"
-    world_package_path.write_text(
-        f"{json.dumps(world_scene_package_json_payload(request.world_package), indent=2)}\n",
-        encoding="utf-8",
-    )
-
-    requested_asset_path = request.urdf_asset_path or "robot.urdf"
-    staged_urdf_relative_path = normalize_resolved_urdf_asset_path(requested_asset_path)
-    staged_urdf_path = source_root / staged_urdf_relative_path
-    robot_urdf_xml = normalize_root_relative_urdf_mesh_filenames(
-        request.world_package.world_snapshot.urdf_xml
-    )
-    write_workspace_asset_file(
-        source_root,
-        staged_urdf_relative_path,
-        robot_urdf_xml.encode("utf-8"),
+    world_package_path = _write_workspace_world_package(request, workspace_dir=workspace_dir)
+    staged_robot_source = _stage_workspace_robot_source(
+        request,
+        source_root=source_root,
         error=error,
     )
-
-    source_urdf_path = staged_urdf_path
-    extra_search_roots: list[Path] = [source_root, staged_urdf_path.parent]
-    requested_asset_parent = (source_root / normalize_workspace_asset_path(requested_asset_path)).parent
-    if requested_asset_parent != staged_urdf_path.parent:
-        extra_search_roots.append(requested_asset_parent)
-    if request.ilu_session_id:
-        try:
-            session_context = get_ilu_session_local_urdf_source_context(request.ilu_session_id)
-        except IluSessionError:
-            session_context = None
-        if session_context is not None:
-            source_urdf_path = session_context.source_urdf_path
-            extra_search_roots.extend(session_context.extra_search_roots)
-
-    extra_search_roots.extend(package_root_hint_paths(source_root, request.package_roots))
-
-    bundled_urdf_path = workspace_dir / "robot" / "robot.urdf"
-    workspace_asset_roots = compute_workspace_asset_roots(
+    bundle_inputs = _resolve_workspace_robot_bundle_inputs(
+        request,
         workspace_dir=workspace_dir,
-        robot_urdf_path=bundled_urdf_path,
-        uploaded_asset_sources=tuple(extra_search_roots),
+        source_root=source_root,
+        staged_robot_source=staged_robot_source,
     )
-    write_workspace_asset_roots(workspace_dir, workspace_asset_roots)
+    write_workspace_asset_roots(workspace_dir, bundle_inputs.workspace_asset_roots)
     try:
         bundle_result = bundle_mesh_assets_for_urdf_file(
-            urdf_path=str(source_urdf_path),
-            urdf_xml=robot_urdf_xml,
-            out_path=str(bundled_urdf_path),
-            extra_search_roots=[str(path) for path in workspace_asset_roots],
+            urdf_path=str(bundle_inputs.source_urdf_path),
+            urdf_xml=staged_robot_source.robot_urdf_xml,
+            out_path=str(bundle_inputs.bundled_urdf_path),
+            extra_search_roots=[str(path) for path in bundle_inputs.workspace_asset_roots],
         )
     except IluUrdfBridgeError as exc:
         _raise(error, exc.detail)
@@ -181,15 +243,15 @@ def _prepare_simulator_workspace_package_inner(
         suffix = "" if len(bundle_result.unresolved) <= 8 else " ..."
         _raise(error, f"Simulator workspace could not resolve robot mesh assets: {unresolved}{suffix}")
     try:
-        materialize_urdf_visual_material_colors(bundled_urdf_path)
+        materialize_urdf_visual_material_colors(bundle_inputs.bundled_urdf_path)
     except ET.ParseError as exc:
         _raise(error, f"Simulator workspace could not parse robot URDF materials: {exc}")
-    prepared_robot_urdf_xml = bundled_urdf_path.read_text(encoding="utf-8")
+    prepared_robot_urdf_xml = bundle_inputs.bundled_urdf_path.read_text(encoding="utf-8")
 
     return PreparedSimulatorWorkspace(
         workspace_dir=workspace_dir,
         world_package_path=world_package_path,
-        robot_urdf_path=bundled_urdf_path,
+        robot_urdf_path=bundle_inputs.bundled_urdf_path,
         bundle_result=bundle_result,
         robot_urdf_xml=prepared_robot_urdf_xml,
         world_object_count=_transferable_world_object_count(request),
