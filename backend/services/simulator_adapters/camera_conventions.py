@@ -33,6 +33,11 @@ OPENGL_CAMERA_TO_ROS_CAMERA_MATRIX = np.array(
     ],
     dtype=np.float64,
 )
+CAMERA_FRAME_TO_OPENGL_MATRIX = {
+    "world": WORLD_CAMERA_TO_OPENGL_CAMERA_MATRIX,
+    "opengl": np.eye(3, dtype=np.float64),
+    "ros": OPENGL_CAMERA_TO_ROS_CAMERA_MATRIX,
+}
 
 
 def camera_frame_conversion_rotation(
@@ -51,16 +56,17 @@ def world_camera_to_opengl_camera_rotation() -> Rotation:
 
 
 def _camera_frame_to_opengl_rotation(convention: CameraFrameConvention) -> Rotation:
-    if convention == "opengl":
-        return Rotation.identity()
-    if convention == "world":
-        return Rotation.from_matrix(WORLD_CAMERA_TO_OPENGL_CAMERA_MATRIX)
-    if convention == "ros":
-        return Rotation.from_matrix(OPENGL_CAMERA_TO_ROS_CAMERA_MATRIX)
-    raise ValueError(f"Unsupported camera frame convention: {convention}")
+    return Rotation.from_matrix(_camera_frame_to_opengl_matrix(convention))
 
 
 def _opengl_to_camera_frame_rotation(convention: CameraFrameConvention) -> Rotation:
     if convention == "opengl":
         return Rotation.identity()
     return _camera_frame_to_opengl_rotation(convention).inv()
+
+
+def _camera_frame_to_opengl_matrix(convention: CameraFrameConvention) -> np.ndarray:
+    try:
+        return CAMERA_FRAME_TO_OPENGL_MATRIX[convention]
+    except KeyError:
+        raise ValueError(f"Unsupported camera frame convention: {convention}") from None
