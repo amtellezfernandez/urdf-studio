@@ -309,6 +309,26 @@ def test_mujoco_export_preserves_unexpected_smoke_errors(monkeypatch) -> None:
         export_rollout_trace_to_mujoco_mjcf(_wait_trace())
 
 
+def test_mujoco_export_preserves_unexpected_smoke_import_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        simulator_export_module,
+        "_simulator_smoke_dependency_available",
+        lambda import_name: True,
+    )
+
+    def _raise_unexpected_import_error(*_args, **_kwargs):
+        raise ImportError("unexpected mujoco smoke import failure")
+
+    monkeypatch.setattr(
+        simulator_export_module,
+        "check_mujoco_transfer",
+        _raise_unexpected_import_error,
+    )
+
+    with pytest.raises(ImportError, match="unexpected mujoco smoke import failure"):
+        export_rollout_trace_to_mujoco_mjcf(_wait_trace())
+
+
 def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_path) -> None:
     frame = PhysicalStateFrame(
         frame_id="genesis-frame-map-smoke",
@@ -395,4 +415,24 @@ def test_genesis_export_preserves_unexpected_smoke_errors(monkeypatch) -> None:
     )
 
     with pytest.raises(KeyError, match="unexpected genesis smoke bookkeeping failure"):
+        export_rollout_trace_to_genesis_scene(_wait_trace())
+
+
+def test_genesis_export_preserves_unexpected_smoke_import_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        simulator_export_module,
+        "_simulator_smoke_dependency_available",
+        lambda import_name: True,
+    )
+
+    def _raise_unexpected_import_error(*_args, **_kwargs):
+        raise ImportError("unexpected genesis smoke import failure")
+
+    monkeypatch.setattr(
+        simulator_export_module,
+        "check_genesis_transfer",
+        _raise_unexpected_import_error,
+    )
+
+    with pytest.raises(ImportError, match="unexpected genesis smoke import failure"):
         export_rollout_trace_to_genesis_scene(_wait_trace())

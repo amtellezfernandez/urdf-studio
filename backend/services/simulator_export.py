@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation
 
 from backend.models.physical_state import PhysicalEntity, PhysicalRolloutTrace, SimulatorExportState
 from backend.services.executability_audit import audit_physical_rollout_trace
+from backend.services.simulator_adapters.base import is_python_module_available
 from backend.services.world_layout_static_transfer import (
     STUDIO_Y_UP_TO_Z_UP,
     SimPrimitive,
@@ -30,6 +31,8 @@ _SMOKE_LOAD_ERROR_TYPES = (
     OSError,
     RuntimeError,
 )
+_MUJOCO_SMOKE_IMPORT_NAME = "mujoco"
+_GENESIS_SMOKE_IMPORT_NAME = "genesis"
 
 
 @dataclass(frozen=True)
@@ -196,6 +199,10 @@ def _to_static_transfer_primitives(primitives: Sequence[ExportPrimitive]) -> tup
     return tuple(_to_static_transfer_primitive(primitive) for primitive in primitives)
 
 
+def _simulator_smoke_dependency_available(import_name: str) -> bool:
+    return is_python_module_available(import_name)
+
+
 def _collect_export_primitives(
     trace: PhysicalRolloutTrace,
     *,
@@ -297,24 +304,25 @@ def export_rollout_trace_to_mujoco_mjcf(
         output_path.write_text(mjcf_text + "\n", encoding="utf-8")
 
     if smoke_load:
-        try:
-            smoke_report = check_mujoco_transfer(_to_static_transfer_primitives(primitives), mjcf_text=mjcf_text)
-            smoke_passed = smoke_report["ok"] is True
-            smoke_metrics = {
-                "mujoco_loaded_count": smoke_report["loaded_count"],
-                "mujoco_max_position_error_m": smoke_report["max_position_error_m"],
-                "mujoco_max_size_error_m": smoke_report["max_size_error_m"],
-                "mujoco_max_quat_error": smoke_report["max_quat_error"],
-                "mujoco_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
-                "mujoco_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
-                "mujoco_missing_count": len(smoke_report["missing_source_ids"]),
-            }
-            if not smoke_passed:
-                smoke_error = "MuJoCo exported primitive verification failed."
-        except ImportError:
+        if not _simulator_smoke_dependency_available(_MUJOCO_SMOKE_IMPORT_NAME):
             warnings.append("MuJoCo is not installed; MJCF XML was generated but not smoke-loaded.")
-        except _SMOKE_LOAD_ERROR_TYPES as exc:
-            smoke_error = str(exc)
+        else:
+            try:
+                smoke_report = check_mujoco_transfer(_to_static_transfer_primitives(primitives), mjcf_text=mjcf_text)
+                smoke_passed = smoke_report["ok"] is True
+                smoke_metrics = {
+                    "mujoco_loaded_count": smoke_report["loaded_count"],
+                    "mujoco_max_position_error_m": smoke_report["max_position_error_m"],
+                    "mujoco_max_size_error_m": smoke_report["max_size_error_m"],
+                    "mujoco_max_quat_error": smoke_report["max_quat_error"],
+                    "mujoco_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
+                    "mujoco_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
+                    "mujoco_missing_count": len(smoke_report["missing_source_ids"]),
+                }
+                if not smoke_passed:
+                    smoke_error = "MuJoCo exported primitive verification failed."
+            except _SMOKE_LOAD_ERROR_TYPES as exc:
+                smoke_error = str(exc)
     else:
         warnings.append("MuJoCo smoke load skipped for replay labeling throughput.")
 
@@ -397,24 +405,25 @@ def export_rollout_trace_to_genesis_scene(
     smoke_error: str | None = None
     smoke_metrics: dict[str, Any] = {}
     if smoke_load:
-        try:
-            smoke_report = check_genesis_transfer(_to_static_transfer_primitives(primitives))
-            smoke_passed = smoke_report["ok"] is True
-            smoke_metrics = {
-                "genesis_entity_count": smoke_report["loaded_count"],
-                "genesis_max_position_error_m": smoke_report["max_position_error_m"],
-                "genesis_max_size_error_m": smoke_report["max_size_error_m"],
-                "genesis_max_quat_error": smoke_report["max_quat_error"],
-                "genesis_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
-                "genesis_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
-                "genesis_missing_count": len(smoke_report["missing_source_ids"]),
-            }
-            if not smoke_passed:
-                smoke_error = "Genesis exported primitive verification failed."
-        except ImportError:
+        if not _simulator_smoke_dependency_available(_GENESIS_SMOKE_IMPORT_NAME):
             warnings.append("Genesis is not installed; Genesis scene JSON was generated but not smoke-built.")
-        except _SMOKE_LOAD_ERROR_TYPES as exc:
-            smoke_error = str(exc)
+        else:
+            try:
+                smoke_report = check_genesis_transfer(_to_static_transfer_primitives(primitives))
+                smoke_passed = smoke_report["ok"] is True
+                smoke_metrics = {
+                    "genesis_entity_count": smoke_report["loaded_count"],
+                    "genesis_max_position_error_m": smoke_report["max_position_error_m"],
+                    "genesis_max_size_error_m": smoke_report["max_size_error_m"],
+                    "genesis_max_quat_error": smoke_report["max_quat_error"],
+                    "genesis_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
+                    "genesis_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
+                    "genesis_missing_count": len(smoke_report["missing_source_ids"]),
+                }
+                if not smoke_passed:
+                    smoke_error = "Genesis exported primitive verification failed."
+            except _SMOKE_LOAD_ERROR_TYPES as exc:
+                smoke_error = str(exc)
     else:
         warnings.append("Genesis smoke build skipped for replay labeling throughput.")
 
