@@ -12,7 +12,9 @@ from backend.services.placo_kinematics import (
     _quat_to_matrix,
     _resolved_weight,
     _set_placo_posture_target,
+    inverse_kinematics,
 )
+from backend.models.kinematics import IKRequest
 
 
 class _FakeJointsTask:
@@ -192,3 +194,102 @@ def test_load_placo_preserves_unexpected_robot_build_errors(monkeypatch) -> None
 
     with pytest.raises(KeyError, match="unexpected placo robot failure"):
         _load_placo("<robot name='demo'/>")
+
+
+def test_placo_inverse_kinematics_wraps_expected_setup_errors(monkeypatch) -> None:
+    class _FakeRobot:
+        @staticmethod
+        def set_joint(_joint_name: str, _joint_value: float) -> None:
+            return None
+
+        @staticmethod
+        def update_kinematics() -> None:
+            return None
+
+    class _BrokenFrameTask:
+        T_world_frame = None
+
+        @staticmethod
+        def configure(*_args) -> None:
+            raise RuntimeError("bad frame task setup")
+
+    class _FakeSolver:
+        @staticmethod
+        def add_frame_task(_target_link: str, _frame: np.ndarray) -> object:
+            return _BrokenFrameTask()
+
+        @staticmethod
+        def enable_joint_limits(_enabled: bool) -> None:
+            return None
+
+    entry = placo_kinematics_module.PlacoRobotEntry(
+        urdf_hash="demo",
+        urdf_xml="<robot name='demo'/>",
+        robot=_FakeRobot(),
+        solver=_FakeSolver(),
+        joint_names=["joint_a"],
+        joints_task=None,
+    )
+
+    monkeypatch.setattr(placo_kinematics_module, "_load_placo", lambda _urdf_xml: entry)
+
+    with pytest.raises(HTTPException) as exc_info:
+        inverse_kinematics(
+            IKRequest(
+                urdf="<robot name='demo'/>",
+                target_link="tool",
+                target_position=[0.0, 0.0, 0.0],
+                joint_values={"joint_a": 0.0},
+            )
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Placo IK setup failed: bad frame task setup"
+
+
+def test_placo_inverse_kinematics_preserves_unexpected_setup_errors(monkeypatch) -> None:
+    class _FakeRobot:
+        @staticmethod
+        def set_joint(_joint_name: str, _joint_value: float) -> None:
+            return None
+
+        @staticmethod
+        def update_kinematics() -> None:
+            return None
+
+    class _BrokenFrameTask:
+        T_world_frame = None
+
+        @staticmethod
+        def configure(*_args) -> None:
+            raise KeyError("unexpected frame task setup failure")
+
+    class _FakeSolver:
+        @staticmethod
+        def add_frame_task(_target_link: str, _frame: np.ndarray) -> object:
+            return _BrokenFrameTask()
+
+        @staticmethod
+        def enable_joint_limits(_enabled: bool) -> None:
+            return None
+
+    entry = placo_kinematics_module.PlacoRobotEntry(
+        urdf_hash="demo",
+        urdf_xml="<robot name='demo'/>",
+        robot=_FakeRobot(),
+        solver=_FakeSolver(),
+        joint_names=["joint_a"],
+        joints_task=None,
+    )
+
+    monkeypatch.setattr(placo_kinematics_module, "_load_placo", lambda _urdf_xml: entry)
+
+    with pytest.raises(KeyError, match="unexpected frame task setup failure"):
+        inverse_kinematics(
+            IKRequest(
+                urdf="<robot name='demo'/>",
+                target_link="tool",
+                target_position=[0.0, 0.0, 0.0],
+                joint_values={"joint_a": 0.0},
+            )
+        )
