@@ -221,14 +221,15 @@ def write_camera_screenshots(
     cameras: Sequence[SimCameraSpec],
     output_dir: Path,
 ) -> int:
-    from PIL import Image
-
     output_dir.mkdir(parents=True, exist_ok=True)
     written_count = 0
     for index, (scene_camera, camera_spec) in enumerate(zip(scene_cameras, cameras), start=1):
         image = scene_camera.render(rgb=True, force_render=True)[0]
-        Image.fromarray(image).save(
-            camera_artifact_path(output_dir, index=index, camera_name=camera_spec.sim_name)
+        _write_camera_image(
+            image,
+            output_dir=output_dir,
+            index=index,
+            camera_name=camera_spec.sim_name,
         )
         written_count += 1
     return written_count
@@ -238,18 +239,35 @@ def write_sensor_screenshots(
     sensor_images: Sequence[tuple[SimCameraSpec, np.ndarray]],
     output_dir: Path,
 ) -> int:
-    from PIL import Image
-
     output_dir.mkdir(parents=True, exist_ok=True)
     written_count = 0
     for index, (camera_spec, image) in enumerate(sensor_images, start=1):
-        Image.fromarray(image).save(
-            camera_artifact_path(
-                output_dir,
-                index=index,
-                camera_name=camera_spec.sim_name,
-                default_name="sensor",
-            )
+        _write_camera_image(
+            image,
+            output_dir=output_dir,
+            index=index,
+            camera_name=camera_spec.sim_name,
+            default_name="sensor",
         )
         written_count += 1
     return written_count
+
+
+def _write_camera_image(
+    image: np.ndarray,
+    *,
+    output_dir: Path,
+    index: int,
+    camera_name: str,
+    default_name: str = "camera",
+) -> None:
+    from PIL import Image
+
+    Image.fromarray(image).save(
+        camera_artifact_path(
+            output_dir,
+            index=index,
+            camera_name=camera_name,
+            default_name=default_name,
+        )
+    )
