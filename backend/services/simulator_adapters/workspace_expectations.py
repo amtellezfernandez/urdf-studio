@@ -55,28 +55,32 @@ def build_workspace_expectations(
     duration_sec: float,
     frame_map: WorldLayoutFrameMap,
 ) -> WorkspaceExpectations:
-    object_contracts = expected_object_contracts_for_request(request, frame_map)
+    workspace_layout = workspace_layout_from_request(request)
+    object_contracts = _expected_object_contracts(
+        workspace_layout,
+        frame_map=frame_map,
+    )
     return WorkspaceExpectations(
-        object_count=active_object_count(request),
+        object_count=_active_object_count(workspace_layout),
         camera_count=len(request.world_package.world_snapshot.cameras),
         duration_sec=duration_sec,
         frame_map=frame_map,
-        resolved_frame_map=resolved_frame_map_for_request(request, frame_map),
+        resolved_frame_map=_resolved_frame_map(workspace_layout, frame_map),
         object_positions_xyz=object_contracts.positions_xyz,
         object_sizes_xyz=object_contracts.sizes_xyz,
         object_asset_refs=object_contracts.asset_refs,
         object_contracts=object_contracts.contracts,
-        joint_positions={
-            str(name): float(position)
-            for name, position in request.world_package.world_snapshot.joint_positions.items()
-        },
+        joint_positions=_expected_joint_positions(request),
         camera_ids=expected_camera_ids_for_request(request),
         camera_contracts=expected_camera_contracts_for_request(request),
     )
 
 
 def active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
-    layout = workspace_layout_from_request(request)
+    return _active_object_count(workspace_layout_from_request(request))
+
+
+def _active_object_count(layout: StaticWorldLayout) -> int:
     return count_transferable_world_objects(layout, include_hidden=False)
 
 
@@ -88,15 +92,33 @@ def resolved_frame_map_for_request(
     request: SimulatorWorkspacePrepareRequest,
     frame_map: WorldLayoutFrameMap,
 ) -> ConcreteWorldLayoutFrameMap:
-    return resolve_world_layout_frame_map(workspace_layout_from_request(request), frame_map)
+    return _resolved_frame_map(workspace_layout_from_request(request), frame_map)
+
+
+def _resolved_frame_map(
+    layout: StaticWorldLayout,
+    frame_map: WorldLayoutFrameMap,
+) -> ConcreteWorldLayoutFrameMap:
+    return resolve_world_layout_frame_map(layout, frame_map)
 
 
 def expected_object_contracts_for_request(
     request: SimulatorWorkspacePrepareRequest,
     frame_map: WorldLayoutFrameMap,
 ) -> ExpectedObjectContracts:
-    primitives, _warnings = build_sim_primitives(
+    return _expected_object_contracts(
         workspace_layout_from_request(request),
+        frame_map=frame_map,
+    )
+
+
+def _expected_object_contracts(
+    layout: StaticWorldLayout,
+    *,
+    frame_map: WorldLayoutFrameMap,
+) -> ExpectedObjectContracts:
+    primitives, _warnings = build_sim_primitives(
+        layout,
         frame_map=frame_map,
         include_hidden=False,
     )
@@ -127,6 +149,15 @@ def expected_object_contracts_for_request(
             for primitive in primitives
         },
     )
+
+
+def _expected_joint_positions(
+    request: SimulatorWorkspacePrepareRequest,
+) -> dict[str, float]:
+    return {
+        str(name): float(position)
+        for name, position in request.world_package.world_snapshot.joint_positions.items()
+    }
 
 
 def expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
