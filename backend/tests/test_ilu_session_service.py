@@ -274,6 +274,47 @@ def test_github_session_manifest_exposes_working_urdf_and_repo_assets(
     ]
 
 
+def test_github_session_manifest_rejects_blank_github_source_fields(
+    monkeypatch, tmp_path: Path
+) -> None:
+    session_root = tmp_path / "sessions"
+    session_dir = session_root / "session-1"
+    session_dir.mkdir(parents=True)
+    working_urdf_path = session_dir / "working.urdf"
+    working_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+
+    (session_dir / "session.json").write_text(
+        json.dumps(
+            {
+                "schema": "ilu-shared-session",
+                "schemaVersion": 1,
+                "sessionId": "session-1",
+                "createdAt": "2026-03-23T00:00:00Z",
+                "updatedAt": "2026-03-23T00:00:01Z",
+                "workingUrdfPath": str(working_urdf_path),
+                "lastUrdfPath": str(working_urdf_path),
+                "loadedSource": {
+                    "source": "github",
+                    "urdfPath": str(working_urdf_path),
+                    "githubRef": "   ",
+                    "githubRevision": "   ",
+                    "repositoryUrdfPath": "   ",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ilu_session_service, "ILU_SESSION_ROOT", session_root)
+
+    try:
+        ilu_session_service.get_ilu_session_asset_manifest("session-1")
+    except ilu_session_service.IluSessionError as exc:
+        assert exc.status_code == 404
+        assert exc.detail == "ilu session GitHub source is unavailable."
+    else:
+        raise AssertionError("Expected blank GitHub source fields to be rejected.")
+
+
 def test_local_session_asset_resolution_restricts_paths(monkeypatch, tmp_path: Path) -> None:
     session_root = tmp_path / "sessions"
     session_dir = session_root / "session-1"

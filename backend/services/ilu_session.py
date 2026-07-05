@@ -261,8 +261,12 @@ def _resolve_github_source_context(
     if loaded_source is None or loaded_source.source != "github":
         return None
 
-    github_ref = (loaded_source.github_ref or "").strip()
-    repository_urdf_path = (loaded_source.repository_urdf_path or "").strip()
+    github_ref = loaded_source.github_ref.strip() if isinstance(loaded_source.github_ref, str) else ""
+    repository_urdf_path = (
+        loaded_source.repository_urdf_path.strip()
+        if isinstance(loaded_source.repository_urdf_path, str)
+        else ""
+    )
     if not github_ref or not repository_urdf_path:
         raise IluSessionError(status_code=404, detail="ilu session GitHub source is unavailable.")
 
@@ -278,11 +282,11 @@ def _resolve_github_source_context(
     if not owner or not repo:
         raise IluSessionError(status_code=500, detail="ilu session GitHub source is invalid.")
 
-    revision = (loaded_source.github_revision or "").strip() or None
+    revision = loaded_source.github_revision.strip() if isinstance(loaded_source.github_revision, str) else ""
     return IluSessionGitHubSourceContext(
         owner=owner,
         repo=repo,
-        revision=revision,
+        revision=revision or None,
         repository_urdf_path=repository_urdf_path,
     )
 
