@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 
 MIN_VISIBLE_CHANNEL_SPAN = 5
+IMAGE_ARTIFACT_SUFFIX = ".png"
+SAFE_ARTIFACT_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 @dataclass(frozen=True)
@@ -21,7 +23,11 @@ def camera_artifact_name(
     camera_name: str,
     default_name: str = "camera",
 ) -> str:
-    return f"{index:02d}_{safe_artifact_name(camera_name, default_name=default_name)}.png"
+    return (
+        f"{index:02d}_"
+        f"{safe_artifact_name(camera_name, default_name=default_name)}"
+        f"{IMAGE_ARTIFACT_SUFFIX}"
+    )
 
 
 def camera_artifact_path(
@@ -39,7 +45,7 @@ def camera_artifact_path(
 
 
 def safe_artifact_name(value: str, *, default_name: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip()).strip("._")
+    normalized = SAFE_ARTIFACT_NAME_PATTERN.sub("_", value.strip()).strip("._")
     return normalized or default_name
 
 
