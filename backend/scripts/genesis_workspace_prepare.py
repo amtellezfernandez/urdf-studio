@@ -41,6 +41,10 @@ from backend.services.simulator_adapters.params import (
     GENESIS_SCENE_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
 )
+from backend.services.import_utils import (
+    module_not_found_matches_any_import_name,
+    module_not_found_matches_import_name,
+)
 from backend.services.simulator_adapters.robot_repairs import (
     genesis_robot_compatibility_patch_ids_from_world_package,
     materialize_genesis_robot_urdf_report,
@@ -88,7 +92,7 @@ def _torch_cuda_available() -> bool:
         torch = importlib.import_module("torch")
         return bool(torch.cuda.is_available() and torch.version.cuda)
     except ModuleNotFoundError as exc:
-        if exc.name != "torch":
+        if not module_not_found_matches_import_name(exc.name, "torch"):
             raise
         return False
     except AttributeError:
@@ -100,7 +104,7 @@ def _torch_hip_available() -> bool:
         torch = importlib.import_module("torch")
         return bool(torch.cuda.is_available() and torch.version.hip)
     except ModuleNotFoundError as exc:
-        if exc.name != "torch":
+        if not module_not_found_matches_import_name(exc.name, "torch"):
             raise
         return False
     except AttributeError:
@@ -112,7 +116,7 @@ def _torch_mps_available() -> bool:
         torch = importlib.import_module("torch")
         return bool(torch.backends.mps.is_available())
     except ModuleNotFoundError as exc:
-        if exc.name != "torch":
+        if not module_not_found_matches_import_name(exc.name, "torch"):
             raise
         return False
     except AttributeError:
@@ -129,7 +133,10 @@ def _quadrants_backend_supported(backend_name: str) -> bool:
         arch = getattr(qd, backend_name)
         return bool(is_arch_supported(arch))
     except ModuleNotFoundError as exc:
-        if exc.name not in {"quadrants", "quadrants.lang", "quadrants.lang.misc"}:
+        if not module_not_found_matches_any_import_name(
+            exc.name,
+            ("quadrants", "quadrants.lang.misc"),
+        ):
             raise
         return False
     except AttributeError:

@@ -17,6 +17,7 @@ from backend.services.simulator_adapters.camera_transfer import (
     SimCameraSpec,
     Transform,
 )
+from backend.services.import_utils import module_not_found_matches_any_import_name
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
 
@@ -164,7 +165,10 @@ def add_observation_camera_sensor(gs: Any, scene: Any, robot_entity: Any, camera
         importlib.import_module("genesis.engine.sensors.camera")
         return scene.add_sensor(gs.options.sensors.RasterizerCameraOptions(**kwargs))
     except ModuleNotFoundError as exc:
-        if exc.name not in _GENESIS_CAMERA_SENSOR_MODULE_NAMES:
+        if not module_not_found_matches_any_import_name(
+            exc.name,
+            _GENESIS_CAMERA_SENSOR_MODULE_NAMES,
+        ):
             raise
         print(
             "[genesis-workspace] warning: "
