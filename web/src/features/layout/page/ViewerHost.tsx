@@ -1,4 +1,4 @@
-import { Suspense, lazy, useSyncExternalStore } from "react";
+import { Suspense, useSyncExternalStore } from "react";
 
 import {
   canUseWebGpu,
@@ -10,17 +10,20 @@ import {
   subscribeFeatureFlags,
 } from "@/shared/config/featureFlags";
 import { useFeatureGateAvailability } from "@/shared/lib/featureGateUi";
+import { lazyNamedComponent } from "@/features/layout/page/workspacePanelsHelpers";
 import { ViewerErrorBoundary } from "@/features/viewer/ViewerErrorBoundary";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 
-const Viewer3D = lazy(() =>
-  import("@/features/viewer/Viewer3D").then((module) => ({ default: module.Viewer3D }))
+const Viewer3D = lazyNamedComponent(
+  () => import("@/features/viewer/Viewer3D"),
+  "Viewer3D"
 );
-const RosVizViewer = lazy(() =>
-  import("@/studio_ui/rosviz/RosVizViewer").then((module) => ({
-    default: module.RosVizViewer,
-  }))
+const RosVizViewer = lazyNamedComponent(
+  () => import("@/studio_ui/rosviz/RosVizViewer"),
+  "RosVizViewer"
 );
+const STUDIO_3D_RUNTIME_PREFIX = "studio3d";
+const ROS_VIZ_RUNTIME_PREFIX = "rosviz";
 
 type ViewerHostProps = {
   viewerKey: string;
@@ -48,8 +51,11 @@ export const ViewerHost = ({
     webGpuSupported: canUseWebGpu(),
   });
 
-  const runtimePrefix = runtimeDecision.runtime === "rosViz" ? "rosviz" : "studio3d";
-  const ActiveViewer = runtimeDecision.runtime === "rosViz" ? RosVizViewer : Viewer3D;
+  const usesRosVizRuntime = runtimeDecision.runtime === "rosViz";
+  const runtimePrefix = usesRosVizRuntime
+    ? ROS_VIZ_RUNTIME_PREFIX
+    : STUDIO_3D_RUNTIME_PREFIX;
+  const ActiveViewer = usesRosVizRuntime ? RosVizViewer : Viewer3D;
 
   return (
     <Suspense fallback={<div className={fallbackClassName} />}>
