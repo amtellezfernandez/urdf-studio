@@ -43,13 +43,13 @@ def read_world_object_asset_ref(value: Mapping[str, object]) -> WorldObjectAsset
     for key in WORLD_OBJECT_ASSET_REF_KEYS:
         asset_ref = value.get(key)
         if isinstance(asset_ref, str) and asset_ref.strip():
-            return WorldObjectAssetRef(value=asset_ref.strip(), field_path=key)
+            return WorldObjectAssetRef(value=asset_ref, field_path=key)
     mesh = value.get("mesh")
     if isinstance(mesh, Mapping):
         for key in WORLD_OBJECT_MESH_ASSET_REF_KEYS:
             asset_ref = mesh.get(key)
             if isinstance(asset_ref, str) and asset_ref.strip():
-                return WorldObjectAssetRef(value=asset_ref.strip(), field_path=f"mesh.{key}")
+                return WorldObjectAssetRef(value=asset_ref, field_path=f"mesh.{key}")
     geometry = value.get("geometry")
     if isinstance(geometry, Mapping):
         geometry_mesh = geometry.get("mesh")
@@ -58,7 +58,7 @@ def read_world_object_asset_ref(value: Mapping[str, object]) -> WorldObjectAsset
                 asset_ref = geometry_mesh.get(key)
                 if isinstance(asset_ref, str) and asset_ref.strip():
                     return WorldObjectAssetRef(
-                        value=asset_ref.strip(),
+                        value=asset_ref,
                         field_path=f"geometry.mesh.{key}",
                     )
     return None
