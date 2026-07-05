@@ -28,10 +28,12 @@ from backend.services.simulator_adapters.blender_change_sets import (
     apply_blender_layout_change_set_with_summary,
     build_blender_change_set_source,
 )
+from backend.services.simulator_adapters import blender_workspace as blender_workspace_module
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_FOCUS_SCRIPT_FILENAME,
     BLENDER_ROBOT_GLB_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
+    _write_robot_glb_reference,
     build_blender_open_script,
     build_blender_focus_script,
     write_blender_workspace_artifacts,
@@ -313,6 +315,30 @@ def test_blender_robot_glb_reference_applies_joint_positions(tmp_path: Path) -> 
     assert edit_session["robot"]["visual_glb_stats"]["applied_joint_count"] == 1
     assert artifacts.robot_glb_path is not None
     assert artifacts.robot_glb_path.exists()
+
+
+def test_blender_robot_glb_reference_rejects_missing_yourdfpy_loader(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf_path = tmp_path / "robot.urdf"
+    robot_glb_path = tmp_path / "robot.glb"
+    robot_urdf_path.write_text(
+        "<robot name=\"demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+
+    class _LoaderlessUrdf:
+        pass
+
+    monkeypatch.setattr(blender_workspace_module.yourdfpy, "URDF", _LoaderlessUrdf)
+
+    with pytest.raises(ValueError, match="yourdfpy.URDF.load is unavailable"):
+        _write_robot_glb_reference(
+            robot_urdf_path,
+            robot_glb_path,
+            joint_positions={},
+        )
 
 
 def test_blender_edit_session_validation_rejects_missing_supported_change(

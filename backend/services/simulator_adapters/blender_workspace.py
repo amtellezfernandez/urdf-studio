@@ -176,7 +176,10 @@ def _write_robot_glb_reference(
     *,
     joint_positions: Mapping[str, float],
 ) -> BlenderRobotGlbReference | None:
-    robot = yourdfpy.URDF.load(
+    load_urdf = getattr(yourdfpy.URDF, "load", None)
+    if not callable(load_urdf):
+        raise ValueError("yourdfpy.URDF.load is unavailable")
+    robot = load_urdf(
         str(robot_urdf_path),
         build_scene_graph=True,
         load_meshes=True,
