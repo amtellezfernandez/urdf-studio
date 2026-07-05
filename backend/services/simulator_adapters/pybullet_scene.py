@@ -149,6 +149,13 @@ def _optional_pybullet_api_error_types(pybullet: Any) -> tuple[type[BaseExceptio
     return (TypeError,)
 
 
+def _pybullet_aabb_error_types(pybullet: Any) -> tuple[type[BaseException], ...]:
+    error_type = getattr(pybullet, "error", None)
+    if isinstance(error_type, type) and issubclass(error_type, BaseException):
+        return (TypeError, ValueError, error_type)
+    return (TypeError, ValueError)
+
+
 def _call_optional_pybullet_viewer_method(pybullet: Any, method_name: str) -> bool:
     method = getattr(pybullet, method_name, None)
     if method is None:
@@ -311,10 +318,11 @@ def pybullet_body_aabb(
     min_xyz = [math.inf, math.inf, math.inf]
     max_xyz = [-math.inf, -math.inf, -math.inf]
     link_indices = [-1, *range(pybullet.getNumJoints(body_id))]
+    handled_error_types = _pybullet_aabb_error_types(pybullet)
     for link_index in link_indices:
         try:
             aabb = get_aabb(body_id, link_index)
-        except Exception:
+        except handled_error_types:
             continue
         if not aabb or len(aabb) != 2:
             continue

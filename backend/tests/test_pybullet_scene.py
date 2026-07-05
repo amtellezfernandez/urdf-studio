@@ -13,6 +13,7 @@ from backend.services.simulator_adapters.pybullet_scene import (
     hold_pybullet_current_joint_positions,
     is_pybullet_connected,
     pump_pybullet_static_debug_viewer,
+    pybullet_body_aabb,
     require_pybullet_gui_environment,
     should_step_pybullet_interactive_viewer_loop,
     should_step_pybullet_workspace_once,
@@ -598,6 +599,47 @@ def test_pybullet_debug_camera_fits_loaded_robot_and_workspace_objects() -> None
     assert _FakeRuntime.camera_call is not None
     assert _FakeRuntime.camera_call["cameraTargetPosition"] == (0.5, 0.0, 0.4)
     assert float(_FakeRuntime.camera_call["cameraDistance"]) >= 1.0
+
+
+def test_pybullet_body_aabb_tolerates_expected_api_errors() -> None:
+    class _FakeRuntime:
+        class error(Exception):
+            pass
+
+        @classmethod
+        def getNumJoints(cls, body_id: int) -> int:
+            del body_id
+            return 2
+
+        @classmethod
+        def getAABB(cls, body_id: int, link_id: int):
+            del body_id
+            if link_id == -1:
+                return ((-0.2, -0.1, 0.0), (0.2, 0.1, 0.4))
+            if link_id == 0:
+                raise cls.error("link not available")
+            raise ValueError("bad link")
+
+    assert pybullet_body_aabb(_FakeRuntime, 10) == (
+        (-0.2, -0.1, 0.0),
+        (0.2, 0.1, 0.4),
+    )
+
+
+def test_pybullet_body_aabb_propagates_unexpected_errors() -> None:
+    class _FakeRuntime:
+        @classmethod
+        def getNumJoints(cls, body_id: int) -> int:
+            del body_id
+            return 1
+
+        @classmethod
+        def getAABB(cls, body_id: int, link_id: int):
+            del body_id, link_id
+            raise RuntimeError("unexpected AABB failure")
+
+    with pytest.raises(RuntimeError, match="unexpected AABB failure"):
+        pybullet_body_aabb(_FakeRuntime, 10)
 
 
 def test_pybullet_debug_camera_is_headless_noop() -> None:
