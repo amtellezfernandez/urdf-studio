@@ -22,6 +22,12 @@ from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
 
 GenesisVector3: TypeAlias = tuple[float, float, float]
 GenesisCameraViewerPose: TypeAlias = tuple[GenesisVector3, GenesisVector3, GenesisVector3, float]
+_GENESIS_CAMERA_SENSOR_MODULE_NAMES = (
+    "genesis",
+    "genesis.engine",
+    "genesis.engine.sensors",
+    "genesis.engine.sensors.camera",
+)
 
 
 class GenesisObservationCameraSensorKwargs(TypedDict):
@@ -157,7 +163,16 @@ def add_observation_camera_sensor(gs: Any, scene: Any, robot_entity: Any, camera
     try:
         importlib.import_module("genesis.engine.sensors.camera")
         return scene.add_sensor(gs.options.sensors.RasterizerCameraOptions(**kwargs))
-    except (ImportError, ModuleNotFoundError, TypeError, ValueError, RuntimeError) as exc:
+    except ModuleNotFoundError as exc:
+        if exc.name not in _GENESIS_CAMERA_SENSOR_MODULE_NAMES:
+            raise
+        print(
+            "[genesis-workspace] warning: "
+            f"failed to add observation camera sensor '{camera.sim_name}': {exc}",
+            flush=True,
+        )
+        return None
+    except (TypeError, ValueError, RuntimeError) as exc:
         print(
             "[genesis-workspace] warning: "
             f"failed to add observation camera sensor '{camera.sim_name}': {exc}",

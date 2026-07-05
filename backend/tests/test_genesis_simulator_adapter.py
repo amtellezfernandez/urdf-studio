@@ -917,7 +917,7 @@ def test_genesis_add_observation_camera_sensor_returns_none_when_sensor_module_m
 
     def fake_import_module(name, package=None):
         if name == "genesis.engine.sensors.camera":
-            raise ImportError("Genesis camera sensors unavailable")
+            raise ModuleNotFoundError(name="genesis.engine.sensors.camera")
         return real_import_module(name, package=package)
 
     monkeypatch.setattr(importlib, "import_module", fake_import_module)
@@ -926,6 +926,43 @@ def test_genesis_add_observation_camera_sensor_returns_none_when_sensor_module_m
 
     assert sensor is None
     assert "failed to add observation camera sensor 'wrist_camera'" in capsys.readouterr().out
+
+
+def test_genesis_add_observation_camera_sensor_preserves_unexpected_import_errors(monkeypatch) -> None:
+    class _FakeLink:
+        name = "wrist_link"
+        idx_local = 4
+
+    class _FakeRobotEntity:
+        idx = 2
+        links = [_FakeLink()]
+
+    def fake_import_module(name, package=None):
+        raise ImportError("unexpected genesis camera import failure")
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected genesis camera import failure"):
+        add_observation_camera_sensor(object(), object(), _FakeRobotEntity(), _genesis_camera_spec())
+
+
+def test_genesis_add_observation_camera_sensor_preserves_nested_missing_import_errors(monkeypatch) -> None:
+    class _FakeLink:
+        name = "wrist_link"
+        idx_local = 4
+
+    class _FakeRobotEntity:
+        idx = 2
+        links = [_FakeLink()]
+
+    def fake_import_module(name, package=None):
+        raise ModuleNotFoundError(name="unexpected_nested_dependency")
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        add_observation_camera_sensor(object(), object(), _FakeRobotEntity(), _genesis_camera_spec())
+    assert exc_info.value.name == "unexpected_nested_dependency"
 
 
 def test_genesis_add_observation_camera_sensor_preserves_unexpected_errors(monkeypatch) -> None:
