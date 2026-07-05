@@ -29,14 +29,29 @@ from backend.services.simulator_adapters.plugin import get_all_plugins, get_plug
 from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
 
 _plugins_by_id = {p.simulator_id: p for p in get_all_plugins()}
+
+
+def _iter_supported_plugins():
+    for simulator_id in SIMULATOR_ID_VALUES:
+        plugin = _plugins_by_id.get(simulator_id)
+        if plugin is not None:
+            yield plugin
+
+
+def _normalize_world_package_request(request):
+    return request.model_copy(
+        update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
+        deep=True,
+    )
+
+
 SUPPORTED_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
-    sid for sid in SIMULATOR_ID_VALUES if sid in _plugins_by_id
+    plugin.simulator_id for plugin in _iter_supported_plugins()
 )
 WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
-    sid for sid in SIMULATOR_ID_VALUES
-    if (p := _plugins_by_id.get(sid)) is not None
-    and p.workspace_target
-    and p.transfer_strategy != "planned"
+    plugin.simulator_id
+    for plugin in _iter_supported_plugins()
+    if plugin.workspace_target and plugin.transfer_strategy != "planned"
 )
 WORKSPACE_SIMULATOR_ID_SET = set(WORKSPACE_SIMULATOR_IDS)
 
@@ -46,38 +61,24 @@ def get_simulator_adapter(simulator_id: SimulatorId) -> SimulatorAdapter:
 
 
 def list_simulator_runtime_descriptors() -> SimulatorRuntimeListResponse:
-    descriptors = [
-        _plugins_by_id[sid].runtime_spec_descriptor()
-        for sid in SIMULATOR_ID_VALUES
-        if sid in _plugins_by_id
-    ]
+    descriptors = [plugin.runtime_spec_descriptor() for plugin in _iter_supported_plugins()]
     return SimulatorRuntimeListResponse(simulators=descriptors)
 
 
 def list_simulator_runtime_specs() -> tuple[SimulatorRuntimeSpec, ...]:
-    return tuple(
-        _plugins_by_id[sid].as_runtime_spec()
-        for sid in SIMULATOR_ID_VALUES
-        if sid in _plugins_by_id
-    )
+    return tuple(plugin.as_runtime_spec() for plugin in _iter_supported_plugins())
 
 
 def normalize_simulator_workspace_prepare_request(
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareRequest:
-    return request.model_copy(
-        update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
-        deep=True,
-    )
+    return _normalize_world_package_request(request)
 
 
 def normalize_simulator_workspace_change_set_request(
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyRequest:
-    return request.model_copy(
-        update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
-        deep=True,
-    )
+    return _normalize_world_package_request(request)
 
 
 def prepare_simulator_workspace(
