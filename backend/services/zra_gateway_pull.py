@@ -35,7 +35,10 @@ def _lookup_robot_pull_source(robot_id: str) -> JsonObject | None:
     config_path = Path(devices_path)
     if not config_path.exists():
         return None
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
     if not isinstance(payload, list):
         return None
     normalized_robot_id = robot_id.strip()

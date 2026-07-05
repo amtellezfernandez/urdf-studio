@@ -87,3 +87,30 @@ def test_fetch_zra_gateway_decision_rejects_non_object_local_payload(
                 local_gateway_path=str(gateway_decision_path),
             )
         )
+
+
+def test_fetch_zra_gateway_decision_ignores_invalid_devices_file_when_request_is_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    gateway_decision_path = tmp_path / "gateway-decision.json"
+    devices_path = tmp_path / "devices.json"
+    gateway_decision_path.write_text(
+        json.dumps({"decision": {"status": "accept"}}),
+        encoding="utf-8",
+    )
+    devices_path.write_bytes(b"\xff\xfe\x00")
+    monkeypatch.setattr(
+        zra_gateway_pull,
+        "settings",
+        SimpleNamespace(zra_orchestrator_devices_path=str(devices_path)),
+    )
+
+    decision = zra_gateway_pull.fetch_zra_gateway_decision(
+        ZraGatewayPullRequest(
+            robot_id="pull-bot",
+            local_gateway_path=str(gateway_decision_path),
+        )
+    )
+
+    assert decision == {"decision": {"status": "accept"}}
