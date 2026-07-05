@@ -115,7 +115,7 @@ export const useStructureGroupEditor = ({
       customStructureGroupLabels,
       structureLabels,
     });
-  }, [customStructureGroupLabels, structureLabels.jointByName, structureLabels.linkByName]);
+  }, [customStructureGroupLabels, structureLabels]);
 
   const groupedLinks = useMemo(
     () => buildStructureGroupSections(filteredLinks, structureLabels.linkByName),

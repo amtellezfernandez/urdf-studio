@@ -308,7 +308,7 @@ export const useSimulationPrepPhysicsActions = ({
     },
     [
       generateAndStagePhysicsDraft,
-      physicsPreflightSession?.plausibilitySummary.excludedLinks,
+      physicsPreflightSession,
     ]
   );
 

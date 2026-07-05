@@ -454,7 +454,7 @@ export const JointControl = ({
     const nextLimitState = resolveJointLimitLocalState({ jointInfo });
     setLocalLowerLimit(nextLimitState.lower);
     setLocalUpperLimit(nextLimitState.upper);
-  }, [jointInfo?.lower, jointInfo?.upper, jointInfo?.type]);
+  }, [jointInfo]);
 
   useEffect(() => {
     setLocalOriginXyz(jointOrigin.xyz);

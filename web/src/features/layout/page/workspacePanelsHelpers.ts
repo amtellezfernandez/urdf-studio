@@ -1,16 +1,18 @@
 import { lazy, type ComponentType } from "react";
 
+type ModuleNamedComponent<TModule, TKey extends keyof TModule> =
+  TModule[TKey] extends ComponentType<infer TProps> ? ComponentType<TProps> : never;
+
 export const lazyNamedComponent = <
   TModule,
   TKey extends keyof TModule & string,
-  TComponent extends TModule[TKey] & ComponentType<any>,
 >(
   loadModule: () => Promise<TModule>,
   exportName: TKey
 ) =>
-  lazy(async () => {
+  lazy<ModuleNamedComponent<TModule, TKey>>(async () => {
     const module = await loadModule();
     return {
-      default: module[exportName] as TComponent,
+      default: module[exportName] as ModuleNamedComponent<TModule, TKey>,
     };
   });
