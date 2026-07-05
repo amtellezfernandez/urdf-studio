@@ -37,27 +37,19 @@ def validate_workspace_image_artifacts(
         if isinstance(expected_camera_images, str):
             return expected_camera_images
         if expected_camera_images is not None:
-            actual_names = tuple(path.name for path in directory_images)
-            expected_names = tuple(path.name for path, _size in expected_camera_images)
-            if actual_names != expected_names:
-                return (
-                    f"camera image artifact names in {directory} are {actual_names!r}, "
-                    f"expected {expected_names!r}"
-                )
-            for path, expected_size in expected_camera_images:
-                error = validate_visible_rgb_image(path, expected_size=expected_size)
-                if error:
-                    return error
+            error = _validate_expected_camera_images(
+                directory_images=tuple(directory_images),
+                expected_camera_images=expected_camera_images,
+                directory=directory,
+            )
+            if error:
+                return error
             continue
         image_paths.extend(directory_images)
     if not image_paths:
         return None
 
-    for path in image_paths:
-        error = validate_visible_rgb_image(path)
-        if error:
-            return error
-    return None
+    return _validate_image_paths(tuple(image_paths))
 
 
 def _expected_camera_images(
@@ -96,9 +88,7 @@ def _expected_camera_images(
         return ()
     if not contracts:
         return None
-    ordered_contracts: list[ExpectedCameraReport] = []
-    for camera_id in camera_ids:
-        ordered_contracts.append(contracts[camera_id])
+    ordered_contracts = tuple(contracts[camera_id] for camera_id in camera_ids)
     return tuple(
         (
             camera_artifact_path(
@@ -110,3 +100,37 @@ def _expected_camera_images(
         )
         for index, contract in enumerate(ordered_contracts, start=1)
     )
+
+
+def _validate_expected_camera_images(
+    *,
+    directory_images: tuple[Path, ...],
+    expected_camera_images: tuple[tuple[Path, tuple[int, int]], ...],
+    directory: Path,
+) -> str | None:
+    actual_names = tuple(path.name for path in directory_images)
+    expected_names = tuple(path.name for path, _size in expected_camera_images)
+    if actual_names != expected_names:
+        return (
+            f"camera image artifact names in {directory} are {actual_names!r}, "
+            f"expected {expected_names!r}"
+        )
+    return _validate_sized_image_paths(expected_camera_images)
+
+
+def _validate_sized_image_paths(
+    image_paths: tuple[tuple[Path, tuple[int, int]], ...],
+) -> str | None:
+    for path, expected_size in image_paths:
+        error = validate_visible_rgb_image(path, expected_size=expected_size)
+        if error:
+            return error
+    return None
+
+
+def _validate_image_paths(image_paths: tuple[Path, ...]) -> str | None:
+    for path in image_paths:
+        error = validate_visible_rgb_image(path)
+        if error:
+            return error
+    return None
