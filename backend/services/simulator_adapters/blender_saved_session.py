@@ -87,23 +87,29 @@ print(
     flush=True,
 )
 """
-    process = subprocess.run(
-        [
-            blender_executable,
-            "--background",
-            str(path),
-            "--python-expr",
-            f"exec({script!r})",
-        ],
-        cwd=BASE_DIR,
-        capture_output=True,
-        text=True,
-        timeout=BLENDER_BLEND_VALIDATE_TIMEOUT_SEC,
-        check=False,
-        env=build_simulator_workspace_env(
-            BASE_DIR / ".cache" / "simulator-workspaces" / "runtime-cache"
-        ),
-    )
+    try:
+        process = subprocess.run(
+            [
+                blender_executable,
+                "--background",
+                str(path),
+                "--python-expr",
+                f"exec({script!r})",
+            ],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=BLENDER_BLEND_VALIDATE_TIMEOUT_SEC,
+            check=False,
+            env=build_simulator_workspace_env(
+                BASE_DIR / ".cache" / "simulator-workspaces" / "runtime-cache"
+            ),
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            "Blender saved-session validation timed out after "
+            f"{BLENDER_BLEND_VALIDATE_TIMEOUT_SEC:.1f}s"
+        )
     output = "\n".join(part for part in (process.stdout, process.stderr) if part)
     if process.returncode != 0:
         return f"Blender saved-session validation exited with code {process.returncode}: {output.strip()}"

@@ -156,3 +156,23 @@ def test_read_blender_validate_payload_ignores_malformed_marker_before_valid_pay
         "visible_world_object_count": 2,
         "world_object_count": 2,
     }
+
+
+def test_blender_blend_validator_reports_timeout(monkeypatch, tmp_path: Path) -> None:
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
+
+    def fake_run(command, **_kwargs):
+        raise subprocess.TimeoutExpired(command, timeout=60.0)
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.blender_saved_session.subprocess.run",
+        fake_run,
+    )
+
+    assert validate_blender_blend_artifact(
+        blend_path,
+        blender_executable="/usr/bin/blender",
+        expected_object_count=2,
+        expected_camera_count=3,
+    ) == "Blender saved-session validation timed out after 60.0s"
