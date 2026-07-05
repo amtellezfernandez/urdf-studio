@@ -90,7 +90,7 @@ def _derived_focal_lengths(
     if vertical_fov_deg is None:
         return None
     fy = focal_length_px_from_vertical_fov_deg(vertical_fov_deg, height)
-    fx = fy * (width / height)
+    fx = fy * _camera_aspect_ratio(width=width, height=height)
     return fx, fy, vertical_fov_deg
 
 
@@ -127,10 +127,14 @@ def _normalize_focal_length_pair(
     fy: float | None,
 ) -> tuple[float | None, float | None]:
     if fx is None and fy is not None:
-        return fy * (width / height), fy
+        return fy * _camera_aspect_ratio(width=width, height=height), fy
     if fy is None and fx is not None:
-        return fx, fx * (height / width)
+        return fx, fx / _camera_aspect_ratio(width=width, height=height)
     return fx, fy
+
+
+def _camera_aspect_ratio(*, width: int, height: int) -> float:
+    return width / height
 
 
 def _read_principal_point(
