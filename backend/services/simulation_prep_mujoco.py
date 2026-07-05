@@ -13,6 +13,7 @@ from typing import Iterator
 
 import numpy as np
 
+from backend.services.simulator_adapters.base import is_python_module_available
 from backend.services.simulation_prep_mujoco_params import (
     SIMULATION_PREP_MUJOCO_DEFAULT_POSITION,
     SIMULATION_PREP_MUJOCO_DEFAULT_RPY,
@@ -32,6 +33,7 @@ Float4 = tuple[float, float, float, float]
 MESH_REFERENCE_SCHEME_SEPARATOR = "://"
 FILE_REFERENCE_SCHEME = "file"
 INVALID_MJCF_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]")
+_MUJOCO_IMPORT_NAME = "mujoco"
 
 
 @dataclass(frozen=True)
@@ -543,11 +545,12 @@ def _build_smoke_simulation_result(*, passed: bool, error: str | None):
     )
 
 
+def _mujoco_dependency_available() -> bool:
+    return is_python_module_available(_MUJOCO_IMPORT_NAME)
+
+
 def _mujoco_validation_errors() -> tuple[type[BaseException], ...]:
-    try:
-        import mujoco
-    except ImportError:
-        return (AssertionError, ValueError)
+    mujoco = importlib.import_module(_MUJOCO_IMPORT_NAME)
     return (
         AssertionError,
         ValueError,
@@ -564,11 +567,8 @@ def run_simulation_prep_validation(
 
     warnings: list[str] = []
 
-    mujoco_available = False
-    try:
-        importlib.import_module("mujoco")
-        mujoco_available = True
-    except ImportError:
+    mujoco_available = _mujoco_dependency_available()
+    if not mujoco_available:
         warnings.append("MuJoCo is not installed. Install with: uv pip install --python .venv/bin/python3 mujoco")
 
     try:

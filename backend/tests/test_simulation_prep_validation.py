@@ -130,3 +130,59 @@ def test_run_simulation_prep_validation_propagates_unexpected_mujoco_runtime_err
             "<robot name='demo'><link name='base'/></robot>",
             {},
         )
+
+
+def test_run_simulation_prep_validation_reports_missing_mujoco_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.services import simulation_prep_mujoco
+
+    monkeypatch.setattr(
+        simulation_prep_mujoco,
+        "_mujoco_dependency_available",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        simulation_prep_mujoco,
+        "collect_urdf_collision_mesh_geometries",
+        lambda _path: (),
+    )
+
+    report = run_simulation_prep_validation(
+        "<robot name='demo'><link name='base'/></robot>",
+        {},
+    )
+
+    assert report.success is True
+    assert report.mujoco_available is False
+    assert report.warnings == [
+        "MuJoCo is not installed. Install with: uv pip install --python .venv/bin/python3 mujoco"
+    ]
+
+
+def test_run_simulation_prep_validation_preserves_unexpected_mujoco_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.services import simulation_prep_mujoco
+
+    monkeypatch.setattr(
+        simulation_prep_mujoco,
+        "_mujoco_dependency_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        simulation_prep_mujoco,
+        "collect_urdf_collision_mesh_geometries",
+        lambda _path: (),
+    )
+    monkeypatch.setattr(
+        simulation_prep_mujoco.importlib,
+        "import_module",
+        lambda name: (_ for _ in ()).throw(ImportError("unexpected mujoco import failure")),
+    )
+
+    with pytest.raises(ImportError, match="unexpected mujoco import failure"):
+        run_simulation_prep_validation(
+            "<robot name='demo'><link name='base'/></robot>",
+            {},
+        )
