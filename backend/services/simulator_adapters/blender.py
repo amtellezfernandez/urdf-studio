@@ -55,20 +55,13 @@ def prepare_blender_workspace_package(
     )
 
 
-def start_blender_workspace(
-    request: SimulatorWorkspacePrepareRequest,
-) -> SimulatorWorkspacePrepareResponse:
-    from backend.services.simulator_adapters.plugin import get_plugin
-    plugin = get_plugin(SIMULATOR_BLENDER_ID)
-    blender_executable = resolve_blender_executable()
-    if blender_executable is None:
-        raise BlenderWorkspaceError(
-            f"Blender executable was not found. Install Blender or set {BLENDER_PATH_ENV}."
-        )
-    prepared = prepare_blender_workspace_package(request)
-    log_path = prepared.workspace_dir / BLENDER_WORKSPACE_PROCESS_PARAMS.log_name
-    report_path = prepared.workspace_dir / "artifacts" / "report.json"
-    command = [
+def _blender_workspace_command(
+    *,
+    prepared: PreparedSimulatorWorkspace,
+    blender_executable: str,
+    report_path,
+) -> list[str]:
+    return [
         sys.executable,
         "-u",
         "-m",
@@ -84,6 +77,26 @@ def start_blender_workspace(
         "--blender",
         blender_executable,
     ]
+
+
+def start_blender_workspace(
+    request: SimulatorWorkspacePrepareRequest,
+) -> SimulatorWorkspacePrepareResponse:
+    from backend.services.simulator_adapters.plugin import get_plugin
+    plugin = get_plugin(SIMULATOR_BLENDER_ID)
+    blender_executable = resolve_blender_executable()
+    if blender_executable is None:
+        raise BlenderWorkspaceError(
+            f"Blender executable was not found. Install Blender or set {BLENDER_PATH_ENV}."
+        )
+    prepared = prepare_blender_workspace_package(request)
+    log_path = prepared.workspace_dir / BLENDER_WORKSPACE_PROCESS_PARAMS.log_name
+    report_path = prepared.workspace_dir / "artifacts" / "report.json"
+    command = _blender_workspace_command(
+        prepared=prepared,
+        blender_executable=blender_executable,
+        report_path=report_path,
+    )
     process = start_workspace_process_until_ready(
         command=command,
         prepared=prepared,

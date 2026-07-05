@@ -1299,6 +1299,40 @@ def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path
     assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
 
 
+def test_blender_workspace_command_uses_expected_launch_shape(tmp_path: Path) -> None:
+    workspace_dir = tmp_path / "workspace"
+    world_package_path = workspace_dir / "world-package.json"
+    robot_urdf_path = workspace_dir / "robot" / "robot.urdf"
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content="<robot name='demo'/>",
+            out_path=str(robot_urdf_path),
+            assets_root=str(workspace_dir / "robot" / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+    )
+    report_path = workspace_dir / "artifacts" / "report.json"
+
+    command = blender_adapter._blender_workspace_command(
+        prepared=prepared,
+        blender_executable="/bin/blender",
+        report_path=report_path,
+    )
+
+    assert command[command.index("--world-package") + 1] == str(world_package_path)
+    assert command[command.index("--robot-urdf") + 1] == str(robot_urdf_path)
+    assert command[command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
+    assert command[command.index("--report") + 1] == str(report_path)
+    assert command[command.index("--blender") + 1] == "/bin/blender"
+
+
 def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_path: Path) -> None:
     world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
     scene = prepare_simulator_scene(
