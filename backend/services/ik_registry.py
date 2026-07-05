@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 
 from backend.models.ik_solvers import IkSolverInfo
 
@@ -39,10 +40,12 @@ SOLVER_DEFINITIONS: dict[str, SolverDefinition] = {
 
 def _placo_available() -> bool:
     try:
-        import placo  # type: ignore # noqa: F401
+        placo_module = importlib.import_module("placo")
     except ImportError:
         return False
-    return True
+    return callable(getattr(placo_module, "RobotWrapper", None)) and callable(
+        getattr(placo_module, "KinematicsSolver", None)
+    )
 
 
 def _definition_to_info(definition: SolverDefinition) -> IkSolverInfo:

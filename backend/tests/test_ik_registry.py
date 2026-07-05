@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib
+from types import SimpleNamespace
+
 import pytest
 
 from backend.models.ik_solvers import IkSolverInfo
@@ -36,3 +39,16 @@ def test_available_solvers_keep_registry_order_when_placo_is_available(
         "amik",
     ]
     assert ik_registry.default_solver_chain() == ["placo", "amik"]
+
+
+def test_placo_available_rejects_incomplete_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_import_module(name: str) -> object:
+        if name == "placo":
+            return SimpleNamespace(RobotWrapper=None, KinematicsSolver=object)
+        raise ImportError(name)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    assert ik_registry._placo_available() is False
