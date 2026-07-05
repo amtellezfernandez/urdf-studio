@@ -8,6 +8,7 @@ import pytest
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.params import PYBULLET_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.workspace_check_spec import (
+    PreparedWorkspaceCommand,
     _module_command,
     _prepare_direct_urdf_command,
 )
@@ -80,6 +81,20 @@ def test_module_command_omits_report_flag_when_report_path_is_not_provided(tmp_p
     )
 
     assert "--report" not in command
+
+
+def test_prepared_workspace_command_rejects_report_artifact_keys_without_report_path() -> None:
+    with pytest.raises(
+        ValueError,
+        match="workspace report artifact keys require expected_report_path",
+    ):
+        PreparedWorkspaceCommand(
+            command=[],
+            ready_marker="ready",
+            expected_object_marker="objects=0",
+            expected_camera_log_marker="cameras=0",
+            expected_report_artifact_dir_keys=("camera_screenshot_dir",),
+        )
 
 
 @pytest.mark.parametrize("duration_sec", [-1.0, math.inf, math.nan])

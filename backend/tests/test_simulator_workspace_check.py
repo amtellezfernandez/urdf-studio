@@ -660,6 +660,20 @@ def test_workspace_check_runs_configured_file_validators(tmp_path) -> None:
     assert _validate_file_artifacts(command) == "invalid edit session"
 
 
+def test_workspace_check_rejects_report_artifact_keys_without_report_path() -> None:
+    with pytest.raises(
+        ValueError,
+        match="workspace report artifact keys require expected_report_path",
+    ):
+        PreparedWorkspaceCommand(
+            command=[],
+            ready_marker="ready",
+            expected_object_marker="objects=0",
+            expected_camera_log_marker="cameras=0",
+            expected_report_artifact_file_keys=("viewer_screenshot",),
+        )
+
+
 def _write_visible_png(path, *, size=(64, 48)) -> None:
     from PIL import Image
 

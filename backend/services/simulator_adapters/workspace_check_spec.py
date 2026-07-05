@@ -50,6 +50,14 @@ class PreparedWorkspaceCommand:
     expected_report_artifact_file_keys: tuple[str, ...] = ()
     expected_report_artifact_dir_keys: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        if self.expected_report_path is not None:
+            return
+        if self.expected_report_artifact_file_keys or self.expected_report_artifact_dir_keys:
+            raise ValueError(
+                "workspace report artifact keys require expected_report_path"
+            )
+
 
 @dataclass(frozen=True)
 class WorkspaceTarget:
