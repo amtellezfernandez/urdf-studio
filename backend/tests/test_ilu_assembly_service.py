@@ -154,6 +154,20 @@ def test_get_ilu_assembly_manifest_rejects_invalid_metadata_encoding(
     assert exc_info.value.detail == "Failed to read ilu assembly metadata."
 
 
+def test_get_ilu_assembly_manifest_rejects_non_string_assembly_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    assembly_root = tmp_path / "assembly-sessions"
+    monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
+
+    with pytest.raises(ilu_assembly_service.IluAssemblyError) as exc_info:
+        ilu_assembly_service.get_ilu_assembly_manifest(123)  # type: ignore[arg-type]
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Invalid ilu assembly id."
+
+
 def test_get_ilu_assembly_manifest_rejects_selected_paths_without_strings(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -177,3 +191,62 @@ def test_get_ilu_assembly_manifest_rejects_selected_paths_without_strings(
 
     assert exc_info.value.status_code == 500
     assert exc_info.value.detail == "ilu assembly selected paths are missing."
+
+
+def test_get_ilu_assembly_manifest_ignores_non_string_label_and_names(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    assembly_root = tmp_path / "assembly-sessions"
+    session_dir = assembly_root / "assembly-1"
+    workspace_root = session_dir / "files"
+    workspace_root.mkdir(parents=True)
+    (workspace_root / "tool.urdf").write_text("<robot name='tool'/>", encoding="utf-8")
+    (session_dir / "assembly-session.json").write_text(
+        json.dumps(
+            {
+                "schema": "ilu-assembly-session",
+                "schemaVersion": 1,
+                "sessionId": "assembly-1",
+                "createdAt": "2026-03-26T00:00:00Z",
+                "updatedAt": "2026-03-26T00:00:01Z",
+                "label": 123,
+                "workspaceRoot": str(workspace_root),
+                "selectedPaths": ["tool.urdf"],
+                "namesByPath": {"tool.urdf": "tool.urdf", "bad.urdf": 456},
+                "sourceByPath": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
+
+    manifest = ilu_assembly_service.get_ilu_assembly_manifest("assembly-1").model_dump(by_alias=True)
+
+    assert manifest["label"] == "Attached ilu assembly assembly-1"
+    assert manifest["namesByPath"] == {"tool.urdf": "tool.urdf"}
+
+
+def test_resolve_ilu_assembly_asset_file_rejects_non_string_asset_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    assembly_root = tmp_path / "assembly-sessions"
+    session_dir = assembly_root / "assembly-1"
+    workspace_root = session_dir / "files"
+    workspace_root.mkdir(parents=True)
+    (workspace_root / "tool.urdf").write_text("<robot name='tool'/>", encoding="utf-8")
+    _write_assembly_metadata(
+        session_dir,
+        workspace_root,
+        selected_paths=["tool.urdf"],
+        names_by_path={"tool.urdf": "tool.urdf"},
+        source_by_path={},
+    )
+    monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
+
+    with pytest.raises(ilu_assembly_service.IluAssemblyError) as exc_info:
+        ilu_assembly_service.resolve_ilu_assembly_asset_file("assembly-1", ["tool.urdf"])  # type: ignore[arg-type]
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Invalid ilu assembly asset path."

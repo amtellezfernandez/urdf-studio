@@ -54,6 +54,8 @@ class IluAssemblyAssetFile:
 
 
 def _validate_assembly_id(assembly_id: str) -> str:
+    if not isinstance(assembly_id, str):
+        raise IluAssemblyError(status_code=400, detail="Invalid ilu assembly id.")
     normalized = assembly_id.strip()
     if not normalized or not ASSEMBLY_ID_PATTERN.match(normalized):
         raise IluAssemblyError(status_code=400, detail="Invalid ilu assembly id.")
@@ -69,6 +71,8 @@ def _get_assembly_metadata_path(assembly_id: str) -> Path:
 
 
 def _normalize_asset_path(raw_path: str) -> str:
+    if not isinstance(raw_path, str):
+        raise IluAssemblyError(status_code=400, detail="Invalid ilu assembly asset path.")
     candidate = raw_path.replace("\\", "/").strip()
     candidate = re.sub(r"/+", "/", candidate).lstrip("/")
     if not candidate:
@@ -177,13 +181,14 @@ def get_ilu_assembly_manifest(assembly_id: str) -> IluAssemblyManifestResponse:
     names_by_path = payload.get("namesByPath")
     if not isinstance(names_by_path, dict):
         names_by_path = {}
+    label = payload.get("label")
 
     return IluAssemblyManifestResponse(
-        label=str(payload.get("label") or f"Attached ilu assembly {normalized_assembly_id}"),
+        label=label if isinstance(label, str) and label else f"Attached ilu assembly {normalized_assembly_id}",
         files=files,
         selected_paths=selected_paths,
         names_by_path={
-            str(key): str(value)
+            key: value
             for key, value in names_by_path.items()
             if isinstance(key, str) and isinstance(value, str)
         },
