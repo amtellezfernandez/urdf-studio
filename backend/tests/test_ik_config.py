@@ -49,6 +49,70 @@ def test_get_ik_config_applies_app_config_solver_overrides(
     assert config.solver_tuning["amik"].solve_iterations == 9
 
 
+def test_get_ik_config_coerces_string_app_config_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_config(
+        monkeypatch,
+        {
+            "ik": {
+                "timeouts": {"requestMs": "900"},
+                "drag": {"maxDragSpeed": "1.25", "ikThrottleMs": "75"},
+                "orbit": {"radius": "0.45"},
+                "tolerances": {"positionTolerance": "0.01"},
+                "solverTuning": {
+                    "amik": {
+                        "positionWeight": "42.0",
+                        "solveIterations": "9",
+                    }
+                },
+            }
+        },
+    )
+
+    config = ik_config.get_ik_config()
+
+    assert config.timeouts.request_ms == 900
+    assert config.drag.max_drag_speed == 1.25
+    assert config.drag.ik_throttle_ms == 75
+    assert config.orbit.radius == 0.45
+    assert config.tolerances.position_tolerance == 0.01
+    assert config.solver_tuning["amik"].position_weight == 42.0
+    assert config.solver_tuning["amik"].solve_iterations == 9
+
+
+def test_get_ik_config_ignores_invalid_app_config_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_config(
+        monkeypatch,
+        {
+            "ik": {
+                "timeouts": {"requestMs": True},
+                "drag": {"maxDragSpeed": "nan", "ikThrottleMs": []},
+                "orbit": {"radius": ""},
+                "tolerances": {"positionTolerance": "bad"},
+                "solverTuning": {
+                    "amik": {
+                        "positionWeight": False,
+                        "solveIterations": "bad",
+                    }
+                },
+            }
+        },
+    )
+
+    config = ik_config.get_ik_config()
+
+    assert config.timeouts.request_ms == 1200
+    assert config.drag.max_drag_speed == 0.8
+    assert config.drag.ik_throttle_ms == 60
+    assert config.orbit.radius == 0.3
+    assert config.tolerances.position_tolerance == 0.002
+    assert config.solver_tuning["amik"].position_weight == 100.0
+    assert config.solver_tuning["amik"].solve_iterations == 28
+
+
 def test_get_ik_config_env_overrides_app_config_solver_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

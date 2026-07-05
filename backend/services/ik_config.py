@@ -65,6 +65,42 @@ _DEFAULT_SOLVER_TUNING: SolverTuningDefaults = {
 }
 
 
+def _coerce_config_int(value: object, default_value: int) -> int:
+    if isinstance(value, bool):
+        return default_value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default_value
+        try:
+            return int(candidate)
+        except ValueError:
+            return default_value
+    return default_value
+
+
+def _coerce_config_float(value: object, default_value: float) -> float:
+    if isinstance(value, bool):
+        return default_value
+    if isinstance(value, int | float):
+        parsed = float(value)
+    elif isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default_value
+        try:
+            parsed = float(candidate)
+        except ValueError:
+            return default_value
+    else:
+        return default_value
+    if not math.isfinite(parsed):
+        return default_value
+    return parsed
+
+
 def _read_int(key: str, default_value: int) -> int:
     raw = os.getenv(key)
     if not raw:
@@ -101,9 +137,9 @@ def _apply_config_overrides_timeouts(
     if orbit_ms is None:
         orbit_ms = get_config_value(config, ["ik", "timeouts", "orbit_ms"], base.orbit_ms)
     return IkTimeouts(
-        request_ms=int(request_ms),
-        drag_ms=int(drag_ms),
-        orbit_ms=int(orbit_ms),
+        request_ms=_coerce_config_int(request_ms, base.request_ms),
+        drag_ms=_coerce_config_int(drag_ms, base.drag_ms),
+        orbit_ms=_coerce_config_int(orbit_ms, base.orbit_ms),
     )
 
 
@@ -111,29 +147,37 @@ def _apply_config_overrides_drag(
     base: IkDragConfig, config: IkConfigOverrides
 ) -> IkDragConfig:
     return IkDragConfig(
-        max_drag_speed=float(
-            get_config_value(config, ["ik", "drag", "maxDragSpeed"], base.max_drag_speed)
+        max_drag_speed=_coerce_config_float(
+            get_config_value(config, ["ik", "drag", "maxDragSpeed"], base.max_drag_speed),
+            base.max_drag_speed,
         ),
-        min_solve_distance=float(
-            get_config_value(config, ["ik", "drag", "minSolveDistance"], base.min_solve_distance)
+        min_solve_distance=_coerce_config_float(
+            get_config_value(config, ["ik", "drag", "minSolveDistance"], base.min_solve_distance),
+            base.min_solve_distance,
         ),
-        spring_strength=float(
-            get_config_value(config, ["ik", "drag", "springStrength"], base.spring_strength)
+        spring_strength=_coerce_config_float(
+            get_config_value(config, ["ik", "drag", "springStrength"], base.spring_strength),
+            base.spring_strength,
         ),
-        spring_damping=float(
-            get_config_value(config, ["ik", "drag", "springDamping"], base.spring_damping)
+        spring_damping=_coerce_config_float(
+            get_config_value(config, ["ik", "drag", "springDamping"], base.spring_damping),
+            base.spring_damping,
         ),
-        snap_distance=float(
-            get_config_value(config, ["ik", "drag", "snapDistance"], base.snap_distance)
+        snap_distance=_coerce_config_float(
+            get_config_value(config, ["ik", "drag", "snapDistance"], base.snap_distance),
+            base.snap_distance,
         ),
-        reach_margin=float(
-            get_config_value(config, ["ik", "drag", "reachMargin"], base.reach_margin)
+        reach_margin=_coerce_config_float(
+            get_config_value(config, ["ik", "drag", "reachMargin"], base.reach_margin),
+            base.reach_margin,
         ),
-        ik_throttle_ms=int(
-            get_config_value(config, ["ik", "drag", "ikThrottleMs"], base.ik_throttle_ms)
+        ik_throttle_ms=_coerce_config_int(
+            get_config_value(config, ["ik", "drag", "ikThrottleMs"], base.ik_throttle_ms),
+            base.ik_throttle_ms,
         ),
-        max_link_traversal=int(
-            get_config_value(config, ["ik", "drag", "maxLinkTraversal"], base.max_link_traversal)
+        max_link_traversal=_coerce_config_int(
+            get_config_value(config, ["ik", "drag", "maxLinkTraversal"], base.max_link_traversal),
+            base.max_link_traversal,
         ),
     )
 
@@ -142,17 +186,25 @@ def _apply_config_overrides_orbit(
     base: IkOrbitDefaults, config: IkConfigOverrides
 ) -> IkOrbitDefaults:
     return IkOrbitDefaults(
-        radius=float(get_config_value(config, ["ik", "orbit", "radius"], base.radius)),
-        inclination_deg=float(
-            get_config_value(config, ["ik", "orbit", "inclinationDeg"], base.inclination_deg)
+        radius=_coerce_config_float(
+            get_config_value(config, ["ik", "orbit", "radius"], base.radius),
+            base.radius,
         ),
-        phase_deg=float(get_config_value(config, ["ik", "orbit", "phaseDeg"], base.phase_deg)),
-        secondary_offset_deg=float(
+        inclination_deg=_coerce_config_float(
+            get_config_value(config, ["ik", "orbit", "inclinationDeg"], base.inclination_deg),
+            base.inclination_deg,
+        ),
+        phase_deg=_coerce_config_float(
+            get_config_value(config, ["ik", "orbit", "phaseDeg"], base.phase_deg),
+            base.phase_deg,
+        ),
+        secondary_offset_deg=_coerce_config_float(
             get_config_value(
                 config,
                 ["ik", "orbit", "secondaryOffsetDeg"],
                 base.secondary_offset_deg,
-            )
+            ),
+            base.secondary_offset_deg,
         ),
     )
 
@@ -179,50 +231,59 @@ def _apply_config_overrides_solver(
     solver_id: str, base: IkSolverTuning, config: IkConfigOverrides
 ) -> IkSolverTuning:
     return IkSolverTuning(
-        position_weight=float(
+        position_weight=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "positionWeight", base.position_weight, config
-            )
+            ),
+            base.position_weight,
         ),
-        orientation_weight=float(
+        orientation_weight=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "orientationWeight", base.orientation_weight, config
-            )
+            ),
+            base.orientation_weight,
         ),
-        posture_weight=float(
+        posture_weight=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "postureWeight", base.posture_weight, config
-            )
+            ),
+            base.posture_weight,
         ),
-        velocity_dt=float(
+        velocity_dt=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "velocityDt", base.velocity_dt, config
-            )
+            ),
+            base.velocity_dt,
         ),
-        limit_weight=float(
+        limit_weight=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "limitWeight", base.limit_weight, config
-            )
+            ),
+            base.limit_weight,
         ),
-        smooth_alpha=float(
+        smooth_alpha=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "smoothAlpha", base.smooth_alpha, config
-            )
+            ),
+            base.smooth_alpha,
         ),
-        max_step_delta=float(
+        max_step_delta=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "maxStepDelta", base.max_step_delta, config
-            )
+            ),
+            base.max_step_delta,
         ),
-        max_blend_delta=float(
+        max_blend_delta=_coerce_config_float(
             _read_solver_tuning_config_value(
                 solver_id, "maxBlendDelta", base.max_blend_delta, config
-            )
+            ),
+            base.max_blend_delta,
         ),
-        solve_iterations=int(
+        solve_iterations=_coerce_config_int(
             _read_solver_tuning_config_value(
                 solver_id, "solveIterations", base.solve_iterations, config
-            )
+            ),
+            base.solve_iterations,
         ),
     )
 
@@ -263,17 +324,19 @@ def _apply_config_overrides_tolerances(
     base: IkTolerances, config: IkConfigOverrides
 ) -> IkTolerances:
     return IkTolerances(
-        position_tolerance=float(
+        position_tolerance=_coerce_config_float(
             get_config_value(
                 config, ["ik", "tolerances", "positionTolerance"], base.position_tolerance
-            )
+            ),
+            base.position_tolerance,
         ),
-        orientation_tolerance=float(
+        orientation_tolerance=_coerce_config_float(
             get_config_value(
                 config,
                 ["ik", "tolerances", "orientationTolerance"],
                 base.orientation_tolerance,
-            )
+            ),
+            base.orientation_tolerance,
         ),
     )
 
