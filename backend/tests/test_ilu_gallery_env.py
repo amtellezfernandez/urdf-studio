@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.models.ilu_gallery import IluGallerySource
@@ -172,3 +174,67 @@ def test_resolve_candidate_file_base_accepts_string_values() -> None:
         )
         == "demo-base"
     )
+
+
+def test_resolve_gallery_repo_asset_paths_ignores_non_string_prefilled_values() -> None:
+    source = IluGallerySource(owner="acme", repo="demo")
+
+    resolved = ilu_gallery._resolve_gallery_repo_asset_paths(
+        source,
+        {
+            "galleryRepoKey": 123,
+            "galleryFileBase": False,
+            "galleryPngPath": [],
+            "galleryWebmPath": {},
+            "fileBase": "demo-base",
+        },
+        "robots/demo.urdf",
+    )
+
+    assert resolved == {
+        "repoKey": "acme/demo",
+        "fileBase": "demo-base",
+        "png": "thumbnails/acme/demo/demo-base.png",
+        "webm": "previews/acme/demo/demo-base.webm",
+    }
+
+
+def test_merge_generated_gallery_manifest_ignores_non_string_generated_paths(
+    tmp_path: Path,
+) -> None:
+    source = IluGallerySource(owner="acme", repo="demo")
+    merged = ilu_gallery._merge_generated_manifest(
+        source,
+        tmp_path,
+        {
+            "items": [
+                {
+                    "candidatePath": "robots/demo.urdf",
+                    "galleryRepoKey": "",
+                    "galleryFileBase": "demo-base",
+                    "galleryPngPath": "",
+                    "galleryWebmPath": "",
+                    "thumbnailPath": "",
+                    "thumbnailUrl": "",
+                    "previewUrl": "",
+                    "videoPath": "",
+                    "videoUrl": "",
+                    "status": "inspect ok",
+                }
+            ]
+        },
+        {
+            "items": [
+                {
+                    "candidatePath": ["robots/demo.urdf"],
+                    "thumbnailPath": 123,
+                    "videoPath": {},
+                }
+            ]
+        },
+        [ilu_gallery.GALLERY_GENERATE_ASSET_KIND_IMAGE],
+    )
+
+    merged_item = merged["items"][0]
+    assert merged_item["thumbnailPath"] == ""
+    assert merged_item["galleryPngPath"] == ""

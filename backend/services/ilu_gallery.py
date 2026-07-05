@@ -1673,10 +1673,10 @@ def _resolve_candidate_file_base(candidate_path: str, raw_item: dict) -> str:
 
 
 def _resolve_gallery_repo_asset_paths(source: IluGallerySource, raw_item: dict, candidate_path: str) -> dict[str, str]:
-    repo_key = str(raw_item.get("galleryRepoKey") or "").strip()
-    file_base = str(raw_item.get("galleryFileBase") or "").strip()
-    png_path = str(raw_item.get("galleryPngPath") or "").strip()
-    webm_path = str(raw_item.get("galleryWebmPath") or "").strip()
+    repo_key = _normalize_optional_text(raw_item.get("galleryRepoKey"))
+    file_base = _normalize_optional_text(raw_item.get("galleryFileBase"))
+    png_path = _normalize_optional_text(raw_item.get("galleryPngPath"))
+    webm_path = _normalize_optional_text(raw_item.get("galleryWebmPath"))
     if repo_key and file_base and png_path and webm_path:
         return {
             "repoKey": repo_key,
@@ -1695,11 +1695,11 @@ def _resolve_gallery_repo_asset_paths(source: IluGallerySource, raw_item: dict, 
 
 
 def _has_gallery_asset_path(raw_item: dict, asset_key: str) -> bool:
-    return bool(str(raw_item.get(asset_key) or "").strip())
+    return bool(_normalize_optional_text(raw_item.get(asset_key)))
 
 
 def _resolve_job_asset_url(job_id: str, candidate_path: str, raw_item: dict, url_key: str, path_key: str, kind: str) -> str | None:
-    asset_url = str(raw_item.get(url_key) or "").strip() or None
+    asset_url = _normalize_optional_text(raw_item.get(url_key)) or None
     if asset_url is None and _has_gallery_asset_path(raw_item, path_key):
         asset_url = _build_gallery_asset_endpoint(job_id, candidate_path, kind)
     return asset_url
@@ -1810,16 +1810,16 @@ def _merge_generated_manifest(
     asset_kinds: list[str],
 ) -> dict:
     generated_by_path = {
-        str(item.get("candidatePath") or "").strip(): item
+        _normalize_optional_text(item.get("candidatePath")): item
         for item in _require_manifest_items(generated_manifest, "Generated gallery manifest returned an invalid items list")
-        if str(item.get("candidatePath") or "").strip()
+        if _normalize_optional_text(item.get("candidatePath"))
     }
 
     merged_items: list[dict] = []
     for raw_item in current_manifest.get("items", []):
         if not isinstance(raw_item, dict):
             continue
-        candidate_path = str(raw_item.get("candidatePath") or "").strip()
+        candidate_path = _normalize_optional_text(raw_item.get("candidatePath"))
         generated_item = generated_by_path.get(candidate_path)
         if generated_item is None:
             merged_items.append(raw_item)
@@ -1827,12 +1827,12 @@ def _merge_generated_manifest(
         repo_asset_paths = _resolve_gallery_repo_asset_paths(source, raw_item, candidate_path)
         merged_item = dict(raw_item)
         if GALLERY_GENERATE_ASSET_KIND_IMAGE in asset_kinds:
-            generated_thumbnail_path = str(generated_item.get("thumbnailPath") or "").strip()
+            generated_thumbnail_path = _normalize_optional_text(generated_item.get("thumbnailPath"))
             if generated_thumbnail_path:
                 merged_item["thumbnailPath"] = generated_thumbnail_path
                 merged_item["thumbnailUrl"] = ""
         if GALLERY_GENERATE_ASSET_KIND_VIDEO in asset_kinds:
-            generated_video_path = str(generated_item.get("videoPath") or "").strip()
+            generated_video_path = _normalize_optional_text(generated_item.get("videoPath"))
             if generated_video_path:
                 merged_item["videoPath"] = generated_video_path
                 merged_item["videoUrl"] = ""
@@ -1842,14 +1842,20 @@ def _merge_generated_manifest(
         if _has_gallery_asset_path(merged_item, "thumbnailPath") or _has_gallery_asset_path(merged_item, "thumbnailUrl"):
             merged_item["galleryPngPath"] = repo_asset_paths["png"]
         else:
-            merged_item["galleryPngPath"] = str(raw_item.get("galleryPngPath") or "").strip()
+            merged_item["galleryPngPath"] = _normalize_optional_text(raw_item.get("galleryPngPath"))
         if _has_gallery_asset_path(merged_item, "videoPath") or _has_gallery_asset_path(merged_item, "videoUrl"):
             merged_item["galleryWebmPath"] = repo_asset_paths["webm"]
         else:
-            merged_item["galleryWebmPath"] = str(raw_item.get("galleryWebmPath") or "").strip()
-        has_thumbnail = bool(str(merged_item.get("thumbnailPath") or "").strip() or str(merged_item.get("thumbnailUrl") or "").strip())
-        has_preview = bool(str(merged_item.get("previewUrl") or "").strip())
-        has_video = bool(str(merged_item.get("videoPath") or "").strip() or str(merged_item.get("videoUrl") or "").strip())
+            merged_item["galleryWebmPath"] = _normalize_optional_text(raw_item.get("galleryWebmPath"))
+        has_thumbnail = bool(
+            _normalize_optional_text(merged_item.get("thumbnailPath"))
+            or _normalize_optional_text(merged_item.get("thumbnailUrl"))
+        )
+        has_preview = bool(_normalize_optional_text(merged_item.get("previewUrl")))
+        has_video = bool(
+            _normalize_optional_text(merged_item.get("videoPath"))
+            or _normalize_optional_text(merged_item.get("videoUrl"))
+        )
         merged_item["status"] = _build_gallery_media_status(
             inspect_status=f"{', '.join(asset_kinds)} generated locally",
             thumbnail_url="generated" if has_thumbnail else None,
