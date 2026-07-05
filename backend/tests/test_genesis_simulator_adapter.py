@@ -33,13 +33,17 @@ from backend.services.simulator_adapters.genesis_robot import (
     links_to_keep_for_workspace_attachments,
     robot_urdf_morph_kwargs,
 )
-from backend.services.simulator_adapters.genesis_scene import add_mesh_entity_if_available
+from backend.services.simulator_adapters.genesis_scene import (
+    add_mesh_entity_if_available,
+    add_primitive_entity,
+)
 from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.simulator_adapters import workspace_package
 from backend.services.simulator_adapters.urdf_material_policy import (
     materialize_urdf_visual_material_colors,
 )
+from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 from backend.services.world_layout_static_transfer import SimPrimitive
 from backend.scripts import genesis_workspace_prepare
 from backend.scripts.genesis_workspace_prepare import (
@@ -707,6 +711,69 @@ def test_genesis_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Genesis mesh object 'crate' asset_ref does not resolve"):
         add_mesh_entity_if_available(object(), object(), primitive, (tmp_path,))
+
+
+def test_genesis_wraps_supported_primitive_add_failures() -> None:
+    class _FakeBox:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class _FakeSurface:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class _FakeGs:
+        class morphs:
+            Box = _FakeBox
+
+        class surfaces:
+            Default = _FakeSurface
+
+        class materials:
+            @staticmethod
+            def Rigid(**_kwargs):
+                return None
+
+    class _FailingScene:
+        def add_entity(self, **_kwargs) -> None:
+            raise RuntimeError("backend boom")
+
+    primitive = SimPrimitive(
+        source_id="box-1",
+        source_name="Box",
+        sim_name="wl_box",
+        source_type="primitive",
+        sim_type="box",
+        position_xyz=(0.0, 0.0, 0.1),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.2, 0.3, 0.4),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+    )
+
+    with pytest.raises(
+        WorldLayoutTransferError,
+        match="Genesis failed to add box object 'box-1': backend boom",
+    ):
+        add_primitive_entity(_FakeGs, _FailingScene(), primitive)
+
+
+def test_genesis_primitive_add_preserves_unsupported_type_error() -> None:
+    primitive = SimPrimitive(
+        source_id="capsule-1",
+        source_name="Capsule",
+        sim_name="wl_capsule",
+        source_type="primitive",
+        sim_type="capsule",
+        position_xyz=(0.0, 0.0, 0.1),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.2, 0.3, 0.4),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+    )
+
+    with pytest.raises(ValueError, match="Unsupported Genesis primitive type: capsule"):
+        add_primitive_entity(object(), object(), primitive)
 
 
 def test_prepare_genesis_workspace_adds_synthetic_visual_material_colors(

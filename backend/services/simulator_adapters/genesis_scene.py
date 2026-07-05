@@ -137,39 +137,46 @@ def add_primitive_entity(
 ) -> None:
     if add_mesh_entity_if_available(gs, scene, primitive, asset_roots):
         return
-    if primitive.sim_type == "box":
-        morph = gs.morphs.Box(
-            size=primitive.size_xyz,
-            pos=primitive.position_xyz,
-            quat=primitive.quat_wxyz,
-            fixed=primitive.fixed,
-            collision=primitive.collision,
-        )
-    elif primitive.sim_type == "sphere":
-        morph = gs.morphs.Sphere(
-            radius=max(primitive.size_xyz) * 0.5,
-            pos=primitive.position_xyz,
-            quat=primitive.quat_wxyz,
-            fixed=primitive.fixed,
-            collision=primitive.collision,
-        )
-    elif primitive.sim_type == "cylinder":
-        morph = gs.morphs.Cylinder(
-            radius=primitive.size_xyz[0] * 0.5,
-            height=primitive.size_xyz[2],
-            pos=primitive.position_xyz,
-            quat=primitive.quat_wxyz,
-            fixed=primitive.fixed,
-            collision=primitive.collision,
-        )
-    else:
-        raise ValueError(f"Unsupported Genesis primitive type: {primitive.sim_type}")
-    material = primitive_rigid_material(gs, primitive)
-    entity_kwargs: dict[str, object] = {
-        "morph": morph,
-        "surface": gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3]),
-        "name": primitive.sim_name,
-    }
-    if material is not None:
-        entity_kwargs["material"] = material
-    scene.add_entity(**entity_kwargs)
+    try:
+        if primitive.sim_type == "box":
+            morph = gs.morphs.Box(
+                size=primitive.size_xyz,
+                pos=primitive.position_xyz,
+                quat=primitive.quat_wxyz,
+                fixed=primitive.fixed,
+                collision=primitive.collision,
+            )
+        elif primitive.sim_type == "sphere":
+            morph = gs.morphs.Sphere(
+                radius=max(primitive.size_xyz) * 0.5,
+                pos=primitive.position_xyz,
+                quat=primitive.quat_wxyz,
+                fixed=primitive.fixed,
+                collision=primitive.collision,
+            )
+        elif primitive.sim_type == "cylinder":
+            morph = gs.morphs.Cylinder(
+                radius=primitive.size_xyz[0] * 0.5,
+                height=primitive.size_xyz[2],
+                pos=primitive.position_xyz,
+                quat=primitive.quat_wxyz,
+                fixed=primitive.fixed,
+                collision=primitive.collision,
+            )
+        else:
+            raise ValueError(f"Unsupported Genesis primitive type: {primitive.sim_type}")
+        material = primitive_rigid_material(gs, primitive)
+        entity_kwargs: dict[str, object] = {
+            "morph": morph,
+            "surface": gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3]),
+            "name": primitive.sim_name,
+        }
+        if material is not None:
+            entity_kwargs["material"] = material
+        scene.add_entity(**entity_kwargs)
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise WorldLayoutTransferError(
+            f"Genesis failed to add {primitive.sim_type} object '{primitive.source_id}': {exc}"
+        ) from exc
