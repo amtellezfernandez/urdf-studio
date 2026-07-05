@@ -149,7 +149,12 @@ function filterViteOutput(data) {
   return false; // Hide most vite output
 }
 
-function shouldPrintBackendLine(line) {
+const OPTIONAL_BACKEND_IMPORT_NOISE = [
+  'failed to import warp: no module named',
+  'failed to import mujoco_warp: no module named',
+];
+
+export function shouldPrintBackendLine(line) {
   if (verbose) {
     return true;
   }
@@ -174,6 +179,10 @@ function shouldPrintBackendLine(line) {
     lower.includes('jax._src.xla_bridge') ||
     lower.includes('joints were not in topological order')
   ) {
+    return false;
+  }
+
+  if (OPTIONAL_BACKEND_IMPORT_NOISE.some((pattern) => lower.includes(pattern))) {
     return false;
   }
 
