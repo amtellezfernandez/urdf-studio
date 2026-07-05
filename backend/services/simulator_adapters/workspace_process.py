@@ -51,6 +51,14 @@ def _cancelled_launch_error(label: str) -> str:
     return f"{label} workspace launch was cancelled."
 
 
+def _raise_cancelled_launch(
+    *,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+) -> None:
+    raise error(_cancelled_launch_error(simulator_label))
+
+
 def _cleanup_cancelled_launch(
     *,
     workspace_dir: Path,
@@ -58,7 +66,29 @@ def _cleanup_cancelled_launch(
     error: Callable[[str], Exception],
 ) -> None:
     shutil.rmtree(workspace_dir, ignore_errors=True)
-    raise error(_cancelled_launch_error(simulator_label))
+    _raise_cancelled_launch(
+        simulator_label=simulator_label,
+        error=error,
+    )
+
+
+def _raise_or_cleanup_cancelled_launch(
+    *,
+    workspace_dir: Path,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+    process: subprocess.Popen | None = None,
+) -> None:
+    if process is not None and process.poll() is None:
+        _raise_cancelled_launch(
+            simulator_label=simulator_label,
+            error=error,
+        )
+    _cleanup_cancelled_launch(
+        workspace_dir=workspace_dir,
+        simulator_label=simulator_label,
+        error=error,
+    )
 
 
 def _cancel_workspace_launch_if_requested(
@@ -67,13 +97,15 @@ def _cancel_workspace_launch_if_requested(
     workspace_dir: Path,
     simulator_label: str,
     error: Callable[[str], Exception],
+    process: subprocess.Popen | None = None,
 ) -> None:
     if launch_id is None or not is_workspace_launch_cancelled(launch_id):
         return
-    _cleanup_cancelled_launch(
+    _raise_or_cleanup_cancelled_launch(
         workspace_dir=workspace_dir,
         simulator_label=simulator_label,
         error=error,
+        process=process,
     )
 
 
@@ -166,10 +198,11 @@ def _attach_workspace_process_or_raise_cancelled(
     error: Callable[[str], Exception],
 ) -> None:
     if launch_id and not attach_workspace_launch_process(launch_id, process):
-        _cleanup_cancelled_launch(
+        _raise_or_cleanup_cancelled_launch(
             workspace_dir=workspace_dir,
             simulator_label=simulator_label,
             error=error,
+            process=process,
         )
 
 
@@ -253,6 +286,7 @@ def start_workspace_process_until_ready(
             workspace_dir=prepared.workspace_dir,
             simulator_label=simulator_label,
             error=error,
+            process=process,
         )
         raise
 
