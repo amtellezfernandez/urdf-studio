@@ -192,6 +192,9 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
     _abstract = True
     workspace_error_class: type[SimulatorAdapterError] = SimulatorAdapterError
 
+    def _workspace_error(self, msg: str) -> SimulatorAdapterError:
+        return self.workspace_error_class(msg)
+
     def prepare_workspace_package(
         self,
         request: SimulatorWorkspacePrepareRequest,
@@ -200,13 +203,10 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
             prepare_direct_urdf_workspace,
         )
 
-        def error(msg: str) -> SimulatorAdapterError:
-            return self.workspace_error_class(msg)
-
         return prepare_direct_urdf_workspace(
             request,
             workspace_process=self.require_workspace_process(),
-            error=error,
+            error=self._workspace_error,
         )
 
     def prepare_workspace(
@@ -217,9 +217,6 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
             start_prepared_workspace_process,
         )
 
-        def error(msg: str) -> SimulatorAdapterError:
-            return self.workspace_error_class(msg)
-
         workspace_process = self.require_workspace_process()
         prepared = self.prepare_workspace_package(request)
         return start_prepared_workspace_process(
@@ -228,7 +225,7 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
             simulator_asset_path=prepared.robot_urdf_path,
             simulator_asset_flag="--robot-urdf",
             workspace_process=workspace_process,
-            error=error,
+            error=self._workspace_error,
             launch_id=request.launch_id,
         )
 
