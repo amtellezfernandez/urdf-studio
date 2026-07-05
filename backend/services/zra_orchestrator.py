@@ -183,7 +183,7 @@ class ZraOrchestratorService:
             device.last_error = None
             device.consecutive_failures = 0
             device.current_state = converted.trust_state
-        except _POLL_DEVICE_FAILURES as exc:  # pragma: no cover - exercised through status behavior
+        except _POLL_DEVICE_FAILURES as exc:
             device.last_error = str(exc)
             device.consecutive_failures += 1
             logger.warning("zRA orchestrator poll failed for %s: %s", device.config.robot_id, exc)
