@@ -12,26 +12,42 @@ _MAX_MESH_BYTES = 64 * 1024 * 1024
 _MAX_MESH_FILES = 512
 
 
+async def _read_upload_bytes(upload: UploadFile, *, max_bytes: int, detail: str) -> bytes:
+    payload = await upload.read()
+    if len(payload) > max_bytes:
+        raise HTTPException(status_code=413, detail=detail)
+    return payload
+
+
+async def _read_mesh_uploads(mesh_uploads: list[UploadFile]) -> dict[str, bytes]:
+    mesh_files_by_name: dict[str, bytes] = {}
+    for mesh_upload in mesh_uploads:
+        if not mesh_upload.filename:
+            continue
+        mesh_files_by_name[mesh_upload.filename] = await _read_upload_bytes(
+            mesh_upload,
+            max_bytes=_MAX_MESH_BYTES,
+            detail=f"Mesh file '{mesh_upload.filename}' exceeds 64 MB limit.",
+        )
+    return mesh_files_by_name
+
+
 @router.post("/validate", response_model=SimulationPrepValidationReport)
 async def validate_simulation_prep(
     urdf_file: UploadFile = File(..., description="URDF XML file"),
     mesh_files: list[UploadFile] | None = File(default=None, description="Mesh files referenced by the URDF"),
 ) -> SimulationPrepValidationReport:
-    urdf_bytes = await urdf_file.read()
-    if len(urdf_bytes) > _MAX_URDF_BYTES:
-        raise HTTPException(status_code=413, detail="URDF file exceeds 4 MB limit.")
+    urdf_bytes = await _read_upload_bytes(
+        urdf_file,
+        max_bytes=_MAX_URDF_BYTES,
+        detail="URDF file exceeds 4 MB limit.",
+    )
 
     mesh_uploads = mesh_files or []
     if len(mesh_uploads) > _MAX_MESH_FILES:
         raise HTTPException(status_code=413, detail=f"Too many mesh files (max {_MAX_MESH_FILES}).")
 
-    mesh_files_by_name: dict[str, bytes] = {}
-    for upload in mesh_uploads:
-        data = await upload.read()
-        if len(data) > _MAX_MESH_BYTES:
-            raise HTTPException(status_code=413, detail=f"Mesh file '{upload.filename}' exceeds 64 MB limit.")
-        if upload.filename:
-            mesh_files_by_name[upload.filename] = data
+    mesh_files_by_name = await _read_mesh_uploads(mesh_uploads)
 
     try:
         urdf_content = urdf_bytes.decode("utf-8")

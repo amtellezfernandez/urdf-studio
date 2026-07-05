@@ -51,3 +51,18 @@ def test_validate_simulation_prep_rejects_non_utf8_urdf() -> None:
 
     assert response.status_code == 422
     assert "not valid UTF-8" in response.json()["detail"]
+
+
+def test_validate_simulation_prep_rejects_too_many_mesh_uploads() -> None:
+    client = AsgiTestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
+    mesh_uploads = [
+        ("mesh_files", (f"mesh-{index}.stl", b"solid", "model/stl"))
+        for index in range(513)
+    ]
+    response = client.post(
+        "/simulation-prep/validate",
+        files=[("urdf_file", ("robot.urdf", b"<robot name='demo'/>", "text/xml")), *mesh_uploads],
+    )
+
+    assert response.status_code == 413
+    assert "Too many mesh files" in response.json()["detail"]
