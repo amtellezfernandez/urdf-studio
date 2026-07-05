@@ -1205,9 +1205,14 @@ def test_genesis_renders_prepared_lekiwi_visual_material_colors(tmp_path: Path) 
     shutil.copytree(demo_dir / "meshes", mesh_dir)
     materialize_urdf_visual_material_colors(robot_urdf_path)
 
+    genesis_exception = getattr(gs, "GenesisException", None)
+    genesis_init_errors: tuple[type[BaseException], ...] = (RuntimeError,)
+    if isinstance(genesis_exception, type) and issubclass(genesis_exception, BaseException):
+        genesis_init_errors = (RuntimeError, genesis_exception)
+
     try:
         gs.init(backend=gs.cpu, logging_level="warning")
-    except Exception as exc:
+    except genesis_init_errors as exc:
         if "already" not in str(exc).lower() and "initialized" not in str(exc).lower():
             raise
 
