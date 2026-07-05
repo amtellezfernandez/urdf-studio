@@ -70,24 +70,38 @@ def _module_command(
     extra_args: Sequence[str] = (),
     report_path: Path | None = None,
 ) -> list[str]:
-    report_args = _report_command_args(report_path)
     return [
         sys.executable,
         "-u",
         "-m",
         workspace_process.module_name,
-        "--world-package",
-        str(world_package_path),
-        robot_asset_flag,
-        str(robot_asset_path),
+        *_workspace_process_io_args(
+            world_package_path=world_package_path,
+            robot_asset_flag=robot_asset_flag,
+            robot_asset_path=robot_asset_path,
+        ),
         *extra_args,
-        *report_args,
+        *_report_command_args(report_path),
         "--frame-map",
         frame_map,
         "--no-viewer",
         "--duration-sec",
         str(duration_sec),
     ]
+
+
+def _workspace_process_io_args(
+    *,
+    world_package_path: Path,
+    robot_asset_flag: str,
+    robot_asset_path: Path,
+) -> tuple[str, ...]:
+    return (
+        "--world-package",
+        str(world_package_path),
+        robot_asset_flag,
+        str(robot_asset_path),
+    )
 
 
 def _report_command_args(report_path: Path | None) -> tuple[str, ...]:
@@ -132,7 +146,6 @@ def _prepared_workspace_command_kwargs(
     expected_report_artifact_file_keys: tuple[str, ...],
     expected_report_artifact_dir_keys: tuple[str, ...],
 ) -> dict[str, object]:
-    expected_camera_log_marker = camera_log_marker or f"cameras={expectations.camera_count}"
     return {
         "command": _module_command(
             workspace_process,
@@ -146,7 +159,10 @@ def _prepared_workspace_command_kwargs(
         ),
         "ready_marker": workspace_process.ready_log_marker,
         "expected_object_marker": object_marker,
-        "expected_camera_log_marker": expected_camera_log_marker,
+        "expected_camera_log_marker": _expected_camera_log_marker(
+            expectations,
+            override=camera_log_marker,
+        ),
         "extra_expected_markers": extra_expected_markers,
         "expected_image_paths": expected_image_paths,
         "expected_image_dirs": expected_image_dirs,
@@ -158,6 +174,16 @@ def _prepared_workspace_command_kwargs(
         "expected_report_artifact_dir_keys": expected_report_artifact_dir_keys,
         **_workspace_expectation_fields(expectations),
     }
+
+
+def _expected_camera_log_marker(
+    expectations: WorkspaceExpectations,
+    *,
+    override: str | None,
+) -> str:
+    if override is not None:
+        return override
+    return f"cameras={expectations.camera_count}"
 
 
 def _prepare_direct_urdf_command(
