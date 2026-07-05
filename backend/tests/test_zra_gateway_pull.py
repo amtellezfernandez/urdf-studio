@@ -10,6 +10,18 @@ from backend.models.attestation import ZraGatewayPullRequest
 from backend.services import zra_gateway_pull
 
 
+def test_resolve_target_rejects_non_string_env_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        zra_gateway_pull.os,
+        "getenv",
+        lambda name: object() if name == zra_gateway_pull.ZRA_GATEWAY_LOCAL_PATH_ENV else None,
+    )
+
+    assert zra_gateway_pull._resolve_target(None, zra_gateway_pull.ZRA_GATEWAY_LOCAL_PATH_ENV) is None
+
+
 def test_fetch_zra_gateway_decision_reads_local_component_report(tmp_path: Path) -> None:
     component_report_path = tmp_path / "component-report.json"
     gateway_decision_path = tmp_path / "gateway-decision.json"

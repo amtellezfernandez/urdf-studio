@@ -60,7 +60,8 @@ def _configured_source_value(configured_source: JsonObject | None, key: str) -> 
 def _resolve_target(value: str | None, env_key: str) -> str | None:
     if value and value.strip():
         return value.strip()
-    env_value = os.getenv(env_key, "").strip()
+    raw_env_value = os.getenv(env_key)
+    env_value = raw_env_value.strip() if isinstance(raw_env_value, str) else ""
     return env_value or None
 
 
