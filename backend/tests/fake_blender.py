@@ -170,14 +170,16 @@ class FakeBlenderModule(types.ModuleType):
         self.data.objects.clear()
         self.context.object = None
 
-    def _add_light(self, *, type: str, location):  # noqa: A002 - matches Blender API.
-        return self._append_object(_FakeObject(f"{type.lower()}_light", "LIGHT", location))
+    def _add_light(self, *, location, **kwargs):
+        light_kind = str(kwargs.get("type", "POINT"))
+        return self._append_object(_FakeObject(f"{light_kind.lower()}_light", "LIGHT", location))
 
     def _add_camera(self, *, location):
         return self._append_object(_FakeObject("camera", "CAMERA", location))
 
-    def _add_empty(self, *, type: str, location):  # noqa: A002 - matches Blender API.
-        return self._append_object(_FakeObject(f"{type.lower()}_empty", "EMPTY", location))
+    def _add_empty(self, *, location, **kwargs):
+        empty_kind = str(kwargs.get("type", "PLAIN_AXES"))
+        return self._append_object(_FakeObject(f"{empty_kind.lower()}_empty", "EMPTY", location))
 
     def _add_mesh(self, **kwargs):
         location = kwargs.get("location", (0.0, 0.0, 0.0))
