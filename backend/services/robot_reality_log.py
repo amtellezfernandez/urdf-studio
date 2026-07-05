@@ -115,6 +115,10 @@ def _optional_unit_interval(value: Any, field: str) -> float | None:
     return parsed
 
 
+def _read_confidence(value: Any, field: str) -> float:
+    return _optional_unit_interval(value, field) or 1.0
+
+
 def _compile_entity(raw_entity: Any, index: int, *, frame_id: str) -> PhysicalEntity:
     record = _as_record(raw_entity, f"frames[].entities[{index}]")
     raw_id = record.get("entity_id") or record.get("id") or record.get("name")
@@ -153,7 +157,10 @@ def _compile_entity(raw_entity: Any, index: int, *, frame_id: str) -> PhysicalEn
         ),
         battery=_optional_unit_interval(record.get("battery"), f"{frame_id}.entities[{index}].battery"),
         movable=record.get("movable", True) is not False,
-        confidence=_optional_unit_interval(record.get("confidence"), f"{frame_id}.entities[{index}].confidence") or 1.0,
+        confidence=_read_confidence(
+            record.get("confidence"),
+            f"{frame_id}.entities[{index}].confidence",
+        ),
         source_ref=f"robot_reality_log:{frame_id}:entities[{index}]",
         metadata=metadata,
     )
@@ -185,7 +192,10 @@ def _compile_action(raw_action: Any, index: int, *, frame_id: str) -> ActionToke
             if record.get("duration_ms") is not None
             else None
         ),
-        confidence=_optional_unit_interval(record.get("confidence"), f"{frame_id}.action.confidence") or 1.0,
+        confidence=_read_confidence(
+            record.get("confidence"),
+            f"{frame_id}.action.confidence",
+        ),
     )
 
 
@@ -262,7 +272,10 @@ def compile_robot_reality_log_file(path: Path) -> PhysicalRolloutTrace:
     if not stripped:
         raise ValueError(f"Robot reality log is empty: {path}")
     if stripped.startswith("{"):
-        return compile_robot_reality_log_payload(stripped)
+        try:
+            return compile_robot_reality_log_payload(stripped)
+        except json.JSONDecodeError:
+            pass
     frames = [json.loads(line) for line in raw_text.splitlines() if line.strip()]
     return compile_robot_reality_log_payload(
         {
