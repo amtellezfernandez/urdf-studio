@@ -142,13 +142,21 @@ def should_step_pybullet_interactive_viewer_loop(*, no_viewer: bool, run_physics
     return not no_viewer and run_physics
 
 
+def _optional_pybullet_api_error_types(pybullet: Any) -> tuple[type[BaseException], ...]:
+    error_type = getattr(pybullet, "error", None)
+    if isinstance(error_type, type) and issubclass(error_type, BaseException):
+        return (TypeError, error_type)
+    return (TypeError,)
+
+
 def _call_optional_pybullet_viewer_method(pybullet: Any, method_name: str) -> bool:
     method = getattr(pybullet, method_name, None)
     if method is None:
         return False
+    handled_error_types = _optional_pybullet_api_error_types(pybullet)
     try:
         method()
-    except Exception:
+    except handled_error_types:
         return False
     return True
 

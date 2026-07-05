@@ -124,6 +124,49 @@ def test_pybullet_headless_static_viewer_does_not_pump_gui_events() -> None:
     }
 
 
+def test_pybullet_static_viewer_tolerates_optional_api_errors() -> None:
+    class _FakeRuntime:
+        COV_ENABLE_SINGLE_STEP_RENDERING = 17
+
+        class error(Exception):
+            pass
+
+        @classmethod
+        def getMouseEvents(cls) -> tuple[object, ...]:
+            raise cls.error("viewer not ready")
+
+        @classmethod
+        def getKeyboardEvents(cls) -> dict[str, object]:
+            return {}
+
+        @classmethod
+        def getDebugVisualizerCamera(cls) -> tuple[object, ...]:
+            return ()
+
+        @classmethod
+        def configureDebugVisualizer(cls, flag: int, value: int) -> None:
+            del flag, value
+
+    pump_state = pump_pybullet_static_debug_viewer(_FakeRuntime, no_viewer=False)
+
+    assert pump_state == {
+        "mouse_events": False,
+        "keyboard_events": True,
+        "camera_state": True,
+        "render_frame": True,
+    }
+
+
+def test_pybullet_static_viewer_propagates_unexpected_viewer_errors() -> None:
+    class _FakeRuntime:
+        @classmethod
+        def getMouseEvents(cls) -> tuple[object, ...]:
+            raise RuntimeError("unexpected viewer failure")
+
+    with pytest.raises(RuntimeError, match="unexpected viewer failure"):
+        pump_pybullet_static_debug_viewer(_FakeRuntime, no_viewer=False)
+
+
 def test_pybullet_gui_rendering_is_suspended_only_while_loading() -> None:
     class _FakeRuntime:
         COV_ENABLE_RENDERING = 42
