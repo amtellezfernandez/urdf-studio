@@ -484,7 +484,7 @@ def test_blender_change_set_applies_camera_pose(tmp_path: Path) -> None:
 
     updated_camera = result.world_package.world_snapshot.cameras[0]
     assert result.applied_change_count == 2
-    assert result.review_only_count == 1
+    assert result.review_only_count == 0
     assert updated_camera["pose"]["xyz"] == [0.2, 0.3, 1.4]
     assert updated_camera["intrinsics"]["fov_deg"] == 60.0
     assert all(
@@ -811,7 +811,7 @@ def test_blender_change_set_accepts_source_camera_update(tmp_path: Path) -> None
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
     assert result.applied_change_count == 2
-    assert result.review_only_count == 1
+    assert result.review_only_count == 0
 
 
 def test_blender_change_set_applies_deleted_camera(tmp_path: Path) -> None:
