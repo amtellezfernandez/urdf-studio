@@ -85,6 +85,72 @@ def _raise_if_launch_cancelled(
         )
 
 
+def _workspace_process_env(
+    *,
+    prepared: PreparedSimulatorWorkspace,
+    simulator_id: str,
+) -> SimulatorEnvironment:
+    return simulator_acceleration.build_simulator_workspace_env(
+        prepared.workspace_dir / "runtime-cache",
+        simulator_id=simulator_id,
+    )
+
+
+def _workspace_launch_cancel_probe(launch_id: str | None) -> Callable[[], bool] | None:
+    if launch_id is None:
+        return None
+    return lambda: is_workspace_launch_cancelled(launch_id)
+
+
+def _workspace_process_popen_kwargs(
+    *,
+    log_file,
+    prepared: PreparedSimulatorWorkspace,
+    simulator_id: str,
+) -> dict[str, object]:
+    return {
+        "cwd": BASE_DIR,
+        "stdin": subprocess.DEVNULL,
+        "stdout": log_file,
+        "stderr": subprocess.STDOUT,
+        "start_new_session": True,
+        "close_fds": True,
+        "env": _workspace_process_env(
+            prepared=prepared,
+            simulator_id=simulator_id,
+        ),
+    }
+
+
+def _spawn_workspace_process(
+    *,
+    command: Sequence[str],
+    prepared: PreparedSimulatorWorkspace,
+    simulator_id: str,
+    log_path: Path,
+) -> subprocess.Popen:
+    with log_path.open("ab", buffering=0) as log_file:
+        return subprocess.Popen(
+            list(command),
+            **_workspace_process_popen_kwargs(
+                log_file=log_file,
+                prepared=prepared,
+                simulator_id=simulator_id,
+            ),
+        )
+
+
+def _attach_workspace_process_or_raise_cancelled(
+    *,
+    launch_id: str | None,
+    process: subprocess.Popen,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+) -> None:
+    if launch_id and not attach_workspace_launch_process(launch_id, process):
+        raise error(_cancelled_launch_error(simulator_label))
+
+
 def build_workspace_process_command(
     *,
     workspace_process: SimulatorWorkspaceProcessParams,
@@ -129,22 +195,18 @@ def start_workspace_process_until_ready(
 
     process: subprocess.Popen | None = None
     try:
-        with log_path.open("ab", buffering=0) as log_file:
-            process = subprocess.Popen(
-                list(command),
-                cwd=BASE_DIR,
-                stdin=subprocess.DEVNULL,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-                close_fds=True,
-                env=simulator_acceleration.build_simulator_workspace_env(
-                    prepared.workspace_dir / "runtime-cache",
-                    simulator_id=simulator_id,
-                ),
-            )
-        if launch_id and not attach_workspace_launch_process(launch_id, process):
-            raise error(_cancelled_launch_error(simulator_label))
+        process = _spawn_workspace_process(
+            command=command,
+            prepared=prepared,
+            simulator_id=simulator_id,
+            log_path=log_path,
+        )
+        _attach_workspace_process_or_raise_cancelled(
+            launch_id=launch_id,
+            process=process,
+            simulator_label=simulator_label,
+            error=error,
+        )
         wait_for_workspace_readiness(
             process,
             simulator_label=simulator_label,
@@ -155,11 +217,7 @@ def start_workspace_process_until_ready(
             ready_timeout_sec=workspace_process.ready_timeout_sec,
             post_ready_grace_sec=workspace_process.post_ready_grace_sec,
             error=error,
-            should_cancel=(
-                (lambda: is_workspace_launch_cancelled(launch_id))
-                if launch_id is not None
-                else None
-            ),
+            should_cancel=_workspace_launch_cancel_probe(launch_id),
         )
         if launch_id:
             complete_workspace_launch(launch_id)
