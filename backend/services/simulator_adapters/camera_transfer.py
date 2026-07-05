@@ -164,45 +164,48 @@ def _build_camera_spec(
     link_transforms: Mapping[str, Transform],
     joint_child_link_by_name: Mapping[str, str],
 ) -> tuple[SimCameraSpec | None, str | None]:
-    name = _read_string(camera_record.get("name")) or _read_string(camera_record.get("id"))
-    if not name:
-        return None, f"Camera at index {index} has no id or name."
-    camera_id = _read_string(camera_record.get("id")) or name
-    parent_joint = _read_string(camera_record.get("parent_joint"))
-    if not parent_joint:
-        return None, f"Camera '{name}' has no parent_joint."
+    camera_identity, warning = _camera_identity(camera_record, index=index)
+    if warning:
+        return None, warning
+    assert camera_identity is not None
 
-    parent_link = joint_child_link_by_name.get(parent_joint)
-    if parent_link is None and parent_joint in link_names:
-        parent_link = parent_joint
-    if parent_link is None:
-        return (
-            None,
-            f"Camera '{name}' parent '{parent_joint}' was not found in robot links or joints; "
-            "camera parent must resolve before simulator transfer.",
-        )
+    parent_link, warning = _resolve_camera_parent_link(
+        camera_record,
+        camera_name=camera_identity.name,
+        link_names=link_names,
+        joint_child_link_by_name=joint_child_link_by_name,
+    )
+    if warning:
+        return None, warning
+    assert parent_link is not None
 
     base_transform = link_transforms.get(parent_link)
     if base_transform is None:
         return (
             None,
-            f"Camera '{name}' parent link '{parent_link}' has no forward-kinematics transform; "
+            f"Camera '{camera_identity.name}' parent link '{parent_link}' has no forward-kinematics transform; "
             "camera parent must have a forward-kinematics transform.",
         )
 
-    render_local_transform, pose_warning = _read_render_camera_local_transform(camera_record, name)
+    render_local_transform, pose_warning = _read_render_camera_local_transform(
+        camera_record,
+        camera_identity.name,
+    )
     if render_local_transform is None:
         return None, pose_warning
     intrinsics = pinhole_camera_intrinsics_from_record(camera_record.get("intrinsics"))
     if intrinsics is None:
-        return None, f"Camera '{name}' has invalid pinhole intrinsics."
+        return None, f"Camera '{camera_identity.name}' has invalid pinhole intrinsics."
     render_world_transform = _compose_transform(base_transform, render_local_transform)
     return (
         SimCameraSpec(
-            camera_id=camera_id,
-            name=name,
-            sim_name=_safe_sim_name(name or camera_id, default_name=f"camera_{index + 1}"),
-            parent_joint=parent_joint,
+            camera_id=camera_identity.camera_id,
+            name=camera_identity.name,
+            sim_name=_safe_sim_name(
+                camera_identity.name or camera_identity.camera_id,
+                default_name=f"camera_{index + 1}",
+            ),
+            parent_joint=camera_identity.parent_joint,
             parent_link=parent_link,
             render_local_pose=render_local_transform,
             render_world_pose=render_world_transform,
@@ -212,6 +215,54 @@ def _build_camera_spec(
             intrinsics=intrinsics,
         ),
         None,
+    )
+
+
+@dataclass(frozen=True)
+class _CameraIdentity:
+    camera_id: str
+    name: str
+    parent_joint: str
+
+
+def _camera_identity(
+    camera_record: WorldScenePayload,
+    *,
+    index: int,
+) -> tuple[_CameraIdentity | None, str | None]:
+    name = _read_string(camera_record.get("name")) or _read_string(camera_record.get("id"))
+    if not name:
+        return None, f"Camera at index {index} has no id or name."
+    parent_joint = _read_string(camera_record.get("parent_joint"))
+    if not parent_joint:
+        return None, f"Camera '{name}' has no parent_joint."
+    return (
+        _CameraIdentity(
+            camera_id=_read_string(camera_record.get("id")) or name,
+            name=name,
+            parent_joint=parent_joint,
+        ),
+        None,
+    )
+
+
+def _resolve_camera_parent_link(
+    camera_record: WorldScenePayload,
+    *,
+    camera_name: str,
+    link_names: set[str],
+    joint_child_link_by_name: Mapping[str, str],
+) -> tuple[str | None, str | None]:
+    parent_joint = _read_string(camera_record.get("parent_joint"))
+    parent_link = joint_child_link_by_name.get(parent_joint)
+    if parent_link is None and parent_joint in link_names:
+        parent_link = parent_joint
+    if parent_link is not None:
+        return parent_link, None
+    return (
+        None,
+        f"Camera '{camera_name}' parent '{parent_joint}' was not found in robot links or joints; "
+        "camera parent must resolve before simulator transfer.",
     )
 
 
