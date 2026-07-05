@@ -1082,7 +1082,7 @@ def _build_gallery_manifest_from_inspection(source: IluGallerySource, output_roo
     raw_candidates = inspection.get("candidates")
     if not isinstance(raw_candidates, list):
         raise RuntimeError("ilu inspect-repo returned an invalid candidates list")
-    if len(raw_candidates) == 0:
+    if not raw_candidates:
         raise RuntimeError("No renderable .urdf or .xacro file found in the repository.")
 
     catalog: _GalleryCatalog | None = None
@@ -2105,7 +2105,7 @@ def _github_find_open_pull_request(repo_slug: str, token: str, branch_name: str)
         f"/repos/{repo_slug}/pulls?state=open&head={repo_owner}:{branch_name}",
         token,
     )
-    if not isinstance(response, list) or len(response) == 0:
+    if not isinstance(response, list) or not response:
         return None
     first = response[0]
     return first if isinstance(first, dict) else None
@@ -2833,7 +2833,7 @@ def publish_gallery_job(job_id: str) -> IluGalleryPublishResponse:
     record = _get_job_record(job_id)
     output_root = Path(record.output_root or _job_workdir(job_id))
     draft = _run_ilu_gallery_publish_build(record, output_root)
-    if len(draft.files) == 0:
+    if not draft.files:
         raise RuntimeError("Gallery publish build did not produce any files to publish.")
 
     repo_slug = draft.repo_slug.strip()
