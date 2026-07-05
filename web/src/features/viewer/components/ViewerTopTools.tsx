@@ -42,7 +42,7 @@ type ViewerTopToolsProps = {
 
 const VIEWER_TOP_TOOL_CLASSES = {
   toolbar:
-    "absolute left-48 top-4 right-24 z-20 flex min-w-0 flex-nowrap items-center justify-end gap-2 overflow-x-auto overflow-y-hidden [&>*]:shrink-0",
+    "absolute left-48 top-4 right-24 z-20 flex min-w-0 flex-nowrap items-center justify-end gap-2 overflow-visible [&>*]:shrink-0",
   button: "rounded border border-border/60 bg-background/90 shadow-sm transition-colors",
   disabledButton: "text-muted-foreground opacity-70 cursor-not-allowed",
 } as const;
@@ -121,7 +121,7 @@ export function ViewerTopTools({
               }
             }}
           >
-            <span className="text-[10px] text-muted-foreground">Utils:</span>
+            <span className="text-[10px] text-muted-foreground">Drag:</span>
             {getDragModeDisplayName(dragMode)}
             {canOpenDragModeMenu ? (
               <span className="text-[10px] text-muted-foreground">▼</span>
@@ -129,7 +129,7 @@ export function ViewerTopTools({
           </button>
           {isDragModeMenuOpen ? (
             <div
-              className="absolute right-0 mt-1 w-48 rounded border border-border/70 bg-background/95 text-xs shadow-md"
+              className="absolute right-0 z-50 mt-1 w-48 rounded border border-border/70 bg-background/95 text-xs shadow-md"
               onClick={stopPropagation}
             >
               <button
