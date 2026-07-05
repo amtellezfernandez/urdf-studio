@@ -39,7 +39,7 @@ def pybullet_runtime_opengl_warnings(
 ) -> tuple[str, ...]:
     glxinfo_renderer = pybullet_glxinfo_renderer()
     if glxinfo_renderer is not None:
-        return _pybullet_warnings_for_renderer(glxinfo_renderer)
+        return _pybullet_renderer_warnings_from_optional_renderer(glxinfo_renderer)
     return pybullet_latest_workspace_log_warnings(
         workspace_root=workspace_root,
         log_name=log_name,
@@ -69,10 +69,7 @@ def latest_workspace_log_path(*, workspace_root: Path, log_name: str) -> Path | 
 
 
 def pybullet_glxinfo_warnings() -> tuple[str, ...]:
-    renderer = pybullet_glxinfo_renderer()
-    if renderer is None:
-        return ()
-    return _pybullet_warnings_for_renderer(renderer)
+    return _pybullet_renderer_warnings_from_optional_renderer(pybullet_glxinfo_renderer())
 
 
 def pybullet_glxinfo_renderer() -> str | None:
@@ -92,14 +89,11 @@ def pybullet_glxinfo_renderer() -> str | None:
 
 
 def pybullet_opengl_warnings(log_text: str) -> tuple[str, ...]:
-    renderer = _pybullet_opengl_renderer(log_text)
-    if renderer is None:
-        return ()
-    return _pybullet_warnings_for_renderer(renderer)
+    return _pybullet_renderer_warnings_from_optional_renderer(_pybullet_opengl_renderer(log_text))
 
 
 def _pybullet_log_warnings(log_path: Path) -> tuple[str, ...]:
-    return _pybullet_warnings_for_log_text(
+    return pybullet_opengl_warnings(
         read_log_tail(log_path, tail_chars=WORKSPACE_DIAGNOSTIC_LOG_TAIL_CHARS)
     )
 
@@ -126,11 +120,9 @@ def _existing_path_mtime(path: Path) -> float | None:
         return None
 
 
-def _pybullet_warnings_for_log_text(log_text: str) -> tuple[str, ...]:
-    return pybullet_opengl_warnings(log_text)
-
-
-def _pybullet_warnings_for_renderer(renderer: str) -> tuple[str, ...]:
+def _pybullet_renderer_warnings_from_optional_renderer(renderer: str | None) -> tuple[str, ...]:
+    if renderer is None:
+        return ()
     return _pybullet_renderer_warnings(renderer)
 
 
