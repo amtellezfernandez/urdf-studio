@@ -182,6 +182,54 @@ def _resolve_workspace_robot_bundle_inputs(
     )
 
 
+def _bundle_workspace_robot_assets(
+    bundle_inputs: WorkspaceRobotBundleInputs,
+    *,
+    robot_urdf_xml: str,
+    error: Callable[[str], Exception],
+) -> BundleMeshAssetsResult:
+    try:
+        return bundle_mesh_assets_for_urdf_file(
+            urdf_path=str(bundle_inputs.source_urdf_path),
+            urdf_xml=robot_urdf_xml,
+            out_path=str(bundle_inputs.bundled_urdf_path),
+            extra_search_roots=[str(path) for path in bundle_inputs.workspace_asset_roots],
+        )
+    except IluUrdfBridgeError as exc:
+        _raise(error, exc.detail)
+
+
+def _raise_on_workspace_bundle_failure(
+    bundle_result: BundleMeshAssetsResult,
+    *,
+    error: Callable[[str], Exception],
+) -> None:
+    if not bundle_result.success:
+        _raise(
+            error,
+            bundle_result.error or "Simulator workspace could not bundle robot mesh assets.",
+        )
+    if bundle_result.unresolved:
+        unresolved = ", ".join(bundle_result.unresolved[:8])
+        suffix = "" if len(bundle_result.unresolved) <= 8 else " ..."
+        _raise(
+            error,
+            f"Simulator workspace could not resolve robot mesh assets: {unresolved}{suffix}",
+        )
+
+
+def _materialize_workspace_robot_urdf(
+    bundled_urdf_path: Path,
+    *,
+    error: Callable[[str], Exception],
+) -> str:
+    try:
+        materialize_urdf_visual_material_colors(bundled_urdf_path)
+    except ET.ParseError as exc:
+        _raise(error, f"Simulator workspace could not parse robot URDF materials: {exc}")
+    return bundled_urdf_path.read_text(encoding="utf-8")
+
+
 def prepare_simulator_workspace_package(
     request: SimulatorWorkspacePrepareRequest,
     *,
@@ -226,27 +274,19 @@ def _prepare_simulator_workspace_package_inner(
         staged_robot_source=staged_robot_source,
     )
     write_workspace_asset_roots(workspace_dir, bundle_inputs.workspace_asset_roots)
-    try:
-        bundle_result = bundle_mesh_assets_for_urdf_file(
-            urdf_path=str(bundle_inputs.source_urdf_path),
-            urdf_xml=staged_robot_source.robot_urdf_xml,
-            out_path=str(bundle_inputs.bundled_urdf_path),
-            extra_search_roots=[str(path) for path in bundle_inputs.workspace_asset_roots],
-        )
-    except IluUrdfBridgeError as exc:
-        _raise(error, exc.detail)
-
-    if not bundle_result.success:
-        _raise(error, bundle_result.error or "Simulator workspace could not bundle robot mesh assets.")
-    if bundle_result.unresolved:
-        unresolved = ", ".join(bundle_result.unresolved[:8])
-        suffix = "" if len(bundle_result.unresolved) <= 8 else " ..."
-        _raise(error, f"Simulator workspace could not resolve robot mesh assets: {unresolved}{suffix}")
-    try:
-        materialize_urdf_visual_material_colors(bundle_inputs.bundled_urdf_path)
-    except ET.ParseError as exc:
-        _raise(error, f"Simulator workspace could not parse robot URDF materials: {exc}")
-    prepared_robot_urdf_xml = bundle_inputs.bundled_urdf_path.read_text(encoding="utf-8")
+    bundle_result = _bundle_workspace_robot_assets(
+        bundle_inputs,
+        robot_urdf_xml=staged_robot_source.robot_urdf_xml,
+        error=error,
+    )
+    _raise_on_workspace_bundle_failure(
+        bundle_result,
+        error=error,
+    )
+    prepared_robot_urdf_xml = _materialize_workspace_robot_urdf(
+        bundle_inputs.bundled_urdf_path,
+        error=error,
+    )
 
     return PreparedSimulatorWorkspace(
         workspace_dir=workspace_dir,
