@@ -24,13 +24,14 @@ from backend.models.physical_state import (
     PhysicalStateFrame,
     WorldModelTrainingSample,
 )
-from backend.services.robot_rollout_generator import UrdfEntry, fk_position, load_urdf_entry
 from backend.services.import_utils import module_not_found_matches_import_name
+from backend.services.robot_rollout_generator import UrdfEntry, fk_position, load_urdf_entry
 from backend.services.world_model_dataset import build_world_model_training_samples
 
 # ── Robot configuration registry ─────────────────────────────────────────────
 
 _REPO_ROOT = Path(__file__).parents[2]
+
 
 @dataclass(frozen=True)
 class _RobotConfig:
