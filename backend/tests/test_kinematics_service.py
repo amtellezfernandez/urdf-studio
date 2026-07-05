@@ -67,6 +67,16 @@ def test_kinematics_get_or_create_entry_preserves_unexpected_urdf_load_errors(mo
         kinematics_module._get_or_create_entry("<robot name='demo'/>")
 
 
+def test_load_urdf_from_xml_rejects_missing_yourdfpy_loader(monkeypatch) -> None:
+    class _LoaderlessUrdf:
+        pass
+
+    monkeypatch.setattr(kinematics_module.yourdfpy, "URDF", _LoaderlessUrdf)
+
+    with pytest.raises(ValueError, match="yourdfpy.URDF.load is unavailable"):
+        kinematics_module._load_urdf_from_xml("<robot name='demo'/>")
+
+
 def test_compute_link_pose_wraps_expected_fk_errors(monkeypatch) -> None:
     class _BrokenRobot:
         actuated_joint_names = ()

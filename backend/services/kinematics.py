@@ -42,7 +42,10 @@ def _load_urdf_from_xml(urdf_xml: str) -> yourdfpy.URDF:
         urdf_file.write(urdf_xml)
         temporary_urdf_path = urdf_file.name
     try:
-        loaded_urdf = yourdfpy.URDF.load(temporary_urdf_path)  # type: ignore[attr-defined]
+        load_urdf = getattr(yourdfpy.URDF, "load", None)
+        if not callable(load_urdf):
+            raise ValueError("yourdfpy.URDF.load is unavailable")
+        loaded_urdf = load_urdf(temporary_urdf_path)
     finally:
         try:
             Path(temporary_urdf_path).unlink(missing_ok=True)
