@@ -230,7 +230,7 @@ def _camera_identity(
     *,
     index: int,
 ) -> tuple[_CameraIdentity | None, str | None]:
-    name = _read_string(camera_record.get("name")) or _read_string(camera_record.get("id"))
+    name = _camera_name_or_id(camera_record)
     if not name:
         return None, f"Camera at index {index} has no id or name."
     parent_joint = _read_string(camera_record.get("parent_joint"))
@@ -244,6 +244,10 @@ def _camera_identity(
         ),
         None,
     )
+
+
+def _camera_name_or_id(camera_record: WorldScenePayload) -> str:
+    return _read_string(camera_record.get("name")) or _read_string(camera_record.get("id"))
 
 
 def _resolve_camera_parent_link(
