@@ -72,6 +72,13 @@ def _manifest_asset_root(value: object) -> Path | None:
     return resolved_root
 
 
+def _valid_manifest_asset_roots(payload: list[object]) -> tuple[Path, ...] | None:
+    roots = tuple(root for item in payload if (root := _manifest_asset_root(item)) is not None)
+    if not roots:
+        return None
+    return _dedupe_paths(roots)
+
+
 def _manifest_workspace_asset_roots(manifest_path: Path) -> tuple[Path, ...] | None:
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -79,10 +86,7 @@ def _manifest_workspace_asset_roots(manifest_path: Path) -> tuple[Path, ...] | N
         return None
     if not isinstance(payload, list):
         return None
-    roots = tuple(root for item in payload if (root := _manifest_asset_root(item)) is not None)
-    if not roots:
-        return None
-    return _dedupe_paths(roots)
+    return _valid_manifest_asset_roots(payload)
 
 
 def workspace_asset_roots(world_package_path: Path, robot_urdf_path: Path) -> tuple[Path, ...]:
