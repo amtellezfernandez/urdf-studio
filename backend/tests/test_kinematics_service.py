@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
 from backend.services import kinematics as kinematics_module
-from backend.services.kinematics import rotation_matrix_to_wxyz
+from backend.services.kinematics import FKRequest, compute_link_pose, forward_kinematics, rotation_matrix_to_wxyz
 
 
 def test_rotation_matrix_to_wxyz_returns_identity_quaternion() -> None:
@@ -64,3 +65,48 @@ def test_kinematics_get_or_create_entry_preserves_unexpected_urdf_load_errors(mo
 
     with pytest.raises(RuntimeError, match="unexpected urdf failure"):
         kinematics_module._get_or_create_entry("<robot name='demo'/>")
+
+
+def test_compute_link_pose_wraps_expected_fk_errors(monkeypatch) -> None:
+    class _BrokenRobot:
+        actuated_joint_names = ()
+        link_map = {"tool": object()}
+
+        @staticmethod
+        def update_cfg(_joint_values):
+            raise ValueError("bad joint values")
+
+    monkeypatch.setattr(
+        kinematics_module,
+        "_get_or_create_entry",
+        lambda _urdf_xml: SimpleNamespace(urdf=_BrokenRobot()),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        compute_link_pose("<robot name='demo'/>", {}, "tool")
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Forward kinematics failed: bad joint values"
+
+
+def test_forward_kinematics_preserves_unexpected_transform_errors(monkeypatch) -> None:
+    class _BrokenRobot:
+        actuated_joint_names = ()
+        link_map = {"tool": object()}
+
+        @staticmethod
+        def update_cfg(_joint_values):
+            return None
+
+        @staticmethod
+        def get_transform(_link_name: str):
+            raise KeyError("unexpected transform failure")
+
+    monkeypatch.setattr(
+        kinematics_module,
+        "_get_or_create_entry",
+        lambda _urdf_xml: SimpleNamespace(urdf=_BrokenRobot(), urdf_hash="demo"),
+    )
+
+    with pytest.raises(KeyError, match="unexpected transform failure"):
+        forward_kinematics(FKRequest(urdf="<robot name='demo'/>", joint_values={}))

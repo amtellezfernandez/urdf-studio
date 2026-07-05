@@ -143,7 +143,7 @@ def compute_link_pose(
             robot_model.get_transform(target_link),
             dtype=np.float64,
         )
-    except Exception as exc:
+    except (TypeError, ValueError, RuntimeError) as exc:
         raise HTTPException(
             status_code=500,
             detail=f"Forward kinematics failed: {exc}",
@@ -162,7 +162,7 @@ def forward_kinematics(fk_request: FKRequest) -> FKResponse:
         robot_model.update_cfg(
             _build_actuated_joint_values(robot_model, fk_request.joint_values)
         )
-    except Exception as exc:
+    except (TypeError, ValueError, RuntimeError) as exc:
         raise HTTPException(
             status_code=500,
             detail=f"Forward kinematics failed: {exc}",
@@ -175,7 +175,7 @@ def forward_kinematics(fk_request: FKRequest) -> FKResponse:
                 robot_model.get_transform(link_name),
                 dtype=np.float64,
             )
-        except Exception as exc:
+        except (TypeError, ValueError, RuntimeError) as exc:
             raise HTTPException(
                 status_code=500,
                 detail=f"Forward kinematics failed for link '{link_name}': {exc}",
