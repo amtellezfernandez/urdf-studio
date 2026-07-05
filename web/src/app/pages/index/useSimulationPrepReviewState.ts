@@ -28,6 +28,38 @@ export type SimulationPrepAcceptedUrdfReviewState = {
   robotMirrorOutcome?: RobotMirrorOutcome | null;
 };
 
+const buildPinnedRepeatedInertiaSymmetryChains = (
+  pinnedSymmetryChain: RepeatedInertiaSymmetryChain | null | undefined
+): RepeatedInertiaSymmetryChain[] =>
+  pinnedSymmetryChain
+    ? [
+        {
+          ...pinnedSymmetryChain,
+          recommendedRepair: null,
+        },
+      ]
+    : [];
+
+const buildRepeatedInertiaSymmetryOutcomeByChainKey = ({
+  pinnedSymmetryChain,
+  pinnedSymmetryOutcome,
+}: Pick<
+  SimulationPrepAcceptedUrdfReviewState,
+  "pinnedSymmetryChain" | "pinnedSymmetryOutcome"
+>): Record<string, RepeatedInertiaSymmetryOutcome> => {
+  if (!pinnedSymmetryChain || !pinnedSymmetryOutcome) {
+    return {};
+  }
+
+  return {
+    [buildRepeatedInertiaSymmetryFamilyOutcomeKey(pinnedSymmetryChain)]: pinnedSymmetryOutcome,
+    [buildRepeatedInertiaSymmetryChainKey({
+      symmetryRootLinkName: pinnedSymmetryChain.symmetryRootLinkName,
+      outlierBranchRootLinkName: pinnedSymmetryChain.outlierBranchRootLinkName,
+    })]: pinnedSymmetryOutcome,
+  };
+};
+
 export const useSimulationPrepReviewState = () => {
   const [activeInertiaVisualizationScopeKey, setActiveInertiaVisualizationScopeKey] =
     useState<string | null>(null);
@@ -97,6 +129,15 @@ export const useSimulationPrepReviewState = () => {
     setRepeatedInertiaOutcomeByGroupKey({});
   }, []);
 
+  const clearSimulationPrepReviewActions = useCallback(() => {
+    setRepeatedInertiaGroupAction(null);
+    setRepeatedInertiaSymmetryActingChainKey(null);
+    setRepeatedInertiaSymmetryActingProgress(null);
+    setRobotMirrorOutcome(null);
+    setActiveRobotMirrorAction(null);
+    setIsRobotMirrorActing(false);
+  }, []);
+
   const resetSimulationPrepReviewState = useCallback(() => {
     setShowHealthActionPanel(false);
     setHoveredInertiaVisualizationPreview(null);
@@ -104,14 +145,9 @@ export const useSimulationPrepReviewState = () => {
     clearRepeatedInertiaReview();
     setPinnedRepeatedInertiaSymmetryChains([]);
     setRepeatedInertiaSymmetryOutcomeByChainKey({});
-    setRepeatedInertiaGroupAction(null);
-    setRepeatedInertiaSymmetryActingChainKey(null);
-    setRepeatedInertiaSymmetryActingProgress(null);
+    clearSimulationPrepReviewActions();
     setSimulationPrepReviewResetRevision((revision) => revision + 1);
-    setRobotMirrorOutcome(null);
-    setActiveRobotMirrorAction(null);
-    setIsRobotMirrorActing(false);
-  }, [clearRepeatedInertiaReview]);
+  }, [clearRepeatedInertiaReview, clearSimulationPrepReviewActions]);
 
   const applyAcceptedUrdfReviewState = useCallback(
     ({
@@ -122,26 +158,13 @@ export const useSimulationPrepReviewState = () => {
       clearDraftSessions();
       clearRepeatedInertiaReview();
       setPinnedRepeatedInertiaSymmetryChains(
-        pinnedSymmetryChain
-          ? [
-              {
-                ...pinnedSymmetryChain,
-                recommendedRepair: null,
-              },
-            ]
-          : []
+        buildPinnedRepeatedInertiaSymmetryChains(pinnedSymmetryChain)
       );
       setRepeatedInertiaSymmetryOutcomeByChainKey(
-        pinnedSymmetryChain && pinnedSymmetryOutcome
-          ? {
-              [buildRepeatedInertiaSymmetryFamilyOutcomeKey(pinnedSymmetryChain)]:
-                pinnedSymmetryOutcome,
-              [buildRepeatedInertiaSymmetryChainKey({
-                symmetryRootLinkName: pinnedSymmetryChain.symmetryRootLinkName,
-                outlierBranchRootLinkName: pinnedSymmetryChain.outlierBranchRootLinkName,
-              })]: pinnedSymmetryOutcome,
-            }
-          : {}
+        buildRepeatedInertiaSymmetryOutcomeByChainKey({
+          pinnedSymmetryChain,
+          pinnedSymmetryOutcome,
+        })
       );
       setRobotMirrorOutcome(robotMirrorOutcome ?? null);
     },
