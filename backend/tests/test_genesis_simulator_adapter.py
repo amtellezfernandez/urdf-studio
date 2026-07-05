@@ -966,3 +966,13 @@ def test_genesis_plugin_build_check_command_uses_expected_artifact_paths(
     assert str(prepared.workspace_dir / "artifacts" / "cameras") in command.command
     assert str(prepared.workspace_dir / "artifacts" / "sensors") in command.command
     assert command.expected_report_path == prepared.workspace_dir / "artifacts" / "report.json"
+
+
+def test_genesis_extra_expected_markers_use_camera_count() -> None:
+    assert genesis_adapter._genesis_extra_expected_markers(3) == (
+        "camera_screenshots=3",
+        "observation_cameras=3",
+        "sensor_reads=3",
+        "sensor_screenshots=3",
+        "merge_fixed_links=True",
+    )

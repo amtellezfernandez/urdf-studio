@@ -61,6 +61,16 @@ def _build_genesis_workspace_check_artifacts(
     )
 
 
+def _genesis_extra_expected_markers(camera_count: int) -> tuple[str, ...]:
+    return (
+        f"camera_screenshots={camera_count}",
+        f"observation_cameras={camera_count}",
+        f"sensor_reads={camera_count}",
+        f"sensor_screenshots={camera_count}",
+        "merge_fixed_links=True",
+    )
+
+
 class GenesisPlugin(DirectUrdfSimulatorPlugin):
     simulator_id = SIMULATOR_GENESIS_ID
     label = "Genesis"
@@ -85,13 +95,7 @@ class GenesisPlugin(DirectUrdfSimulatorPlugin):
             workspace_process=GENESIS_WORKSPACE_PROCESS_PARAMS,
             object_marker=f"primitives={expectations.object_count}",
             camera_log_marker=f"attached_cameras={expectations.camera_count}",
-            extra_expected_markers=(
-                f"camera_screenshots={expectations.camera_count}",
-                f"observation_cameras={expectations.camera_count}",
-                f"sensor_reads={expectations.camera_count}",
-                f"sensor_screenshots={expectations.camera_count}",
-                "merge_fixed_links=True",
-            ),
+            extra_expected_markers=_genesis_extra_expected_markers(expectations.camera_count),
             extra_args=(
                 "--screenshot",
                 str(artifacts.viewer_screenshot_path),
