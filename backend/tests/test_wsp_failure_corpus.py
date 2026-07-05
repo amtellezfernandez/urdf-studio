@@ -4,9 +4,14 @@ import json
 import subprocess
 import sys
 
+import pytest
+
 from backend.services.world_model_dataset import load_world_model_dataset_jsonl, validate_world_model_dataset_samples
 from backend.services.wsp_failure_corpus import (
     CorpusNoiseConfig,
+    _entity,
+    _selected_entity_type,
+    _selected_geometry_type,
     generate_wsp_failure_corpus_samples,
     normalize_failure_modes,
     summarize_wsp_failure_corpus,
@@ -23,6 +28,40 @@ def test_failure_corpus_normalizes_requested_aliases() -> None:
         "battery_infeasible",
         "unreachable_target",
     ]
+
+
+def test_failure_corpus_selected_entity_type_accepts_supported_values() -> None:
+    assert _selected_entity_type("robot") == "robot"
+    assert _selected_entity_type("object") == "object"
+
+
+def test_failure_corpus_selected_entity_type_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="Unsupported physical entity type"):
+        _selected_entity_type("world_object")
+
+
+def test_failure_corpus_selected_geometry_type_accepts_supported_values() -> None:
+    assert _selected_geometry_type("box") == "box"
+    assert _selected_geometry_type("mesh") == "mesh"
+
+
+def test_failure_corpus_selected_geometry_type_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="Unsupported physical geometry type"):
+        _selected_geometry_type("capsule")
+
+
+def test_failure_corpus_entity_builder_rejects_unknown_runtime_types() -> None:
+    with pytest.raises(ValueError, match="Unsupported physical entity type"):
+        _entity("demo", "world_object", [0.0, 0.0, 0.0], [0.2, 0.2, 0.2])
+
+    with pytest.raises(ValueError, match="Unsupported physical geometry type"):
+        _entity(
+            "demo",
+            "object",
+            [0.0, 0.0, 0.0],
+            [0.2, 0.2, 0.2],
+            geometry_type="capsule",
+        )
 
 
 def test_failure_corpus_generates_model_ready_labeled_samples() -> None:

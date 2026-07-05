@@ -3,12 +3,14 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Sequence, cast, get_args
 
 from backend.models.physical_state import (
     ActionToken,
     ConstraintToken,
     PhysicalEntity,
+    PhysicalEntityType,
+    PhysicalGeometryType,
     PhysicalRelation,
     PhysicalRolloutTrace,
     PhysicalStateFrame,
@@ -56,6 +58,9 @@ DEFAULT_FAILURE_MODES = (
     "bad_scale_missing_geometry",
 )
 
+_PHYSICAL_ENTITY_TYPES = set(get_args(PhysicalEntityType))
+_PHYSICAL_GEOMETRY_TYPES = set(get_args(PhysicalGeometryType))
+
 
 def normalize_failure_modes(raw_modes: Sequence[str] | str | None) -> list[str]:
     if raw_modes is None:
@@ -76,6 +81,18 @@ def normalize_failure_modes(raw_modes: Sequence[str] | str | None) -> list[str]:
     return modes or list(DEFAULT_FAILURE_MODES)
 
 
+def _selected_entity_type(value: str) -> PhysicalEntityType:
+    if value in _PHYSICAL_ENTITY_TYPES:
+        return cast(PhysicalEntityType, value)
+    raise ValueError(f"Unsupported physical entity type: {value}")
+
+
+def _selected_geometry_type(value: str) -> PhysicalGeometryType:
+    if value in _PHYSICAL_GEOMETRY_TYPES:
+        return cast(PhysicalGeometryType, value)
+    raise ValueError(f"Unsupported physical geometry type: {value}")
+
+
 def _entity(
     entity_id: str,
     entity_type: str,
@@ -91,8 +108,8 @@ def _entity(
 ) -> PhysicalEntity:
     return PhysicalEntity(
         entity_id=entity_id,
-        entity_type=entity_type,  # type: ignore[arg-type]
-        geometry_type=geometry_type,  # type: ignore[arg-type]
+        entity_type=_selected_entity_type(entity_type),
+        geometry_type=_selected_geometry_type(geometry_type),
         position_xyz=position_xyz,
         size_xyz=size_xyz,
         mass_kg=mass_kg,
