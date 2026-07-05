@@ -3,11 +3,14 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import SimulatorId
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
+
+if TYPE_CHECKING:
+    from backend.services.simulator_adapters.plugin import SimulatorPlugin
 
 
 WORKSPACE_LAUNCH_FRAME_MAP: WorldLayoutFrameMap = "auto"
@@ -159,7 +162,7 @@ def _ensure_simulator_plugins_registered() -> None:
     importlib.import_module("backend.services.simulator_adapters")
 
 
-def _workspace_plugins():
+def _workspace_plugins() -> tuple[SimulatorPlugin, ...]:
     _ensure_simulator_plugins_registered()
     from backend.services.simulator_adapters.plugin import get_workspace_plugins
 
