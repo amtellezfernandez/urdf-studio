@@ -79,6 +79,20 @@ def _blender_workspace_command(
     ]
 
 
+def _blender_runtime_status(executable: str | None) -> SimulatorRuntimeStatus:
+    available = executable is not None
+    return SimulatorRuntimeStatus(
+        runtimeName=SIMULATOR_BLENDER_ID,
+        available=available,
+        status=f"ready: {executable}"
+        if available
+        else f"Missing optional dependency: blender. Set {BLENDER_PATH_ENV} if Blender is installed outside the standard paths.",
+        dependencies=[
+            SimulatorRuntimeDependency(name="blender", available=available),
+        ],
+    )
+
+
 def start_blender_workspace(
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareResponse:
@@ -138,18 +152,7 @@ class BlenderPlugin(SimulatorPlugin):
         return start_blender_workspace(request)
 
     def runtime_status(self) -> SimulatorRuntimeStatus:
-        executable = resolve_blender_executable()
-        available = executable is not None
-        return SimulatorRuntimeStatus(
-            runtimeName=self.simulator_id,
-            available=available,
-            status=f"ready: {executable}"
-            if available
-            else f"Missing optional dependency: blender. Set {BLENDER_PATH_ENV} if Blender is installed outside the standard paths.",
-            dependencies=[
-                SimulatorRuntimeDependency(name="blender", available=available),
-            ],
-        )
+        return _blender_runtime_status(resolve_blender_executable())
 
     def apply_workspace_change_set(
         self,

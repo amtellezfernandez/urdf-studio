@@ -2018,6 +2018,16 @@ def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
     assert status.dependencies[0].available is False
 
 
+def test_blender_runtime_status_reports_resolved_executable() -> None:
+    status = blender_adapter._blender_runtime_status("/usr/bin/blender")
+
+    assert status.runtime_name == SIMULATOR_BLENDER_ID
+    assert status.available is True
+    assert status.status == "ready: /usr/bin/blender"
+    assert status.dependencies[0].name == "blender"
+    assert status.dependencies[0].available is True
+
+
 def test_blender_runtime_resolves_configured_app_bundle(tmp_path: Path) -> None:
     app_binary = tmp_path / "Blender.app" / "Contents" / "MacOS" / "Blender"
     app_binary.parent.mkdir(parents=True)
