@@ -155,6 +155,42 @@ def test_list_repo_contents_ignores_non_string_bridge_ref(monkeypatch) -> None:
     )
 
 
+def test_list_repo_contents_ignores_non_string_entry_path_and_sha(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
+
+    def _fake_run(*args, **kwargs):
+        del kwargs
+        payload = {
+            "ref": "main",
+            "files": [
+                {
+                    "name": "bad.urdf",
+                    "path": ["robots", "bad.urdf"],
+                    "type": "file",
+                    "sha": "sha-bad",
+                    "encoding": "sha",
+                },
+                {
+                    "name": "demo.urdf",
+                    "path": "robots/demo/demo.urdf",
+                    "type": "file",
+                    "sha": 123,
+                    "encoding": "sha",
+                },
+            ],
+        }
+        return subprocess.CompletedProcess(args[0], 0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr("backend.services.ilu_repo_source.subprocess.run", _fake_run)
+
+    files = list_repo_contents(owner="acme", repo="robot")
+
+    assert [file["path"] for file in files] == ["robots/demo/demo.urdf"]
+    assert files[0]["download_url"] == (
+        "/ilu/file?owner=acme&repo=robot&path=robots%2Fdemo%2Fdemo.urdf&branch=main"
+    )
+
+
 def test_fetch_file_bytes_uses_ilu_bridge(monkeypatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
@@ -389,6 +425,21 @@ def test_list_repo_candidates_falls_back_when_bridge_process_fails(monkeypatch) 
     assert payload["ref"] == "main"
     assert payload["candidates"][0]["path"] == "robots/demo/demo.urdf"
     assert payload["candidates"][0]["meshesFolderPath"] == "robots/demo/assets"
+
+
+def test_filter_archive_files_ignores_non_string_item_paths() -> None:
+    snapshot = _ArchiveSnapshot(
+        resolved_ref="main",
+        files=[
+            {"path": ["robots", "bad.urdf"], "type": "file"},
+            {"path": "robots/demo/demo.urdf", "type": "file"},
+        ],
+        file_bytes_by_path={},
+    )
+
+    filtered = ilu_repo_source._filter_archive_files(snapshot, "robots/demo")
+
+    assert [item["path"] for item in filtered] == ["robots/demo/demo.urdf"]
 
 
 def test_find_repo_candidates_from_files_ignores_non_string_entry_fields() -> None:

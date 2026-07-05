@@ -753,7 +753,7 @@ def _filter_archive_files(
 
     filtered: list[RepositoryFileEntry] = []
     for item in snapshot.files:
-        item_path = str(item.get("path", ""))
+        item_path = _read_entry_str(item, "path")
         if item_path == normalized_prefix or item_path.startswith(f"{normalized_prefix}/"):
             filtered.append(dict(item))
     return filtered
@@ -842,11 +842,14 @@ def list_repo_contents(
             continue
         normalized = dict(entry)
         if normalized.get("type") == "file":
+            normalized_path = _read_entry_str(normalized, "path")
+            if not normalized_path:
+                continue
             raw_sha = normalized.get("sha")
             normalized["download_url"] = _build_backend_file_url(
                 owner=owner,
                 repo=repo,
-                path=str(normalized.get("path", "")),
+                path=normalized_path,
                 sha=raw_sha.strip() if isinstance(raw_sha, str) and raw_sha.strip() else None,
                 branch=resolved_ref,
             )
