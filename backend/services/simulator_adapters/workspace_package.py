@@ -385,6 +385,31 @@ def _workspace_ready_log_marker_seen(
     return ready_log_marker in read_log_tail(log_path, tail_chars=log_tail_chars)
 
 
+def _raise_if_workspace_process_still_not_ready(
+    process: subprocess.Popen,
+    *,
+    simulator_label: str,
+    log_path: Path,
+    ready_log_marker: str,
+    log_tail_chars: int,
+    error: Callable[[str], Exception],
+    should_cancel: Callable[[], bool] | None,
+) -> bool:
+    _raise_if_workspace_process_not_ready(
+        process,
+        simulator_label=simulator_label,
+        log_path=log_path,
+        log_tail_chars=log_tail_chars,
+        error=error,
+        should_cancel=should_cancel,
+    )
+    return _workspace_ready_log_marker_seen(
+        log_path=log_path,
+        ready_log_marker=ready_log_marker,
+        log_tail_chars=log_tail_chars,
+    )
+
+
 def wait_for_workspace_readiness(
     process: subprocess.Popen,
     *,
@@ -400,29 +425,26 @@ def wait_for_workspace_readiness(
 ) -> None:
     deadline = time.monotonic() + ready_timeout_sec
     while time.monotonic() < deadline:
-        _raise_if_workspace_process_not_ready(
+        if _raise_if_workspace_process_still_not_ready(
             process,
             simulator_label=simulator_label,
             log_path=log_path,
+            ready_log_marker=ready_log_marker,
             log_tail_chars=log_tail_chars,
             error=error,
             should_cancel=should_cancel,
-        )
-        if _workspace_ready_log_marker_seen(
-            log_path=log_path,
-            ready_log_marker=ready_log_marker,
-            log_tail_chars=log_tail_chars,
         ):
             time.sleep(post_ready_grace_sec)
-            _raise_if_workspace_process_not_ready(
+            if _raise_if_workspace_process_still_not_ready(
                 process,
                 simulator_label=simulator_label,
                 log_path=log_path,
+                ready_log_marker=ready_log_marker,
                 log_tail_chars=log_tail_chars,
                 error=error,
                 should_cancel=should_cancel,
-            )
-            return
+            ):
+                return
         time.sleep(poll_sec)
     _raise_if_workspace_launch_cancelled(
         simulator_label=simulator_label,

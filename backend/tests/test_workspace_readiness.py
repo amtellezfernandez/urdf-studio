@@ -71,3 +71,31 @@ def test_wait_for_workspace_readiness_reports_process_exit_log_tail(
             post_ready_grace_sec=0.01,
             error=_value_error,
         )
+
+
+def test_wait_for_workspace_readiness_reports_timeout_with_log_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "workspace.log"
+    log_path.write_text("", encoding="utf-8")
+    monotonic_values = iter((0.0, 0.25, 0.5, 1.25))
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.time.monotonic",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr("backend.services.simulator_adapters.workspace_package.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(ValueError, match=r"PyBullet workspace did not become ready within 1s\."):
+        wait_for_workspace_readiness(
+            _FakeProcess([None]),
+            simulator_label="PyBullet",
+            log_path=log_path,
+            ready_log_marker="READY",
+            log_tail_chars=256,
+            poll_sec=0.01,
+            ready_timeout_sec=1.0,
+            post_ready_grace_sec=0.01,
+            error=_value_error,
+        )
