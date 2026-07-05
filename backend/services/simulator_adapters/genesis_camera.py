@@ -93,9 +93,10 @@ def attach_scene_camera_to_robot_link(
     camera: SimCameraSpec,
 ) -> bool:
     parent_link = _robot_parent_link(robot_entity, camera)
-    if parent_link is None or not hasattr(scene_camera, "attach"):
+    attach = getattr(scene_camera, "attach", None)
+    if parent_link is None or not callable(attach):
         return False
-    scene_camera.attach(parent_link, transform_matrix(camera.render_local_pose))
+    attach(parent_link, transform_matrix(camera.render_local_pose))
     return True
 
 

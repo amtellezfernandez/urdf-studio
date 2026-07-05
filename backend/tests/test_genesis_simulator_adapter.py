@@ -581,6 +581,25 @@ def test_genesis_workspace_camera_attaches_to_native_robot_link() -> None:
     assert np.allclose(scene_camera.offset_matrix, expected_offset)
 
 
+def test_genesis_workspace_camera_skips_non_callable_attach_attribute() -> None:
+    class _FakeLink:
+        name = "wrist_link"
+
+    class _FakeRobotEntity:
+        links = [_FakeLink()]
+
+    class _FakeSceneCamera:
+        attach = True
+
+    attached = attach_scene_camera_to_robot_link(
+        _FakeSceneCamera(),
+        _FakeRobotEntity(),
+        _genesis_camera_spec(),
+    )
+
+    assert attached is False
+
+
 def test_genesis_observation_camera_sensor_uses_native_entity_and_link_indices() -> None:
     class _FakeLink:
         name = "wrist_link"
