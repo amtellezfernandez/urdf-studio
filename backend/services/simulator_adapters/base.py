@@ -13,6 +13,7 @@ from backend.models.simulator_runtime import (
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
 )
+from backend.services.import_utils import module_not_found_matches_import_name
 
 PYTHON_MODULE_PROBE_TIMEOUT_SEC = 5
 PYTHON_MODULE_PROBE_PROGRAM = (
@@ -48,16 +49,10 @@ def is_python_module_available(import_name: str) -> bool:
     try:
         importlib.import_module(import_name)
     except ModuleNotFoundError as exc:
-        if not _module_not_found_matches_import_name(exc.name, import_name):
+        if not module_not_found_matches_import_name(exc.name, import_name):
             raise
         return False
     return True
-
-
-def _module_not_found_matches_import_name(missing_name: str | None, import_name: str) -> bool:
-    return bool(missing_name) and (
-        missing_name == import_name or import_name.startswith(f"{missing_name}.")
-    )
 
 
 def is_python_module_available_in_python(python_executable: str, import_name: str) -> bool:
