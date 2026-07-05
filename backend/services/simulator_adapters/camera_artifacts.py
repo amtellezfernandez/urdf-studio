@@ -9,6 +9,7 @@ import numpy as np
 MIN_VISIBLE_CHANNEL_SPAN = 5
 IMAGE_ARTIFACT_SUFFIX = ".png"
 SAFE_ARTIFACT_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
+DEFAULT_SAFE_ARTIFACT_NAME = "artifact"
 
 
 @dataclass(frozen=True)
@@ -45,8 +46,15 @@ def camera_artifact_path(
 
 
 def safe_artifact_name(value: str, *, default_name: str) -> str:
-    normalized = SAFE_ARTIFACT_NAME_PATTERN.sub("_", value.strip()).strip("._")
-    return normalized or default_name
+    normalized = _normalized_artifact_name(value)
+    if normalized:
+        return normalized
+    fallback_name = _normalized_artifact_name(default_name)
+    return fallback_name or DEFAULT_SAFE_ARTIFACT_NAME
+
+
+def _normalized_artifact_name(value: str) -> str:
+    return SAFE_ARTIFACT_NAME_PATTERN.sub("_", value.strip()).strip("._")
 
 
 def write_rgb_image(path: Path, image: np.ndarray) -> None:
