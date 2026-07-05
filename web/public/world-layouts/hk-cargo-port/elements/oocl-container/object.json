@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "world": "port-hk2",
+  "object": {
+    "id": "oocl-container",
+    "name": "OOCL shipping container",
+    "description": "Standard ISO intermodal shipping container with white painted corrugated steel body and red OOCL logo and lettering on the side panels.",
+    "estimated_size_m": {
+      "height": 2.6,
+      "width": 2.4,
+      "length": 6.1
+    },
+    "estimated_mass_kg": 2300,
+    "materials": [
+      "white painted corrugated steel"
+    ],
+    "source_images": [
+      "worlds/port-hk2/source/0-port-hk2.png"
+    ],
+    "evidence": [
+      {
+        "image": "worlds/port-hk2/source/0-port-hk2.png",
+        "location_in_image": "mid-ground and foreground rows, white body with red OOCL branding"
+      }
+    ],
+    "generate_as_3d_object": true,
+    "working_dir": "worlds/port-hk2/output/oocl-container"
+  },
+  "updated_at": "2026-06-06T23:46:13.174Z"
+}

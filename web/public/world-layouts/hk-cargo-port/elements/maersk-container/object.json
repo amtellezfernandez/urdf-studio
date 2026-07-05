@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "world": "hk-port3",
+  "object": {
+    "id": "maersk-iso-shipping-container",
+    "name": "Maersk ISO shipping container",
+    "description": "Standard 20-foot ISO shipping container in light blue Maersk livery. Corrugated steel walls, white MAERSK logo and star emblem on the side, double swing doors with locking bars at the rear, corner castings at all eight corners.",
+    "source_images": [
+      "worlds/port-boats/output/shipping-container/0-shipping-container.png"
+    ],
+    "evidence": [
+      {
+        "image": "worlds/port-boats/output/shipping-container/0-shipping-container.png",
+        "notes": "Direct single-image object input"
+      }
+    ],
+    "generate_as_3d_object": true,
+    "working_dir": "worlds/hk-port3/output/maersk-iso-shipping-container"
+  },
+  "updated_at": "2026-06-07T05:02:32.049Z"
+}
