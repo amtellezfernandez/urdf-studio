@@ -1,21 +1,27 @@
 import type { ComponentProps } from "react";
-import { Profiler, Suspense, lazy, useCallback, type ReactNode } from "react";
+import { Suspense, useCallback } from "react";
 import { LoadingScreen } from "@/features/layout/page/LoadingScreen";
 import { ROBOT_LOADING_MESSAGE } from "@/features/layout/page/loadingScreenParams";
 import { UrdfStatusBanner } from "@/features/layout/page/UrdfStatusBanner";
+import { renderWithOptionalProfiler } from "@/features/layout/page/pageShellHelpers";
+import { lazyNamedComponent } from "@/features/layout/page/workspacePanelsHelpers";
 import { isMetricsEnabled } from "@/shared/lib/metrics";
 
-const TopNavBar = lazy(() =>
-  import("@/features/layout/page/TopNavBar").then((module) => ({ default: module.TopNavBar }))
+const TopNavBar = lazyNamedComponent(
+  () => import("@/features/layout/page/TopNavBar"),
+  "TopNavBar"
 );
-const LeftSidebarPanel = lazy(() =>
-  import("@/features/layout/page/LeftSidebarPanel").then((module) => ({ default: module.LeftSidebarPanel }))
+const LeftSidebarPanel = lazyNamedComponent(
+  () => import("@/features/layout/page/LeftSidebarPanel"),
+  "LeftSidebarPanel"
 );
-const ViewerLayout = lazy(() =>
-  import("@/features/layout/page/ViewerLayout").then((module) => ({ default: module.ViewerLayout }))
+const ViewerLayout = lazyNamedComponent(
+  () => import("@/features/layout/page/ViewerLayout"),
+  "ViewerLayout"
 );
-const RightSidebarPanel = lazy(() =>
-  import("@/features/layout/page/RightSidebarPanel").then((module) => ({ default: module.RightSidebarPanel }))
+const RightSidebarPanel = lazyNamedComponent(
+  () => import("@/features/layout/page/RightSidebarPanel"),
+  "RightSidebarPanel"
 );
 
 export type PageShellProps = {
@@ -59,17 +65,6 @@ export const PageShell = ({
     },
     [metricsEnabled]
   );
-  const withOptionalProfiler = useCallback(
-    (id: string, node: ReactNode) =>
-      metricsEnabled ? (
-        <Profiler id={id} onRender={handleProfilerRender}>
-          {node}
-        </Profiler>
-      ) : (
-        node
-      ),
-    [handleProfilerRender, metricsEnabled]
-  );
 
   return isLoading ? (
     <LoadingScreen message={ROBOT_LOADING_MESSAGE} />
@@ -77,15 +72,24 @@ export const PageShell = ({
     <Suspense fallback={<LoadingScreen />}>
       <TopNavBar {...topNavBarProps} />
       <UrdfStatusBanner {...urdfStatusBannerProps} />
-      {withOptionalProfiler(
-        "left-sidebar",
-        <LeftSidebarPanel {...leftSidebarProps} />
-      )}
-      {withOptionalProfiler("viewer-layout", <ViewerLayout {...viewerLayoutProps} />)}
-      {withOptionalProfiler(
-        "right-sidebar",
-        <RightSidebarPanel {...rightSidebarProps} />
-      )}
+      {renderWithOptionalProfiler({
+        enabled: metricsEnabled,
+        id: "left-sidebar",
+        node: <LeftSidebarPanel {...leftSidebarProps} />,
+        onRender: handleProfilerRender,
+      })}
+      {renderWithOptionalProfiler({
+        enabled: metricsEnabled,
+        id: "viewer-layout",
+        node: <ViewerLayout {...viewerLayoutProps} />,
+        onRender: handleProfilerRender,
+      })}
+      {renderWithOptionalProfiler({
+        enabled: metricsEnabled,
+        id: "right-sidebar",
+        node: <RightSidebarPanel {...rightSidebarProps} />,
+        onRender: handleProfilerRender,
+      })}
     </Suspense>
   );
 };
