@@ -17,6 +17,25 @@ from backend.services.world_layout_static_transfer import resolve_world_layout_a
 
 VALID_REPORT_FRAME_MAPS = frozenset(("identity", "studio-y-up-to-z-up"))
 VALID_REPORT_REQUESTED_FRAME_MAPS = frozenset(("auto", *VALID_REPORT_FRAME_MAPS))
+REQUIRED_REPORT_FIELDS = (
+    "simulator",
+    "package_id",
+    "version",
+    "requested_frame_map",
+    "frame_map",
+    "frame_convention",
+    "object_count",
+    "primitive_count",
+    "camera_count",
+    "joint_position_count",
+    "joint_positions",
+    "robot_urdf_path",
+    "asset_roots",
+    "warnings",
+    "objects",
+    "cameras",
+    "artifacts",
+)
 
 SimulatorWorkspaceReportPayload: TypeAlias = JsonObject
 SimulatorWorkspaceReportObject: TypeAlias = Mapping[str, JsonValue]
@@ -89,28 +108,13 @@ def validate_simulator_workspace_report(
         return f"invalid simulator validation report {report_path}: expected JSON object"
     payload = cast(SimulatorWorkspaceReportPayload, raw_payload)
 
-    required_fields = (
-        "simulator",
-        "package_id",
-        "version",
-        "requested_frame_map",
-        "frame_map",
-        "frame_convention",
-        "object_count",
-        "primitive_count",
-        "camera_count",
-        "joint_position_count",
-        "joint_positions",
-        "robot_urdf_path",
-        "asset_roots",
-        "warnings",
-        "objects",
-        "cameras",
-        "artifacts",
+    missing_required_fields_error = _validate_required_fields_present(
+        payload,
+        required_fields=REQUIRED_REPORT_FIELDS,
+        path_prefix="simulator validation report",
     )
-    missing_fields = [field for field in required_fields if field not in payload]
-    if missing_fields:
-        return f"simulator validation report missing field(s): {', '.join(missing_fields)}"
+    if missing_required_fields_error:
+        return missing_required_fields_error
 
     simulator = payload.get("simulator")
     simulator_error = _validate_report_simulator(simulator, expectations)
@@ -464,12 +468,13 @@ def _validate_report_item_fields(
                 f"simulator validation report field '{list_field_name}[{index}]' "
                 "must be an object"
             )
-        missing_fields = [field for field in required_fields if field not in report_entry]
-        if missing_fields:
-            return (
-                f"simulator validation report field '{list_field_name}[{index}]' "
-                f"missing field(s): {', '.join(missing_fields)}"
-            )
+        missing_fields_error = _validate_required_fields_present(
+            cast(SimulatorWorkspaceReportObject, report_entry),
+            required_fields=required_fields,
+            path_prefix=f"simulator validation report field '{list_field_name}[{index}]'",
+        )
+        if missing_fields_error:
+            return missing_fields_error
         value_error = _validate_report_item_values(
             report_entry,
             path=f"{list_field_name}[{index}]",
@@ -489,6 +494,18 @@ def _validate_report_item_fields(
     if identity_error:
         return identity_error
     return None
+
+
+def _validate_required_fields_present(
+    payload: SimulatorWorkspaceReportObject,
+    *,
+    required_fields: tuple[str, ...],
+    path_prefix: str,
+) -> str | None:
+    missing_fields = [field for field in required_fields if field not in payload]
+    if not missing_fields:
+        return None
+    return f"{path_prefix} missing field(s): {', '.join(missing_fields)}"
 
 
 def _index_report_entries_by_string_field(

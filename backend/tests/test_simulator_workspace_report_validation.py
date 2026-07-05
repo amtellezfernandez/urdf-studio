@@ -987,6 +987,29 @@ def test_workspace_report_validation_rejects_missing_camera_fields(tmp_path) -> 
     )
 
 
+def test_workspace_report_validation_rejects_multiple_missing_object_fields(tmp_path) -> None:
+    broken_object = _report_object()
+    del broken_object["source_id"]
+    del broken_object["sim_name"]
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [broken_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'objects[0]' missing field(s): source_id, sim_name"
+    )
+
+
 def test_workspace_report_validation_rejects_invalid_object_values(tmp_path) -> None:
     invalid_object = _report_object()
     invalid_object["size_xyz"] = [0.1, -0.2, 0.3]
