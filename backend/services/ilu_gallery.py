@@ -903,7 +903,7 @@ def _build_candidate_lookup(raw_candidates: list[dict]) -> dict[str, dict]:
         if not isinstance(candidate, dict):
             continue
         candidate_path = _normalize_repo_or_path(str(candidate.get("path") or ""))
-        source_file = _normalize_repo_or_path(str(candidate.get("sourceFile") or ""))
+        source_file = _normalize_repo_or_path(_normalize_optional_text(candidate.get("sourceFile")))
         if candidate_path:
             lookup.setdefault(candidate_path, candidate)
             basename = candidate_path.split("/")[-1]
@@ -1020,7 +1020,7 @@ def _build_gallery_manifest_item(
     repo_file_bytes_by_path: dict[str, bytes] | None,
     resolve_robot_traits: bool = GALLERY_RESOLVE_ROBOT_TRAITS_DURING_INSPECTION,
 ) -> dict[str, object]:
-    inspection_mode = str(candidate.get("inspectionMode") or "").strip()
+    inspection_mode = _normalize_optional_text(candidate.get("inspectionMode"))
     inspect_status = _build_gallery_item_status(candidate)
     thumbnail_url = _build_gallery_media_url(preview_entry.get("png")) if isinstance(preview_entry, dict) else None
     preview_url = _build_gallery_media_url(preview_entry.get("webp")) if isinstance(preview_entry, dict) else None
@@ -1028,24 +1028,22 @@ def _build_gallery_manifest_item(
     if isinstance(preview_entry, dict):
         video_url = _build_gallery_media_url(preview_entry.get("webm")) or _build_gallery_media_url(preview_entry.get("mp4"))
     gallery_repo_key = ""
-    gallery_file_base = str(candidate.get("fileBase") or "").strip()
+    gallery_file_base = _normalize_optional_text(candidate.get("fileBase"))
     gallery_png_path = ""
     gallery_webm_path = ""
     if isinstance(preview_entry, dict):
-        gallery_repo_key = str(preview_entry.get("repoKey") or "").strip()
-        gallery_file_base = str(preview_entry.get("fileBase") or "").strip()
-        gallery_png_path = str(preview_entry.get("png") or "").strip()
-        gallery_webm_path = str(preview_entry.get("webm") or "").strip()
-    gallery_robot_name = str(
+        gallery_repo_key = _normalize_optional_text(preview_entry.get("repoKey"))
+        gallery_file_base = _normalize_optional_text(preview_entry.get("fileBase"))
+        gallery_png_path = _normalize_optional_text(preview_entry.get("png"))
+        gallery_webm_path = _normalize_optional_text(preview_entry.get("webm"))
+    gallery_robot_name = _normalize_optional_text(
         (robot_entry.get("name") if isinstance(robot_entry, dict) else None)
         or candidate.get("displayName")
-        or ""
-    ).strip()
-    gallery_source_file = str(
+    )
+    gallery_source_file = _normalize_optional_text(
         (robot_entry.get("file") if isinstance(robot_entry, dict) else None)
         or candidate.get("sourceFile")
-        or ""
-    ).strip()
+    )
     attention_notes = _build_gallery_attention_notes(raw_item=candidate, repo_cataloged=repo_entry is not None)
     robot_traits = (
         _resolve_gallery_robot_traits(
@@ -1110,7 +1108,7 @@ def _build_gallery_manifest_from_inspection(source: IluGallerySource, output_roo
         catalog = None
     catalog_snapshot = _catalog_snapshot_from_catalog(catalog) if catalog is not None else None
     has_urdf_candidate = any(
-        isinstance(candidate, dict) and str(candidate.get("inspectionMode") or "").strip() == "urdf"
+        isinstance(candidate, dict) and _normalize_optional_text(candidate.get("inspectionMode")) == "urdf"
         for candidate in raw_candidates
     )
     should_resolve_robot_traits = GALLERY_RESOLVE_ROBOT_TRAITS_DURING_INSPECTION
@@ -1141,16 +1139,22 @@ def _build_gallery_manifest_from_inspection(source: IluGallerySource, output_roo
                 or candidate_lookup.get(stem)
                 or {
                     "path": catalog_candidate_path,
-                    "sourceFile": str(raw_robot.get("file") or "").strip(),
-                    "displayName": str(raw_robot.get("name") or "").strip(),
-                    "fileBase": str(raw_robot.get("fileBase") or "").strip(),
+                    "sourceFile": _normalize_optional_text(raw_robot.get("file")),
+                    "displayName": _normalize_optional_text(raw_robot.get("name")),
+                    "fileBase": _normalize_optional_text(raw_robot.get("fileBase")),
                     "inspectionMode": "xacro-source" if basename.lower().endswith(".xacro") else "urdf",
-                    "hasRenderableGeometry": True if str(raw_robot.get("fileBase") or "").strip() else None,
+                    "hasRenderableGeometry": True if _normalize_optional_text(raw_robot.get("fileBase")) else None,
                     "unresolvedMeshReferenceCount": 0,
                 }
             )
             candidate_path = _normalize_repo_or_path(str(candidate.get("path") or "")) or catalog_candidate_path
-            preview_entry = catalog.preview_entries.get(f"{repo_key}::{str(raw_robot.get('fileBase') or '').strip()}") if catalog is not None else None
+            preview_entry = (
+                catalog.preview_entries.get(
+                    f"{repo_key}::{_normalize_optional_text(raw_robot.get('fileBase'))}"
+                )
+                if catalog is not None
+                else None
+            )
             manifest_items.append(
                 _build_gallery_manifest_item(
                     source=source,
@@ -2205,14 +2209,14 @@ def _rehydrate_gallery_item_from_catalog_snapshot(
         if _normalize_optional_int(raw_item.get(key)) is None:
             rehydrated[key] = _resolve_gallery_catalog_int(preview_entry, robot_entry, key)
 
-    if not str(raw_item.get("galleryRobotName") or "").strip() and isinstance(robot_entry, dict):
-        rehydrated["galleryRobotName"] = str(robot_entry.get("name") or "").strip()
-    if not str(raw_item.get("sourceFile") or "").strip() and isinstance(robot_entry, dict):
-        rehydrated["sourceFile"] = str(robot_entry.get("file") or "").strip()
-    if not str(raw_item.get("galleryRepoKey") or "").strip() and isinstance(preview_entry, dict):
-        rehydrated["galleryRepoKey"] = str(preview_entry.get("repoKey") or "").strip()
-    if not str(raw_item.get("galleryFileBase") or "").strip() and isinstance(preview_entry, dict):
-        rehydrated["galleryFileBase"] = str(preview_entry.get("fileBase") or "").strip()
+    if not _normalize_optional_text(raw_item.get("galleryRobotName")) and isinstance(robot_entry, dict):
+        rehydrated["galleryRobotName"] = _normalize_optional_text(robot_entry.get("name"))
+    if not _normalize_optional_text(raw_item.get("sourceFile")) and isinstance(robot_entry, dict):
+        rehydrated["sourceFile"] = _normalize_optional_text(robot_entry.get("file"))
+    if not _normalize_optional_text(raw_item.get("galleryRepoKey")) and isinstance(preview_entry, dict):
+        rehydrated["galleryRepoKey"] = _normalize_optional_text(preview_entry.get("repoKey"))
+    if not _normalize_optional_text(raw_item.get("galleryFileBase")) and isinstance(preview_entry, dict):
+        rehydrated["galleryFileBase"] = _normalize_optional_text(preview_entry.get("fileBase"))
     return rehydrated
 
 

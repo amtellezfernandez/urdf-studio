@@ -90,3 +90,67 @@ def test_resolve_gallery_preview_entry_ignores_non_string_file_base() -> None:
     assert isinstance(repo_entry, dict)
     assert preview_entry is None
     assert robot_entry is None
+
+
+def test_build_gallery_manifest_item_ignores_non_string_preview_metadata() -> None:
+    item = ilu_gallery._build_gallery_manifest_item(
+        source=IluGallerySource(owner="acme", repo="demo"),
+        candidate_path="robots/demo.urdf",
+        candidate={
+            "inspectionMode": 123,
+            "displayName": "Demo Robot",
+            "sourceFile": "robots/demo.urdf",
+            "fileBase": "demo-base",
+        },
+        repo_entry=None,
+        preview_entry={
+            "repoKey": 123,
+            "fileBase": False,
+            "png": [],
+            "webm": {},
+        },
+        robot_entry={"name": 456, "file": None},
+        repo_file_bytes_by_path=None,
+        resolve_robot_traits=False,
+    )
+
+    assert item["galleryRepoKey"] == ""
+    assert item["galleryFileBase"] == ""
+    assert item["galleryPngPath"] == ""
+    assert item["galleryWebmPath"] == ""
+    assert item["galleryRobotName"] == ""
+    assert item["sourceFile"] == "robots/demo.urdf"
+
+
+def test_rehydrate_gallery_manifest_item_ignores_non_string_preview_and_robot_fields() -> None:
+    source = IluGallerySource(owner="acme", repo="demo")
+    catalog = ilu_gallery._GalleryCatalog(
+        repo_entries={
+            "acme/demo": [
+                {
+                    "repoKey": "acme/demo",
+                    "robots": [{"fileBase": "demo-base", "file": 123, "name": False}],
+                }
+            ]
+        },
+        preview_entries={"acme/demo::demo-base": {"repoKey": 123, "fileBase": []}},
+    )
+
+    rehydrated = ilu_gallery._rehydrate_gallery_item_from_catalog_snapshot(
+        source,
+        {
+            "candidatePath": "robots/demo.urdf",
+            "galleryRepoKey": "",
+            "galleryFileBase": "",
+            "galleryRobotName": "",
+            "sourceFile": "",
+            "tags": [],
+            "macroTags": [],
+        },
+        catalog,
+    )
+
+    assert rehydrated["galleryRobotName"] == ""
+    assert rehydrated["sourceFile"] == ""
+    assert rehydrated["galleryRepoKey"] == ""
+    assert rehydrated["galleryFileBase"] == ""
