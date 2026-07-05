@@ -97,6 +97,37 @@ def test_build_runtime_dependency_statuses_uses_selected_python_probe(monkeypatc
     ]
 
 
+def test_build_runtime_dependency_statuses_skips_missing_prerequisites(monkeypatch) -> None:
+    observed: list[str] = []
+
+    def fake_is_python_module_available(import_name: str) -> bool:
+        observed.append(import_name)
+        return import_name == "mujoco"
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.base.is_python_module_available",
+        fake_is_python_module_available,
+    )
+
+    statuses = build_runtime_dependency_statuses(
+        (
+            SimulatorDependencySpec(name="mujoco", import_name="mujoco"),
+            SimulatorDependencySpec(
+                name="mujoco_warp",
+                import_name="mujoco_warp",
+                required=False,
+                import_prerequisites=("warp",),
+            ),
+        ),
+    )
+
+    assert observed == ["mujoco", "warp"]
+    assert [(status.name, status.available) for status in statuses] == [
+        ("mujoco", True),
+        ("mujoco_warp", False),
+    ]
+
+
 def test_format_runtime_dependency_status_lists_missing_required_dependencies(monkeypatch) -> None:
     def fake_is_python_module_available(import_name: str) -> bool:
         return False

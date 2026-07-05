@@ -368,8 +368,9 @@ def test_mjlab_workspace_status_uses_mujoco_workspace_dependency(monkeypatch) ->
         for dependency in status.dependencies
     ] == [
         ("mujoco", True, True, "workspace"),
-        ("mjlab", False, False, "validation"),
+        ("warp", False, False, "validation"),
         ("mujoco_warp", False, False, "validation"),
+        ("mjlab", False, False, "validation"),
     ]
 
 
@@ -397,8 +398,7 @@ def test_simulator_runtime_status_can_probe_external_python(monkeypatch) -> None
     assert status.available is True
     assert observed == [
         ("/opt/mjlab-env/bin/python", "mujoco"),
-        ("/opt/mjlab-env/bin/python", "mjlab"),
-        ("/opt/mjlab-env/bin/python", "mujoco_warp"),
+        ("/opt/mjlab-env/bin/python", "warp"),
     ]
 
 

@@ -98,10 +98,17 @@ def build_runtime_dependency_statuses(
     python_executable: str | None = None,
 ) -> list[SimulatorRuntimeDependency]:
     module_availability_probe = _resolve_module_availability_probe(python_executable)
+    cached_module_availability: dict[str, bool] = {}
+
+    def cached_module_availability_probe(import_name: str) -> bool:
+        if import_name not in cached_module_availability:
+            cached_module_availability[import_name] = module_availability_probe(import_name)
+        return cached_module_availability[import_name]
+
     return [
         _runtime_dependency_status(
             dependency=dependency,
-            module_availability_probe=module_availability_probe,
+            module_availability_probe=cached_module_availability_probe,
         )
         for dependency in dependencies
     ]
@@ -134,9 +141,13 @@ def _runtime_dependency_status(
     dependency: SimulatorDependencySpec,
     module_availability_probe: Callable[[str], bool],
 ) -> SimulatorRuntimeDependency:
+    available = all(
+        module_availability_probe(import_name)
+        for import_name in dependency.import_prerequisites
+    ) and module_availability_probe(dependency.import_name)
     return SimulatorRuntimeDependency(
         name=dependency.name,
-        available=module_availability_probe(dependency.import_name),
+        available=available,
         required=dependency.required,
         scope=dependency.scope,
     )

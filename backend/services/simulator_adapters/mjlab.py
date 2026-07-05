@@ -21,8 +21,8 @@ class MjlabPlugin(MjcfSimulatorPlugin):
     dependencies = (
         SimulatorDependencySpec(name="mujoco", import_name="mujoco", scope="workspace"),
         SimulatorDependencySpec(
-            name="mjlab",
-            import_name="mjlab",
+            name="warp",
+            import_name="warp",
             required=False,
             scope="validation",
         ),
@@ -31,6 +31,14 @@ class MjlabPlugin(MjcfSimulatorPlugin):
             import_name="mujoco_warp",
             required=False,
             scope="validation",
+            import_prerequisites=("warp",),
+        ),
+        SimulatorDependencySpec(
+            name="mjlab",
+            import_name="mjlab",
+            required=False,
+            scope="validation",
+            import_prerequisites=("warp", "mujoco_warp"),
         ),
     )
     workspace_process = MJLAB_WORKSPACE_PROCESS_PARAMS

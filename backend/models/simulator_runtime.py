@@ -187,6 +187,7 @@ class SimulatorDependencySpec:
     import_name: str
     required: bool = True
     scope: SimulatorDependencyScope = "workspace"
+    import_prerequisites: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
