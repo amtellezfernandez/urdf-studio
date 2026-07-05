@@ -202,7 +202,7 @@ def wsp_audit_score(trace: PhysicalRolloutTrace) -> tuple[float, float]:
 
     try:
         report = audit_physical_rollout_trace(trace)
-    except Exception:
+    except (TypeError, ValueError, KeyError, IndexError):
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         # If audit raises (e.g. due to bad entity refs), treat as corrupted
         return 1.0, elapsed_ms
