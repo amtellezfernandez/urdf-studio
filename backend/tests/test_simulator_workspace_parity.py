@@ -368,6 +368,33 @@ def test_simulator_workspace_parity_rejects_blank_camera_image(tmp_path: Path) -
     assert "is blank" in result.detail
 
 
+def test_simulator_workspace_parity_rejects_corrupted_camera_image(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+    )
+    payload = json.loads(mujoco_report.read_text(encoding="utf-8"))
+    camera_dir = Path(payload["artifacts"]["camera_screenshot_dir"])
+    (camera_dir / "01_scene_camera.png").write_bytes(b"not-a-real-png")
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "invalid camera_images artifact" in result.detail
+
+
 def _write_parity_report(
     root: Path,
     *,

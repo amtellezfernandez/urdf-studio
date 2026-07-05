@@ -276,7 +276,7 @@ def _camera_image_manifest(
         path = image_by_name[expected["name"]]
         try:
             image_stats = inspect_rgb_image(path)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             return _labeled_camera_manifest(label, f"invalid camera_images artifact {path}: {exc}")
         if image_stats.size != (expected["width"], expected["height"]):
             return _labeled_camera_manifest(
