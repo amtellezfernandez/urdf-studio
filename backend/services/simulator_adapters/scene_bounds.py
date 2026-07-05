@@ -30,19 +30,10 @@ def scene_bounds_from_aabbs(
             radius_m=default_radius_m,
         )
 
-    mins, maxs = _enclosing_aabb(aabbs)
-    center = tuple((mins[axis] + maxs[axis]) * 0.5 for axis in range(3))
-    half_span = tuple((maxs[axis] - mins[axis]) * 0.5 for axis in range(3))
-    radius = max(
-        float(min_radius_m),
-        math.sqrt(sum(component * component for component in half_span)),
-    )
-    return SceneBounds(
-        center_xyz=_vector3(center),
-        radius_m=radius,
-        min_xyz=_vector3(mins),
-        max_xyz=_vector3(maxs),
+    return _scene_bounds_for_aabb(
+        enclosing_aabb=_enclosing_aabb(aabbs),
         item_count=len(aabbs),
+        min_radius_m=min_radius_m,
     )
 
 
@@ -68,6 +59,27 @@ def _default_scene_bounds(
     )
 
 
+def _scene_bounds_for_aabb(
+    *,
+    enclosing_aabb: Aabb,
+    item_count: int,
+    min_radius_m: float,
+) -> SceneBounds:
+    mins, maxs = enclosing_aabb
+    center = _midpoint_vector3(mins, maxs)
+    radius = max(
+        float(min_radius_m),
+        _vector_length(_half_span_vector3(mins, maxs)),
+    )
+    return SceneBounds(
+        center_xyz=center,
+        radius_m=radius,
+        min_xyz=_vector3(mins),
+        max_xyz=_vector3(maxs),
+        item_count=item_count,
+    )
+
+
 def _enclosing_aabb(aabbs: Sequence[Aabb]) -> Aabb:
     return (
         tuple(min(aabb[0][axis] for aabb in aabbs) for axis in range(3)),
@@ -81,6 +93,18 @@ def _offset_vector3(value: Vector3, offset: float) -> Vector3:
         value[1] + offset,
         value[2] + offset,
     )
+
+
+def _midpoint_vector3(left: Sequence[float], right: Sequence[float]) -> Vector3:
+    return tuple((left[axis] + right[axis]) * 0.5 for axis in range(3))
+
+
+def _half_span_vector3(mins: Sequence[float], maxs: Sequence[float]) -> Vector3:
+    return tuple((maxs[axis] - mins[axis]) * 0.5 for axis in range(3))
+
+
+def _vector_length(value: Sequence[float]) -> float:
+    return math.sqrt(sum(component * component for component in value))
 
 
 def _vector3(value: Sequence[float]) -> Vector3:
