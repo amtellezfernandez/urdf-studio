@@ -12,7 +12,11 @@ from typing import Callable
 from backend.models.simulator_runtime import (
     SimulatorWorkspacePrepareRequest,
 )
-from backend.services.ilu_session import IluSessionError, get_ilu_session_local_urdf_source_context
+from backend.services.ilu_session import (
+    IluSessionError,
+    IluSessionLocalUrdfSourceContext,
+    get_ilu_session_local_urdf_source_context,
+)
 from backend.services.ilu_urdf import (
     BundleMeshAssetsResult,
     IluUrdfBridgeError,
@@ -144,12 +148,26 @@ def _stage_workspace_robot_source(
     )
 
 
+def _local_ilu_session_source_context(
+    session_id: str,
+    *,
+    error: Callable[[str], Exception],
+) -> IluSessionLocalUrdfSourceContext | None:
+    try:
+        return get_ilu_session_local_urdf_source_context(session_id)
+    except IluSessionError as exc:
+        if exc.status_code == 404 and exc.detail == "ilu session has no local asset source.":
+            return None
+        _raise(error, exc.detail)
+
+
 def _resolve_workspace_robot_bundle_inputs(
     request: SimulatorWorkspacePrepareRequest,
     *,
     workspace_dir: Path,
     source_root: Path,
     staged_robot_source: StagedWorkspaceRobotSource,
+    error: Callable[[str], Exception],
 ) -> WorkspaceRobotBundleInputs:
     source_urdf_path = staged_robot_source.staged_urdf_path
     uploaded_asset_sources: list[Path] = [source_root, staged_robot_source.staged_urdf_path.parent]
@@ -159,10 +177,10 @@ def _resolve_workspace_robot_bundle_inputs(
     if requested_asset_parent != staged_robot_source.staged_urdf_path.parent:
         uploaded_asset_sources.append(requested_asset_parent)
     if request.ilu_session_id:
-        try:
-            session_context = get_ilu_session_local_urdf_source_context(request.ilu_session_id)
-        except IluSessionError:
-            session_context = None
+        session_context = _local_ilu_session_source_context(
+            request.ilu_session_id,
+            error=error,
+        )
         if session_context is not None:
             source_urdf_path = session_context.source_urdf_path
             uploaded_asset_sources.extend(session_context.extra_search_roots)
@@ -272,6 +290,7 @@ def _prepare_simulator_workspace_package_inner(
         workspace_dir=workspace_dir,
         source_root=source_root,
         staged_robot_source=staged_robot_source,
+        error=error,
     )
     bundle_inputs.bundled_urdf_path.parent.mkdir(parents=True, exist_ok=True)
     write_workspace_asset_roots(workspace_dir, bundle_inputs.workspace_asset_roots)

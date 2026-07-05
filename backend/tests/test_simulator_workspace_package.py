@@ -12,6 +12,7 @@ from backend.models.simulator_runtime import (
     validate_simulator_relative_path,
 )
 from backend.models.world_scene_package import WorldArtifactRef, WorldRuntimeTarget
+from backend.services.ilu_session import IluSessionError
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.workspace_package import (
     prepare_simulator_workspace_package,
@@ -317,6 +318,55 @@ def test_prepare_simulator_workspace_persists_shared_asset_roots(
     assert prepared.workspace_dir / "source" in scene_roots
     assert prepared.workspace_dir / "source" / "robot_description" in scene_roots
     assert prepared.robot_urdf_path.parent in scene_roots
+
+
+def test_prepare_simulator_workspace_ignores_ilu_sessions_without_local_source(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    def fake_get_ilu_session_local_urdf_source_context(_session_id: str):
+        raise IluSessionError(status_code=404, detail="ilu session has no local asset source.")
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.get_ilu_session_local_urdf_source_context",
+        fake_get_ilu_session_local_urdf_source_context,
+    )
+
+    prepared = prepare_simulator_workspace_package(
+        SimulatorWorkspacePrepareRequest(
+            world_package=_minimal_world_package(),
+            ilu_session_id="demo-session",
+        ),
+        workspace_root=tmp_path,
+        error=ValueError,
+    )
+
+    assert prepared.robot_urdf_path.exists()
+
+
+def test_prepare_simulator_workspace_surfaces_ilu_session_lookup_errors(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    def fake_get_ilu_session_local_urdf_source_context(_session_id: str):
+        raise IluSessionError(status_code=404, detail="ilu session not found: demo-session")
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.get_ilu_session_local_urdf_source_context",
+        fake_get_ilu_session_local_urdf_source_context,
+    )
+
+    with pytest.raises(ValueError, match="ilu session not found: demo-session"):
+        prepare_simulator_workspace_package(
+            SimulatorWorkspacePrepareRequest(
+                world_package=_minimal_world_package(),
+                ilu_session_id="demo-session",
+            ),
+            workspace_root=tmp_path,
+            error=ValueError,
+        )
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_prepare_simulator_workspace_removes_partial_workspace_on_bundle_error(
