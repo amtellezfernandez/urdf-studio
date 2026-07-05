@@ -47,6 +47,11 @@ const isSplatAssetUri = (uri: string): boolean => {
   return /\.(spz|splat|ply|ksplat)$/i.test(withoutQuery);
 };
 
+// blob: URIs from local file imports carry no extension; the original filename
+// is preserved in assetRef, so accept the object when either names a splat file.
+const hasSplatAssetExtension = (object: CreatedObject, uri: string): boolean =>
+  isSplatAssetUri(uri) || (object.assetRef ? isSplatAssetUri(object.assetRef) : false);
+
 class SplatAssetErrorBoundary extends Component<
   { children: ReactNode; fallback: ReactNode; resetKey: string },
   { hasError: boolean }
@@ -115,7 +120,7 @@ export function SplatAssetBody({
     };
   }, [splatInstance]);
 
-  if (!uri || !isSplatAssetUri(uri)) {
+  if (!uri || !hasSplatAssetExtension(object, uri)) {
     return <>{fallback}</>;
   }
 

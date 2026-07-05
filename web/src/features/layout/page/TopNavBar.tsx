@@ -27,6 +27,7 @@ type TopNavMenusProps = Pick<
   | "onExportWorldRolloutCampaign"
   | "onFixMeshPaths"
   | "onImportSceneLayerFromUrl"
+  | "onImportSplatBackground"
   | "onImportWorkspaceChangeSet"
   | "onImportWorldRolloutResults"
   | "onImportWorldScenePackage"
@@ -126,6 +127,7 @@ const TopNavMenus = ({
           <WorldsMenu
             onExportCurrentWorldSceneLayer={props.onExportCurrentWorldSceneLayer}
             onImportSceneLayerFromUrl={props.onImportSceneLayerFromUrl}
+            onImportSplatBackground={props.onImportSplatBackground}
             onImportWorkspaceChangeSet={props.onImportWorkspaceChangeSet}
             onExportCurrentWorldScenePackage={props.onExportCurrentWorldScenePackage}
             onImportWorldScenePackage={props.onImportWorldScenePackage}

@@ -75,6 +75,7 @@ export type TopNavBarProps = {
   onOpenWorldRolloutReview?: () => void;
   onExportCurrentWorldSceneLayer: () => void;
   onImportSceneLayerFromUrl: () => void;
+  onImportSplatBackground: () => void;
   onImportWorkspaceChangeSet: () => void;
   onListWorldScenePackages: () => void;
   onOpenWorldHubBrowser?: () => void;

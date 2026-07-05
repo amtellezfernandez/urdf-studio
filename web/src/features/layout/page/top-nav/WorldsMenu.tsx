@@ -7,6 +7,7 @@ type WorldsMenuProps = Pick<
   TopNavBarProps,
   | "onExportCurrentWorldSceneLayer"
   | "onImportSceneLayerFromUrl"
+  | "onImportSplatBackground"
   | "onImportWorkspaceChangeSet"
   | "onExportCurrentWorldScenePackage"
   | "onImportWorldScenePackage"
@@ -25,6 +26,7 @@ type WorldsMenuProps = Pick<
 export function WorldsMenu({
   onExportCurrentWorldSceneLayer,
   onImportSceneLayerFromUrl,
+  onImportSplatBackground,
   onImportWorkspaceChangeSet,
   onExportCurrentWorldScenePackage,
   onImportWorldScenePackage,
@@ -67,6 +69,9 @@ export function WorldsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportSceneLayerFromUrl} className={menuItemClass}>
           Import Layout JSON
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onImportSplatBackground} className={menuItemClass}>
+          Import Splat Background
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportWorkspaceChangeSet} className={menuItemClass}>
           Import Workspace Changes

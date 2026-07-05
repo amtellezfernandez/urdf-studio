@@ -367,6 +367,19 @@ describe("buildWorldScenePackageManifest", () => {
     expect(serializable.mesh).toBeUndefined();
   });
 
+  it("exports locally imported splat backgrounds by their portable asset name", () => {
+    const serializable = toSerializableWorldObject({
+      ...TEST_MESH_OBJECT,
+      type: "splat",
+      assetRef: "port-background.spz",
+      meshUri: "blob:http://localhost/8b2c1f7e-0d3a-4b6e-9f21-3f9d8a2c5e11",
+    });
+
+    expect(serializable.type).toBe("splat");
+    expect(serializable.asset_ref).toBe("port-background.spz");
+    expect(serializable.mesh).toEqual({ uri: "port-background.spz" });
+  });
+
   it("rejects non-positive mesh asset scale before package export", () => {
     expect(() =>
       toSerializableWorldObject({

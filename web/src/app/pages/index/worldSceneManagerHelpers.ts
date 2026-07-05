@@ -14,6 +14,43 @@ import {
   fetchWorldRolloutJob,
 } from "@/app/pages/index/worldSceneRuntime";
 
+export const SPLAT_BACKGROUND_IMPORT_ACCEPT = ".spz,.splat,.ksplat";
+
+// World Labs / SimuGen splats are y-up; the studio scene is z-up (ROS REP-103).
+const Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD = [-Math.PI / 2, 0, 0] as const;
+
+// Exports reference assets by portable relative name (the manifest validator
+// rejects rooted paths and URI schemes), so the imported file's name must be
+// normalized into that shape.
+export const toPortableSplatAssetName = (filename: string): string => {
+  const basename = filename.split(/[\\/]/).pop() ?? "";
+  const sanitized = basename.trim().replace(/[^\w.\- ]+/g, "_").replace(/^\.+/, "");
+  return sanitized || "splat-background.spz";
+};
+
+export function buildImportedSplatBackgroundObject(file: File): Omit<CreatedObject, "id"> {
+  const assetName = toPortableSplatAssetName(file.name);
+  return {
+    label: assetName,
+    type: "splat",
+    position: new Vector3(0, 0, 0),
+    rotation: normalizeWorldObjectRotationEuler({
+      x: Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD[0],
+      y: Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD[1],
+      z: Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD[2],
+    }),
+    size: new Vector3(1, 1, 1),
+    color: "#94a3b8",
+    assetRef: assetName,
+    assetScale: new Vector3(1, 1, 1),
+    meshUri: URL.createObjectURL(file),
+    source: "user",
+    trackedJointName: null,
+    isIkTarget: false,
+    ikTargetType: "punctual",
+  };
+}
+
 function downloadBlobDocument(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
