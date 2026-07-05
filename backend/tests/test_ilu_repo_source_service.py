@@ -472,6 +472,19 @@ def test_find_repo_candidates_from_files_ignores_non_string_entry_fields() -> No
     assert candidates[0]["hasMeshesFolder"] is True
 
 
+def test_score_repository_candidate_ignores_non_string_path_and_name() -> None:
+    score = ilu_repo_source._score_repository_candidate(
+        {
+            "path": ["robots", "demo.urdf"],
+            "name": {"value": "demo.urdf"},
+            "hasMeshesFolder": True,
+            "isXacro": True,
+        }
+    )
+
+    assert score == 40
+
+
 def test_fetch_url_bytes_wraps_url_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise_url_error(*_args, **_kwargs):
         raise ilu_repo_source.urllib.error.URLError("offline")

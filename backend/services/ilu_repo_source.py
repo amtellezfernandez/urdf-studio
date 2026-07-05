@@ -306,8 +306,10 @@ def _repository_basename(path: str) -> str:
 
 
 def _score_repository_candidate(candidate: RepositoryCandidate) -> int:
-    path_lower = str(candidate.get("path", "")).lower()
-    name_lower = str(candidate.get("name", "")).lower()
+    path_lower = candidate.get("path")
+    path_lower = path_lower.lower() if isinstance(path_lower, str) else ""
+    name_lower = candidate.get("name")
+    name_lower = name_lower.lower() if isinstance(name_lower, str) else ""
     candidate_stem = _strip_candidate_extension(name_lower)
     parent_dir = _repository_basename("/".join(path_lower.split("/")[:-1]))
     score = 0
@@ -409,7 +411,7 @@ def _find_repo_candidates_from_files(
         candidates,
         key=lambda candidate: (
             -_score_repository_candidate(candidate),
-            str(candidate.get("path", "")).lower(),
+            candidate.get("path").lower() if isinstance(candidate.get("path"), str) else "",
         ),
     )
 
