@@ -26,6 +26,7 @@ def test_normalize_root_relative_urdf_mesh_filenames_rewrites_portable_refs() ->
     <robot name="demo">
       <link name="base">
         <visual><geometry><mesh filename="/meshes/base.stl"/></geometry></visual>
+        <visual><geometry><mesh filename="/Meshes/upper_base.stl"/></geometry></visual>
         <visual><geometry><mesh filename="/mesh/gripper.stl"/></geometry></visual>
         <visual><geometry><mesh filename="/models/bracket.stl"/></geometry></visual>
         <visual><geometry><mesh filename="/model/spacer.stl"/></geometry></visual>
@@ -39,6 +40,7 @@ def test_normalize_root_relative_urdf_mesh_filenames_rewrites_portable_refs() ->
     normalized = normalize_root_relative_urdf_mesh_filenames(urdf_xml)
 
     assert 'filename="meshes/base.stl"' in normalized
+    assert 'filename="Meshes/upper_base.stl"' in normalized
     assert 'filename="mesh/gripper.stl"' in normalized
     assert 'filename="models/bracket.stl"' in normalized
     assert 'filename="model/spacer.stl"' in normalized
@@ -46,6 +48,7 @@ def test_normalize_root_relative_urdf_mesh_filenames_rewrites_portable_refs() ->
     assert 'filename="cover.dae"' in normalized
     assert 'filename="meshes/wheel.stl"' in normalized
     assert 'filename="/meshes/base.stl"' not in normalized
+    assert 'filename="/Meshes/upper_base.stl"' not in normalized
 
 
 def test_normalize_root_relative_urdf_mesh_filenames_leaves_host_like_refs_unchanged() -> None:

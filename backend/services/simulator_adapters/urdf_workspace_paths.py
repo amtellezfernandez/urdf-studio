@@ -48,7 +48,7 @@ def normalize_root_relative_urdf_mesh_filenames(urdf_xml: str) -> str:
 def is_portable_root_relative_mesh_path(value: str) -> bool:
     if not value:
         return False
-    if value.startswith(ROOT_RELATIVE_URDF_MESH_PREFIXES):
+    if value.lower().startswith(ROOT_RELATIVE_URDF_MESH_PREFIXES):
         return True
     return "/" not in value
 
