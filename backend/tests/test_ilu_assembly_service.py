@@ -137,6 +137,23 @@ def test_get_ilu_assembly_manifest_rejects_non_object_metadata(
     assert exc_info.value.detail == "Failed to read ilu assembly metadata."
 
 
+def test_get_ilu_assembly_manifest_rejects_invalid_metadata_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    assembly_root = tmp_path / "assembly-sessions"
+    session_dir = assembly_root / "assembly-1"
+    session_dir.mkdir(parents=True)
+    (session_dir / "assembly-session.json").write_bytes(b"\xff\xfe\x00")
+    monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
+
+    with pytest.raises(ilu_assembly_service.IluAssemblyError) as exc_info:
+        ilu_assembly_service.get_ilu_assembly_manifest("assembly-1")
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Failed to read ilu assembly metadata."
+
+
 def test_get_ilu_assembly_manifest_rejects_selected_paths_without_strings(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

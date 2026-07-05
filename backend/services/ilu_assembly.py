@@ -107,7 +107,7 @@ def _read_assembly_payload(assembly_id: str) -> JsonObject:
         raise IluAssemblyError(status_code=404, detail=f"ilu assembly not found: {assembly_id}")
     try:
         payload = _read_json_object(metadata_path)
-    except (json.JSONDecodeError, OSError, ValueError) as exc:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError, ValueError) as exc:
         raise IluAssemblyError(status_code=500, detail="Failed to read ilu assembly metadata.") from exc
 
     if (
