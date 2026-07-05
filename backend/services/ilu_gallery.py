@@ -2502,7 +2502,19 @@ def _run_gallery_job(job_id: str) -> None:
             error=None,
             output_root=output_root or str(_job_workdir(job_id)),
         )
-    except Exception as error:
+    except (
+        GitHubPublicProxyError,
+        HTTPError,
+        OSError,
+        TimeoutError,
+        URLError,
+        UnicodeDecodeError,
+        ValidationError,
+        json.JSONDecodeError,
+        subprocess.SubprocessError,
+        RuntimeError,
+        ValueError,
+    ) as error:
         _update_job_record(job_id, status="failed", phase="inspect", items=[], error=str(error))
     finally:
         _clear_active_gallery_inspect_job(source_key, job_id)

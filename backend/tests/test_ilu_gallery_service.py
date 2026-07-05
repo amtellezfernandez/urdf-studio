@@ -571,6 +571,46 @@ def test_create_gallery_job_reuses_cached_inspect_manifest_for_same_source(
     assert second_record.output_root != first_record.output_root
 
 
+def test_create_gallery_job_marks_expected_inspect_failures_as_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_run_ilu_gallery_generate",
+        lambda _source, _output_root: (_ for _ in ()).throw(RuntimeError("inspect failed")),
+    )
+    monkeypatch.setattr(ilu_gallery.threading.Thread, "start", lambda self: self.run())
+
+    response = ilu_gallery.create_gallery_job(
+        IluGalleryJobCreateRequest(
+            source={"owner": REAL_GALLERY_OWNER, "repo": REAL_GALLERY_REPO}
+        )
+    )
+    resolved = ilu_gallery.get_gallery_job(response.job_id)
+
+    assert resolved.status == "failed"
+    assert resolved.phase == "inspect"
+    assert resolved.error == "inspect failed"
+
+
+def test_create_gallery_job_preserves_unexpected_inspect_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery,
+        "_run_ilu_gallery_generate",
+        lambda _source, _output_root: (_ for _ in ()).throw(KeyError("unexpected inspect failure")),
+    )
+    monkeypatch.setattr(ilu_gallery.threading.Thread, "start", lambda self: self.run())
+
+    with pytest.raises(KeyError, match="unexpected inspect failure"):
+        ilu_gallery.create_gallery_job(
+            IluGalleryJobCreateRequest(
+                source={"owner": REAL_GALLERY_OWNER, "repo": REAL_GALLERY_REPO}
+            )
+        )
+
+
 def test_run_ilu_gallery_generate_rejects_catalog_only_repo_without_live_candidates(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: pathlib.Path,
