@@ -95,7 +95,7 @@ def load_zra_orchestrator_devices(path_value: str | None) -> list[ZraOrchestrato
     for entry in payload:
         if not isinstance(entry, dict):
             raise ValueError("Each zRA orchestrator device entry must be a JSON object.")
-        robot_id = str(entry.get("robot_id") or "").strip()
+        robot_id = _read_optional_config_str(entry.get("robot_id")) or ""
         if not robot_id:
             raise ValueError("Each zRA orchestrator device entry requires robot_id.")
         devices.append(

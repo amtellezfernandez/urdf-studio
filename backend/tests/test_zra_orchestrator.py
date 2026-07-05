@@ -60,6 +60,25 @@ def test_load_zra_orchestrator_devices_normalizes_optional_string_fields(
     assert devices[0].local_gateway_path == "/tmp/gateway.json"
 
 
+def test_load_zra_orchestrator_devices_rejects_non_string_robot_id(
+    tmp_path: Path,
+) -> None:
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text(
+        json.dumps(
+            [
+                {
+                    "robot_id": 123,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="requires robot_id"):
+        zra_orchestrator.load_zra_orchestrator_devices(str(devices_path))
+
+
 def test_load_zra_orchestrator_devices_ignores_invalid_optional_string_fields(
     tmp_path: Path,
 ) -> None:
