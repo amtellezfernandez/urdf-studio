@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import importlib
 import json
 import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
 
 from scipy.spatial.transform import Rotation
-import yourdfpy  # type: ignore
 
 from backend.models.json_payload import JsonObject
 from backend.services.ilu_urdf import convert_urdf_to_usd
@@ -27,6 +27,9 @@ from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
 from backend.services.world_layout_transfer_types import SimPrimitive
+
+if TYPE_CHECKING:
+    import yourdfpy
 
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
@@ -92,6 +95,18 @@ class BlenderRobotGlbReference:
     geometry_count: int
     node_count: int
     applied_joint_count: int
+
+
+def _load_yourdfpy_urdf_loader() -> Any:
+    try:
+        yourdfpy_module = importlib.import_module("yourdfpy")
+    except ImportError as exc:
+        raise ValueError("yourdfpy is not installed") from exc
+    urdf_class = getattr(yourdfpy_module, "URDF", None)
+    load_urdf = getattr(urdf_class, "load", None)
+    if not callable(load_urdf):
+        raise ValueError("yourdfpy.URDF.load is unavailable")
+    return load_urdf
 
 
 def write_blender_workspace_artifacts(
@@ -176,9 +191,7 @@ def _write_robot_glb_reference(
     *,
     joint_positions: Mapping[str, float],
 ) -> BlenderRobotGlbReference | None:
-    load_urdf = getattr(yourdfpy.URDF, "load", None)
-    if not callable(load_urdf):
-        raise ValueError("yourdfpy.URDF.load is unavailable")
+    load_urdf = _load_yourdfpy_urdf_loader()
     robot = load_urdf(
         str(robot_urdf_path),
         build_scene_graph=True,

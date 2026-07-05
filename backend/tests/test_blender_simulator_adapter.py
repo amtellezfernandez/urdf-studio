@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import json
 import math
 import runpy
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -328,12 +330,38 @@ def test_blender_robot_glb_reference_rejects_missing_yourdfpy_loader(
         encoding="utf-8",
     )
 
-    class _LoaderlessUrdf:
-        pass
+    def _fake_import_module(name: str) -> object:
+        if name == "yourdfpy":
+            return SimpleNamespace(URDF=SimpleNamespace(load=None))
+        raise ImportError(name)
 
-    monkeypatch.setattr(blender_workspace_module.yourdfpy, "URDF", _LoaderlessUrdf)
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ValueError, match="yourdfpy.URDF.load is unavailable"):
+        _write_robot_glb_reference(
+            robot_urdf_path,
+            robot_glb_path,
+            joint_positions={},
+        )
+
+
+def test_blender_robot_glb_reference_rejects_missing_yourdfpy_module(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf_path = tmp_path / "robot.urdf"
+    robot_glb_path = tmp_path / "robot.glb"
+    robot_urdf_path.write_text(
+        "<robot name=\"demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+
+    def _fake_import_module(name: str) -> object:
+        raise ImportError(name)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ValueError, match="yourdfpy is not installed"):
         _write_robot_glb_reference(
             robot_urdf_path,
             robot_glb_path,
