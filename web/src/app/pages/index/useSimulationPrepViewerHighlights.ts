@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   type Dispatch,
+  type MutableRefObject,
   type SetStateAction,
 } from "react";
 import {
@@ -18,6 +19,27 @@ export const cloneInertialVisualizationSettings = (
   ...settings,
   scopedLinkNames: settings.scopedLinkNames ? [...settings.scopedLinkNames] : null,
 });
+
+const captureInertialVisualizationSnapshot = (
+  snapshotRef: MutableRefObject<InertialVisualizationSettings | null>,
+  settings: InertialVisualizationSettings
+) => {
+  if (!snapshotRef.current) {
+    snapshotRef.current = cloneInertialVisualizationSettings(settings);
+  }
+};
+
+const restoreInertialVisualizationSnapshot = (
+  current: InertialVisualizationSettings,
+  snapshot: InertialVisualizationSettings | null
+): InertialVisualizationSettings => {
+  if (snapshot) {
+    return cloneInertialVisualizationSettings(snapshot);
+  }
+  return current.scopedLinkNames === null
+    ? current
+    : syncSimulationPrepInertiaVisualizationScope(current);
+};
 
 export const useSimulationPrepViewerHighlights = ({
   panelOpen,
@@ -45,13 +67,15 @@ export const useSimulationPrepViewerHighlights = ({
     inertialVisualizationBeforeOpenRef.current = null;
   }, []);
 
+  const resetSimulationPrepTransientPreviewState = useCallback(() => {
+    setHoveredInertiaVisualizationPreview(null);
+    setActiveInertiaVisualizationScopeKey(null);
+  }, [setActiveInertiaVisualizationScopeKey, setHoveredInertiaVisualizationPreview]);
+
   const enableSimulationPrepViewerHighlights = useCallback(
     (scopedLinkNames?: readonly string[] | null) => {
       setInertialVisualization((current) => {
-        if (!inertialVisualizationBeforeOpenRef.current) {
-          inertialVisualizationBeforeOpenRef.current =
-            cloneInertialVisualizationSettings(current);
-        }
+        captureInertialVisualizationSnapshot(inertialVisualizationBeforeOpenRef, current);
         return withSimulationPrepInertiaVisualization(current, scopedLinkNames);
       });
     },
@@ -62,24 +86,14 @@ export const useSimulationPrepViewerHighlights = ({
     setInertialVisualization((current) => {
       const previous = inertialVisualizationBeforeOpenRef.current;
       inertialVisualizationBeforeOpenRef.current = null;
-      if (previous) {
-        return cloneInertialVisualizationSettings(previous);
-      }
-      return current.scopedLinkNames === null
-        ? current
-        : syncSimulationPrepInertiaVisualizationScope(current);
+      return restoreInertialVisualizationSnapshot(current, previous);
     });
   }, [setInertialVisualization]);
 
   const clearSimulationPrepViewerHighlights = useCallback(() => {
-    setHoveredInertiaVisualizationPreview(null);
-    setActiveInertiaVisualizationScopeKey(null);
+    resetSimulationPrepTransientPreviewState();
     restoreSimulationPrepViewerHighlights();
-  }, [
-    restoreSimulationPrepViewerHighlights,
-    setActiveInertiaVisualizationScopeKey,
-    setHoveredInertiaVisualizationPreview,
-  ]);
+  }, [resetSimulationPrepTransientPreviewState, restoreSimulationPrepViewerHighlights]);
 
   const closeSimulationPrepPanel = useCallback(() => {
     setShowHealthActionPanel(false);
@@ -89,14 +103,12 @@ export const useSimulationPrepViewerHighlights = ({
   const openSimulationPrepPanel = useCallback(() => {
     setShowLoadIssues(false);
     enableSimulationPrepViewerHighlights();
-    setHoveredInertiaVisualizationPreview(null);
-    setActiveInertiaVisualizationScopeKey(null);
+    resetSimulationPrepTransientPreviewState();
     setSimulationPrepResetPoseRequestKey(String(Date.now()));
     setShowHealthActionPanel(true);
   }, [
     enableSimulationPrepViewerHighlights,
-    setActiveInertiaVisualizationScopeKey,
-    setHoveredInertiaVisualizationPreview,
+    resetSimulationPrepTransientPreviewState,
     setShowHealthActionPanel,
     setShowLoadIssues,
     setSimulationPrepResetPoseRequestKey,
