@@ -1,0 +1,52 @@
+{
+  "world_layout": {
+    "name": "hk-cargo-port-splat-only",
+    "objects": [
+      {
+        "id": "hk-cargo-port-splat",
+        "name": "hk cargo port environment (gaussian splat)",
+        "type": "splat",
+        "position_xyz": [
+          0,
+          0,
+          0.14
+        ],
+        "rotation_rpy_rad": [
+          -1.5707963267948966,
+          0,
+          0
+        ],
+        "size_xyz": [
+          1,
+          1,
+          1
+        ],
+        "color": "#000000",
+        "asset_scale_xyz": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "mesh": {
+          "uri": "hk-cargo-port/0-world-500k.spz"
+        },
+        "simulation": {
+          "fixed": true,
+          "collision": false,
+          "semantic_role": "environment"
+        },
+        "source": "demo-world",
+        "tracked_joint_name": null,
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      }
+    ],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "environment": {
+    "preset": "default",
+    "frame_convention": "ros-rep-103",
+    "frame_map": "identity"
+  }
+}
