@@ -245,7 +245,10 @@ def _materialize_workspace_robot_urdf(
         materialize_urdf_visual_material_colors(bundled_urdf_path)
     except ET.ParseError as exc:
         _raise(error, f"Simulator workspace could not parse robot URDF materials: {exc}")
-    return bundled_urdf_path.read_text(encoding="utf-8")
+    try:
+        return bundled_urdf_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        _raise(error, f"Simulator workspace could not read robot URDF materials: {exc}")
 
 
 def prepare_simulator_workspace_package(

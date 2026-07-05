@@ -554,3 +554,53 @@ def test_prepare_simulator_workspace_exposes_materialized_robot_urdf_xml(
     prepared_file_xml = prepared.robot_urdf_path.read_text(encoding="utf-8")
     assert '<color rgba="0.8 0.1 0.1 1.0"' in prepared_file_xml
     assert prepared.robot_urdf_xml == prepared_file_xml
+
+
+def test_prepare_simulator_workspace_surfaces_materialized_robot_urdf_read_errors(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    def fake_bundle_mesh_assets_for_urdf_file(
+        *,
+        urdf_path: str,
+        urdf_xml: str,
+        out_path: str,
+        extra_search_roots: list[str] | None = None,
+    ) -> BundleMeshAssetsResult:
+        output_path = Path(out_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(urdf_xml, encoding="utf-8")
+        return BundleMeshAssetsResult(
+            success=True,
+            content=urdf_xml,
+            out_path=out_path,
+            assets_root=str(tmp_path / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        )
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(self: Path, *args, **kwargs) -> str:
+        if self.name == "robot.urdf" and self.parent.name == "robot":
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.bundle_mesh_assets_for_urdf_file",
+        fake_bundle_mesh_assets_for_urdf_file,
+    )
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.materialize_urdf_visual_material_colors",
+        lambda _path: None,
+    )
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+    with pytest.raises(ValueError, match="Simulator workspace could not read robot URDF materials:"):
+        prepare_simulator_workspace_package(
+            SimulatorWorkspacePrepareRequest(world_package=_minimal_world_package()),
+            workspace_root=tmp_path,
+            error=ValueError,
+        )
