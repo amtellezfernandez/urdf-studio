@@ -140,3 +140,27 @@ def test_terminate_workspace_process_reports_false_when_process_survives_kill(
 
     assert terminate_workspace_process(process) is False
     assert process.wait_calls == 2
+
+
+def test_terminate_workspace_process_reports_true_when_process_exits_before_signal_delivery(
+    monkeypatch,
+) -> None:
+    class _ExitedDuringTerminateProcess:
+        pid = 1234
+
+        def __init__(self) -> None:
+            self.poll_calls = 0
+
+        def poll(self):
+            self.poll_calls += 1
+            return None if self.poll_calls == 1 else 0
+
+    process = _ExitedDuringTerminateProcess()
+
+    monkeypatch.setattr(
+        workspace_launches,
+        "_terminate_running_process",
+        lambda _process: (_ for _ in ()).throw(ProcessLookupError()),
+    )
+
+    assert terminate_workspace_process(process) is True

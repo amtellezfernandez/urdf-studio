@@ -267,12 +267,12 @@ def terminate_workspace_process(process: subprocess.Popen) -> bool:
     try:
         _terminate_running_process(process)
     except ProcessLookupError:
-        return False
+        return process.poll() is not None
     except OSError:
         try:
             process.terminate()
         except OSError:
-            return False
+            return process.poll() is not None
 
     if _wait_for_process_exit(process):
         return True
