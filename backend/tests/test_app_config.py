@@ -47,6 +47,21 @@ def test_read_app_config_returns_empty_object_when_file_read_fails(
     assert read_app_config(config_path) == {}
 
 
+def test_read_app_config_returns_empty_object_when_file_decode_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "app.config.json"
+    config_path.write_text('{"enabled": true}', encoding="utf-8")
+
+    def _raise_decode_error(*args: object, **kwargs: object) -> str:
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(Path, "read_text", _raise_decode_error)
+
+    assert read_app_config(config_path) == {}
+
+
 def test_default_app_config_path_uses_repo_config_location() -> None:
     assert _default_app_config_path() == BASE_DIR / "config" / "app.config.json"
 
