@@ -25,6 +25,7 @@ class _InvalidOptionalNumber:
 
 
 OptionalFloatRead: TypeAlias = float | None | _InvalidOptionalNumber
+DerivedFocalLengths: TypeAlias = tuple[float, float, float]
 
 _INVALID_OPTIONAL_NUMBER = _InvalidOptionalNumber()
 
@@ -45,17 +46,16 @@ def pinhole_camera_intrinsics_from_record(value: object) -> PinholeCameraIntrins
         fx = fy * (width / height)
     if fy is None and fx is not None:
         fy = fx * (height / width)
-
-    if fy is None:
-        vertical_fov_deg = _read_camera_fov_deg(value.get("fov_deg"))
-        if vertical_fov_deg is None:
-            return None
-        fy = focal_length_px_from_vertical_fov_deg(vertical_fov_deg, height)
-        fx = fy * (width / height)
-    else:
-        vertical_fov_deg = vertical_fov_deg_from_focal_length_px(fy, height)
-        if fx is None:
-            return None
+    derived_intrinsics = _derived_focal_lengths(
+        value,
+        width=width,
+        height=height,
+        fx=fx,
+        fy=fy,
+    )
+    if derived_intrinsics is None:
+        return None
+    fx, fy, vertical_fov_deg = derived_intrinsics
 
     cx = _read_optional_finite_float(value, "cx", default_value=width * 0.5)
     cy = _read_optional_finite_float(value, "cy", default_value=height * 0.5)
@@ -81,6 +81,27 @@ def focal_length_px_from_vertical_fov_deg(fov_deg: float, height_px: int) -> flo
 def vertical_fov_deg_from_focal_length_px(fy_px: float, height_px: int) -> float:
     half_fov_rad = math.atan(height_px / (2.0 * fy_px))
     return math.degrees(half_fov_rad) * 2.0
+
+
+def _derived_focal_lengths(
+    record: CameraIntrinsicsRecord,
+    *,
+    width: int,
+    height: int,
+    fx: float | None,
+    fy: float | None,
+) -> DerivedFocalLengths | None:
+    if fy is not None:
+        if fx is None:
+            return None
+        return fx, fy, vertical_fov_deg_from_focal_length_px(fy, height)
+
+    vertical_fov_deg = _read_camera_fov_deg(record.get("fov_deg"))
+    if vertical_fov_deg is None:
+        return None
+    fy = focal_length_px_from_vertical_fov_deg(vertical_fov_deg, height)
+    fx = fy * (width / height)
+    return fx, fy, vertical_fov_deg
 
 
 def _read_camera_dimension(value: object) -> int | None:
