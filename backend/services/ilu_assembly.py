@@ -118,6 +118,21 @@ def _read_assembly_payload(assembly_id: str) -> JsonObject:
     return payload
 
 
+def _normalized_selected_paths(payload: JsonObject) -> list[str]:
+    selected_paths = payload.get("selectedPaths")
+    if not isinstance(selected_paths, list) or not selected_paths:
+        raise IluAssemblyError(status_code=500, detail="ilu assembly selected paths are missing.")
+
+    normalized = [
+        item.strip()
+        for item in selected_paths
+        if isinstance(item, str) and item.strip()
+    ]
+    if not normalized:
+        raise IluAssemblyError(status_code=500, detail="ilu assembly selected paths are missing.")
+    return normalized
+
+
 def get_ilu_assembly_manifest(assembly_id: str) -> IluAssemblyManifestResponse:
     payload = _read_assembly_payload(assembly_id)
     normalized_assembly_id = _validate_assembly_id(assembly_id)
@@ -158,17 +173,15 @@ def get_ilu_assembly_manifest(assembly_id: str) -> IluAssemblyManifestResponse:
                 continue
             source_by_path[key] = IluAssemblySource.model_validate(value)
 
-    selected_paths = payload.get("selectedPaths")
+    selected_paths = _normalized_selected_paths(payload)
     names_by_path = payload.get("namesByPath")
-    if not isinstance(selected_paths, list) or not selected_paths:
-        raise IluAssemblyError(status_code=500, detail="ilu assembly selected paths are missing.")
     if not isinstance(names_by_path, dict):
         names_by_path = {}
 
     return IluAssemblyManifestResponse(
         label=str(payload.get("label") or f"Attached ilu assembly {normalized_assembly_id}"),
         files=files,
-        selected_paths=[str(item) for item in selected_paths if isinstance(item, str) and item.strip()],
+        selected_paths=selected_paths,
         names_by_path={
             str(key): str(value)
             for key, value in names_by_path.items()

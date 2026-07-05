@@ -135,3 +135,28 @@ def test_get_ilu_assembly_manifest_rejects_non_object_metadata(
 
     assert exc_info.value.status_code == 500
     assert exc_info.value.detail == "Failed to read ilu assembly metadata."
+
+
+def test_get_ilu_assembly_manifest_rejects_selected_paths_without_strings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    assembly_root = tmp_path / "assembly-sessions"
+    session_dir = assembly_root / "assembly-1"
+    workspace_root = session_dir / "files"
+    workspace_root.mkdir(parents=True)
+    (workspace_root / "tool.urdf").write_text("<robot name='tool'/>", encoding="utf-8")
+    _write_assembly_metadata(
+        session_dir,
+        workspace_root,
+        selected_paths=["", "   "],
+        names_by_path={},
+        source_by_path={},
+    )
+    monkeypatch.setattr(ilu_assembly_service, "ILU_ASSEMBLY_ROOT", assembly_root)
+
+    with pytest.raises(ilu_assembly_service.IluAssemblyError) as exc_info:
+        ilu_assembly_service.get_ilu_assembly_manifest("assembly-1")
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "ilu assembly selected paths are missing."
