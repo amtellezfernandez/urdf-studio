@@ -11,8 +11,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.models.physical_state import (
+    PhysicalEntity,
     PhysicalRelation,
     PhysicalRolloutTrace,
+    PhysicalStateFrame,
 )
 from backend.services.robot_rollout_generator import UrdfEntry, fk_position
 
@@ -77,10 +79,10 @@ def _find_table_entity_id(trace: PhysicalRolloutTrace) -> str | None:
     return None
 
 
-def _get_entity(frame, entity_id: str):
-    for e in frame.entities:
-        if e.entity_id == entity_id:
-            return e
+def _get_entity(frame: PhysicalStateFrame, entity_id: str) -> PhysicalEntity | None:
+    for entity in frame.entities:
+        if entity.entity_id == entity_id:
+            return entity
     return None
 
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from backend.models.physical_state import PhysicalRolloutTrace
+from backend.models.physical_state import PhysicalEntity, PhysicalRolloutTrace
 
 
 # ── ZscoreStats ───────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ def _dist3(a: list[float], b: list[float]) -> float:
     return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
 
 
-def _find_robot_entity(trace: PhysicalRolloutTrace):
+def _find_robot_entity(trace: PhysicalRolloutTrace) -> PhysicalEntity | None:
     """Return first robot-type entity found across all frames, or None."""
     for frame in trace.frames:
         for entity in frame.entities:

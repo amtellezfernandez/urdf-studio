@@ -10,7 +10,12 @@ from xml.etree import ElementTree as ET
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from backend.models.physical_state import PhysicalEntity, PhysicalRolloutTrace, SimulatorExportState
+from backend.models.physical_state import (
+    PhysicalEntity,
+    PhysicalRolloutTrace,
+    PhysicalStateFrame,
+    SimulatorExportState,
+)
 from backend.services.executability_audit import audit_physical_rollout_trace
 from backend.services.simulator_adapters.base import is_python_module_available
 from backend.services.world_layout_static_transfer import (
@@ -258,7 +263,7 @@ def _collect_export_primitives(
     return primitives, frame_map, skipped_hidden_count, warnings, None
 
 
-def _final_frame(trace: PhysicalRolloutTrace):
+def _final_frame(trace: PhysicalRolloutTrace) -> PhysicalStateFrame:
     return trace.frames[-1]
 
 
