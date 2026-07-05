@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import binascii
+import http.client
 import json
 import mimetypes
 import os
@@ -424,7 +426,12 @@ def _fetch_url_bytes(url: str, *, max_bytes: int, headers: dict[str, str] | None
         raise GitHubPublicProxyError(502, detail) from error
     except GitHubPublicProxyError:
         raise
-    except Exception as error:
+    except (
+        http.client.HTTPException,
+        OSError,
+        TimeoutError,
+        urllib.error.URLError,
+    ) as error:
         raise GitHubPublicProxyError(502, f"Failed to reach GitHub public archive: {error}") from error
 
 
@@ -658,7 +665,12 @@ def _load_public_archive_snapshot(
             files.sort(key=lambda item: (item["path"], 0 if item["type"] == "dir" else 1))
     except GitHubPublicProxyError:
         raise
-    except Exception as error:
+    except (
+        RuntimeError,
+        ValueError,
+        zipfile.BadZipFile,
+        zipfile.LargeZipFile,
+    ) as error:
         raise GitHubPublicProxyError(502, f"Failed to read GitHub archive: {error}") from error
 
     snapshot = _ArchiveSnapshot(
@@ -840,7 +852,7 @@ def fetch_file_bytes(
             raise GitHubPublicProxyError(502, f"ilu bridge did not return file content for {path}.")
         try:
             raw = base64.b64decode(content_b64)
-        except Exception as error:
+        except (binascii.Error, ValueError) as error:
             raise GitHubPublicProxyError(502, f"Failed to decode file content for {path}.") from error
 
         mime_type = payload.get("mimeType")

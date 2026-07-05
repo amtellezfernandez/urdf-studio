@@ -290,6 +290,29 @@ def test_list_repo_candidates_falls_back_when_bridge_process_fails(monkeypatch) 
     assert payload["candidates"][0]["meshesFolderPath"] == "robots/demo/assets"
 
 
+def test_fetch_url_bytes_wraps_url_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_url_error(*_args, **_kwargs):
+        raise ilu_repo_source.urllib.error.URLError("offline")
+
+    monkeypatch.setattr("backend.services.ilu_repo_source.urllib.request.urlopen", _raise_url_error)
+
+    with pytest.raises(GitHubPublicProxyError) as exc_info:
+        ilu_repo_source._fetch_url_bytes("https://github.com/acme/robot", max_bytes=128)
+
+    assert exc_info.value.status_code == 502
+    assert "Failed to reach GitHub public archive" in exc_info.value.detail
+
+
+def test_fetch_url_bytes_preserves_unexpected_urlopen_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_unexpected_error(*_args, **_kwargs):
+        raise KeyError("unexpected urlopen bookkeeping failure")
+
+    monkeypatch.setattr("backend.services.ilu_repo_source.urllib.request.urlopen", _raise_unexpected_error)
+
+    with pytest.raises(KeyError, match="unexpected urlopen bookkeeping failure"):
+        ilu_repo_source._fetch_url_bytes("https://github.com/acme/robot", max_bytes=128)
+
+
 def test_load_public_git_tree_files_builds_candidate_discovery_listing(monkeypatch) -> None:
     owner = "google-deepmind"
     repo = "mujoco_menagerie"
@@ -407,6 +430,45 @@ def test_extract_github_error_detail_simplifies_rate_limit_json() -> None:
     assert detail == "GitHub public API rate limit exceeded. Configure server GitHub auth or retry later."
 
 
+def test_fetch_file_bytes_falls_back_for_invalid_base64_bridge_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._run_bridge",
+        lambda command, payload: {"contentBase64": "a", "mimeType": "application/xml"},
+    )
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._load_public_archive_snapshot",
+        lambda owner, repo, branch=None, force_refresh=False: _ArchiveSnapshot(
+            resolved_ref=branch or "main",
+            files=[],
+            file_bytes_by_path={"robot.urdf": b"<robot />"},
+        ),
+    )
+
+    content, mime_type = fetch_file_bytes(owner="acme", repo="robot", path="robot.urdf", sha="sha-robot")
+
+    assert content == b"<robot />"
+    assert mime_type == "application/xml"
+
+
+def test_fetch_file_bytes_preserves_unexpected_decode_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_repo_source.resolve_server_github_token", lambda: "server-token")
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._run_bridge",
+        lambda command, payload: {"contentBase64": "cm9ib3Q=", "mimeType": "application/xml"},
+    )
+
+    def _raise_unexpected_error(_content: str):
+        raise KeyError("unexpected base64 decoder failure")
+
+    monkeypatch.setattr("backend.services.ilu_repo_source.base64.b64decode", _raise_unexpected_error)
+
+    with pytest.raises(KeyError, match="unexpected base64 decoder failure"):
+        fetch_file_bytes(owner="acme", repo="robot", path="robot.urdf", sha="sha-robot")
+
+
 def test_fetch_file_bytes_refreshes_stale_archive_snapshot(monkeypatch) -> None:
     calls: list[bool] = []
 
@@ -511,3 +573,44 @@ def test_load_public_archive_snapshot_rejects_excessive_file_count(monkeypatch: 
 
     assert exc.value.status_code == 413
     assert "file-count limit" in exc.value.detail.lower()
+
+
+def test_load_public_archive_snapshot_wraps_invalid_zip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._resolve_default_branch_from_html",
+        lambda owner, repo: "main",
+    )
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._fetch_url_bytes",
+        lambda url, max_bytes: b"not a zip archive",
+    )
+
+    with pytest.raises(GitHubPublicProxyError) as exc_info:
+        _load_public_archive_snapshot("acme", "robot")
+
+    assert exc_info.value.status_code == 502
+    assert "Failed to read GitHub archive" in exc_info.value.detail
+
+
+def test_load_public_archive_snapshot_preserves_unexpected_archive_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._resolve_default_branch_from_html",
+        lambda owner, repo: "main",
+    )
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._fetch_url_bytes",
+        lambda url, max_bytes: _build_archive_bytes({"robot.urdf": b"<robot />"}),
+    )
+
+    def _raise_unexpected_error(_path: str) -> str:
+        raise KeyError("unexpected archive path bookkeeping failure")
+
+    monkeypatch.setattr(
+        "backend.services.ilu_repo_source._normalize_repository_path",
+        _raise_unexpected_error,
+    )
+
+    with pytest.raises(KeyError, match="unexpected archive path bookkeeping failure"):
+        _load_public_archive_snapshot("acme", "robot")
