@@ -72,25 +72,26 @@ def _manifest_asset_root(value: object) -> Path | None:
     return resolved_root
 
 
-def workspace_asset_roots(world_package_path: Path, robot_urdf_path: Path) -> tuple[Path, ...]:
-    workspace_dir = world_package_path.parent
-    manifest_path = workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME
+def _manifest_workspace_asset_roots(manifest_path: Path) -> tuple[Path, ...] | None:
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return _default_workspace_asset_roots(
-            world_package_path=world_package_path,
-            robot_urdf_path=robot_urdf_path,
-        )
+        return None
     if not isinstance(payload, list):
-        return _default_workspace_asset_roots(
-            world_package_path=world_package_path,
-            robot_urdf_path=robot_urdf_path,
-        )
+        return None
     roots = tuple(root for item in payload if (root := _manifest_asset_root(item)) is not None)
     if not roots:
-        return _default_workspace_asset_roots(
-            world_package_path=world_package_path,
-            robot_urdf_path=robot_urdf_path,
-        )
+        return None
     return _dedupe_paths(roots)
+
+
+def workspace_asset_roots(world_package_path: Path, robot_urdf_path: Path) -> tuple[Path, ...]:
+    workspace_dir = world_package_path.parent
+    manifest_path = workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME
+    manifest_roots = _manifest_workspace_asset_roots(manifest_path)
+    if manifest_roots is not None:
+        return manifest_roots
+    return _default_workspace_asset_roots(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+    )

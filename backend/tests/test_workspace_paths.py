@@ -64,3 +64,21 @@ def test_workspace_asset_roots_falls_back_when_manifest_has_no_valid_roots(tmp_p
         workspace_dir=workspace_dir,
         robot_urdf_path=robot_urdf_path,
     )
+
+
+def test_workspace_asset_roots_falls_back_when_manifest_payload_is_not_a_list(tmp_path) -> None:
+    workspace_dir = tmp_path / "workspace"
+    robot_urdf_path = workspace_dir / "robot" / "robot.urdf"
+    world_package_path = workspace_dir / "world-package.json"
+    workspace_dir.mkdir()
+    (workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME).write_text(
+        f"{json.dumps({'root': str(tmp_path / 'external-assets')})}\n",
+        encoding="utf-8",
+    )
+
+    roots = workspace_asset_roots(world_package_path, robot_urdf_path)
+
+    assert roots == compute_workspace_asset_roots(
+        workspace_dir=workspace_dir,
+        robot_urdf_path=robot_urdf_path,
+    )
