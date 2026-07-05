@@ -92,7 +92,7 @@ def _apply_action_step(frame: PhysicalStateFrame, action: ActionToken, *, step_c
     elif action.action_type == "handoff_to_human":
         _set_entity_metadata(next_frame, action.object_id or action.target_id, {"handoff_requested": True})
     elif action.action_type in {"wait", "inspect", "replan", "noop"}:
-        pass
+        return next_frame
     return next_frame
 
 
