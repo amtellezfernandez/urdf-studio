@@ -38,29 +38,19 @@ def pinhole_camera_intrinsics_from_record(value: object) -> PinholeCameraIntrins
     if width is None or height is None:
         return None
 
-    fx = _read_optional_positive_float(value, "fx")
-    fy = _read_optional_positive_float(value, "fy")
-    if fx is _INVALID_OPTIONAL_NUMBER or fy is _INVALID_OPTIONAL_NUMBER:
-        return None
-    if fx is None and fy is not None:
-        fx = fy * (width / height)
-    if fy is None and fx is not None:
-        fy = fx * (height / width)
-    derived_intrinsics = _derived_focal_lengths(
+    resolved_focal_lengths = _read_resolved_focal_lengths(
         value,
         width=width,
         height=height,
-        fx=fx,
-        fy=fy,
     )
-    if derived_intrinsics is None:
+    if resolved_focal_lengths is None:
         return None
-    fx, fy, vertical_fov_deg = derived_intrinsics
+    fx, fy, vertical_fov_deg = resolved_focal_lengths
 
-    cx = _read_optional_finite_float(value, "cx", default_value=width * 0.5)
-    cy = _read_optional_finite_float(value, "cy", default_value=height * 0.5)
-    if cx is _INVALID_OPTIONAL_NUMBER or cy is _INVALID_OPTIONAL_NUMBER:
+    principal_point = _read_principal_point(value, width=width, height=height)
+    if principal_point is None:
         return None
+    cx, cy = principal_point
     return PinholeCameraIntrinsics(
         width=width,
         height=height,
@@ -102,6 +92,58 @@ def _derived_focal_lengths(
     fy = focal_length_px_from_vertical_fov_deg(vertical_fov_deg, height)
     fx = fy * (width / height)
     return fx, fy, vertical_fov_deg
+
+
+def _read_resolved_focal_lengths(
+    record: CameraIntrinsicsRecord,
+    *,
+    width: int,
+    height: int,
+) -> DerivedFocalLengths | None:
+    fx = _read_optional_positive_float(record, "fx")
+    fy = _read_optional_positive_float(record, "fy")
+    if fx is _INVALID_OPTIONAL_NUMBER or fy is _INVALID_OPTIONAL_NUMBER:
+        return None
+    normalized_fx, normalized_fy = _normalize_focal_length_pair(
+        width=width,
+        height=height,
+        fx=fx,
+        fy=fy,
+    )
+    return _derived_focal_lengths(
+        record,
+        width=width,
+        height=height,
+        fx=normalized_fx,
+        fy=normalized_fy,
+    )
+
+
+def _normalize_focal_length_pair(
+    *,
+    width: int,
+    height: int,
+    fx: float | None,
+    fy: float | None,
+) -> tuple[float | None, float | None]:
+    if fx is None and fy is not None:
+        return fy * (width / height), fy
+    if fy is None and fx is not None:
+        return fx, fx * (height / width)
+    return fx, fy
+
+
+def _read_principal_point(
+    record: CameraIntrinsicsRecord,
+    *,
+    width: int,
+    height: int,
+) -> tuple[float, float] | None:
+    cx = _read_optional_finite_float(record, "cx", default_value=width * 0.5)
+    cy = _read_optional_finite_float(record, "cy", default_value=height * 0.5)
+    if cx is _INVALID_OPTIONAL_NUMBER or cy is _INVALID_OPTIONAL_NUMBER:
+        return None
+    return cx, cy
 
 
 def _read_camera_dimension(value: object) -> int | None:
