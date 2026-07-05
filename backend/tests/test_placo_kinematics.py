@@ -88,3 +88,17 @@ def test_set_placo_posture_target_falls_back_to_numpy_array() -> None:
     assert joints_task.calls[1] == [0.0, 0.75]
     assert isinstance(joints_task.calls[2], np.ndarray)
     assert np.allclose(joints_task.calls[2], np.array([0.0, 0.75]))
+
+
+def test_set_placo_posture_target_preserves_unexpected_errors() -> None:
+    class _BrokenJointsTask:
+        @staticmethod
+        def set_joints(_joint_target: object) -> None:
+            raise KeyError("unexpected joint target failure")
+
+    with pytest.raises(KeyError, match="unexpected joint target failure"):
+        _set_placo_posture_target(
+            _BrokenJointsTask(),
+            {"joint_a": 0.5},
+            ("joint_a", "joint_b"),
+        )

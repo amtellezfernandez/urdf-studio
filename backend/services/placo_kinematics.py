@@ -170,7 +170,7 @@ def _set_placo_posture_target(
     try:
         joints_task.set_joints(posture_target)
         return
-    except Exception:
+    except (RuntimeError, TypeError, ValueError):
         pass
 
     joint_seed = [
@@ -179,7 +179,7 @@ def _set_placo_posture_target(
     try:
         joints_task.set_joints(joint_seed)
         return
-    except Exception:
+    except (RuntimeError, TypeError, ValueError):
         joints_task.set_joints(np.array(joint_seed, dtype=np.float64))
 
 
