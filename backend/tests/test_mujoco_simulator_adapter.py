@@ -623,3 +623,45 @@ def test_configure_mujoco_passive_viewer_sets_fit_camera_and_visual_groups() -> 
     assert viewer.cam.azimuth == MUJOCO_SCENE_PARAMS.viewer.azimuth_deg
     assert viewer.cam.elevation == MUJOCO_SCENE_PARAMS.viewer.elevation_deg
     assert list(viewer.opt.geomgroup[:3]) == [1, 1, 1]
+
+
+def test_configure_mujoco_passive_viewer_tolerates_camera_without_type() -> None:
+    mujoco = pytest.importorskip("mujoco")
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco model="viewer">
+          <worldbody>
+            <geom name="robot_visual" group="1" type="box" pos="0.5 0 0.2" size="0.1 0.1 0.2"/>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    class _CameraWithoutType:
+        def __init__(self) -> None:
+            self.lookat = [0.0, 0.0, 0.0]
+            self.distance = 0.0
+            self.azimuth = 0.0
+            self.elevation = 0.0
+
+        @property
+        def type(self) -> object:
+            raise AttributeError("camera type is unavailable")
+
+        @type.setter
+        def type(self, _value: object) -> None:
+            raise AttributeError("camera type is unavailable")
+
+    class _Viewer:
+        cam = _CameraWithoutType()
+
+    viewer = _Viewer()
+
+    bounds = configure_mujoco_passive_viewer(mujoco, model, data, viewer)
+
+    assert tuple(float(value) for value in viewer.cam.lookat) == bounds.center_xyz
+    assert viewer.cam.distance >= 1.0
+    assert viewer.cam.azimuth == MUJOCO_SCENE_PARAMS.viewer.azimuth_deg
+    assert viewer.cam.elevation == MUJOCO_SCENE_PARAMS.viewer.elevation_deg

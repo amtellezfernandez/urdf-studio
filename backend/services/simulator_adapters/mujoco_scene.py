@@ -61,10 +61,7 @@ def configure_mujoco_passive_viewer(
     bounds = mujoco_scene_bounds(mujoco, model, data)
     params = MUJOCO_SCENE_PARAMS.viewer
 
-    try:
-        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-    except AttributeError:
-        pass
+    _configure_free_camera_type(mujoco, viewer)
     viewer.cam.lookat[:] = bounds.center_xyz
     viewer.cam.distance = max(
         float(params.min_distance_m),
@@ -80,6 +77,13 @@ def configure_mujoco_passive_viewer(
                 geomgroup[group_id] = 1
 
     return bounds
+
+
+def _configure_free_camera_type(mujoco: Any, viewer: Any) -> None:
+    try:
+        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+    except AttributeError:
+        return
 
 
 def _finite_positive_float(value: object) -> float | None:
