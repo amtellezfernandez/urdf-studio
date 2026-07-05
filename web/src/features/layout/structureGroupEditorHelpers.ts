@@ -22,7 +22,9 @@ export const STRUCTURE_SUBGROUP_SUPPORTED_VIEWS = new Set<StructureGroupViewMode
   "flat",
 ]);
 
-export const STRUCTURE_DRAG_DATA_KEY = "application/x-urdf-studio-structure-drag";
+export const STRUCTURE_DRAG_MIME_TYPES = {
+  dataKey: "application/x-urdf-studio-structure-drag",
+} as const;
 
 export const parseStructureDragPayload = (
   payloadRaw: string

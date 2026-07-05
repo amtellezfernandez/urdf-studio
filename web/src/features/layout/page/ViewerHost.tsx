@@ -22,8 +22,10 @@ const RosVizViewer = lazyNamedComponent(
   () => import("@/studio_ui/rosviz/RosVizViewer"),
   "RosVizViewer"
 );
-const STUDIO_3D_RUNTIME_PREFIX = "studio3d";
-const ROS_VIZ_RUNTIME_PREFIX = "rosviz";
+const VIEWER_RUNTIME_PREFIXES = {
+  rosViz: "rosviz",
+  studio3d: "studio3d",
+} as const;
 
 type ViewerHostProps = {
   viewerKey: string;
@@ -53,8 +55,8 @@ export const ViewerHost = ({
 
   const usesRosVizRuntime = runtimeDecision.runtime === "rosViz";
   const runtimePrefix = usesRosVizRuntime
-    ? ROS_VIZ_RUNTIME_PREFIX
-    : STUDIO_3D_RUNTIME_PREFIX;
+    ? VIEWER_RUNTIME_PREFIXES.rosViz
+    : VIEWER_RUNTIME_PREFIXES.studio3d;
   const ActiveViewer = usesRosVizRuntime ? RosVizViewer : Viewer3D;
 
   return (

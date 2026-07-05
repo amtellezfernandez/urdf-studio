@@ -1,7 +1,6 @@
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { StructureGroupSection } from "@/features/layout/structureGroups";
 import {
-  DEFAULT_MESH_GROUP_LABEL,
   resolveLinkMeshGroupLabel,
 } from "@/features/layout/linkSidebarGroupingHelpers";
 

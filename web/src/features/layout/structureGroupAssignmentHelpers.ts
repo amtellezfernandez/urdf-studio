@@ -12,8 +12,10 @@ export type StructureMoveSource = {
 };
 
 const GROUP_LABEL_WHITESPACE_PATTERN = /\s+/g;
-const URDF_LINK_TAG_NAME = "link";
-const URDF_JOINT_TAG_NAME = "joint";
+const URDF_STRUCTURE_TAG_NAMES = {
+  joint: "joint",
+  link: "link",
+} as const;
 
 export const normalizeStructureGroupLabel = (label: string): string =>
   label.trim().toLowerCase().replace(GROUP_LABEL_WHITESPACE_PATTERN, "");
@@ -29,7 +31,9 @@ const isDirectiveTargetElement = (node: Node): node is Element => {
     return false;
   }
   const tagName = (node as Element).tagName.toLowerCase();
-  return tagName === URDF_LINK_TAG_NAME || tagName === URDF_JOINT_TAG_NAME;
+  return (
+    tagName === URDF_STRUCTURE_TAG_NAMES.link || tagName === URDF_STRUCTURE_TAG_NAMES.joint
+  );
 };
 
 export const resolveDirectiveNextSiblingElement = (

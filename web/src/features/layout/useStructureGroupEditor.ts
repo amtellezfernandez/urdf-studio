@@ -23,7 +23,7 @@ import {
   shouldCloseSubgroupCreatorForView,
   shouldCloseSubgroupCreatorWhenUnavailable,
   shouldIgnoreStructureDragStart,
-  STRUCTURE_DRAG_DATA_KEY,
+  STRUCTURE_DRAG_MIME_TYPES,
   STRUCTURE_SUBGROUP_SUPPORTED_VIEWS,
   type StructureDragState,
   type StructureGroupViewMode,
@@ -179,7 +179,7 @@ export const useStructureGroupEditor = ({
     (event: React.DragEvent<HTMLElement>): StructureDragState | null => {
       if (activeStructureDragRef.current) return activeStructureDragRef.current;
       if (activeStructureDrag) return activeStructureDrag;
-      const payloadRaw = event.dataTransfer.getData(STRUCTURE_DRAG_DATA_KEY);
+      const payloadRaw = event.dataTransfer.getData(STRUCTURE_DRAG_MIME_TYPES.dataKey);
       return parseStructureDragPayload(payloadRaw);
     },
     [activeStructureDrag]
@@ -199,7 +199,7 @@ export const useStructureGroupEditor = ({
       }
 
       event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData(STRUCTURE_DRAG_DATA_KEY, JSON.stringify(dragState));
+      event.dataTransfer.setData(STRUCTURE_DRAG_MIME_TYPES.dataKey, JSON.stringify(dragState));
       event.dataTransfer.setData("text/plain", `${dragState.sourceType}:${dragState.sourceName}`);
       activeStructureDragRef.current = dragState;
       setIsStructureDragActive(true);

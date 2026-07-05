@@ -1,5 +1,4 @@
 import {
-  DEFAULT_STRUCTURE_GROUP_LABEL,
   normalizeStructureGroupDisplayLabel,
   parseStructureGroupLabel,
   resolveStructureGroupLabelForName,

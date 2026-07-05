@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  DEFAULT_STRUCTURE_GROUP_LABEL,
   normalizeStructureGroupDisplayLabel,
   parseStructureGroupLabel,
   resolveStructureGroupLabelForName,
+  STRUCTURE_GROUP_DEFAULTS,
 } from "@/features/layout/structureGroupHelpers";
 
 describe("structureGroupHelpers", () => {
@@ -12,7 +12,7 @@ describe("structureGroupHelpers", () => {
     expect(parseStructureGroupLabel("arm3")).toEqual({ kind: "arm", index: 3 });
     expect(parseStructureGroupLabel("base")).toEqual({ kind: "base", index: 0 });
     expect(parseStructureGroupLabel("gripper1")).toEqual({
-      kind: DEFAULT_STRUCTURE_GROUP_LABEL,
+      kind: STRUCTURE_GROUP_DEFAULTS.label,
       index: 1,
     });
   });
@@ -34,6 +34,6 @@ describe("structureGroupHelpers", () => {
         labelsByName: { joint_a: "   " },
         name: "joint_a",
       })
-    ).toBe(DEFAULT_STRUCTURE_GROUP_LABEL);
+    ).toBe(STRUCTURE_GROUP_DEFAULTS.label);
   });
 });

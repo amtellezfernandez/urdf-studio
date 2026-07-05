@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_MESH_GROUP_LABEL,
+  LINK_SIDEBAR_GROUPING_DEFAULTS,
   extractMeshFilename,
   resolveLinkMeshGroupLabel,
 } from "@/features/layout/linkSidebarGroupingHelpers";
@@ -33,7 +33,11 @@ describe("linkSidebarGroupingHelpers", () => {
 
     expect(resolveLinkMeshGroupLabel(analysis, "visual_link")).toBe("arm.stl");
     expect(resolveLinkMeshGroupLabel(analysis, "collision_link")).toBe("camera_mount.stl");
-    expect(resolveLinkMeshGroupLabel(analysis, "empty_link")).toBe(DEFAULT_MESH_GROUP_LABEL);
-    expect(resolveLinkMeshGroupLabel(null, "visual_link")).toBe(DEFAULT_MESH_GROUP_LABEL);
+    expect(resolveLinkMeshGroupLabel(analysis, "empty_link")).toBe(
+      LINK_SIDEBAR_GROUPING_DEFAULTS.meshGroupLabel
+    );
+    expect(resolveLinkMeshGroupLabel(null, "visual_link")).toBe(
+      LINK_SIDEBAR_GROUPING_DEFAULTS.meshGroupLabel
+    );
   });
 });

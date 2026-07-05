@@ -27,12 +27,12 @@ const WORLD_OBJECT_SOURCE_ORDER: ReadonlyArray<NonNullable<CreatedObject["source
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceOrder;
 const WORLD_OBJECT_SOURCE_LABELS: Record<NonNullable<CreatedObject["source"]>, string> =
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceLabels;
-const WORLD_PANEL_ROW_CLASS_NAME =
-  "group cursor-pointer border-b border-border/20 px-1.5 py-1 transition-colors last:border-b-0";
-const WORLD_PANEL_SECTION_HEADER_CLASS_NAME =
-  "flex items-center justify-between px-0.5 text-[9px] uppercase tracking-wide text-muted-foreground";
-const WORLD_PANEL_SECTION_BODY_CLASS_NAME =
-  "overflow-hidden rounded-sm border border-border/20 bg-background/20";
+const WORLD_PANEL_CLASS_NAMES = {
+  row: "group cursor-pointer border-b border-border/20 px-1.5 py-1 transition-colors last:border-b-0",
+  sectionBody: "overflow-hidden rounded-sm border border-border/20 bg-background/20",
+  sectionHeader:
+    "flex items-center justify-between px-0.5 text-[9px] uppercase tracking-wide text-muted-foreground",
+} as const;
 
 type WorldSectionProps = {
   children: ReactNode;
@@ -57,11 +57,11 @@ type WorldObjectRowProps = {
 
 const WorldSection = ({ children, count, title }: WorldSectionProps) => (
   <div className="space-y-1">
-    <div className={WORLD_PANEL_SECTION_HEADER_CLASS_NAME}>
+    <div className={WORLD_PANEL_CLASS_NAMES.sectionHeader}>
       <span>{title}</span>
       <span className="tabular-nums">{count}</span>
     </div>
-    <div className={WORLD_PANEL_SECTION_BODY_CLASS_NAME}>{children}</div>
+    <div className={WORLD_PANEL_CLASS_NAMES.sectionBody}>{children}</div>
   </div>
 );
 
@@ -69,7 +69,7 @@ const WorldCameraRow = ({ camera, isSelected, onSelect }: WorldCameraRowProps) =
   <div
     data-world-camera-id={camera.id}
     className={cn(
-      WORLD_PANEL_ROW_CLASS_NAME,
+      WORLD_PANEL_CLASS_NAMES.row,
       isSelected ? "bg-muted/35" : "hover:bg-muted/20"
     )}
     onClick={() => onSelect(camera.id)}
@@ -118,7 +118,7 @@ const WorldObjectRow = ({
     <div
       data-world-object-id={worldObject.id}
       className={cn(
-        WORLD_PANEL_ROW_CLASS_NAME,
+        WORLD_PANEL_CLASS_NAMES.row,
         isSelected ? "bg-muted/35" : "hover:bg-muted/20",
         isHidden && "opacity-70"
       )}

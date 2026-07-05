@@ -9,7 +9,8 @@ import {
   toGroupDirectiveCommentBody,
 } from "@/features/layout/structureGroupAssignmentHelpers";
 
-const SAMPLE_URDF = `<?xml version="1.0"?>
+const STRUCTURE_GROUP_ASSIGNMENT_FIXTURES = {
+  sampleUrdf: `<?xml version="1.0"?>
 <robot name="group_move">
   <link name="base_link" />
   <link name="shoulder_link" />
@@ -17,7 +18,8 @@ const SAMPLE_URDF = `<?xml version="1.0"?>
     <parent link="base_link" />
     <child link="shoulder_link" />
   </joint>
-</robot>`;
+</robot>`,
+} as const;
 
 describe("structureGroupAssignmentHelpers", () => {
   it("normalizes structure group labels", () => {
@@ -31,7 +33,7 @@ describe("structureGroupAssignmentHelpers", () => {
   });
 
   it("resolves move targets through inbound joints for links", () => {
-    const analysis = analyzeUrdf(SAMPLE_URDF);
+    const analysis = analyzeUrdf(STRUCTURE_GROUP_ASSIGNMENT_FIXTURES.sampleUrdf);
     expect(
       resolveMoveTargets(
         {

@@ -1,7 +1,9 @@
 import type { LinkData } from "@/shared/lib/urdfBrowser";
 
-const LINK_STATUS_SEGMENT_SEPARATOR = "+";
-const LINK_STATUS_TITLE_SEPARATOR = " • ";
+const LINK_STATUS_SEPARATORS = {
+  label: "+",
+  title: " • ",
+} as const;
 
 export const resolveLinkBrowserEmptyState = (searchQuery: string): string =>
   searchQuery ? "No links match the search" : "No links available";
@@ -97,13 +99,13 @@ export const resolveLinkStatusSummary = ({
     hasEeStatus,
     isCollisionMerged,
     isCollisionSimplified,
-  }).join(LINK_STATUS_SEGMENT_SEPARATOR);
+  }).join(LINK_STATUS_SEPARATORS.label);
 
   const title = buildLinkStatusTitleSegments({
     hasEeStatus,
     isCollisionMerged,
     isCollisionSimplified,
-  }).join(LINK_STATUS_TITLE_SEPARATOR);
+  }).join(LINK_STATUS_SEPARATORS.title);
 
   return { label, title };
 };

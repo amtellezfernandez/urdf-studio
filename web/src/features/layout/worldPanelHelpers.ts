@@ -6,7 +6,9 @@ export type WorldObjectGroup = {
   objects: CreatedObject[];
 };
 
-const DEFAULT_WORLD_OBJECT_SOURCE: NonNullable<CreatedObject["source"]> = "user";
+const WORLD_PANEL_DEFAULTS = {
+  worldObjectSource: "user" as NonNullable<CreatedObject["source"]>,
+} as const;
 
 export const toReadableWorldSourceLabel = (source: string): string =>
   source
@@ -27,7 +29,7 @@ export const toWorldObjectDisplayName = (worldObject: CreatedObject): string => 
 export const resolveWorldObjectSource = (
   worldObject: CreatedObject
 ): NonNullable<CreatedObject["source"]> =>
-  worldObject.source ?? DEFAULT_WORLD_OBJECT_SOURCE;
+  worldObject.source ?? WORLD_PANEL_DEFAULTS.worldObjectSource;
 
 export const resolveWorldObjectGroupLabel = ({
   source,

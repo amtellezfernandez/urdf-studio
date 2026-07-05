@@ -1,6 +1,8 @@
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 
-export const DEFAULT_MESH_GROUP_LABEL = "Other";
+export const LINK_SIDEBAR_GROUPING_DEFAULTS = {
+  meshGroupLabel: "Other",
+} as const;
 
 const resolveLinkMeshReference = (
   analysis: UrdfAnalysis | null | undefined,
@@ -36,5 +38,7 @@ export const resolveLinkMeshGroupLabel = (
   linkName: string
 ): string => {
   const meshReference = resolveLinkMeshReference(analysis, linkName);
-  return meshReference ? extractMeshFilename(meshReference) : DEFAULT_MESH_GROUP_LABEL;
+  return meshReference
+    ? extractMeshFilename(meshReference)
+    : LINK_SIDEBAR_GROUPING_DEFAULTS.meshGroupLabel;
 };
