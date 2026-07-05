@@ -6,9 +6,9 @@ import math
 import random
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 from fastapi import HTTPException
@@ -33,8 +33,8 @@ class BenchmarkRun:
     solver_policy: str
     solver_used: str | None
     target_index: int
-    target_position: Tuple[float, float, float]
-    target_wxyz: Tuple[float, float, float, float]
+    target_position: tuple[float, float, float]
+    target_wxyz: tuple[float, float, float, float]
     duration_ms: float
     success: bool
     pos_err: float | None
@@ -70,9 +70,9 @@ def load_sample_urdf(sample_id: str) -> str:
     return urdf_path.read_text(encoding="utf-8")
 
 
-def generate_targets(target_set: str, count: int) -> List[Tuple[float, float, float]]:
+def generate_targets(target_set: str, count: int) -> list[tuple[float, float, float]]:
     rng = random.Random(42)
-    targets: List[Tuple[float, float, float]] = []
+    targets: list[tuple[float, float, float]] = []
     for _ in range(count):
         if target_set == "unreachable":
             x = 0.6 + rng.uniform(0.1, 0.2)
@@ -92,7 +92,10 @@ def generate_target_set(
     urdf_xml: str,
     target_link: str,
     seed: int,
-) -> Tuple[List[Tuple[float, float, float]], List[Tuple[float, float, float, float]]]:
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[tuple[float, float, float, float]],
+]:
     if target_set not in ("nominal", "unreachable"):
         raise ValueError(f"Unknown target set: {target_set}")
     positions = generate_targets(target_set, count)
@@ -118,9 +121,9 @@ def solve_policy(
     policy: str,
     urdf_xml: str,
     target_link: str,
-    target_position: Tuple[float, float, float],
-    target_wxyz: Tuple[float, float, float, float],
-) -> Tuple[IKRequest | IkSolveRequest, Dict[str, float], Dict]:
+    target_position: tuple[float, float, float],
+    target_wxyz: tuple[float, float, float, float],
+) -> tuple[IKRequest | IkSolveRequest, dict[str, float], dict]:
     if policy == "orchestrated":
         request = IkSolveRequest(
             urdf=urdf_xml,
@@ -156,7 +159,7 @@ def solve_policy(
     raise ValueError(f"Unknown policy: {policy}")
 
 
-def summarize(values: List[float]) -> Dict[str, float]:
+def summarize(values: list[float]) -> dict[str, float]:
     if not values:
         return {"p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0, "mean": 0.0}
     values_array = np.array(values, dtype=float)
@@ -198,7 +201,7 @@ def main() -> None:
     args = parser.parse_args()
 
     output_path = Path(args.output)
-    runs: List[BenchmarkRun] = []
+    runs: list[BenchmarkRun] = []
 
     for sample_id in args.samples:
         urdf_xml = load_sample_urdf(sample_id)
@@ -294,7 +297,7 @@ def main() -> None:
 
     print(f"Wrote {len(runs)} runs to {output_path}")
 
-    by_policy: Dict[str, List[BenchmarkRun]] = {}
+    by_policy: dict[str, list[BenchmarkRun]] = {}
     for run in runs:
         by_policy.setdefault(run.solver_policy, []).append(run)
 
