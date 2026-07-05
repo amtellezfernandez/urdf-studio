@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 
@@ -33,6 +34,8 @@ def _read_positive_float_env(name: str, default: float) -> float:
     try:
         value = float(raw)
     except ValueError:
+        return default
+    if not math.isfinite(value):
         return default
     return value if value > 0 else default
 
