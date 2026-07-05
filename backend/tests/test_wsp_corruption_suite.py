@@ -14,10 +14,13 @@ from backend.models.physical_state import (
     PhysicalRolloutTrace,
     PhysicalStateFrame,
 )
+from backend.services import wsp_corruption_suite as corruption_suite
 from backend.services.wsp_corruption_suite import (
     ALL_CORRUPTIONS,
     CORRUPTION_CONTACT,
+    CORRUPTION_DEGREE_RADIAN,
     CORRUPTION_INTERPENETRATION,
+    CORRUPTION_JOINT_PERMUTATION,
     CORRUPTION_NONE,
     CorruptedTrace,
     apply_corruption,
@@ -122,6 +125,42 @@ class TestApplyCorruption:
         rng = random.Random(0)
         with pytest.raises(ValueError, match="Unknown corruption type"):
             apply_corruption(trace, "not_a_real_corruption", rng)
+
+    def test_fk_corruption_falls_back_for_bad_fk_inputs(self, monkeypatch):
+        trace = _minimal_trace()
+        rng = random.Random(0)
+
+        def fail_fk(*_args, **_kwargs):
+            raise KeyError("missing link")
+
+        monkeypatch.setattr(corruption_suite, "fk_position", fail_fk)
+
+        result = apply_corruption(
+            trace,
+            CORRUPTION_JOINT_PERMUTATION,
+            rng,
+            urdf_entry=object(),
+        )
+
+        assert result.is_corrupted is True
+        assert result.trace.frames[0].entities[0].position_xyz == [0.05, 0.0, 0.1]
+
+    def test_fk_corruption_propagates_unexpected_fk_errors(self, monkeypatch):
+        trace = _minimal_trace()
+        rng = random.Random(0)
+
+        def fail_fk(*_args, **_kwargs):
+            raise RuntimeError("unexpected fk failure")
+
+        monkeypatch.setattr(corruption_suite, "fk_position", fail_fk)
+
+        with pytest.raises(RuntimeError, match="unexpected fk failure"):
+            apply_corruption(
+                trace,
+                CORRUPTION_DEGREE_RADIAN,
+                rng,
+                urdf_entry=object(),
+            )
 
 
 class TestBuildEvalCorpus:

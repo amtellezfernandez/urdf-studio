@@ -42,6 +42,7 @@ ALL_CORRUPTIONS = [
     CORRUPTION_INTERPENETRATION,
     CORRUPTION_ACTION_LAG,
 ]
+FK_FALLBACK_ERROR_TYPES = (ValueError, TypeError, KeyError, IndexError)
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ def _corrupt_degree_radian(
             try:
                 wrong_pos = fk_position(urdf_entry, jdict, ee_link)
                 robot.position_xyz = wrong_pos
-            except Exception:
+            except FK_FALLBACK_ERROR_TYPES:
                 robot.position_xyz = [v * 10.0 for v in robot.position_xyz]
     else:
         # Multiply all entity positions by 10 (workspace violation)
@@ -180,7 +181,7 @@ def _corrupt_joint_permutation(
             try:
                 wrong_pos = fk_position(urdf_entry, jdict, ee_link)
                 robot.position_xyz = wrong_pos
-            except Exception:
+            except FK_FALLBACK_ERROR_TYPES:
                 x, y, z = robot.position_xyz
                 robot.position_xyz = [z, y, x]
     else:
