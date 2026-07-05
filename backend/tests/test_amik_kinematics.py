@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
+from backend.services import amik_kinematics as amik_kinematics_module
 from backend.services.amik_kinematics import _clamp, _get_joint_limits
 
 
@@ -25,3 +29,28 @@ def test_get_joint_limits_ignores_missing_or_partial_limits() -> None:
     assert _get_joint_limits(SimpleNamespace(limit=None)) == (None, None)
     assert _get_joint_limits(_joint_with_limits(lower=None, upper=1.0)) == (None, None)
     assert _get_joint_limits(_joint_with_limits(lower=-1.0, upper=None)) == (None, None)
+
+
+def test_amik_get_or_create_entry_wraps_expected_urdf_load_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        amik_kinematics_module,
+        "_load_urdf_from_xml",
+        lambda _urdf_xml: (_ for _ in ()).throw(ValueError("bad urdf")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        amik_kinematics_module._get_or_create_entry("<robot name='demo'/>")
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Failed to load URDF: bad urdf"
+
+
+def test_amik_get_or_create_entry_preserves_unexpected_urdf_load_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        amik_kinematics_module,
+        "_load_urdf_from_xml",
+        lambda _urdf_xml: (_ for _ in ()).throw(RuntimeError("unexpected urdf failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected urdf failure"):
+        amik_kinematics_module._get_or_create_entry("<robot name='demo'/>")

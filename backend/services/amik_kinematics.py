@@ -51,7 +51,7 @@ def _get_or_create_entry(urdf_xml: str) -> AmikEntry:
         return cached_entry
     try:
         robot_model = _load_urdf_from_xml(sanitized_urdf)
-    except Exception as exc:  # defensive; surfaced as HTTP error
+    except (ValueError, OSError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=f"Failed to load URDF: {exc}") from exc
     entry = AmikEntry(
         urdf_hash=urdf_hash,
