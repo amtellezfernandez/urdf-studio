@@ -14,13 +14,9 @@ from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 
 
 def pybullet_camera_view_matrix(pybullet: Any, camera: SimCameraSpec) -> Sequence[float]:
-    target = tuple(
-        camera.position_xyz[axis] + camera.render_forward_xyz[axis]
-        for axis in range(3)
-    )
     return pybullet.computeViewMatrix(
         cameraEyePosition=camera.position_xyz,
-        cameraTargetPosition=target,
+        cameraTargetPosition=_pybullet_camera_target_position(camera),
         cameraUpVector=camera.render_up_xyz,
     )
 
@@ -117,3 +113,10 @@ def write_pybullet_camera_screenshots(
         )
         written_count += 1
     return written_count
+
+
+def _pybullet_camera_target_position(camera: SimCameraSpec) -> tuple[float, float, float]:
+    return tuple(
+        camera.position_xyz[axis] + camera.render_forward_xyz[axis]
+        for axis in range(3)
+    )
