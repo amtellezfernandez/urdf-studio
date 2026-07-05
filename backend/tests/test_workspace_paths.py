@@ -5,6 +5,7 @@ import json
 from backend.services.simulator_adapters.workspace_paths import (
     WORKSPACE_ASSET_ROOTS_FILENAME,
     compute_workspace_asset_roots,
+    write_workspace_asset_roots,
     workspace_asset_roots,
 )
 
@@ -82,3 +83,30 @@ def test_workspace_asset_roots_falls_back_when_manifest_payload_is_not_a_list(tm
         workspace_dir=workspace_dir,
         robot_urdf_path=robot_urdf_path,
     )
+
+
+def test_write_workspace_asset_roots_normalizes_and_dedupes_manifest_entries(tmp_path) -> None:
+    workspace_dir = tmp_path / "workspace"
+    root_a = tmp_path / "assets-a"
+    root_b = tmp_path / "assets-b"
+    root_a.mkdir()
+    root_b.mkdir()
+
+    write_workspace_asset_roots(
+        workspace_dir,
+        (
+            root_a,
+            root_b,
+            root_a,
+            root_a.parent / root_a.name,
+        ),
+    )
+
+    manifest_payload = json.loads(
+        (workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME).read_text(encoding="utf-8")
+    )
+
+    assert manifest_payload == [
+        str(root_a.resolve()),
+        str(root_b.resolve()),
+    ]
