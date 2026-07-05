@@ -166,16 +166,16 @@ def _catalog_from_snapshot(snapshot: object) -> _GalleryCatalog:
     for entry in snapshot_root.get("repoEntries", []):
         if not isinstance(entry, dict):
             continue
-        repo_key = _normalize_repo_or_path(str(entry.get("repoKey") or ""))
+        repo_key = _normalize_repo_or_path(_normalize_optional_text(entry.get("repoKey")))
         if not repo_key:
             continue
         repo_entries.setdefault(repo_key, []).append(entry)
     preview_entries = {
-        f"{_normalize_repo_or_path(str(entry.get('repoKey') or ''))}::{str(entry.get('fileBase') or '').strip()}": entry
+        f"{_normalize_repo_or_path(_normalize_optional_text(entry.get('repoKey')))}::{_normalize_optional_text(entry.get('fileBase'))}": entry
         for entry in snapshot_root.get("previewEntries", [])
         if isinstance(entry, dict)
-        and str(entry.get("repoKey") or "").strip()
-        and str(entry.get("fileBase") or "").strip()
+        and _normalize_optional_text(entry.get("repoKey"))
+        and _normalize_optional_text(entry.get("fileBase"))
     }
     return _GalleryCatalog(repo_entries=repo_entries, preview_entries=preview_entries)
 
@@ -534,7 +534,7 @@ def _load_gallery_catalog_repo_shard(source: IluGallerySource) -> _GalleryCatalo
 
 
 def _normalize_optional_text(value: object) -> str:
-    return str(value or "").strip()
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _normalize_optional_int(value: object) -> int | None:
