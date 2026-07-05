@@ -278,7 +278,10 @@ def _resolve_camera_parent_link(
 
 
 def _load_robot_for_camera_transfer(robot_urdf_path: Path) -> yourdfpy.URDF:
-    return yourdfpy.URDF.load(  # type: ignore[attr-defined]
+    load_urdf = getattr(yourdfpy.URDF, "load", None)
+    if not callable(load_urdf):
+        raise ValueError("yourdfpy.URDF.load is unavailable")
+    return load_urdf(
         str(robot_urdf_path.resolve()),
         load_meshes=False,
         load_collision_meshes=False,
