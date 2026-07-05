@@ -48,9 +48,7 @@ def add_camera_marker_entity(gs: Any, scene: Any, camera: SimCameraSpec) -> None
 
 
 def camera_viewer_pose(camera: SimCameraSpec) -> GenesisCameraViewerPose:
-    forward = camera.render_forward_xyz
-    lookat = tuple(camera.position_xyz[axis] + forward[axis] for axis in range(3))
-    return camera.position_xyz, lookat, camera.render_up_xyz, camera.fov_deg
+    return camera.position_xyz, _camera_lookat(camera), camera.render_up_xyz, camera.fov_deg
 
 
 def _camera_gui_resolution(camera: SimCameraSpec) -> tuple[int, int]:
@@ -125,10 +123,7 @@ def observation_camera_sensor_kwargs(
     return {
         "res": (camera.width, camera.height),
         "pos": camera.position_xyz,
-        "lookat": tuple(
-            camera.position_xyz[axis] + camera.render_forward_xyz[axis]
-            for axis in range(3)
-        ),
+        "lookat": _camera_lookat(camera),
         "up": camera.render_up_xyz,
         "fov": camera.fov_deg,
         "near": GENESIS_SCENE_PARAMS.camera_sensor.near_m,
@@ -137,6 +132,13 @@ def observation_camera_sensor_kwargs(
         "entity_idx": entity_idx,
         "link_idx_local": link_idx_local,
     }
+
+
+def _camera_lookat(camera: SimCameraSpec) -> GenesisVector3:
+    return tuple(
+        camera.position_xyz[axis] + camera.render_forward_xyz[axis]
+        for axis in range(3)
+    )
 
 
 def add_observation_camera_sensor(gs: Any, scene: Any, robot_entity: Any, camera: SimCameraSpec) -> Any | None:
