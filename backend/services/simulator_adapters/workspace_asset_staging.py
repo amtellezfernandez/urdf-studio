@@ -80,8 +80,7 @@ def write_package_root_hints(
         normalized_package_name = package_name.strip()
         if not normalized_package_name:
             continue
-        for root in unique_workspace_asset_paths(roots):
-            candidate = resolve_workspace_asset_path(source_root, root)
+        for candidate in _package_root_hint_directories(source_root, roots):
             candidate.mkdir(parents=True, exist_ok=True)
             package_xml = candidate / "package.xml"
             if package_xml.exists():
@@ -105,13 +104,19 @@ def package_root_hint_paths(source_root: Path, package_roots: dict[str, list[str
     paths: list[Path] = []
     seen: set[Path] = set()
     for roots in package_roots.values():
-        for root in unique_workspace_asset_paths(roots):
-            candidate = resolve_workspace_asset_path(source_root, root)
+        for candidate in _package_root_hint_directories(source_root, roots):
             if candidate in seen:
                 continue
             seen.add(candidate)
             paths.append(candidate)
     return paths
+
+
+def _package_root_hint_directories(source_root: Path, roots: Iterable[str]) -> tuple[Path, ...]:
+    return tuple(
+        resolve_workspace_asset_path(source_root, root)
+        for root in unique_workspace_asset_paths(roots)
+    )
 
 
 def unique_workspace_asset_paths(paths: Iterable[str]) -> tuple[str, ...]:
