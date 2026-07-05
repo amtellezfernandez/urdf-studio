@@ -9,6 +9,7 @@ from backend.models.xacro import GitHubXacroExpandRequest
 from backend.services import ilu_urdf
 from backend.services.ilu_urdf import (
     IluUrdfBridgeError,
+    _read_env_str,
     _read_float_env,
     bundle_mesh_assets_for_urdf_file,
     convert_urdf_to_mjcf,
@@ -41,6 +42,22 @@ def test_read_float_env_rejects_non_string_values(monkeypatch: pytest.MonkeyPatc
     )
 
     assert _read_float_env("URDF_TEST_ILU_FLOAT", 3.0, minimum=0.0) == 3.0
+
+
+def test_read_env_str_returns_default_for_non_string_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ilu_urdf.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_ILU_TEXT" else None,
+    )
+
+    assert _read_env_str("URDF_TEST_ILU_TEXT", "fallback") == "fallback"
+
+
+def test_read_env_str_returns_default_for_blank_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("URDF_TEST_ILU_TEXT", "   ")
+
+    assert _read_env_str("URDF_TEST_ILU_TEXT", "fallback") == "fallback"
 
 
 def test_expand_github_xacro_uses_load_source_bridge(monkeypatch) -> None:

@@ -17,6 +17,14 @@ from backend.models.xacro import GitHubXacroExpandRequest, XacroExpandRequest
 from backend.services.github_auth import resolve_server_github_token
 
 
+def _read_env_str(name: str, default: str) -> str:
+    raw = os.getenv(name)
+    if not isinstance(raw, str):
+        return default
+    normalized = raw.strip()
+    return normalized or default
+
+
 def _read_float_env(name: str, default: float, *, minimum: float | None = None) -> float:
     raw = os.getenv(name)
     if not isinstance(raw, str):
@@ -31,8 +39,7 @@ def _read_float_env(name: str, default: float, *, minimum: float | None = None) 
         return default
     return value
 
-
-NODE_BIN = os.getenv("URDF_NODE_BIN", "node").strip() or "node"
+NODE_BIN = _read_env_str("URDF_NODE_BIN", "node")
 NODE_TIMEOUT_SECONDS = _read_float_env("URDF_ILU_BRIDGE_TIMEOUT_SECONDS", 60.0, minimum=0.0)
 BRIDGE_SCRIPT = SCRIPTS_DIR / "ilu_urdf_bridge.mjs"
 XACRODOC_WHEEL = (
