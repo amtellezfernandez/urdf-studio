@@ -51,7 +51,7 @@ def validate_blender_edit_session_artifact(
         return f"missing Blender edit-session artifact: {path}"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return f"invalid Blender edit-session artifact {path}: {exc}"
     if not isinstance(payload, Mapping):
         return f"invalid Blender edit-session artifact {path}: expected JSON object"

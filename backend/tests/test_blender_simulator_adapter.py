@@ -381,6 +381,28 @@ def test_blender_edit_session_validation_rejects_duplicate_source_camera_id(
     )
 
 
+def test_blender_edit_session_validation_rejects_invalid_json(tmp_path: Path) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    artifacts.edit_session_path.write_text("{", encoding="utf-8")
+
+    error = validate_blender_edit_session_artifact(artifacts.edit_session_path)
+
+    assert error is not None
+    assert "invalid Blender edit-session artifact" in error
+    assert "edit-session.json" in error
+
+
+def test_blender_edit_session_validation_rejects_invalid_encoding(tmp_path: Path) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    artifacts.edit_session_path.write_bytes(b"\xff\xfe\x00")
+
+    error = validate_blender_edit_session_artifact(artifacts.edit_session_path)
+
+    assert error is not None
+    assert "invalid Blender edit-session artifact" in error
+    assert "edit-session.json" in error
+
+
 @pytest.mark.parametrize(
     ("path", "value", "expected_error"),
     (
