@@ -6,6 +6,7 @@ from typing import Sequence
 
 Vector3 = tuple[float, float, float]
 Aabb = tuple[Vector3, Vector3]
+VECTOR3_AXES = range(3)
 
 
 @dataclass(frozen=True)
@@ -82,8 +83,8 @@ def _scene_bounds_for_aabb(
 
 def _enclosing_aabb(aabbs: Sequence[Aabb]) -> Aabb:
     return (
-        tuple(min(aabb[0][axis] for aabb in aabbs) for axis in range(3)),
-        tuple(max(aabb[1][axis] for aabb in aabbs) for axis in range(3)),
+        tuple(min(aabb[0][axis] for aabb in aabbs) for axis in VECTOR3_AXES),
+        tuple(max(aabb[1][axis] for aabb in aabbs) for axis in VECTOR3_AXES),
     )
 
 
@@ -96,11 +97,11 @@ def _offset_vector3(value: Vector3, offset: float) -> Vector3:
 
 
 def _midpoint_vector3(left: Sequence[float], right: Sequence[float]) -> Vector3:
-    return tuple((left[axis] + right[axis]) * 0.5 for axis in range(3))
+    return tuple((left[axis] + right[axis]) * 0.5 for axis in VECTOR3_AXES)
 
 
 def _half_span_vector3(mins: Sequence[float], maxs: Sequence[float]) -> Vector3:
-    return tuple((maxs[axis] - mins[axis]) * 0.5 for axis in range(3))
+    return tuple((maxs[axis] - mins[axis]) * 0.5 for axis in VECTOR3_AXES)
 
 
 def _vector_length(value: Sequence[float]) -> float:
