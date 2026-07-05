@@ -6,6 +6,7 @@ from backend.models.world_scene_package import WorldArtifactRef
 from backend.services.simulator_adapters.workspace_request_sources import (
     MESH_ASSET_FIXTURE_PATH,
     WORKSPACE_SIMULATORS,
+    _resolve_workspace_asset_roots,
     build_demo_workspace_request,
     build_hidden_object_workspace_request,
     build_mesh_asset_workspace_request,
@@ -207,6 +208,22 @@ def test_workspace_request_from_files_keeps_robot_directory_when_extra_asset_roo
         "meshes/arm.stl",
         "props/crate.obj",
     ]
+
+
+def test_resolve_workspace_asset_roots_dedupes_robot_root_and_extra_roots(tmp_path) -> None:
+    robot_root = tmp_path / "robot_scene"
+    robot_urdf_path = robot_root / "robot.urdf"
+    extra_root = tmp_path / "extra_assets"
+    robot_root.mkdir()
+    extra_root.mkdir()
+    robot_urdf_path.write_text("<robot name='demo'/>", encoding="utf-8")
+
+    roots = _resolve_workspace_asset_roots(
+        robot_urdf_path=robot_urdf_path,
+        asset_roots=(robot_root, extra_root, robot_root),
+    )
+
+    assert roots == (robot_root.resolve(), extra_root.resolve())
 
 
 def test_workspace_request_from_files_repairs_stale_world_snapshot_artifact_digest(

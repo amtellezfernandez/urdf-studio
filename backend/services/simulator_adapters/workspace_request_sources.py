@@ -305,15 +305,10 @@ def build_workspace_request_from_files(
     resolved_robot_urdf_path = robot_urdf_path.expanduser().resolve()
     if not resolved_robot_urdf_path.is_file():
         raise ValueError(f"Robot URDF does not exist: {robot_urdf_path}")
-    resolved_asset_roots = tuple(
-        dict.fromkeys(
-            root.expanduser().resolve()
-            for root in (resolved_robot_urdf_path.parent, *asset_roots)
-        )
+    resolved_asset_roots = _resolve_workspace_asset_roots(
+        robot_urdf_path=resolved_robot_urdf_path,
+        asset_roots=asset_roots,
     )
-    for root in resolved_asset_roots:
-        if not root.is_dir():
-            raise ValueError(f"Asset root does not exist or is not a directory: {root}")
     return SimulatorWorkspacePrepareRequest(
         world_package=world_package,
         urdf_asset_path=_relative_to_asset_roots(
@@ -333,6 +328,23 @@ def _load_json(path: Path) -> JsonObject:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
     return payload
+
+
+def _resolve_workspace_asset_roots(
+    *,
+    robot_urdf_path: Path,
+    asset_roots: Sequence[Path],
+) -> tuple[Path, ...]:
+    resolved_asset_roots = tuple(
+        dict.fromkeys(
+            root.expanduser().resolve()
+            for root in (robot_urdf_path.parent, *asset_roots)
+        )
+    )
+    for root in resolved_asset_roots:
+        if not root.is_dir():
+            raise ValueError(f"Asset root does not exist or is not a directory: {root}")
+    return resolved_asset_roots
 
 
 def _load_demo_mesh_assets() -> list[SimulatorMeshAssetUpload]:
