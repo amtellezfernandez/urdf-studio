@@ -429,6 +429,23 @@ def test_genesis_rgb_tensor_conversion_accepts_batched_float_image() -> None:
     assert np.array_equal(rgb_to_image_array(_TensorLikeImage()), converted)
 
 
+def test_genesis_rgb_tensor_conversion_rejects_invalid_array_input() -> None:
+    class _InvalidImage:
+        def __array__(self, dtype=None) -> np.ndarray:
+            raise ValueError("bad image")
+
+    assert rgb_to_image_array(_InvalidImage()) is None
+
+
+def test_genesis_rgb_tensor_conversion_propagates_unexpected_array_errors() -> None:
+    class _BrokenImage:
+        def __array__(self, dtype=None) -> np.ndarray:
+            raise RuntimeError("unexpected image failure")
+
+    with pytest.raises(RuntimeError, match="unexpected image failure"):
+        rgb_to_image_array(_BrokenImage())
+
+
 def test_genesis_camera_screenshot_writer_normalizes_float_render_output(tmp_path: Path) -> None:
     class _FakeSceneCamera:
         def render(self, **_kwargs):

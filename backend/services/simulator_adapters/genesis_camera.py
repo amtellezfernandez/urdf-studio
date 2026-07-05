@@ -175,7 +175,7 @@ def rgb_to_image_array(rgb: object) -> np.ndarray | None:
         rgb = rgb.numpy()
     try:
         image = np.asarray(rgb)
-    except Exception:
+    except (TypeError, ValueError):
         return None
     if image.ndim == 4 and image.shape[0] >= 1:
         image = image[0]
