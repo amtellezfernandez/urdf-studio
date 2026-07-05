@@ -340,6 +340,50 @@ def test_create_job_rejects_when_worker_capacity_is_full(tmp_path) -> None:
         )
 
 
+def test_create_job_wraps_executor_runtime_submit_failure(tmp_path) -> None:
+    class _FailingExecutor:
+        @staticmethod
+        def submit(*_args, **_kwargs):
+            raise RuntimeError("executor stopped")
+
+    service = _build_service(tmp_path)
+    service._executor = _FailingExecutor()
+
+    with pytest.raises(WorldRolloutError, match="World rollout worker submit failed"):
+        service.create_job(
+            WorldRolloutJobCreateRequest(
+                world_package=_build_world_package(),
+                checker_profile=_build_profile(),
+            )
+        )
+
+    assert service._jobs == {}
+    assert service._job_inputs == {}
+    assert service._queued_job_ids == set()
+
+
+def test_create_job_propagates_unexpected_executor_submit_failure(tmp_path) -> None:
+    class _FailingExecutor:
+        @staticmethod
+        def submit(*_args, **_kwargs):
+            raise ValueError("unexpected submit failure")
+
+    service = _build_service(tmp_path)
+    service._executor = _FailingExecutor()
+
+    with pytest.raises(ValueError, match="unexpected submit failure"):
+        service.create_job(
+            WorldRolloutJobCreateRequest(
+                world_package=_build_world_package(),
+                checker_profile=_build_profile(),
+            )
+        )
+
+    assert service._jobs == {}
+    assert service._job_inputs == {}
+    assert service._queued_job_ids == set()
+
+
 def test_import_results_rejects_invalid_decision(tmp_path) -> None:
     service = _build_service(tmp_path)
     job = service.create_job(

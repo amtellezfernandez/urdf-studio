@@ -118,14 +118,18 @@ class WorldRolloutService:
                 checker_profile=request.checker_profile,
             )
         if self._executor is not None:
+            submitted = False
             try:
                 self._executor.submit(self._run_job, job.job_id)
-            except Exception as exc:
-                with self._lock:
-                    self._queued_job_ids.discard(job.job_id)
-                    self._jobs.pop(job.job_id, None)
-                    self._job_inputs.pop(job.job_id, None)
+                submitted = True
+            except RuntimeError as exc:
                 raise WorldRolloutError(f"World rollout worker submit failed: {exc}") from exc
+            finally:
+                if not submitted:
+                    with self._lock:
+                        self._queued_job_ids.discard(job.job_id)
+                        self._jobs.pop(job.job_id, None)
+                        self._job_inputs.pop(job.job_id, None)
         return job
 
     def get_job(self, job_id: str) -> WorldRolloutJobResponse:
