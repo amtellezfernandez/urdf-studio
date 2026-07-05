@@ -320,14 +320,12 @@ def prepare_mujoco_simulation_assets(urdf_path: Path) -> Iterator[PreparedMujoco
 
 
 def load_mujoco_model(xml_path: Path) -> mujoco.MjModel:
-    import mujoco
-
+    mujoco = _load_mujoco_module()
     return mujoco.MjModel.from_xml_path(str(xml_path))
 
 
 def _recover_authored_mesh_pose(model, geom_id: int) -> tuple[Float3, Float4]:
-    import mujoco
-
+    mujoco = _load_mujoco_module()
     mesh_id = int(model.geom_dataid[geom_id])
     if mesh_id < 0:
         raise ValueError(f"Geometry {geom_id} is not backed by a mesh asset.")
@@ -362,8 +360,7 @@ def _recover_authored_mesh_pose(model, geom_id: int) -> tuple[Float3, Float4]:
 
 
 def collect_compiled_mesh_geometries(model) -> dict[str, CompiledMujocoMeshGeometry]:
-    import mujoco
-
+    mujoco = _load_mujoco_module()
     compiled: dict[str, CompiledMujocoMeshGeometry] = {}
     for geom_id in range(model.ngeom):
         geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
@@ -407,8 +404,7 @@ def _assert_simulation_data_is_finite(data) -> None:
 
 
 def run_headless_smoke_simulation(model, step_count: int = SIMULATION_PREP_MUJOCO_SMOKE_STEP_COUNT) -> None:
-    import mujoco
-
+    mujoco = _load_mujoco_module()
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     _assert_simulation_data_is_finite(data)
@@ -556,8 +552,12 @@ def _mujoco_dependency_available() -> bool:
     return is_python_module_available(_MUJOCO_IMPORT_NAME)
 
 
+def _load_mujoco_module() -> mujoco:
+    return importlib.import_module(_MUJOCO_IMPORT_NAME)
+
+
 def _mujoco_validation_errors() -> tuple[type[BaseException], ...]:
-    mujoco = importlib.import_module(_MUJOCO_IMPORT_NAME)
+    mujoco = _load_mujoco_module()
     return (
         AssertionError,
         ValueError,
