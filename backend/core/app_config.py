@@ -15,7 +15,7 @@ def read_app_config(config_path: Path | None = None) -> JsonConfig:
         return {}
     try:
         decoded = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return {}
     if not isinstance(decoded, dict):
         return {}

@@ -31,6 +31,21 @@ def test_read_app_config_returns_empty_object_for_missing_invalid_or_non_object_
     assert read_app_config(list_path) == {}
 
 
+def test_read_app_config_returns_empty_object_when_file_read_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "app.config.json"
+    config_path.write_text('{"enabled": true}', encoding="utf-8")
+
+    def _raise_read_error(*args: object, **kwargs: object) -> str:
+        raise OSError("unreadable")
+
+    monkeypatch.setattr(Path, "read_text", _raise_read_error)
+
+    assert read_app_config(config_path) == {}
+
+
 def test_get_config_value_reads_nested_value() -> None:
     config = {"web": {"host": "localhost"}}
 
