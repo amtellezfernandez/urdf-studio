@@ -221,7 +221,8 @@ def analyze_robot_morphology(urdf_xml: str) -> RobotMorphologySummary:
     payload = _run_bridge("analyze-morphology", {"urdfXml": urdf_xml})
     primary_family = payload.get("primaryFamily")
     raw_families = payload.get("families")
-    if not isinstance(primary_family, str) or not primary_family.strip():
+    normalized_primary_family = primary_family.strip() if isinstance(primary_family, str) else ""
+    if not normalized_primary_family:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid robot morphology summary.")
     if not isinstance(raw_families, list):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid robot morphology family list.")
@@ -238,7 +239,7 @@ def analyze_robot_morphology(urdf_xml: str) -> RobotMorphologySummary:
         if isinstance(family, str) and family.strip()
     )
     return RobotMorphologySummary(
-        primary_family=primary_family.strip(),
+        primary_family=normalized_primary_family,
         families=families,
         link_count=_read_non_negative_int("linkCount"),
         joint_count=_read_non_negative_int("jointCount"),
@@ -263,10 +264,11 @@ def expand_xacro(request: XacroExpandRequest) -> tuple[str, str | None]:
 
     response = _run_bridge("expand-xacro", payload)
     urdf = response.get("urdf")
-    if not isinstance(urdf, str) or not urdf.strip():
+    normalized_urdf = urdf.strip() if isinstance(urdf, str) else ""
+    if not normalized_urdf:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid xacro expansion response.")
     stderr = response.get("stderr")
-    return urdf, stderr if isinstance(stderr, str) or stderr is None else None
+    return normalized_urdf, stderr if isinstance(stderr, str) or stderr is None else None
 
 
 def expand_github_xacro(request: GitHubXacroExpandRequest) -> tuple[str, str | None]:
@@ -286,9 +288,10 @@ def expand_github_xacro(request: GitHubXacroExpandRequest) -> tuple[str, str | N
 
     response = _run_bridge("load-source-github", payload)
     urdf = response.get("urdf")
-    if not isinstance(urdf, str) or not urdf.strip():
+    normalized_urdf = urdf.strip() if isinstance(urdf, str) else ""
+    if not normalized_urdf:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid GitHub xacro expansion response.")
-    return urdf, None
+    return normalized_urdf, None
 
 
 def bundle_mesh_assets_for_urdf_file(

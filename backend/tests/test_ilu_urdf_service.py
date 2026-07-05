@@ -91,6 +91,75 @@ def test_expand_github_xacro_uses_load_source_bridge(monkeypatch) -> None:
     assert stderr is None
 
 
+def test_analyze_robot_morphology_ignores_non_string_family_entries(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {
+            "primaryFamily": " mobile ",
+            "families": [" mobile ", 2, None, "manipulator", "mobile"],
+            "linkCount": 1,
+            "jointCount": 2,
+            "controllableJointCount": 1,
+            "dofCount": 1,
+            "armCount": 0,
+            "legCount": 0,
+            "wheelCount": 2,
+        },
+    )
+
+    result = ilu_urdf.analyze_robot_morphology("<robot name=\"demo\"/>")
+
+    assert result.primary_family == "mobile"
+    assert result.families == ("mobile", "manipulator", "mobile")
+
+
+def test_expand_xacro_rejects_non_string_or_blank_urdf(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_urdf._run_bridge", lambda command, payload: {"urdf": 123})
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid xacro expansion response"):
+        ilu_urdf.expand_xacro(
+            ilu_urdf.XacroExpandRequest(
+                target_path="robot.xacro",
+                files=[],
+                args={},
+                use_inorder=False,
+            )
+        )
+
+    monkeypatch.setattr("backend.services.ilu_urdf._run_bridge", lambda command, payload: {"urdf": "   "})
+
+    with pytest.raises(IluUrdfBridgeError, match="invalid xacro expansion response"):
+        ilu_urdf.expand_xacro(
+            ilu_urdf.XacroExpandRequest(
+                target_path="robot.xacro",
+                files=[],
+                args={},
+                use_inorder=False,
+            )
+        )
+
+
+def test_expand_github_xacro_trims_urdf_response(monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.ilu_urdf.resolve_server_github_token", lambda token=None: "server-token")
+    monkeypatch.setattr(
+        "backend.services.ilu_urdf._run_bridge",
+        lambda command, payload: {"urdf": "  <robot name=\"demo\"/>  "},
+    )
+
+    urdf, stderr = expand_github_xacro(
+        GitHubXacroExpandRequest(
+            owner="acme",
+            repo="demo_robot",
+            target_path="urdf/demo.xacro",
+            branch="main",
+            access_token="token",
+        )
+    )
+
+    assert urdf == "<robot name=\"demo\"/>"
+    assert stderr is None
+
+
 def test_run_bridge_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.services.ilu_urdf.subprocess.run",
