@@ -143,6 +143,12 @@ def _validate_blender_edit_session_round_trip(value: object) -> str | None:
         values = _validate_string_tuple(value.get(field_name), f"round_trip.{field_name}")
         if isinstance(values, str):
             return values
+        duplicate_values = _duplicate_ids(values)
+        if duplicate_values:
+            return (
+                f"Blender edit-session field 'round_trip.{field_name}' contains duplicate value(s): "
+                f"{', '.join(duplicate_values)}"
+            )
         missing = sorted(expected_values - set(values))
         if missing:
             return (

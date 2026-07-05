@@ -331,6 +331,23 @@ def test_blender_edit_session_validation_rejects_missing_supported_change(
     )
 
 
+def test_blender_edit_session_validation_rejects_duplicate_supported_change(
+    tmp_path: Path,
+) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["round_trip"]["supported_changes"].append("world_object.color")
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
+        "Blender edit-session field 'round_trip.supported_changes' "
+        "contains duplicate value(s): world_object.color"
+    )
+
+
 def test_blender_edit_session_validation_rejects_source_object_mismatch(
     tmp_path: Path,
 ) -> None:
