@@ -342,6 +342,12 @@ def _validate_expected_runtime_joint_application(
     if not isinstance(runtime, Mapping) or "applied_initial_joints" not in runtime:
         return None
     applied_count = runtime.get("applied_initial_joints")
+    count_error = _validate_report_non_negative_int(
+        applied_count,
+        "simulator.runtime.applied_initial_joints",
+    )
+    if count_error:
+        return count_error
     expected_count = len(expected_joint_positions)
     if applied_count != expected_count:
         return (

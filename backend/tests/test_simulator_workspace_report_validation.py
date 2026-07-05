@@ -374,6 +374,36 @@ def test_workspace_report_validation_rejects_unapplied_runtime_joint_position(tm
     )
 
 
+def test_workspace_report_validation_rejects_invalid_runtime_joint_application_count(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {
+                "id": SIMULATOR_GENESIS_ID,
+                "label": "Genesis",
+                "runtime": {"applied_initial_joints": True},
+            },
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 1,
+            "joint_positions": {"shoulder": 0.5},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(joint_positions={"shoulder": 0.5}),
+    ) == (
+        "simulator validation report field 'simulator.runtime.applied_initial_joints' "
+        "must be a non-negative integer"
+    )
+
+
 def test_workspace_report_validation_rejects_nonfinite_joint_position(tmp_path) -> None:
     report_path = _write_report(
         tmp_path,
