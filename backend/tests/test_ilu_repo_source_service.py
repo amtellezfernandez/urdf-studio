@@ -14,10 +14,37 @@ from backend.services.ilu_repo_source import (
     _ArchiveSnapshot,
     _extract_github_error_detail,
     _load_public_archive_snapshot,
+    _read_float_env,
     fetch_file_bytes,
     list_repo_candidates,
     list_repo_contents,
 )
+
+
+def test_read_float_env_accepts_positive_finite_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("URDF_TEST_REPO_FLOAT", "12.5")
+
+    assert _read_float_env("URDF_TEST_REPO_FLOAT", 3.0, minimum=0.0) == 12.5
+
+
+@pytest.mark.parametrize("raw_value", ["bad", "inf", "-inf", "-1"])
+def test_read_float_env_rejects_invalid_non_finite_or_below_minimum_values(
+    monkeypatch: pytest.MonkeyPatch,
+    raw_value: str,
+) -> None:
+    monkeypatch.setenv("URDF_TEST_REPO_FLOAT", raw_value)
+
+    assert _read_float_env("URDF_TEST_REPO_FLOAT", 3.0, minimum=0.0) == 3.0
+
+
+def test_read_float_env_rejects_non_string_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ilu_repo_source.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_REPO_FLOAT" else None,
+    )
+
+    assert _read_float_env("URDF_TEST_REPO_FLOAT", 3.0, minimum=0.0) == 3.0
 
 
 def test_list_repo_contents_uses_ilu_bridge(monkeypatch) -> None:

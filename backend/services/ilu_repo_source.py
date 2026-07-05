@@ -4,6 +4,7 @@ import base64
 import binascii
 import http.client
 import json
+import math
 import mimetypes
 import os
 import re
@@ -34,10 +35,29 @@ from backend.services.github_public_params import (
 )
 
 
+def _read_float_env(name: str, default: float, *, minimum: float | None = None) -> float:
+    raw = os.getenv(name)
+    if not isinstance(raw, str):
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    if not math.isfinite(value):
+        return default
+    if minimum is not None and value < minimum:
+        return default
+    return value
+
+
 NODE_BIN = os.getenv("URDF_NODE_BIN", "node").strip() or "node"
-NODE_TIMEOUT_SECONDS = float(os.getenv("URDF_GITHUB_BRIDGE_TIMEOUT_SECONDS", "30"))
+NODE_TIMEOUT_SECONDS = _read_float_env("URDF_GITHUB_BRIDGE_TIMEOUT_SECONDS", 30.0, minimum=0.0)
 BRIDGE_SCRIPT = SCRIPTS_DIR / "ilu_github_bridge.mjs"
-ARCHIVE_CACHE_TTL_SECONDS = float(os.getenv("URDF_GITHUB_ARCHIVE_CACHE_TTL_SECONDS", "300"))
+ARCHIVE_CACHE_TTL_SECONDS = _read_float_env(
+    "URDF_GITHUB_ARCHIVE_CACHE_TTL_SECONDS",
+    300.0,
+    minimum=0.0,
+)
 HTTP_USER_AGENT = os.getenv("URDF_STUDIO_HTTP_USER_AGENT", "urdf-studio/1.0")
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
