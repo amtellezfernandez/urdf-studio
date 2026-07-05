@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Dict, Tuple, List
 
 import numpy as np
 from fastapi import HTTPException
 
 from backend.core.app_config import get_config_value, read_app_config
-from backend.models.kinematics import FKRequest, IKRequest
+from backend.models.kinematics import FKRequest, FKResponse, IKRequest
 from backend.services.kinematics import forward_kinematics
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
 from backend.services.placo_kinematics import _load_placo, inverse_kinematics as placo_ik
@@ -43,7 +43,10 @@ def _rotation_error_deg(target: np.ndarray, actual: np.ndarray) -> float:
     return float(np.degrees(np.arccos(trace)))
 
 
-def _find_link_pose(fk_payload, link_name: str) -> Tuple[np.ndarray, np.ndarray]:
+PoseSolver = Callable[[str, str, np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]]
+
+
+def _find_link_pose(fk_payload: FKResponse, link_name: str) -> tuple[np.ndarray, np.ndarray]:
     for link in fk_payload.links:
         if link.name == link_name:
             pos = np.array(link.position, dtype=np.float64)
@@ -68,7 +71,11 @@ def _quat_to_matrix(wxyz: np.ndarray) -> np.ndarray:
     )
 
 
-def _placo_fk(urdf_xml: str, joints: Dict[str, float], target_link: str) -> Tuple[np.ndarray, np.ndarray]:
+def _placo_fk(
+    urdf_xml: str,
+    joints: Mapping[str, float],
+    target_link: str,
+) -> tuple[np.ndarray, np.ndarray]:
     entry = _load_placo(urdf_xml)
     for name in entry.joint_names:
         entry.robot.set_joint(name, float(joints.get(name, 0.0)))
@@ -90,7 +97,7 @@ def _solve_amik_pose(
     target_link: str,
     target_pos: np.ndarray,
     target_quat: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     solution = amik_ik(
         IKRequest(
             urdf=urdf_xml,
@@ -110,7 +117,7 @@ def _solve_placo_pose(
     target_link: str,
     target_pos: np.ndarray,
     target_quat: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     solution = placo_ik(
         IKRequest(
             urdf=urdf_xml,
@@ -123,7 +130,7 @@ def _solve_placo_pose(
     return _placo_fk(urdf_xml, solution, target_link)
 
 
-def _describe_alignment(offset: np.ndarray, delta: np.ndarray) -> Tuple[float, float, str]:
+def _describe_alignment(offset: np.ndarray, delta: np.ndarray) -> tuple[float, float, str]:
     offset_norm = float(np.linalg.norm(offset))
     delta_norm = float(np.linalg.norm(delta))
     if offset_norm == 0 or delta_norm == 0:
@@ -139,8 +146,8 @@ def _describe_alignment(offset: np.ndarray, delta: np.ndarray) -> Tuple[float, f
 def _print_sweep_results(
     label: str,
     base_pos: np.ndarray,
-    offsets: List[Tuple[str, np.ndarray]],
-    solve_fn,
+    offsets: Sequence[tuple[str, np.ndarray]],
+    solve_fn: PoseSolver,
     target_link: str,
     target_quat: np.ndarray,
     urdf_xml: str,
