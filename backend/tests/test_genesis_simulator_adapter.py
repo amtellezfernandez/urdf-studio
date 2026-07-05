@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import base64
-import builtins
 import importlib
 import os
 import shutil
-import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -593,16 +591,24 @@ def test_genesis_backend_resolution_rejects_generic_gpu_override_when_unavailabl
 def test_quadrants_backend_supported_returns_false_when_quadrants_module_is_missing(
     monkeypatch,
 ) -> None:
-    original_import = builtins.__import__
+    def _missing_import_module(name: str, package=None):
+        raise ModuleNotFoundError(name=name)
 
-    def _missing_import(name, *args, **kwargs):
-        if name == "quadrants" or name.startswith("quadrants."):
-            raise ImportError("quadrants unavailable")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _missing_import)
+    monkeypatch.setattr(importlib, "import_module", _missing_import_module)
 
     assert genesis_workspace_prepare._quadrants_backend_supported("cuda") is False
+
+
+def test_quadrants_backend_supported_preserves_unexpected_import_errors(
+    monkeypatch,
+) -> None:
+    def _broken_import_module(name: str, package=None):
+        raise ImportError("unexpected quadrants import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _broken_import_module)
+
+    with pytest.raises(ImportError, match="unexpected quadrants import failure"):
+        genesis_workspace_prepare._quadrants_backend_supported("cuda")
 
 
 def test_quadrants_backend_supported_preserves_unexpected_runtime_errors(
@@ -612,8 +618,15 @@ def test_quadrants_backend_supported_preserves_unexpected_runtime_errors(
     quadrants_misc_module = SimpleNamespace(
         is_arch_supported=lambda _arch: (_ for _ in ()).throw(RuntimeError("unexpected backend probe failure"))
     )
-    monkeypatch.setitem(sys.modules, "quadrants", quadrants_module)
-    monkeypatch.setitem(sys.modules, "quadrants.lang.misc", quadrants_misc_module)
+
+    def _fake_import_module(name: str, package=None):
+        if name == "quadrants":
+            return quadrants_module
+        if name == "quadrants.lang.misc":
+            return quadrants_misc_module
+        raise ModuleNotFoundError(name=name)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(RuntimeError, match="unexpected backend probe failure"):
         genesis_workspace_prepare._quadrants_backend_supported("cuda")
@@ -622,18 +635,26 @@ def test_quadrants_backend_supported_preserves_unexpected_runtime_errors(
 def test_torch_backend_probe_returns_false_when_torch_module_is_missing(
     monkeypatch,
 ) -> None:
-    original_import = builtins.__import__
+    def _missing_import_module(name: str, package=None):
+        raise ModuleNotFoundError(name=name)
 
-    def _missing_import(name, *args, **kwargs):
-        if name == "torch" or name.startswith("torch."):
-            raise ImportError("torch unavailable")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _missing_import)
+    monkeypatch.setattr(importlib, "import_module", _missing_import_module)
 
     assert genesis_workspace_prepare._torch_cuda_available() is False
     assert genesis_workspace_prepare._torch_hip_available() is False
     assert genesis_workspace_prepare._torch_mps_available() is False
+
+
+def test_torch_backend_probe_preserves_unexpected_import_errors(
+    monkeypatch,
+) -> None:
+    def _broken_import_module(name: str, package=None):
+        raise ImportError("unexpected torch import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _broken_import_module)
+
+    with pytest.raises(ImportError, match="unexpected torch import failure"):
+        genesis_workspace_prepare._torch_cuda_available()
 
 
 def test_torch_backend_probe_preserves_unexpected_runtime_errors(
@@ -649,7 +670,7 @@ def test_torch_backend_probe_preserves_unexpected_runtime_errors(
         version=SimpleNamespace(cuda="12.0", hip=None),
         backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: True)),
     )
-    monkeypatch.setitem(sys.modules, "torch", torch_module)
+    monkeypatch.setattr(importlib, "import_module", lambda name, package=None: torch_module)
 
     with pytest.raises(RuntimeError, match="unexpected torch probe failure"):
         genesis_workspace_prepare._torch_cuda_available()

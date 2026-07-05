@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import math
 import os
 import sys
@@ -84,39 +85,54 @@ def _genesis_performance_mode() -> bool:
 
 def _torch_cuda_available() -> bool:
     try:
-        import torch
-
+        torch = importlib.import_module("torch")
         return bool(torch.cuda.is_available() and torch.version.cuda)
-    except (ImportError, AttributeError):
+    except ModuleNotFoundError as exc:
+        if exc.name != "torch":
+            raise
+        return False
+    except AttributeError:
         return False
 
 
 def _torch_hip_available() -> bool:
     try:
-        import torch
-
+        torch = importlib.import_module("torch")
         return bool(torch.cuda.is_available() and torch.version.hip)
-    except (ImportError, AttributeError):
+    except ModuleNotFoundError as exc:
+        if exc.name != "torch":
+            raise
+        return False
+    except AttributeError:
         return False
 
 
 def _torch_mps_available() -> bool:
     try:
-        import torch
-
+        torch = importlib.import_module("torch")
         return bool(torch.backends.mps.is_available())
-    except (ImportError, AttributeError):
+    except ModuleNotFoundError as exc:
+        if exc.name != "torch":
+            raise
+        return False
+    except AttributeError:
         return False
 
 
 def _quadrants_backend_supported(backend_name: str) -> bool:
     try:
-        import quadrants as qd
-        from quadrants.lang.misc import is_arch_supported
-
+        qd = importlib.import_module("quadrants")
+        is_arch_supported = getattr(
+            importlib.import_module("quadrants.lang.misc"),
+            "is_arch_supported",
+        )
         arch = getattr(qd, backend_name)
         return bool(is_arch_supported(arch))
-    except (ImportError, AttributeError):
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"quadrants", "quadrants.lang", "quadrants.lang.misc"}:
+            raise
+        return False
+    except AttributeError:
         return False
 
 
