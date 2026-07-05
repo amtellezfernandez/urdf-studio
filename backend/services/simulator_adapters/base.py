@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from importlib.util import find_spec
+import importlib
 import subprocess
 from typing import Callable, Protocol
 
@@ -16,8 +16,8 @@ from backend.models.simulator_runtime import (
 
 PYTHON_MODULE_PROBE_TIMEOUT_SEC = 5
 PYTHON_MODULE_PROBE_PROGRAM = (
-    "import importlib.util, sys; "
-    "sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)"
+    "import importlib, sys; "
+    "sys.exit(0 if importlib.import_module(sys.argv[1]) else 1)"
 )
 
 
@@ -46,9 +46,10 @@ class SimulatorAdapter(Protocol):
 
 def is_python_module_available(import_name: str) -> bool:
     try:
-        return find_spec(import_name) is not None
-    except ModuleNotFoundError:
+        importlib.import_module(import_name)
+    except ImportError:
         return False
+    return True
 
 
 def is_python_module_available_in_python(python_executable: str, import_name: str) -> bool:

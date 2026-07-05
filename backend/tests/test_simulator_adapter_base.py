@@ -1,10 +1,40 @@
 from __future__ import annotations
 
+import importlib
+
+import pytest
+
 from backend.models.simulator_runtime import SimulatorDependencySpec
 from backend.services.simulator_adapters.base import (
     build_runtime_dependency_statuses,
     format_runtime_dependency_status,
+    is_python_module_available,
 )
+
+
+def test_is_python_module_available_returns_false_for_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("broken install")),
+    )
+
+    assert is_python_module_available("yourdfpy") is False
+
+
+def test_is_python_module_available_preserves_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(RuntimeError("unexpected import failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected import failure"):
+        is_python_module_available("yourdfpy")
 
 
 def test_build_runtime_dependency_statuses_uses_selected_python_probe(monkeypatch) -> None:
