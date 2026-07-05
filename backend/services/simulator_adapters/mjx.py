@@ -20,7 +20,7 @@ _MJX_INSPECTION_STEPS = 20
 
 
 class MjxWorkspaceError(SimulatorAdapterError):
-    pass
+    ...
 
 
 def _build_mjx_workspace_report(

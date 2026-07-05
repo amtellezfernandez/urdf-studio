@@ -21,7 +21,7 @@ class PinholeCameraIntrinsics:
 
 
 class _InvalidOptionalNumber:
-    pass
+    ...
 
 
 OptionalFloatRead: TypeAlias = float | None | _InvalidOptionalNumber

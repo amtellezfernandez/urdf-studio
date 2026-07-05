@@ -56,15 +56,15 @@ from backend.services.collaboration_params import (
 
 
 class CollaborationValidationError(ValueError):
-    pass
+    ...
 
 
 class CollaborationAccessError(PermissionError):
-    pass
+    ...
 
 
 class CollaborationCapacityError(RuntimeError):
-    pass
+    ...
 
 
 @dataclass(frozen=True)

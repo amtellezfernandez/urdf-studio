@@ -525,7 +525,7 @@ class WorlddHttpError(Exception):
 
 
 class WorlddUnavailableError(Exception):
-    pass
+    ...
 
 
 class WorlddClient:

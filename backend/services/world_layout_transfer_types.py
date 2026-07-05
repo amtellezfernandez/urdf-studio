@@ -9,7 +9,7 @@ WorldLayoutFrameMap = Literal["auto", "identity", "studio-y-up-to-z-up"]
 
 
 class WorldLayoutTransferError(ValueError):
-    pass
+    ...
 
 
 @dataclass(frozen=True)
