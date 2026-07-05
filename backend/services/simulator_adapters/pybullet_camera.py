@@ -36,15 +36,10 @@ def pybullet_camera_projection_matrix(
             farVal=far_m,
         )
 
-    matrix = camera.intrinsics.matrix
-    fx = max(float(matrix[0][0]), 1e-9)
-    fy = max(float(matrix[1][1]), 1e-9)
-    cx = float(matrix[0][2])
-    cy = float(matrix[1][2])
-    left = -cx * near_m / fx
-    right = (camera.width - cx) * near_m / fx
-    top = cy * near_m / fy
-    bottom = -(camera.height - cy) * near_m / fy
+    left, right, bottom, top = _pybullet_projection_bounds(
+        camera,
+        near_m=near_m,
+    )
     return pybullet.computeProjectionMatrix(
         left=left,
         right=right,
@@ -119,4 +114,24 @@ def _pybullet_camera_target_position(camera: SimCameraSpec) -> tuple[float, floa
     return tuple(
         camera.position_xyz[axis] + camera.render_forward_xyz[axis]
         for axis in range(3)
+    )
+
+
+def _pybullet_projection_bounds(
+    camera: SimCameraSpec,
+    *,
+    near_m: float,
+) -> tuple[float, float, float, float]:
+    if camera.intrinsics is None:
+        raise ValueError("Expected explicit camera intrinsics.")
+    matrix = camera.intrinsics.matrix
+    fx = max(float(matrix[0][0]), 1e-9)
+    fy = max(float(matrix[1][1]), 1e-9)
+    cx = float(matrix[0][2])
+    cy = float(matrix[1][2])
+    return (
+        -cx * near_m / fx,
+        (camera.width - cx) * near_m / fx,
+        -(camera.height - cy) * near_m / fy,
+        cy * near_m / fy,
     )
