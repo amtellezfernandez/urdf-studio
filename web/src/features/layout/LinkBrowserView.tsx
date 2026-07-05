@@ -14,33 +14,37 @@ import {
 } from "@/features/layout/linkBrowserViewHelpers";
 import { resolveLinkBrowserRowState } from "@/features/layout/linkBrowserRowState";
 
-type LinkBrowserViewProps = StructureGroupDragHandlers & {
-  activeStructureDropGroup: string | null;
-  areAllFilteredLinksSelected: boolean;
+type LinkBrowserRowSharedProps = {
   canReassignDisplayedLinkGroups: boolean;
-  collapsedLinkSectionIds: ReadonlySet<string>;
-  displayedLinkSections: readonly StructureGroupSection[];
   effectiveEndEffectorLink: string | null;
   endEffectorLink?: string | null;
-  formatSectionLabel: (sectionLabel: string) => string;
   highlightedLinkName: string | null;
-  isStructureDragActive: boolean;
-  linkDataByName: Record<string, LinkData> | null;
   linksWithCollisionSet: ReadonlySet<string>;
   mergedLinkSet: ReadonlySet<string>;
   onAddMeshCollisionForLink: (linkName: string) => void;
   onBatchLinkToggle: (linkName: string) => void;
   onLinkSelect: (linkName: string) => void;
   onMarkAsEndEffector?: (linkName: string | null) => void;
+  selectedBatchLinks: ReadonlySet<string>;
+  selectedLink: string | null;
+  simplifiedLinkSet: ReadonlySet<string>;
+  voxelDerivedInertialLinkSet: ReadonlySet<string>;
+};
+
+type LinkBrowserViewProps = StructureGroupDragHandlers &
+  LinkBrowserRowSharedProps & {
+  activeStructureDropGroup: string | null;
+  areAllFilteredLinksSelected: boolean;
+  collapsedLinkSectionIds: ReadonlySet<string>;
+  displayedLinkSections: readonly StructureGroupSection[];
+  formatSectionLabel: (sectionLabel: string) => string;
+  isStructureDragActive: boolean;
+  linkDataByName: Record<string, LinkData> | null;
   onToggleBatchLinkGroup: (linkNames: string[]) => void;
   onToggleLinkSectionCollapse: (sectionId: string) => void;
   onToggleSelectAllFilteredLinks: () => void;
   searchQuery: string;
   selectedBatchLinkNames: readonly string[];
-  selectedBatchLinks: ReadonlySet<string>;
-  selectedLink: string | null;
-  simplifiedLinkSet: ReadonlySet<string>;
-  voxelDerivedInertialLinkSet: ReadonlySet<string>;
 };
 
 type LinkBrowserSectionHeaderProps = {
@@ -52,32 +56,20 @@ type LinkBrowserSectionHeaderProps = {
   selectedBatchLinks: ReadonlySet<string>;
 };
 
-type LinkBrowserRowProps = {
-  canReassignDisplayedLinkGroups: boolean;
-  effectiveEndEffectorLink: string | null;
-  endEffectorLink?: string | null;
-  highlightedLinkName: string | null;
+type LinkBrowserRowProps = LinkBrowserRowSharedProps & {
   linkData: LinkData | null;
   linkName: string;
-  linksWithCollisionSet: ReadonlySet<string>;
-  mergedLinkSet: ReadonlySet<string>;
-  onAddMeshCollisionForLink: (linkName: string) => void;
-  onBatchLinkToggle: (linkName: string) => void;
-  onLinkSelect: (linkName: string) => void;
-  onMarkAsEndEffector?: (linkName: string | null) => void;
   onStructureDragEnd: () => void;
   onStructureDragStart: StructureGroupDragHandlers["onStructureDragStart"];
   sectionLabel: string;
-  selectedBatchLinks: ReadonlySet<string>;
-  selectedLink: string | null;
-  simplifiedLinkSet: ReadonlySet<string>;
-  voxelDerivedInertialLinkSet: ReadonlySet<string>;
 };
 
 const JOINT_LIST_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
-const BATCH_TOGGLE_BASE_CLASS = JOINT_LIST_CLASS_NAMES.batchToggleBase;
-const BATCH_TOGGLE_SELECTED_CLASS = JOINT_LIST_CLASS_NAMES.batchToggleSelected;
-const BATCH_TOGGLE_UNSELECTED_CLASS = JOINT_LIST_CLASS_NAMES.batchToggleUnselected;
+const LINK_BROWSER_BATCH_TOGGLE_CLASSES = {
+  base: JOINT_LIST_CLASS_NAMES.batchToggleBase,
+  selected: JOINT_LIST_CLASS_NAMES.batchToggleSelected,
+  unselected: JOINT_LIST_CLASS_NAMES.batchToggleUnselected,
+} as const;
 const LINK_TICK_SIZE_CLASS = JOINT_LIST_CLASS_NAMES.linkTickSize;
 const LINK_SECTION_HEADER_CLASS = JOINT_LIST_CLASS_NAMES.linkSectionHeader;
 const LINK_COLLAPSE_BUTTON_CLASS = JOINT_LIST_CLASS_NAMES.linkCollapseButton;
@@ -94,9 +86,11 @@ const BatchSelectionTick = ({
 }) => (
   <span
     className={cn(
-      BATCH_TOGGLE_BASE_CLASS,
+      LINK_BROWSER_BATCH_TOGGLE_CLASSES.base,
       squareClassName,
-      selected ? BATCH_TOGGLE_SELECTED_CLASS : BATCH_TOGGLE_UNSELECTED_CLASS
+      selected
+        ? LINK_BROWSER_BATCH_TOGGLE_CLASSES.selected
+        : LINK_BROWSER_BATCH_TOGGLE_CLASSES.unselected
     )}
   >
     <Check className="h-2.5 w-2.5" />

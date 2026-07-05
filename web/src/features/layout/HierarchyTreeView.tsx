@@ -275,24 +275,28 @@ function HierarchyJointRow({
   structureLabel,
   visibleJoints,
 }: HierarchyJointRowProps) {
+  const jointListItemProps = {
+    angleUnit,
+    availableJoints,
+    colorJointNames,
+    effortLimit: jointEffortLimits[jointName] ?? null,
+    groupLabel: structureLabel,
+    isDeleted: deletedJoints.has(jointName),
+    isHighlighted: hoveredJoint === jointName,
+    isSelected: selectedJoint === jointName,
+    isVisible: visibleJoints.has(jointName),
+    jointInfo,
+    jointName,
+    onClick: () => onSelect(jointName),
+    onHover: undefined,
+    onValueChange: () => {},
+    onVisibilityToggle,
+  } as const;
+
   return (
     <JointListItem
-      jointName={jointName}
-      jointInfo={jointInfo}
-      effortLimit={jointEffortLimits[jointName] ?? null}
-      onValueChange={() => {}}
-      isDeleted={deletedJoints.has(jointName)}
-      isSelected={selectedJoint === jointName}
-      isHighlighted={hoveredJoint === jointName}
-      angleUnit={angleUnit}
-      onClick={() => onSelect(jointName)}
-      onHover={undefined}
-      availableJoints={availableJoints}
-      colorJointNames={colorJointNames}
-      isVisible={visibleJoints.has(jointName)}
-      onVisibilityToggle={onVisibilityToggle}
+      {...jointListItemProps}
       hideColorSquare={false}
-      groupLabel={structureLabel}
       compact
     />
   );

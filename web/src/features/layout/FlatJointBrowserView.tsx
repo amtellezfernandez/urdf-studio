@@ -114,55 +114,61 @@ export const FlatJointBrowserView = ({
               </button>
             )}
           >
-            {visibleJointNames.map((jointName) => (
-              <div
-                key={jointName}
-                draggable={canReassignStructureGroups}
-                onDragStart={(event) =>
-                  onStructureDragStart(event, {
-                    sourceType: "joint",
-                    sourceName: jointName,
-                    sourceGroupLabel: section.label,
-                  })
-                }
-                onDragEnd={onStructureDragEnd}
-                className={cn(canReassignStructureGroups && "cursor-grab active:cursor-grabbing")}
-              >
-                <div className="flex items-center gap-1">
-                  {canReassignStructureGroups ? (
-                    <span
-                      className="inline-flex items-center px-1 text-muted-foreground/50"
-                      title="Drag to move joint to another group"
-                    >
-                      <GripVertical className="h-3 w-3" />
-                    </span>
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <JointListItem
-                      jointName={jointName}
-                      jointInfo={jointLimits[jointName]}
-                      effortLimit={jointEffortLimits[jointName] ?? null}
-                      onValueChange={() => {}}
-                      isDeleted={deletedJoints.has(jointName)}
-                      isSelected={selectedJoint === jointName}
-                      isHighlighted={hoveredJoint === jointName}
-                      angleUnit={angleUnit}
-                      onClick={() => onJointSelect(jointName)}
-                      onHover={onJointHover}
-                      availableJoints={availableJoints}
-                      colorJointNames={colorJointNames}
-                      isVisible={visibleJoints.has(jointName)}
-                      onVisibilityToggle={onVisibilityToggle}
-                      groupLabel={resolveJointGroupLabel({
-                        fallbackSectionLabel: section.label,
-                        jointName,
-                        structureJointLabels,
-                      })}
-                    />
+            {visibleJointNames.map((jointName) => {
+              const jointListItemProps = {
+                angleUnit,
+                availableJoints,
+                colorJointNames,
+                effortLimit: jointEffortLimits[jointName] ?? null,
+                isDeleted: deletedJoints.has(jointName),
+                isHighlighted: hoveredJoint === jointName,
+                isSelected: selectedJoint === jointName,
+                isVisible: visibleJoints.has(jointName),
+                jointInfo: jointLimits[jointName],
+                jointName,
+                onClick: () => onJointSelect(jointName),
+                onHover: onJointHover,
+                onValueChange: () => {},
+                onVisibilityToggle,
+              } as const;
+
+              return (
+                <div
+                  key={jointName}
+                  draggable={canReassignStructureGroups}
+                  onDragStart={(event) =>
+                    onStructureDragStart(event, {
+                      sourceType: "joint",
+                      sourceName: jointName,
+                      sourceGroupLabel: section.label,
+                    })
+                  }
+                  onDragEnd={onStructureDragEnd}
+                  className={cn(canReassignStructureGroups && "cursor-grab active:cursor-grabbing")}
+                >
+                  <div className="flex items-center gap-1">
+                    {canReassignStructureGroups ? (
+                      <span
+                        className="inline-flex items-center px-1 text-muted-foreground/50"
+                        title="Drag to move joint to another group"
+                      >
+                        <GripVertical className="h-3 w-3" />
+                      </span>
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <JointListItem
+                        {...jointListItemProps}
+                        groupLabel={resolveJointGroupLabel({
+                          fallbackSectionLabel: section.label,
+                          jointName,
+                          structureJointLabels,
+                        })}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </StructureSectionShell>
         );
       })}
