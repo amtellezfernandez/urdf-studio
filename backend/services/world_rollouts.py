@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -48,6 +49,13 @@ from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_OUTPUT_DIRNAME,
     WORLD_ROLLOUT_TRACE_ARTIFACT_KIND,
     WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND,
+)
+
+
+_WorldRolloutNdjsonRecord = TypeVar(
+    "_WorldRolloutNdjsonRecord",
+    WorldRolloutTraceRecord,
+    WorldRolloutDecisionRecord,
 )
 
 
@@ -377,11 +385,11 @@ class WorldRolloutService:
         self,
         raw: str,
         *,
-        model: type[WorldRolloutTraceRecord] | type[WorldRolloutDecisionRecord],
+        model: type[_WorldRolloutNdjsonRecord],
         max_records: int,
         label: str,
-    ):
-        parsed = []
+    ) -> list[_WorldRolloutNdjsonRecord]:
+        parsed: list[_WorldRolloutNdjsonRecord] = []
         for line_index, line in enumerate(raw.splitlines()):
             normalized = line.strip()
             if not normalized:

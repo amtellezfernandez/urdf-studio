@@ -30,7 +30,11 @@ from backend.services.simulation_prep_mujoco_params import (
 if TYPE_CHECKING:
     import mujoco
 
-    from backend.models.simulation_prep import SimulationPrepSmokeSimResult
+    from backend.models.simulation_prep import (
+        SimulationPrepGeometryResult,
+        SimulationPrepSmokeSimResult,
+        SimulationPrepValidationReport,
+    )
 
 
 Float3 = tuple[float, float, float]
@@ -459,7 +463,7 @@ def _build_simulation_prep_geometry_result(
     mujoco_loaded: bool | None,
     compiled_geometry: CompiledMujocoMeshGeometry | None,
     error: str | None,
-):
+) -> SimulationPrepGeometryResult:
     from backend.models.simulation_prep import SimulationPrepGeometryResult
 
     return SimulationPrepGeometryResult(
@@ -479,11 +483,11 @@ def _build_simulation_prep_report(
     success: bool,
     error: str | None,
     expectations: tuple[MujocoMeshGeometryExpectation, ...],
-    geometry_results: list,
-    smoke_simulation,
+    geometry_results: list[SimulationPrepGeometryResult],
+    smoke_simulation: SimulationPrepSmokeSimResult | None,
     mujoco_available: bool,
     warnings: list[str],
-):
+) -> SimulationPrepValidationReport:
     from backend.models.simulation_prep import SimulationPrepValidationReport
 
     return SimulationPrepValidationReport(
@@ -500,7 +504,7 @@ def _build_simulation_prep_report(
 def _build_unavailable_mujoco_geometry_results(
     expectations: tuple[MujocoMeshGeometryExpectation, ...],
     staged_basenames: set[str],
-) -> list:
+) -> list[SimulationPrepGeometryResult]:
     return [
         _build_simulation_prep_geometry_result(
             expected_geometry,
@@ -518,8 +522,8 @@ def _build_compiled_mujoco_geometry_results(
     staged_basenames: set[str],
     compiled_geometries: dict[str, CompiledMujocoMeshGeometry],
     mesh_load_error: str | None,
-) -> list:
-    geometry_results = []
+) -> list[SimulationPrepGeometryResult]:
+    geometry_results: list[SimulationPrepGeometryResult] = []
     for expected_geometry in expectations:
         compiled_geometry = compiled_geometries.get(expected_geometry.validation_geom_name)
         geometry_error = mesh_load_error if (mesh_load_error and compiled_geometry is None) else None
