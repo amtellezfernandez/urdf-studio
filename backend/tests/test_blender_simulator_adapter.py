@@ -1293,6 +1293,15 @@ def test_blender_change_set_rejects_duplicate_source_world_object_id(tmp_path: P
         apply_blender_layout_change_set(world_package, change_set)
 
 
+def test_blender_change_set_rejects_non_string_world_object_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    world_package.world_snapshot.objects[0]["id"] = ["crate"]
+    change_set = _blender_change_set(world_package, changes=[])
+
+    with pytest.raises(ValueError, match="object at index 0 is missing id"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
 def test_blender_change_set_rejects_unknown_source_camera_id(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(world_package, changes=[])
@@ -1308,6 +1317,15 @@ def test_blender_change_set_rejects_duplicate_source_camera_id(tmp_path: Path) -
     change_set["source"]["camera_ids"] = ["cam-1", "cam-1"]
 
     with pytest.raises(ValueError, match="source camera_ids contains duplicate"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_non_string_camera_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    world_package.world_snapshot.cameras[0]["id"] = {"camera": "cam-1"}
+    change_set = _blender_change_set(world_package, changes=[])
+
+    with pytest.raises(ValueError, match="camera at index 0 is missing id"):
         apply_blender_layout_change_set(world_package, change_set)
 
 

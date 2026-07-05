@@ -133,7 +133,8 @@ def apply_blender_layout_change_set_with_summary(
     next_objects: list[WorldScenePayload] = []
     for item in updated.world_snapshot.objects:
         next_item = dict(item)
-        object_id = str(next_item.get("id", "")).strip()
+        object_id = next_item.get("id")
+        object_id = object_id.strip() if isinstance(object_id, str) else ""
         if object_id in deleted_world_object_ids:
             applied_change_count += 1
             continue
@@ -557,7 +558,8 @@ def _world_package_object_ids(world_package: WorldScenePackageManifest) -> set[s
     for index, item in enumerate(world_package.world_snapshot.objects):
         if not isinstance(item, Mapping):
             raise ValueError(f"World package object at index {index} must be an object.")
-        object_id = str(item.get("id", "")).strip()
+        object_id = item.get("id")
+        object_id = object_id.strip() if isinstance(object_id, str) else ""
         if not object_id:
             raise ValueError(f"World package object at index {index} is missing id.")
         if object_id in object_ids:
@@ -571,7 +573,8 @@ def _world_package_camera_ids(world_package: WorldScenePackageManifest) -> set[s
     for index, item in enumerate(world_package.world_snapshot.cameras):
         if not isinstance(item, Mapping):
             raise ValueError(f"World package camera at index {index} must be an object.")
-        camera_id = str(item.get("id", "")).strip()
+        camera_id = item.get("id")
+        camera_id = camera_id.strip() if isinstance(camera_id, str) else ""
         if not camera_id:
             raise ValueError(f"World package camera at index {index} is missing id.")
         if camera_id in camera_ids:
@@ -589,9 +592,11 @@ def _updated_camera_fields(
     if not camera_updates and not deleted_camera_ids:
         return [dict(camera) for camera in cameras]
     package_camera_ids = {
-        str(camera.get("id", "")).strip()
+        camera_id.strip()
         for camera in cameras
         if isinstance(camera, Mapping)
+        for camera_id in [camera.get("id")]
+        if isinstance(camera_id, str) and camera_id.strip()
     }
     missing_camera_ids = sorted(set(camera_updates) - package_camera_ids)
     if missing_camera_ids:
@@ -602,7 +607,8 @@ def _updated_camera_fields(
     next_cameras: list[WorldScenePayload] = []
     for camera in cameras:
         next_camera = dict(camera)
-        camera_id = str(next_camera.get("id", "")).strip()
+        camera_id = next_camera.get("id")
+        camera_id = camera_id.strip() if isinstance(camera_id, str) else ""
         if camera_id in deleted_camera_ids:
             continue
         change = camera_updates.get(camera_id)
