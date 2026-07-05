@@ -102,3 +102,32 @@ def test_load_settings_invalid_env_override_uses_config_default(
     loaded_settings = settings_module.load_settings()
 
     assert loaded_settings.web_port == 6200
+
+
+def test_load_settings_invalid_boolean_string_uses_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded_settings = _load_settings_with_config(
+        monkeypatch,
+        {
+            "ikd": {"enabled": "maybe"},
+        },
+    )
+
+    assert loaded_settings.world_bridge_use_worldd_proxy is True
+
+
+def test_load_settings_invalid_boolean_env_override_uses_config_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_settings_config(
+        monkeypatch,
+        {
+            "ikd": {"enabled": False},
+        },
+    )
+    monkeypatch.setenv("URDF_WORLD_BRIDGE_USE_WORLDD_PROXY", "maybe")
+
+    loaded_settings = settings_module.load_settings()
+
+    assert loaded_settings.world_bridge_use_worldd_proxy is False
