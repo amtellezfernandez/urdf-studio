@@ -636,7 +636,13 @@ def _check_target(
         ok, detail = _run_workspace_command(command, timeout_sec=timeout_sec)
         if runtime_notice:
             detail = f"{runtime_notice}\n{detail}" if detail else runtime_notice
-    except Exception as exc:
+    except (
+        OSError,
+        RuntimeError,
+        UnicodeDecodeError,
+        ValueError,
+        subprocess.SubprocessError,
+    ) as exc:
         return WorkspaceCheckResult(
             target.simulator_id,
             target.label,

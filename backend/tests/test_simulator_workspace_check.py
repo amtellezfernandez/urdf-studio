@@ -1053,6 +1053,66 @@ def test_blender_workspace_check_validates_artifacts_without_runtime(monkeypatch
     assert "workspace artifacts ready" in result.detail
 
 
+def test_workspace_check_target_reports_expected_prepare_errors(monkeypatch) -> None:
+    def prepare(_request, _expectations):
+        raise ValueError("invalid workspace request")
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.get_simulator_runtime_status",
+        lambda _simulator_id: SimulatorRuntimeStatus(
+            runtimeName=SIMULATOR_BLENDER_ID,
+            available=True,
+            status="available",
+        ),
+    )
+
+    result = _check_target(
+        WorkspaceTarget(
+            simulator_id=SIMULATOR_BLENDER_ID,
+            label="Blender",
+            prepare=prepare,
+            requires_runtime=True,
+            include_in_parity=False,
+        ),
+        request=build_demo_workspace_request(),
+        expectations=WorkspaceExpectations(object_count=3, camera_count=3, duration_sec=0.0),
+        timeout_sec=1.0,
+        require_runtime=True,
+    )
+
+    assert result.status == "failed"
+    assert result.detail == "ValueError: invalid workspace request"
+
+
+def test_workspace_check_target_preserves_unexpected_prepare_errors(monkeypatch) -> None:
+    def prepare(_request, _expectations):
+        raise KeyError("unexpected workspace target failure")
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.get_simulator_runtime_status",
+        lambda _simulator_id: SimulatorRuntimeStatus(
+            runtimeName=SIMULATOR_BLENDER_ID,
+            available=True,
+            status="available",
+        ),
+    )
+
+    with pytest.raises(KeyError, match="unexpected workspace target failure"):
+        _check_target(
+            WorkspaceTarget(
+                simulator_id=SIMULATOR_BLENDER_ID,
+                label="Blender",
+                prepare=prepare,
+                requires_runtime=True,
+                include_in_parity=False,
+            ),
+            request=build_demo_workspace_request(),
+            expectations=WorkspaceExpectations(object_count=3, camera_count=3, duration_sec=0.0),
+            timeout_sec=1.0,
+            require_runtime=True,
+        )
+
+
 def test_workspace_check_prints_artifact_only_status(capsys) -> None:
     _print_human_results(
         (
