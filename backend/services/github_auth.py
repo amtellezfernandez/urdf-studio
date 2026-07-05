@@ -67,14 +67,7 @@ def _read_gh_hosts_token(host: str = GH_AUTH_HOST) -> str | None:
     return None
 
 
-def _read_gh_auth_token() -> str | None:
-    global _gh_auth_cache
-
-    cached = _gh_auth_cache
-    now = time.time()
-    if cached is not None and now < cached.expires_at:
-        return cached.token
-
+def _probe_gh_auth_token() -> str | None:
     token: str | None = None
     try:
         result = subprocess.run(
@@ -90,7 +83,18 @@ def _read_gh_auth_token() -> str | None:
         token = None
     if token is None:
         token = _read_gh_hosts_token()
+    return token
 
+
+def _read_gh_auth_token() -> str | None:
+    global _gh_auth_cache
+
+    cached = _gh_auth_cache
+    now = time.time()
+    if cached is not None and now < cached.expires_at:
+        return cached.token
+
+    token = _probe_gh_auth_token()
     _gh_auth_cache = _GhAuthCacheEntry(
         expires_at=now + GH_AUTH_CACHE_TTL_SECONDS,
         token=token,
