@@ -9,11 +9,38 @@ from backend.models.xacro import GitHubXacroExpandRequest
 from backend.services import ilu_urdf
 from backend.services.ilu_urdf import (
     IluUrdfBridgeError,
+    _read_float_env,
     bundle_mesh_assets_for_urdf_file,
     convert_urdf_to_mjcf,
     convert_urdf_to_usd,
     expand_github_xacro,
 )
+
+
+def test_read_float_env_accepts_positive_finite_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("URDF_TEST_ILU_FLOAT", "12.5")
+
+    assert _read_float_env("URDF_TEST_ILU_FLOAT", 3.0, minimum=0.0) == 12.5
+
+
+@pytest.mark.parametrize("raw_value", ["bad", "inf", "-inf", "-1"])
+def test_read_float_env_rejects_invalid_non_finite_or_below_minimum_values(
+    monkeypatch: pytest.MonkeyPatch,
+    raw_value: str,
+) -> None:
+    monkeypatch.setenv("URDF_TEST_ILU_FLOAT", raw_value)
+
+    assert _read_float_env("URDF_TEST_ILU_FLOAT", 3.0, minimum=0.0) == 3.0
+
+
+def test_read_float_env_rejects_non_string_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ilu_urdf.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_ILU_FLOAT" else None,
+    )
+
+    assert _read_float_env("URDF_TEST_ILU_FLOAT", 3.0, minimum=0.0) == 3.0
 
 
 def test_expand_github_xacro_uses_load_source_bridge(monkeypatch) -> None:
