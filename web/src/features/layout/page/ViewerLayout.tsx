@@ -1,5 +1,5 @@
 import type React from "react";
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
 import type { RepeatedInertiaSymmetryChain } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RepeatedInertiaSymmetryCenterMode } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
@@ -16,16 +16,18 @@ import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { AssemblySecondaryModel } from "@/features/assembly/types";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import {
-  TOP_NAV_HEIGHT,
 } from "@/features/layout/page/constants";
 import { ViewerHost } from "@/features/layout/page/ViewerHost";
 import { WorkspaceViewerContent } from "@/features/layout/page/WorkspaceViewerContent";
 import { toViewer3DProps } from "@/features/layout/page/viewer3DProps";
+import { lazyNamedComponent } from "@/features/layout/page/workspacePanelsHelpers";
+import { resolveViewerLayoutMainStyle } from "@/features/layout/page/viewerLayoutHelpers";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
 
-const URDFComparison = lazy(() =>
-  import("@/features/urdf/editor/URDFComparison").then((module) => ({ default: module.URDFComparison }))
+const URDFComparison = lazyNamedComponent(
+  () => import("@/features/urdf/editor/URDFComparison"),
+  "URDFComparison"
 );
 type ViewerLayoutProps = {
   workspaceMode: WorkspaceMode;
@@ -214,6 +216,12 @@ export const ViewerLayout = ({
     thumbnailMode,
     preferStudioRuntime: true,
   });
+  const viewerLayoutMainStyle = resolveViewerLayoutMainStyle({
+    isRightSidebarCollapsed,
+    isSidebarCollapsed,
+    rightSidebarWidth,
+    sidebarWidth,
+  });
 
   if (thumbnailMode) {
     return (
@@ -230,11 +238,7 @@ export const ViewerLayout = ({
   return (
     <main
       className="flex-1 flex flex-col overflow-hidden bg-background transition-[margin-left,margin-right] duration-200 ease-out"
-      style={{
-        marginLeft: isSidebarCollapsed ? 0 : sidebarWidth,
-        marginRight: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
-        marginTop: TOP_NAV_HEIGHT,
-      }}
+      style={viewerLayoutMainStyle}
     >
       <div className="flex-1 min-h-0 relative">
         {showUrdfEditor ? (
