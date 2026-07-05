@@ -33,6 +33,8 @@ from backend.services.simulator_adapters.workspace_check_spec import (
 )
 
 if TYPE_CHECKING:
+    from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace
+    from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
     from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
 
 _REGISTRY: dict[SimulatorId, SimulatorPlugin] = {}
@@ -193,7 +195,7 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
     def prepare_workspace_package(
         self,
         request: SimulatorWorkspacePrepareRequest,
-    ):
+    ) -> PreparedSimulatorWorkspace:
         from backend.services.simulator_adapters.direct_urdf import (
             prepare_direct_urdf_workspace,
         )
@@ -237,7 +239,7 @@ class MjcfSimulatorPlugin(SimulatorPlugin):
     def prepare_workspace_package(
         self,
         request: SimulatorWorkspacePrepareRequest,
-    ):
+    ) -> PreparedMujocoWorkspace:
         from backend.services.simulator_adapters.mujoco import prepare_mujoco_workspace
 
         return prepare_mujoco_workspace(
@@ -249,7 +251,6 @@ class MjcfSimulatorPlugin(SimulatorPlugin):
         self,
         request: SimulatorWorkspacePrepareRequest,
     ) -> SimulatorWorkspacePrepareResponse:
-        from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace
         from backend.services.simulator_adapters.mujoco import _mujoco_error
         from backend.services.simulator_adapters.workspace_process import (
             start_prepared_workspace_process,
@@ -280,10 +281,6 @@ class MjcfSimulatorPlugin(SimulatorPlugin):
         request: SimulatorWorkspacePrepareRequest,
         expectations: WorkspaceExpectations,
     ) -> PreparedWorkspaceCommand:
-        from backend.services.simulator_adapters.mujoco import (
-            PreparedMujocoWorkspace,
-            prepare_mujoco_workspace,
-        )
         from backend.services.simulator_adapters.workspace_check_spec import (
             _module_command,
         )
