@@ -6,7 +6,10 @@ from typing import Any, TypeAlias, TypedDict
 
 import numpy as np
 
-from backend.services.simulator_adapters.camera_artifacts import camera_artifact_path
+from backend.services.simulator_adapters.camera_artifacts import (
+    camera_artifact_path,
+    write_rgb_image,
+)
 from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
     CAMERA_MARKER_SIZE_XYZ,
@@ -225,9 +228,8 @@ def write_camera_screenshots(
     output_dir.mkdir(parents=True, exist_ok=True)
     written_count = 0
     for index, (scene_camera, camera_spec) in enumerate(zip(scene_cameras, cameras), start=1):
-        image = scene_camera.render(rgb=True, force_render=True)[0]
         _write_camera_image(
-            image,
+            scene_camera.render(rgb=True, force_render=True)[0],
             output_dir=output_dir,
             index=index,
             camera_name=camera_spec.sim_name,
@@ -254,21 +256,31 @@ def write_sensor_screenshots(
     return written_count
 
 
+def write_viewer_screenshot(path: Path, image: object) -> None:
+    _write_rgb_artifact(path, image)
+
+
 def _write_camera_image(
-    image: np.ndarray,
+    image: object,
     *,
     output_dir: Path,
     index: int,
     camera_name: str,
     default_name: str = "camera",
 ) -> None:
-    from PIL import Image
-
-    Image.fromarray(image).save(
+    _write_rgb_artifact(
         camera_artifact_path(
             output_dir,
             index=index,
             camera_name=camera_name,
             default_name=default_name,
-        )
+        ),
+        image,
     )
+
+
+def _write_rgb_artifact(path: Path, image: object) -> None:
+    rgb_image = rgb_to_image_array(image)
+    if rgb_image is None:
+        raise ValueError(f"Genesis screenshot image has unsupported RGB shape for {path}.")
+    write_rgb_image(path, rgb_image)

@@ -24,7 +24,10 @@ from backend.services.simulator_adapters.genesis_camera import (
     camera_viewer_pose,
     observation_camera_sensor_kwargs,
     rgb_to_image_array,
+    write_camera_screenshots,
+    write_viewer_screenshot,
 )
+from backend.services.simulator_adapters.camera_artifacts import validate_visible_rgb_image
 from backend.services.simulator_adapters.genesis_robot import (
     apply_joint_values,
     attachment_links_from_urdf,
@@ -283,6 +286,33 @@ def test_genesis_rgb_tensor_conversion_accepts_batched_float_image() -> None:
     assert converted.shape == (1, 2, 3)
     assert converted[0, 0].tolist() == [0, 127, 255]
     assert np.array_equal(rgb_to_image_array(_TensorLikeImage()), converted)
+
+
+def test_genesis_camera_screenshot_writer_normalizes_float_render_output(tmp_path: Path) -> None:
+    class _FakeSceneCamera:
+        def render(self, **_kwargs):
+            return [np.array([[[0.0, 0.5, 1.0], [1.0, 0.0, 0.25]]], dtype=np.float32)]
+
+    written = write_camera_screenshots(
+        (_FakeSceneCamera(),),
+        (_genesis_camera_spec(),),
+        tmp_path,
+    )
+
+    image_path = tmp_path / "01_wrist_camera.png"
+    assert written == 1
+    assert validate_visible_rgb_image(image_path, expected_size=(2, 1)) is None
+
+
+def test_genesis_viewer_screenshot_writer_normalizes_float_render_output(tmp_path: Path) -> None:
+    screenshot_path = tmp_path / "viewer.png"
+
+    write_viewer_screenshot(
+        screenshot_path,
+        np.array([[[0.0, 0.5, 1.0], [1.0, 0.0, 0.25]]], dtype=np.float32),
+    )
+
+    assert validate_visible_rgb_image(screenshot_path, expected_size=(2, 1)) is None
 
 
 def test_genesis_backend_resolution_uses_cpu_by_default(monkeypatch) -> None:

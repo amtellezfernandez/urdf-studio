@@ -21,6 +21,7 @@ from backend.services.simulator_adapters.genesis_camera import (
     read_observation_camera_sensor_images,
     write_camera_screenshots,
     write_sensor_screenshots,
+    write_viewer_screenshot,
 )
 from backend.services.simulator_adapters.genesis_robot import (
     apply_joint_values,
@@ -459,11 +460,7 @@ def prepare_genesis_workspace_scene(
         if screenshot_path is not None or camera_screenshot_dir is not None or sensor_screenshot_dir is not None:
             ensure_initial_step()
             if screenshot_path is not None and camera is not None:
-                from PIL import Image
-
-                image = camera.render(rgb=True)[0]
-                screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-                Image.fromarray(image).save(screenshot_path)
+                write_viewer_screenshot(screenshot_path, camera.render(rgb=True)[0])
                 print(f"[genesis-workspace] screenshot written: {screenshot_path}", flush=True)
             if camera_screenshot_dir is not None:
                 camera_screenshot_count = write_camera_screenshots(
