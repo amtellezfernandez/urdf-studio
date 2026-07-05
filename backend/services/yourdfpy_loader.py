@@ -16,3 +16,11 @@ def load_yourdfpy_urdf_loader() -> Any:
     if not callable(load_urdf):
         raise ValueError("yourdfpy.URDF.load is unavailable")
     return load_urdf
+
+
+def yourdfpy_urdf_loader_available() -> bool:
+    try:
+        load_yourdfpy_urdf_loader()
+    except ValueError:
+        return False
+    return True
