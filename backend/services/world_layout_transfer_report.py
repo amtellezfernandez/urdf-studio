@@ -134,7 +134,7 @@ def build_primitive_check_report(
         collision_matches = (
             loaded_primitive.collision is None or loaded_primitive.collision == primitive.collision
         )
-        color_matches = color_error is not None and color_error <= color_tolerance
+        color_matches = color_error is None or color_error <= color_tolerance
         max_position_error = max(max_position_error, position_error)
         if quat_error is not None:
             max_quat_error = max(max_quat_error, quat_error)

@@ -675,6 +675,31 @@ def test_primitive_check_report_rejects_duplicate_loaded_sim_names() -> None:
     assert report["duplicate_loaded_sim_names"] == [primitives[0].sim_name]
 
 
+def test_primitive_check_report_allows_missing_loaded_color_data() -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+    primitives, _warnings = build_sim_primitives(layout)
+    loaded = [
+        LoadedPrimitive(
+            source_id=primitive.source_id,
+            sim_name=primitive.sim_name,
+            sim_type=primitive.sim_type,
+            position_xyz=primitive.position_xyz,
+            quat_wxyz=primitive.quat_wxyz,
+            size_xyz=primitive.size_xyz,
+            collision=primitive.collision,
+            rgba=None,
+        )
+        for primitive in primitives
+    ]
+
+    report = build_primitive_check_report(primitives, loaded)
+
+    assert report["ok"] is True
+    assert report["color_mismatch_source_ids"] == []
+    assert report["max_color_error"] == 0.0
+    assert all(object_report["color_matches"] is True for object_report in report["objects"])
+
+
 @pytest.mark.skipif(
     os.getenv("URDF_STUDIO_RUN_GENESIS_TESTS") != "1",
     reason="Set URDF_STUDIO_RUN_GENESIS_TESTS=1 to run Genesis headless scene build.",
