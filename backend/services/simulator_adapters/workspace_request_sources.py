@@ -196,16 +196,23 @@ def _build_fixture_request(
     urdf_asset_path: str | None = None,
 ) -> SimulatorWorkspacePrepareRequest:
     request = build_demo_workspace_request()
+    normalized_world_package = world_package
+    if "workspace_check_fixture" not in world_package.provenance:
+        normalized_world_package = world_package.model_copy(
+            update={
+                "provenance": {
+                    **world_package.provenance,
+                    "workspace_check_fixture": fixture_name,
+                }
+            },
+            deep=True,
+        )
     update: dict[str, object] = {"world_package": world_package}
+    update["world_package"] = normalized_world_package
     if mesh_assets is not None:
         update["mesh_assets"] = list(mesh_assets)
     if urdf_asset_path is not None:
         update["urdf_asset_path"] = urdf_asset_path
-    if "workspace_check_fixture" not in world_package.provenance:
-        world_package.provenance = {
-            **world_package.provenance,
-            "workspace_check_fixture": fixture_name,
-        }
     return request.model_copy(update=update, deep=True)
 
 

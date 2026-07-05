@@ -6,6 +6,7 @@ from backend.models.world_scene_package import WorldArtifactRef
 from backend.services.simulator_adapters.workspace_request_sources import (
     MESH_ASSET_FIXTURE_PATH,
     WORKSPACE_SIMULATORS,
+    _build_fixture_request,
     _resolve_workspace_asset_roots,
     build_demo_workspace_request,
     build_hidden_object_workspace_request,
@@ -104,6 +105,22 @@ def test_hidden_object_workspace_request_keeps_hidden_source_but_active_count_st
     ]
     assert [item["id"] for item in hidden_objects] == ["hidden-transfer-probe"]
     assert len(request.mesh_assets) > 0
+
+
+def test_build_fixture_request_does_not_mutate_input_world_package_provenance() -> None:
+    base_request = build_demo_workspace_request()
+    world_package = base_request.world_package.model_copy(deep=True)
+    original_provenance = dict(world_package.provenance)
+    original_runtime_targets = list(world_package.runtime_targets)
+
+    request = _build_fixture_request(
+        fixture_name="custom-fixture",
+        world_package=world_package,
+    )
+
+    assert request.world_package.provenance["workspace_check_fixture"] == "custom-fixture"
+    assert world_package.provenance == original_provenance
+    assert list(world_package.runtime_targets) == original_runtime_targets
 
 
 def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> None:
