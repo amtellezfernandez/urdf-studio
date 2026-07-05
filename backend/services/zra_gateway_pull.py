@@ -90,6 +90,21 @@ def _build_ssh_command(
     return command
 
 
+def _remote_component_report_candidates(
+    *, remote_path: str, component_report_path: str
+) -> list[str]:
+    if Path(component_report_path).is_absolute():
+        return [component_report_path]
+
+    gateway_path = Path(remote_path)
+    candidates = [
+        component_report_path,
+        str((gateway_path.parent / component_report_path).as_posix()),
+        str((gateway_path.parent.parent / component_report_path).as_posix()),
+    ]
+    return list(dict.fromkeys(candidates))
+
+
 def _read_remote_gateway_decision(
     *,
     ssh_host: str,
@@ -114,21 +129,11 @@ def _read_remote_gateway_decision(
     gateway_decision = _load_json_object(completed.stdout, source=remote_path)
     component_report_path = gateway_decision.get("component_report_path")
     if isinstance(component_report_path, str) and component_report_path.strip():
-        remote_candidates: list[str] = []
-        if Path(component_report_path).is_absolute():
-            remote_candidates.append(component_report_path)
-        else:
-            gateway_path = Path(remote_path)
-            remote_candidates.extend(
-                [
-                    component_report_path,
-                    str((gateway_path.parent / component_report_path).as_posix()),
-                    str((gateway_path.parent.parent / component_report_path).as_posix()),
-                ]
-            )
-
         last_error: subprocess.CalledProcessError | None = None
-        for candidate in dict.fromkeys(remote_candidates):
+        for candidate in _remote_component_report_candidates(
+            remote_path=remote_path,
+            component_report_path=component_report_path,
+        ):
             component_command = _build_ssh_command(
                 ssh_host=ssh_host,
                 ssh_user=ssh_user,
