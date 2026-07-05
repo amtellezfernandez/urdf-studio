@@ -10,6 +10,7 @@ from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDescriptor,
+    SimulatorRuntimeDependency,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
     SimulatorRuntimeTransferPolicy,
@@ -41,6 +42,8 @@ _REQUIRED_PLUGIN_ATTRIBUTES = (
     "robot_asset_format",
     "transfer_strategy",
 )
+READY_RUNTIME_STATUS = "ready"
+MISSING_OPTIONAL_DEPENDENCY_STATUS_PREFIX = "Missing optional dependency"
 
 
 class SimulatorPlugin:
@@ -95,7 +98,13 @@ class SimulatorPlugin:
         override_python = os.environ.get(self.runtime_override_python_env_var, "").strip()
         return override_python or None
 
-    def _build_transfer_spec(self) -> SimulatorTransferSpec:
+    def _runtime_dependencies(self) -> list[SimulatorRuntimeDependency]:
+        return build_runtime_dependency_statuses(
+            self.dependencies,
+            python_executable=self._resolve_runtime_override_python(),
+        )
+
+    def _transfer_spec(self) -> SimulatorTransferSpec:
         return SimulatorTransferSpec(
             robot_asset_format=self.robot_asset_format,
             scene_asset_format=self.robot_asset_format,
@@ -104,20 +113,17 @@ class SimulatorPlugin:
         )
 
     def runtime_status(self) -> SimulatorRuntimeStatus:
-        deps = build_runtime_dependency_statuses(
-            self.dependencies,
-            python_executable=self._resolve_runtime_override_python(),
-        )
+        dependencies = self._runtime_dependencies()
         available, status = format_runtime_dependency_status(
-            ready_status="ready",
-            missing_status_prefix="Missing optional dependency",
-            dependencies=deps,
+            ready_status=READY_RUNTIME_STATUS,
+            missing_status_prefix=MISSING_OPTIONAL_DEPENDENCY_STATUS_PREFIX,
+            dependencies=dependencies,
         )
         return SimulatorRuntimeStatus(
             runtimeName=self.simulator_id,
             available=available,
             status=status,
-            dependencies=deps,
+            dependencies=dependencies,
         )
 
     def prepare_workspace(
@@ -142,7 +148,7 @@ class SimulatorPlugin:
         return SimulatorRuntimeSpec(
             simulator_id=self.simulator_id,
             label=self.label,
-            transfer=self._build_transfer_spec(),
+            transfer=self._transfer_spec(),
             target_kind=self.target_kind,
             workspace_target=self.workspace_target,
             motion_validation=self.motion_validation,
@@ -151,17 +157,16 @@ class SimulatorPlugin:
         )
 
     def runtime_spec_descriptor(self) -> SimulatorRuntimeDescriptor:
-        spec = self.as_runtime_spec()
         return SimulatorRuntimeDescriptor(
             simulatorId=self.simulator_id,
             label=self.label,
             targetKind=self.target_kind,
-            capabilities=spec.capabilities_model(),
-            transferPolicy=spec.transfer.runtime_model(),
+            capabilities=self.capabilities,
+            transferPolicy=self.transfer_policy(),
         )
 
     def transfer_policy(self) -> SimulatorRuntimeTransferPolicy:
-        return self._build_transfer_spec().runtime_model()
+        return self._transfer_spec().runtime_model()
 
     def require_workspace_process(self) -> SimulatorWorkspaceProcessParams:
         workspace_process = self.workspace_process
