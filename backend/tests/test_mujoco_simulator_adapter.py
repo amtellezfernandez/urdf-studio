@@ -343,6 +343,22 @@ def test_stage_mjcf_mesh_assets_disambiguates_duplicate_basenames(tmp_path: Path
     assert 'name="assets_second_base" file="second__base.stl"' in mjcf_content
 
 
+def test_build_staged_mesh_name_map_adds_suffix_for_duplicate_generated_names(tmp_path: Path) -> None:
+    robot_dir = tmp_path / "robot"
+    first_mesh = tmp_path / "first" / "shared" / "base.stl"
+    second_mesh = tmp_path / "second" / "shared" / "base.stl"
+
+    staged_name_by_source = mujoco_adapter._build_staged_mesh_name_map(
+        {
+            "base.stl": [first_mesh, second_mesh],
+        },
+        robot_dir=robot_dir,
+    )
+
+    assert staged_name_by_source[first_mesh] == "shared__base.stl"
+    assert staged_name_by_source[second_mesh] == "shared__base__2.stl"
+
+
 def test_apply_mjcf_workspace_repairs_removes_invalid_frame_body_inertial() -> None:
     mjcf = """
     <mujoco model="demo">

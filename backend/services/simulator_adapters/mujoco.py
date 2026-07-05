@@ -223,19 +223,23 @@ def _mjcf_mesh_name_from_filename(filename: str) -> str:
     return normalized or "mesh"
 
 
-def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Path) -> None:
-    robot_dir = mjcf_path.parent
-    mesh_dir = robot_dir / "meshes"
-    mesh_dir.mkdir(parents=True, exist_ok=True)
-
+def _group_bundled_mesh_target_paths(bundle_result: BundleMeshAssetsResult) -> dict[str, list[Path]]:
     target_paths_by_basename: dict[str, list[Path]] = defaultdict(list)
     for asset in bundle_result.bundled:
         target_path = Path(asset.target_path).resolve()
         if target_path not in target_paths_by_basename[target_path.name]:
             target_paths_by_basename[target_path.name].append(target_path)
+    return target_paths_by_basename
 
-    staged_name_by_source: dict[str, str] = {}
+
+def _build_staged_mesh_name_map(
+    target_paths_by_basename: dict[str, list[Path]],
+    *,
+    robot_dir: Path,
+) -> dict[Path, str]:
+    staged_name_by_source: dict[Path, str] = {}
     used_staged_names: set[str] = set()
+
     for paths in target_paths_by_basename.values():
         has_collision = len(paths) > 1
         for target_path in paths:
@@ -250,10 +254,12 @@ def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Pa
                     index += 1
                 candidate = f"{stem}__{index}{suffix}"
             used_staged_names.add(candidate)
-            staged_name_by_source[str(target_path)] = candidate
+            staged_name_by_source[target_path] = candidate
+    return staged_name_by_source
 
-    for source_path_str, staged_name in staged_name_by_source.items():
-        source_path = Path(source_path_str)
+
+def _copy_staged_mesh_assets(*, mesh_dir: Path, staged_name_by_source: dict[Path, str]) -> None:
+    for source_path, staged_name in staged_name_by_source.items():
         try:
             shutil.copy2(source_path, mesh_dir / staged_name)
         except OSError as exc:
@@ -261,11 +267,23 @@ def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Pa
                 f"MuJoCo MJCF conversion could not stage mesh asset: {source_path.name}"
             ) from exc
 
-    staged_name_by_mjcf_mesh_name = {
-        _mjcf_mesh_name_from_filename(asset.rewritten): staged_name_by_source[str(Path(asset.target_path).resolve())]
+
+def _build_staged_name_by_mjcf_mesh_name(
+    bundle_result: BundleMeshAssetsResult,
+    staged_name_by_source: dict[Path, str],
+) -> dict[str, str]:
+    return {
+        _mjcf_mesh_name_from_filename(asset.rewritten): staged_name_by_source[target_path]
         for asset in bundle_result.bundled
-        if str(Path(asset.target_path).resolve()) in staged_name_by_source
+        if (target_path := Path(asset.target_path).resolve()) in staged_name_by_source
     }
+
+
+def _rewrite_mjcf_mesh_filenames(
+    *,
+    mjcf_path: Path,
+    staged_name_by_mjcf_mesh_name: dict[str, str],
+) -> None:
     if not staged_name_by_mjcf_mesh_name:
         return
     try:
@@ -287,6 +305,27 @@ def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Pa
         changed = True
     if changed:
         mjcf_path.write_text(ET.tostring(root, encoding="unicode"), encoding="utf-8")
+
+
+def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Path) -> None:
+    robot_dir = mjcf_path.parent
+    mesh_dir = robot_dir / "meshes"
+    mesh_dir.mkdir(parents=True, exist_ok=True)
+
+    target_paths_by_basename = _group_bundled_mesh_target_paths(bundle_result)
+    staged_name_by_source = _build_staged_mesh_name_map(
+        target_paths_by_basename,
+        robot_dir=robot_dir,
+    )
+    _copy_staged_mesh_assets(mesh_dir=mesh_dir, staged_name_by_source=staged_name_by_source)
+    staged_name_by_mjcf_mesh_name = _build_staged_name_by_mjcf_mesh_name(
+        bundle_result,
+        staged_name_by_source,
+    )
+    _rewrite_mjcf_mesh_filenames(
+        mjcf_path=mjcf_path,
+        staged_name_by_mjcf_mesh_name=staged_name_by_mjcf_mesh_name,
+    )
 
 
 def prepare_mujoco_workspace(
