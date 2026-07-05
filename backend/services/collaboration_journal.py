@@ -90,7 +90,8 @@ def collaboration_token_digest(token: str) -> str:
 
 
 def build_collaboration_journal_from_env() -> CollaborationJournal:
-    journal_path = (os.getenv(COLLABORATION_JOURNAL_PATH_ENV) or "").strip()
+    raw_path = os.getenv(COLLABORATION_JOURNAL_PATH_ENV)
+    journal_path = raw_path.strip() if isinstance(raw_path, str) else ""
     if not journal_path:
         return NoopCollaborationJournal()
     return CollaborationFileJournal(journal_path)

@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.models.collaboration import (
     CollaborationAccessUpdateRequest,
     CollaborationEventRequest,
     CollaborationSessionCreateRequest,
 )
 from backend.services.collaboration import CollaborationService
-from backend.services.collaboration_journal import CollaborationFileJournal
+from backend.services import collaboration_journal
+from backend.services.collaboration_journal import CollaborationFileJournal, NoopCollaborationJournal
 from backend.services.collaboration_params import (
     COLLABORATION_JOURNAL_EVENT_ACCESS_UPDATED,
     COLLABORATION_JOURNAL_EVENT_COLLABORATION_EVENT_ACCEPTED,
@@ -22,6 +25,20 @@ TEST_CLIENT_SEQUENCE = 1
 
 def _read_records(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_build_collaboration_journal_from_env_returns_noop_for_non_string_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        collaboration_journal.os,
+        "getenv",
+        lambda name: object() if name == collaboration_journal.COLLABORATION_JOURNAL_PATH_ENV else None,
+    )
+
+    journal = collaboration_journal.build_collaboration_journal_from_env()
+
+    assert isinstance(journal, NoopCollaborationJournal)
 
 
 def test_collaboration_file_journal_appends_replayable_records_without_bearer_tokens(
