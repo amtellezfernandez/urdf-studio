@@ -357,11 +357,35 @@ def test_blender_robot_glb_reference_rejects_missing_yourdfpy_module(
     )
 
     def _fake_import_module(name: str) -> object:
-        raise ImportError(name)
+        raise ModuleNotFoundError(name=name)
 
     monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ValueError, match="yourdfpy is not installed"):
+        _write_robot_glb_reference(
+            robot_urdf_path,
+            robot_glb_path,
+            joint_positions={},
+        )
+
+
+def test_blender_robot_glb_reference_preserves_unexpected_yourdfpy_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf_path = tmp_path / "robot.urdf"
+    robot_glb_path = tmp_path / "robot.glb"
+    robot_urdf_path.write_text(
+        "<robot name=\"demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected yourdfpy import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected yourdfpy import failure"):
         _write_robot_glb_reference(
             robot_urdf_path,
             robot_glb_path,

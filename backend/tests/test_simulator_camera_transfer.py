@@ -364,7 +364,7 @@ def test_build_sim_camera_specs_wraps_missing_yourdfpy_module(
     ]
 
     def _fake_import_module(name: str) -> object:
-        raise ImportError(name)
+        raise ModuleNotFoundError(name=name)
 
     monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
@@ -379,6 +379,32 @@ def test_build_sim_camera_specs_wraps_missing_yourdfpy_module(
 
     assert cameras == ()
     assert warnings == ("Camera transfer could not load robot URDF: yourdfpy is not installed",)
+
+
+def test_build_sim_camera_specs_preserves_unexpected_yourdfpy_import_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text("<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>", encoding="utf-8")
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "scene camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {"width": 640, "height": 480, "fov_deg": 60},
+        }
+    ]
+
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected yourdfpy import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected yourdfpy import failure"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
 
 
 def test_studio_camera_frame_maps_to_render_camera_frame() -> None:
