@@ -8,7 +8,7 @@ def dependency_health() -> HealthResponse:
     try:
         import yourdfpy  # type: ignore # noqa: F401
         yourdfpy_ok = True
-    except Exception:  # pragma: no cover
+    except ImportError:  # pragma: no cover
         yourdfpy_ok = False
 
     return HealthResponse(status="ok", yourdfpy=yourdfpy_ok)
