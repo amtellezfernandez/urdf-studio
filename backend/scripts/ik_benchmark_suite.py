@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
+from fastapi import HTTPException
 
 from backend.core.app_config import get_config_value, read_app_config
 from backend.models.kinematics import IKRequest, IkSolveRequest
@@ -18,6 +19,8 @@ from backend.services.ik_orchestrator import solve_ik as orchestrated_ik
 from backend.services.kinematics import compute_link_pose
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
 from backend.services.placo_kinematics import inverse_kinematics as placo_ik
+
+_BENCHMARK_SOLVER_ERROR_TYPES = (HTTPException, RuntimeError, ValueError)
 
 
 @dataclass
@@ -217,7 +220,7 @@ def main() -> None:
                         _, solution, metadata = solve_policy(
                             policy, urdf_xml, target_link, target_position, target_wxyz
                         )
-                    except Exception:
+                    except _BENCHMARK_SOLVER_ERROR_TYPES:
                         duration_ms = (time.perf_counter() - start) * 1000.0
                         runs.append(
                             BenchmarkRun(
