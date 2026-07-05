@@ -270,6 +270,36 @@ def read_log_tail(log_path: Path, *, tail_chars: int) -> str:
         return ""
 
 
+def _raise_workspace_launch_cancelled(
+    *,
+    simulator_label: str,
+    error: Callable[[str], Exception],
+) -> None:
+    _raise(error, f"{simulator_label} workspace launch was cancelled.")
+
+
+def _raise_on_workspace_process_exit(
+    process: subprocess.Popen,
+    *,
+    simulator_label: str,
+    log_path: Path,
+    log_tail_chars: int,
+    error: Callable[[str], Exception],
+) -> None:
+    returncode = process.poll()
+    if returncode is None:
+        return
+    _raise(
+        error,
+        _format_startup_failure(
+            simulator_label=simulator_label,
+            returncode=returncode,
+            log_path=log_path,
+            log_tail_chars=log_tail_chars,
+        ),
+    )
+
+
 def wait_for_workspace_readiness(
     process: subprocess.Popen,
     *,
@@ -286,37 +316,38 @@ def wait_for_workspace_readiness(
     deadline = time.monotonic() + ready_timeout_sec
     while time.monotonic() < deadline:
         if should_cancel is not None and should_cancel():
-            _raise(error, f"{simulator_label} workspace launch was cancelled.")
-        returncode = process.poll()
-        if returncode is not None:
-            _raise(
-                error,
-                _format_startup_failure(
-                    simulator_label=simulator_label,
-                    returncode=returncode,
-                    log_path=log_path,
-                    log_tail_chars=log_tail_chars,
-                ),
+            _raise_workspace_launch_cancelled(
+                simulator_label=simulator_label,
+                error=error,
             )
+        _raise_on_workspace_process_exit(
+            process,
+            simulator_label=simulator_label,
+            log_path=log_path,
+            log_tail_chars=log_tail_chars,
+            error=error,
+        )
         if ready_log_marker in read_log_tail(log_path, tail_chars=log_tail_chars):
             time.sleep(post_ready_grace_sec)
             if should_cancel is not None and should_cancel():
-                _raise(error, f"{simulator_label} workspace launch was cancelled.")
-            returncode = process.poll()
-            if returncode is not None:
-                _raise(
-                    error,
-                    _format_startup_failure(
-                        simulator_label=simulator_label,
-                        returncode=returncode,
-                        log_path=log_path,
-                        log_tail_chars=log_tail_chars,
-                    ),
+                _raise_workspace_launch_cancelled(
+                    simulator_label=simulator_label,
+                    error=error,
                 )
+            _raise_on_workspace_process_exit(
+                process,
+                simulator_label=simulator_label,
+                log_path=log_path,
+                log_tail_chars=log_tail_chars,
+                error=error,
+            )
             return
         time.sleep(poll_sec)
     if should_cancel is not None and should_cancel():
-        _raise(error, f"{simulator_label} workspace launch was cancelled.")
+        _raise_workspace_launch_cancelled(
+            simulator_label=simulator_label,
+            error=error,
+        )
     _raise(
         error,
         f"{simulator_label} workspace did not become ready within {ready_timeout_sec:.0f}s. "
