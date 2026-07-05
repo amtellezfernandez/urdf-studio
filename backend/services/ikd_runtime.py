@@ -22,6 +22,30 @@ ManagedIkdLaunchMode = Literal["binary", "cargo"]
 IkdRuntimePayload = dict[str, bool | int | str | None]
 
 
+def _coerce_config_bool(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", ""}
+    return default
+
+
+def _coerce_config_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default
+        try:
+            return int(candidate)
+        except ValueError:
+            return default
+    return default
+
+
 @dataclass(frozen=True)
 class IkdRuntimeStatus:
     configured_enabled: bool
@@ -54,11 +78,20 @@ class IkdRuntimeManager:
 
     def _config_flags(self) -> tuple[bool, bool, int, int, int]:
         config = read_app_config()
-        enabled = bool(get_config_value(config, ["ikd", "enabled"], False))
-        use_for_drag = bool(get_config_value(config, ["ikd", "useForDrag"], False))
-        control_hz = int(get_config_value(config, ["ikd", "controlHz"], 500))
-        telemetry_hz = int(get_config_value(config, ["ikd", "telemetryHz"], 60))
-        stale_target_ms = int(get_config_value(config, ["ikd", "staleTargetMs"], 250))
+        enabled = _coerce_config_bool(get_config_value(config, ["ikd", "enabled"], False), False)
+        use_for_drag = _coerce_config_bool(
+            get_config_value(config, ["ikd", "useForDrag"], False),
+            False,
+        )
+        control_hz = _coerce_config_int(get_config_value(config, ["ikd", "controlHz"], 500), 500)
+        telemetry_hz = _coerce_config_int(
+            get_config_value(config, ["ikd", "telemetryHz"], 60),
+            60,
+        )
+        stale_target_ms = _coerce_config_int(
+            get_config_value(config, ["ikd", "staleTargetMs"], 250),
+            250,
+        )
         return enabled, use_for_drag, control_hz, telemetry_hz, stale_target_ms
 
     @staticmethod
