@@ -247,16 +247,19 @@ def _camera_image_manifest(
     if isinstance(directory_or_error, str):
         return label, directory_or_error
     directory = directory_or_error
-    image_paths = sorted(directory.glob("*.png"))
-    if not image_paths:
-        return label, f"{label} camera_images has no PNG artifacts in {directory}"
-    actual_names = sorted(path.name for path in image_paths)
-    expected_names = sorted(entry["name"] for entry in expected_images)
-    if actual_names != expected_names:
+    image_paths_or_error = _camera_image_paths(directory, label=label)
+    if isinstance(image_paths_or_error, str):
+        return label, image_paths_or_error
+    image_paths = image_paths_or_error
+    names_error = _camera_image_name_error(
+        image_paths,
+        expected_images=expected_images,
+        label=label,
+    )
+    if names_error is not None:
         return (
             label,
-            f"{label} camera_images PNG names do not match report cameras: "
-            f"actual={actual_names}, expected={expected_names}",
+            names_error,
         )
 
     images: list[CameraImageEntry] = []
@@ -285,6 +288,29 @@ def _camera_image_manifest(
             }
         )
     return label, {"images": images}
+
+
+def _camera_image_paths(directory: Path, *, label: str) -> list[Path] | str:
+    image_paths = sorted(directory.glob("*.png"))
+    if image_paths:
+        return image_paths
+    return f"{label} camera_images has no PNG artifacts in {directory}"
+
+
+def _camera_image_name_error(
+    image_paths: Sequence[Path],
+    *,
+    expected_images: Sequence[ExpectedCameraImage],
+    label: str,
+) -> str | None:
+    actual_names = sorted(path.name for path in image_paths)
+    expected_names = sorted(entry["name"] for entry in expected_images)
+    if actual_names == expected_names:
+        return None
+    return (
+        f"{label} camera_images PNG names do not match report cameras: "
+        f"actual={actual_names}, expected={expected_names}"
+    )
 
 
 def _camera_image_directory(
