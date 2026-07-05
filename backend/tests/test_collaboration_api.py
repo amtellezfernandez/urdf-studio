@@ -480,6 +480,24 @@ def test_collaboration_websocket_rejects_bad_token() -> None:
     assert disconnect_info.value.code == COLLABORATION_WEBSOCKET_UNAUTHORIZED_CLOSE_CODE
 
 
+def test_collaboration_create_session_propagates_unexpected_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = TestClient(create_app())
+
+    monkeypatch.setattr(
+        "backend.api.collaboration.collaboration_service.create_session",
+        lambda _request: (_ for _ in ()).throw(RuntimeError("unexpected collaboration failure")),
+    )
+
+    with _patch_security_settings(), pytest.raises(
+        RuntimeError, match="unexpected collaboration failure"
+    ):
+        client.post(
+            "/collaboration/sessions",
+            headers=_operator_headers(),
+            json={"label": "Pair edit"},
+        )
+
+
 def test_collaboration_websocket_rejects_peer_capacity_overflow() -> None:
     client = TestClient(create_app())
     with _patch_security_settings():

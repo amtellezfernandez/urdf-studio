@@ -46,6 +46,12 @@ HTTP_NOT_FOUND = 404
 HTTP_UNAUTHORIZED = 401
 HTTP_UNPROCESSABLE_ENTITY = 422
 HTTP_TOO_MANY_REQUESTS = 429
+_COLLABORATION_TRANSLATED_EXCEPTIONS = (
+    KeyError,
+    CollaborationAccessError,
+    CollaborationValidationError,
+    CollaborationCapacityError,
+)
 
 
 def _translate_collaboration_error(exc: Exception) -> HTTPException:
@@ -154,7 +160,7 @@ async def create_collaboration_session(
 ) -> CollaborationSessionCreateResponse:
     try:
         return collaboration_service.create_session(request)
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         raise _translate_collaboration_error(exc) from exc
 
 
@@ -162,7 +168,7 @@ async def create_collaboration_session(
 async def get_collaboration_session(request_context: Request, session_id: str) -> CollaborationSessionSnapshot:
     try:
         return collaboration_service.get_session(session_id, session_token=_session_token(request_context))
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         raise _translate_collaboration_error(exc) from exc
 
 
@@ -173,7 +179,7 @@ async def list_collaboration_events(
 ) -> list[CollaborationEventSnapshot]:
     try:
         return collaboration_service.recent_events(session_id, session_token=_session_token(request_context))
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         raise _translate_collaboration_error(exc) from exc
 
 
@@ -187,7 +193,7 @@ async def get_collaboration_session_stats(
             session_id,
             session_token=_session_token(request_context),
         )
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         raise _translate_collaboration_error(exc) from exc
 
 
@@ -203,7 +209,7 @@ async def update_collaboration_access(
             request,
             session_token=_session_token(request_context),
         )
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         raise _translate_collaboration_error(exc) from exc
     await _close_revoked_collaboration_peers(result.revoked_peers)
     return result.response
@@ -221,7 +227,7 @@ async def post_collaboration_event(
             request,
             session_token=_session_token(request_context),
         )
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         raise _translate_collaboration_error(exc) from exc
     await _broadcast_event(session_id, event)
     return event
@@ -239,7 +245,7 @@ async def collaborate(websocket: WebSocket, session_id: str) -> None:
             client_id=client_id,
             websocket=websocket,
         )
-    except Exception as exc:
+    except _COLLABORATION_TRANSLATED_EXCEPTIONS as exc:
         reason = str(exc)
         log_websocket_security_event(
             websocket,
