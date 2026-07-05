@@ -330,12 +330,7 @@ def append_cameras_to_mujoco_mjcf(
         ET.SubElement(
             parent,
             "camera",
-            {
-                "name": camera.sim_name,
-                "pos": _format_vector(pose.position_xyz),
-                "quat": _format_vector(pose.quat_wxyz),
-                "fovy": f"{camera.fov_deg:.12g}",
-            },
+            _mujoco_camera_attrs(camera, pose),
         )
         if include_markers:
             ET.SubElement(
@@ -352,6 +347,15 @@ def append_cameras_to_mujoco_mjcf(
             )
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode")
+
+
+def _mujoco_camera_attrs(camera: SimCameraSpec, pose: Transform) -> dict[str, str]:
+    return {
+        "name": camera.sim_name,
+        "pos": _format_vector(pose.position_xyz),
+        "quat": _format_vector(pose.quat_wxyz),
+        "fovy": f"{camera.fov_deg:.12g}",
+    }
 
 
 def _ensure_mujoco_offscreen_framebuffer(
