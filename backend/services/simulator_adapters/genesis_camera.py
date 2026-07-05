@@ -92,7 +92,7 @@ def attach_scene_camera_to_robot_link(
     robot_entity: Any,
     camera: SimCameraSpec,
 ) -> bool:
-    parent_link = robot_links_by_name(robot_entity).get(camera.parent_link)
+    parent_link = _robot_parent_link(robot_entity, camera)
     if parent_link is None or not hasattr(scene_camera, "attach"):
         return False
     scene_camera.attach(parent_link, transform_matrix(camera.render_local_pose))
@@ -115,7 +115,7 @@ def observation_camera_sensor_kwargs(
     robot_entity: Any,
     camera: SimCameraSpec,
 ) -> GenesisObservationCameraSensorKwargs | None:
-    parent_link = robot_links_by_name(robot_entity).get(camera.parent_link)
+    parent_link = _robot_parent_link(robot_entity, camera)
     entity_idx = _integer_attr(getattr(robot_entity, "idx", None))
     link_idx_local = _integer_attr(getattr(parent_link, "idx_local", None))
     if parent_link is None or entity_idx is None or link_idx_local is None:
@@ -132,6 +132,10 @@ def observation_camera_sensor_kwargs(
         "entity_idx": entity_idx,
         "link_idx_local": link_idx_local,
     }
+
+
+def _robot_parent_link(robot_entity: Any, camera: SimCameraSpec) -> object | None:
+    return robot_links_by_name(robot_entity).get(camera.parent_link)
 
 
 def _camera_lookat(camera: SimCameraSpec) -> GenesisVector3:
