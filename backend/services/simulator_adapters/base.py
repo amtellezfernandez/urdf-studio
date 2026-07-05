@@ -15,6 +15,10 @@ from backend.models.simulator_runtime import (
 )
 
 PYTHON_MODULE_PROBE_TIMEOUT_SEC = 5
+PYTHON_MODULE_PROBE_PROGRAM = (
+    "import importlib.util, sys; "
+    "sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)"
+)
 
 
 class SimulatorAdapterError(RuntimeError):
@@ -50,15 +54,10 @@ def is_python_module_available(import_name: str) -> bool:
 def is_python_module_available_in_python(python_executable: str, import_name: str) -> bool:
     try:
         process = subprocess.run(
-            [
-                python_executable,
-                "-c",
-                (
-                    "import importlib.util, sys; "
-                    "sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)"
-                ),
-                import_name,
-            ],
+            _python_module_probe_command(
+                python_executable=python_executable,
+                import_name=import_name,
+            ),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=PYTHON_MODULE_PROBE_TIMEOUT_SEC,
@@ -67,6 +66,15 @@ def is_python_module_available_in_python(python_executable: str, import_name: st
     except (OSError, subprocess.TimeoutExpired):
         return False
     return process.returncode == 0
+
+
+def _python_module_probe_command(*, python_executable: str, import_name: str) -> list[str]:
+    return [
+        python_executable,
+        "-c",
+        PYTHON_MODULE_PROBE_PROGRAM,
+        import_name,
+    ]
 
 
 def _resolve_module_availability_probe(
@@ -85,13 +93,11 @@ def build_runtime_dependency_statuses(
     *,
     python_executable: str | None = None,
 ) -> list[SimulatorRuntimeDependency]:
-    is_module_available = _resolve_module_availability_probe(python_executable)
+    module_availability_probe = _resolve_module_availability_probe(python_executable)
     return [
-        SimulatorRuntimeDependency(
-            name=dependency.name,
-            available=is_module_available(dependency.import_name),
-            required=dependency.required,
-            scope=dependency.scope,
+        _runtime_dependency_status(
+            dependency=dependency,
+            module_availability_probe=module_availability_probe,
         )
         for dependency in dependencies
     ]
@@ -117,3 +123,16 @@ def _missing_required_dependency_names(
         for dependency in dependencies
         if dependency.required and not dependency.available
     ]
+
+
+def _runtime_dependency_status(
+    *,
+    dependency: SimulatorDependencySpec,
+    module_availability_probe: Callable[[str], bool],
+) -> SimulatorRuntimeDependency:
+    return SimulatorRuntimeDependency(
+        name=dependency.name,
+        available=module_availability_probe(dependency.import_name),
+        required=dependency.required,
+        scope=dependency.scope,
+    )
