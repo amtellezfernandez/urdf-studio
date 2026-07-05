@@ -140,11 +140,11 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
                     seed_to_use = chained_seed
                 else:
                     seed_to_use = seed
-                attempt_request = compiled_request.copy(
+                attempt_request = compiled_request.model_copy(
                     update={"joint_values": seed_to_use}
                 )
                 if ignore_orientation:
-                    attempt_request = attempt_request.copy(
+                    attempt_request = attempt_request.model_copy(
                         update={
                             "target_rotation": None,
                             "target_wxyz": None,
@@ -152,7 +152,7 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
                         }
                     )
                 else:
-                    attempt_request = attempt_request.copy(
+                    attempt_request = attempt_request.model_copy(
                         update={"orientation_weight": scaled_orientation_weight}
                     )
                 try:
@@ -185,7 +185,7 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
                         target_wxyz = rotation_matrix_to_wxyz(
                             compiled_request.target_rotation
                         )
-                    except Exception:
+                    except HTTPException:
                         target_wxyz = None
 
                 orientation_error = None
@@ -247,7 +247,7 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
                         should_return = orientation_error <= orientation_tolerance
 
                     if should_return:
-                        diagnostics = response.diagnostics.copy(
+                        diagnostics = response.diagnostics.model_copy(
                             update={
                                 "solver_id": solver_id,
                                 "seed_source": seed_source,
@@ -289,7 +289,7 @@ def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
     if best_solver_id is not None and best_seed_index is not None:
         blocked_reason = blocked_reason_by_seed.get((best_solver_id, best_seed_index))
 
-    diagnostics = best_response.diagnostics.copy(
+    diagnostics = best_response.diagnostics.model_copy(
         update={
             "solver_id": best_solver_id,
             "seed_source": best_seed_source,
