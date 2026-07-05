@@ -10,6 +10,8 @@ import time
 
 WORKSPACE_LAUNCH_RECORD_TTL_SEC = 15 * 60
 WORKSPACE_LAUNCH_TERMINATE_GRACE_SEC = 1.0
+POSIX_TERMINATE_SIGNAL = signal.SIGTERM
+POSIX_KILL_SIGNAL = signal.SIGKILL
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,28 @@ def _get_or_create_workspace_launch_record(
     return record
 
 
+def _store_workspace_launch_record(record: _WorkspaceLaunchRecord) -> _WorkspaceLaunchRecord:
+    _launches[record.launch_id] = record
+    return record
+
+
+def _register_workspace_launch_record(
+    *,
+    launch_id: str,
+    target_id: str,
+    created_at: float,
+    cancelled: bool = False,
+) -> _WorkspaceLaunchRecord:
+    return _store_workspace_launch_record(
+        _create_workspace_launch_record(
+            launch_id=launch_id,
+            target_id=target_id,
+            created_at=created_at,
+            cancelled=cancelled,
+        )
+    )
+
+
 def _cancel_workspace_launch_locked(
     *,
     launch_id: str,
@@ -82,13 +106,12 @@ def _cancel_workspace_launch_locked(
 ) -> tuple[_WorkspaceLaunchRecord, bool, subprocess.Popen | None]:
     record = _launches.get(launch_id)
     if record is None:
-        record = _create_workspace_launch_record(
+        record = _register_workspace_launch_record(
             launch_id=launch_id,
             target_id=target_id,
             created_at=now,
             cancelled=True,
         )
-        _launches[launch_id] = record
         return record, False, None
     if not _record_matches_target(record, target_id):
         return record, True, None
@@ -114,7 +137,7 @@ def begin_workspace_launch(launch_id: str, target_id: str) -> bool:
         _prune_locked(now)
         if launch_id in _launches:
             return False
-        _launches[launch_id] = _create_workspace_launch_record(
+        _register_workspace_launch_record(
             launch_id=launch_id,
             target_id=target_id,
             created_at=now,
@@ -152,6 +175,21 @@ def is_workspace_launch_cancelled(launch_id: str) -> bool:
         return bool(record is not None and record.cancelled)
 
 
+def _workspace_launch_cancel_result(
+    *,
+    launch_id: str,
+    cancelled: bool,
+    process: subprocess.Popen | None = None,
+    process_stopped: bool = False,
+) -> WorkspaceLaunchCancelResult:
+    return WorkspaceLaunchCancelResult(
+        launch_id=launch_id,
+        cancelled=cancelled,
+        process_stopped=process_stopped,
+        pid=process.pid if process is not None else None,
+    )
+
+
 def cancel_workspace_launch(
     launch_id: str,
     *,
@@ -167,21 +205,38 @@ def cancel_workspace_launch(
         )
 
     if target_mismatch:
-        return WorkspaceLaunchCancelResult(
+        return _workspace_launch_cancel_result(
             launch_id=launch_id,
             cancelled=False,
         )
 
     process_stopped = False
-    pid = process_to_stop.pid if process_to_stop is not None else None
     if process_to_stop is not None:
         process_stopped = terminate_workspace_process(process_to_stop)
-    return WorkspaceLaunchCancelResult(
+    return _workspace_launch_cancel_result(
         launch_id=launch_id,
         cancelled=True,
+        process=process_to_stop,
         process_stopped=process_stopped,
-        pid=pid,
     )
+
+
+def _terminate_process_group(process: subprocess.Popen, sig: signal.Signals) -> None:
+    os.killpg(process.pid, sig)
+
+
+def _terminate_running_process(process: subprocess.Popen) -> None:
+    if os.name == "posix":
+        _terminate_process_group(process, POSIX_TERMINATE_SIGNAL)
+        return
+    process.terminate()
+
+
+def _kill_running_process(process: subprocess.Popen) -> None:
+    if os.name == "posix":
+        _terminate_process_group(process, POSIX_KILL_SIGNAL)
+        return
+    process.kill()
 
 
 def terminate_workspace_process(process: subprocess.Popen) -> bool:
@@ -189,10 +244,7 @@ def terminate_workspace_process(process: subprocess.Popen) -> bool:
         return False
 
     try:
-        if os.name == "posix":
-            os.killpg(process.pid, signal.SIGTERM)
-        else:
-            process.terminate()
+        _terminate_running_process(process)
     except ProcessLookupError:
         return False
     except OSError:
@@ -206,10 +258,7 @@ def terminate_workspace_process(process: subprocess.Popen) -> bool:
         return True
     except subprocess.TimeoutExpired:
         try:
-            if os.name == "posix":
-                os.killpg(process.pid, signal.SIGKILL)
-            else:
-                process.kill()
+            _kill_running_process(process)
         except OSError:
             return True
         try:
