@@ -366,7 +366,7 @@ def _resolve_workspace_asset_roots(
     resolved_asset_roots = tuple(
         dict.fromkeys(
             root.expanduser().resolve()
-            for root in (robot_urdf_path.parent, *asset_roots)
+            for root in (*asset_roots, robot_urdf_path.parent)
         )
     )
     for root in resolved_asset_roots:

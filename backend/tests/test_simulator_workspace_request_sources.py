@@ -343,3 +343,59 @@ def test_workspace_request_from_files_accepts_xacro_source_path(tmp_path) -> Non
     )
 
     assert request.urdf_asset_path == "robot.urdf.xacro"
+
+
+def test_workspace_request_from_files_preserves_nested_urdf_source_path_with_explicit_asset_root(
+    tmp_path,
+) -> None:
+    asset_root = tmp_path / "scene"
+    robot_urdf_path = asset_root / "demo_description" / "urdf" / "robot.urdf"
+    mesh_path = asset_root / "demo_description" / "meshes" / "arm.stl"
+    robot_urdf_path.parent.mkdir(parents=True)
+    mesh_path.parent.mkdir(parents=True)
+    mesh_path.write_text("solid arm\nendsolid arm\n", encoding="utf-8")
+    urdf_xml = """
+<robot name="custom_robot">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="../meshes/arm.stl"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>
+""".strip()
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    world_package_path = tmp_path / "world-package.json"
+    write_world_package_file(world_package_path, make_world_package(urdf_xml))
+
+    request = build_workspace_request_from_files(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        asset_roots=(asset_root,),
+    )
+
+    assert request.urdf_asset_path == "demo_description/urdf/robot.urdf"
+    assert [asset.path for asset in request.mesh_assets] == [
+        "demo_description/meshes/arm.stl",
+    ]
+
+
+def test_workspace_request_from_files_preserves_nested_xacro_source_path_with_explicit_asset_root(
+    tmp_path,
+) -> None:
+    asset_root = tmp_path / "scene"
+    robot_source_path = asset_root / "demo_description" / "urdf" / "robot.urdf.xacro"
+    robot_source_path.parent.mkdir(parents=True)
+    urdf_xml = "<robot name=\"custom_robot\"><link name=\"base_link\"/></robot>"
+    robot_source_path.write_text(urdf_xml, encoding="utf-8")
+    world_package_path = tmp_path / "world-package.json"
+    write_world_package_file(world_package_path, make_world_package(urdf_xml))
+
+    request = build_workspace_request_from_files(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_source_path,
+        asset_roots=(asset_root,),
+    )
+
+    assert request.urdf_asset_path == "demo_description/urdf/robot.urdf.xacro"
