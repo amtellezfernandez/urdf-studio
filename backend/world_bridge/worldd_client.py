@@ -92,8 +92,10 @@ def _safe_float(
         if strict:
             raise ValueError(f"Invalid float for {field_name}: {value!r}")
         return default_value
-    if strict and not math.isfinite(parsed):
-        raise ValueError(f"Non-finite float for {field_name}: {value!r}")
+    if not math.isfinite(parsed):
+        if strict:
+            raise ValueError(f"Non-finite float for {field_name}: {value!r}")
+        return default_value
     return parsed
 
 

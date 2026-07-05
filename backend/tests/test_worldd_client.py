@@ -272,6 +272,51 @@ def test_parse_worldd_session_payload_strict_rejects_invalid_numeric_fields() ->
     raise AssertionError("Expected strict parser to reject invalid numeric field")
 
 
+def test_parse_worldd_session_payload_coerces_non_finite_joint_values_to_zero() -> None:
+    parsed = parse_worldd_session_payload(
+        {
+            "session_id": "wbs-00000001",
+            "robot_name": "so101",
+            "camera_ids": ["base_cam"],
+            "created_at_ns": TEST_CREATED_AT_NS,
+            "updated_at_ns": TEST_UPDATED_AT_NS,
+            "scenario_duration_ms": TEST_SCENARIO_DURATION_MS,
+            "scenario_time_ms": TEST_SCENARIO_TIME_MS,
+            "joint_state_rad": {
+                "joint_1": float("nan"),
+                "joint_2": float("inf"),
+            },
+            "last_command_sequence": TEST_LAST_COMMAND_SEQUENCE,
+            "recent_events": [],
+        }
+    )
+
+    assert parsed.joint_state == {"joint_1": 0.0, "joint_2": 0.0}
+
+
+def test_parse_worldd_session_payload_strict_rejects_non_finite_joint_values() -> None:
+    try:
+        parse_worldd_session_payload(
+            {
+                "session_id": "wbs-00000001",
+                "robot_name": "so101",
+                "camera_ids": ["base_cam"],
+                "created_at_ns": TEST_CREATED_AT_NS,
+                "updated_at_ns": TEST_UPDATED_AT_NS,
+                "scenario_duration_ms": TEST_SCENARIO_DURATION_MS,
+                "scenario_time_ms": TEST_SCENARIO_TIME_MS,
+                "joint_state_rad": {"joint_1": float("nan")},
+                "last_command_sequence": TEST_LAST_COMMAND_SEQUENCE,
+                "recent_events": [],
+            },
+            strict=True,
+        )
+    except ValueError as exc:
+        assert "joint_state_rad.joint_1" in str(exc)
+        return
+    raise AssertionError("Expected strict parser to reject non-finite joint values")
+
+
 def test_parse_worldd_session_payload_strict_rejects_non_object_event_payload() -> None:
     try:
         parse_worldd_session_payload(
