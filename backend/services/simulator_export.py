@@ -19,11 +19,17 @@ from backend.services.world_layout_static_transfer import (
     check_genesis_transfer,
     check_mujoco_transfer,
 )
+from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 
 INVALID_MJCF_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]")
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
 SimulatorExportTarget = Literal["mujoco", "genesis"]
+_SMOKE_LOAD_ERROR_TYPES = (
+    WorldLayoutTransferError,
+    OSError,
+    RuntimeError,
+)
 
 
 @dataclass(frozen=True)
@@ -307,7 +313,7 @@ def export_rollout_trace_to_mujoco_mjcf(
                 smoke_error = "MuJoCo exported primitive verification failed."
         except ImportError:
             warnings.append("MuJoCo is not installed; MJCF XML was generated but not smoke-loaded.")
-        except Exception as exc:
+        except _SMOKE_LOAD_ERROR_TYPES as exc:
             smoke_error = str(exc)
     else:
         warnings.append("MuJoCo smoke load skipped for replay labeling throughput.")
@@ -407,7 +413,7 @@ def export_rollout_trace_to_genesis_scene(
                 smoke_error = "Genesis exported primitive verification failed."
         except ImportError:
             warnings.append("Genesis is not installed; Genesis scene JSON was generated but not smoke-built.")
-        except Exception as exc:
+        except _SMOKE_LOAD_ERROR_TYPES as exc:
             smoke_error = str(exc)
     else:
         warnings.append("Genesis smoke build skipped for replay labeling throughput.")

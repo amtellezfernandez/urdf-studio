@@ -5,6 +5,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from backend.models.physical_state import ActionToken, ConstraintToken, PhysicalEntity, PhysicalStateFrame
+import backend.services.simulator_export as simulator_export_module
 from backend.services.correction_planner import build_repair_plan, rollout_correction_branch
 from backend.services.executability_audit import audit_physical_rollout_trace, audit_physical_state_frame
 from backend.services.physical_rollout_baseline import rollout_action
@@ -176,6 +177,15 @@ def _pallet_push_frame() -> PhysicalStateFrame:
     )
 
 
+def _wait_trace():
+    return rollout_action(
+        _pallet_push_frame(),
+        ActionToken(action_id="wait", action_type="wait", params={"duration_ms": 0}),
+        step_count=1,
+        step_ms=1,
+    )
+
+
 def test_contact_stability_failure_generates_repair_plan_and_exportable_branch(tmp_path) -> None:
     action = ActionToken(
         action_id="push-pallet-to-dock",
@@ -267,6 +277,38 @@ def test_mujoco_export_converts_studio_y_up_frame_to_simulator_z_up() -> None:
     assert export_status.metrics["mujoco_collision_mismatch_count"] == 0
 
 
+def test_mujoco_export_records_expected_smoke_errors(monkeypatch) -> None:
+    def _raise_smoke_error(*_args, **_kwargs):
+        raise RuntimeError("mujoco smoke crashed")
+
+    monkeypatch.setattr(
+        simulator_export_module,
+        "check_mujoco_transfer",
+        _raise_smoke_error,
+    )
+
+    mjcf, export_status = export_rollout_trace_to_mujoco_mjcf(_wait_trace())
+
+    assert "<mujoco" in mjcf
+    assert export_status.success is False
+    assert export_status.target == "mujoco"
+    assert export_status.error == "mujoco smoke crashed"
+
+
+def test_mujoco_export_preserves_unexpected_smoke_errors(monkeypatch) -> None:
+    def _raise_unexpected_error(*_args, **_kwargs):
+        raise KeyError("unexpected mujoco smoke bookkeeping failure")
+
+    monkeypatch.setattr(
+        simulator_export_module,
+        "check_mujoco_transfer",
+        _raise_unexpected_error,
+    )
+
+    with pytest.raises(KeyError, match="unexpected mujoco smoke bookkeeping failure"):
+        export_rollout_trace_to_mujoco_mjcf(_wait_trace())
+
+
 def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_path) -> None:
     frame = PhysicalStateFrame(
         frame_id="genesis-frame-map-smoke",
@@ -322,3 +364,35 @@ def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_pat
         assert export_status.metrics["genesis_max_position_error_m"] <= 1e-6
         assert export_status.metrics["genesis_max_size_error_m"] <= 1e-6
         assert export_status.metrics["genesis_collision_mismatch_count"] == 0
+
+
+def test_genesis_export_records_expected_smoke_errors(monkeypatch) -> None:
+    def _raise_smoke_error(*_args, **_kwargs):
+        raise RuntimeError("genesis smoke crashed")
+
+    monkeypatch.setattr(
+        simulator_export_module,
+        "check_genesis_transfer",
+        _raise_smoke_error,
+    )
+
+    scene, export_status = export_rollout_trace_to_genesis_scene(_wait_trace())
+
+    assert scene["target"] == "genesis"
+    assert export_status.success is False
+    assert export_status.target == "genesis"
+    assert export_status.error == "genesis smoke crashed"
+
+
+def test_genesis_export_preserves_unexpected_smoke_errors(monkeypatch) -> None:
+    def _raise_unexpected_error(*_args, **_kwargs):
+        raise KeyError("unexpected genesis smoke bookkeeping failure")
+
+    monkeypatch.setattr(
+        simulator_export_module,
+        "check_genesis_transfer",
+        _raise_unexpected_error,
+    )
+
+    with pytest.raises(KeyError, match="unexpected genesis smoke bookkeeping failure"):
+        export_rollout_trace_to_genesis_scene(_wait_trace())
