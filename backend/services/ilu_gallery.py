@@ -70,7 +70,15 @@ from backend.services.ilu_urdf import (
 )
 
 
-NODE_BIN = os.getenv("URDF_NODE_BIN", "node").strip() or "node"
+def _read_env_str(name: str, default: str) -> str:
+    raw = os.getenv(name)
+    if not isinstance(raw, str):
+        return default
+    normalized = raw.strip()
+    return normalized or default
+
+
+NODE_BIN = _read_env_str("URDF_NODE_BIN", "node")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ILU_UPSTREAM_DIST_CLI_PATH = REPO_ROOT.parent / "i-love-urdf" / "dist" / "cli.js"
 ILU_INSTALLED_DIST_CLI_PATH = REPO_ROOT / "node_modules" / "i-love-urdf" / "dist" / "cli.js"
@@ -90,14 +98,14 @@ ILU_GALLERY_INSPECT_COMMAND = "inspect-repo"
 ILU_GALLERY_RENDER_COMMAND = "gallery-render"
 ILU_GALLERY_BUILD_PUBLISH_COMMAND = "gallery-build-publish"
 ILU_GALLERY_PREVIEW_QUERY_FLAG = "1"
-ILU_GALLERY_RENDER_APP_URL = os.getenv("URDF_GALLERY_RENDER_APP_URL", "http://127.0.0.1:4173")
-NPM_BIN = os.getenv("URDF_NPM_BIN", "npm").strip() or "npm"
+ILU_GALLERY_RENDER_APP_URL = _read_env_str("URDF_GALLERY_RENDER_APP_URL", "http://127.0.0.1:4173")
+NPM_BIN = _read_env_str("URDF_NPM_BIN", "npm")
 ILU_GALLERY_RENDER_BUILD_TIMEOUT_SECONDS = 300
 ILU_GALLERY_RENDER_APP_READY_TIMEOUT_SECONDS = 60
 ILU_GALLERY_RENDER_APP_PROBE_TIMEOUT_SECONDS = 2
 ILU_GALLERY_RENDER_APP_POLL_INTERVAL_SECONDS = 0.25
 ILU_GALLERY_RENDER_APP_SHUTDOWN_TIMEOUT_SECONDS = 5
-HTTP_USER_AGENT = os.getenv("URDF_STUDIO_HTTP_USER_AGENT", "urdf-studio/1.0")
+HTTP_USER_AGENT = _read_env_str("URDF_STUDIO_HTTP_USER_AGENT", "urdf-studio/1.0")
 GALLERY_DOCS_BASE_URL = "https://cdn.jsdelivr.net/gh/urdf-studio/urdf-robot-gallery@main/docs"
 GALLERY_RAW_BASE_URL = "https://raw.githubusercontent.com/urdf-studio/urdf-robot-gallery/main/docs"
 GALLERY_ROBOTS_MANIFEST_URL = f"{GALLERY_RAW_BASE_URL}/robots.json"
@@ -173,7 +181,7 @@ def _catalog_from_snapshot(snapshot: object) -> _GalleryCatalog:
 
 
 def _resolve_ilu_cli_path() -> Path:
-    preferred_source = os.getenv(ILU_DIST_SOURCE_ENV, "").strip().lower()
+    preferred_source = _read_env_str(ILU_DIST_SOURCE_ENV, "").lower()
     candidate_paths = (
         (ILU_INSTALLED_DIST_CLI_PATH, ILU_UPSTREAM_DIST_CLI_PATH)
         if preferred_source == ILU_DIST_SOURCE_INSTALLED
@@ -370,7 +378,7 @@ def _wait_for_gallery_render_app_ready(base_url: str, process: subprocess.Popen[
 
 @contextmanager
 def _resolve_gallery_render_app_url() -> str:
-    explicit_url = os.getenv("URDF_GALLERY_RENDER_APP_URL", "").strip()
+    explicit_url = _read_env_str("URDF_GALLERY_RENDER_APP_URL", "")
     if explicit_url:
         yield explicit_url
         return
