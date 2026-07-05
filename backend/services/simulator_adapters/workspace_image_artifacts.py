@@ -98,6 +98,9 @@ def _expected_camera_images(
             f"camera image artifact contract count mismatch in {directory}: "
             f"{len(camera_ids)} camera id(s), expected {expected_count}"
         )
+    duplicate_camera_ids_error = _duplicate_camera_ids_error(camera_ids, directory=directory)
+    if duplicate_camera_ids_error is not None:
+        return duplicate_camera_ids_error
     contract_membership_error = _camera_contract_membership_error(
         camera_ids=camera_ids,
         contracts=contracts,
@@ -202,3 +205,22 @@ def _camera_contract_membership_error(
             f"{', '.join(extra_contract_ids)}"
         )
     return None
+
+
+def _duplicate_camera_ids_error(
+    camera_ids: tuple[str, ...],
+    *,
+    directory: Path,
+) -> str | None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for camera_id in camera_ids:
+        if camera_id in seen and camera_id not in duplicates:
+            duplicates.append(camera_id)
+        seen.add(camera_id)
+    if not duplicates:
+        return None
+    return (
+        f"camera image artifact expectations contain duplicate camera id(s) in {directory}: "
+        f"{', '.join(duplicates)}"
+    )

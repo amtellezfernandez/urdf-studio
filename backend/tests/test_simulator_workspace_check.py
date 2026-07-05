@@ -829,6 +829,23 @@ def test_workspace_check_rejects_camera_image_contract_count_drift(tmp_path) -> 
     )
 
 
+def test_workspace_check_rejects_duplicate_camera_image_ids(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    _write_visible_png(camera_dir / "01_scene_camera.png")
+    _write_visible_png(camera_dir / "02_scene_camera.png")
+    contract = _camera_contract()
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 2),),
+        camera_ids=("scene-camera", "scene-camera"),
+        camera_contracts={"scene-camera": contract},
+    )
+
+    assert validate_workspace_image_artifacts(expectations) == (
+        f"camera image artifact expectations contain duplicate camera id(s) in {camera_dir}: "
+        "scene-camera"
+    )
+
+
 def test_workspace_check_rejects_non_directory_camera_artifact_path(tmp_path) -> None:
     camera_dir = tmp_path / "cameras"
     camera_dir.write_text("not a directory\n", encoding="utf-8")
