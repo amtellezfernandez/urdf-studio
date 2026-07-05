@@ -224,7 +224,7 @@ def _require_object(value: JsonValue, path: str) -> JsonObject:
 
 def _require_list(payload: JsonObject, key: str) -> list[JsonValue]:
     value = payload.get(key)
-    if not isinstance(value, list) or len(value) == 0:
+    if not isinstance(value, list) or not value:
         raise ValueError(f"{key} must be a non-empty list")
     return value
 
