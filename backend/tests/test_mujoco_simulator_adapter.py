@@ -27,6 +27,7 @@ from backend.services.simulator_adapters.params import (
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     WORKSPACE_LAUNCH_FRAME_MAP,
 )
+from backend.services.simulator_adapters.plugin import get_plugin
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 
 
@@ -293,20 +294,51 @@ def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
 
 
 @pytest.mark.parametrize(
+    "simulator_id",
+    ["mujoco", "mjlab"],
+)
+def test_mjcf_plugin_prepare_workspace_uses_prepare_mujoco_workspace(
+    monkeypatch,
+    tmp_path: Path,
+    simulator_id: str,
+) -> None:
+    fixture = _make_prepared_workspace_fixture(tmp_path)
+    robot_mjcf_path = fixture.robot_dir / "robot.xml"
+    robot_mjcf_path.write_text(DEMO_MJCF, encoding="utf-8")
+    expected_response = object()
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.mujoco.prepare_mujoco_workspace",
+        lambda request, *, simulator_id: mujoco_adapter.PreparedMujocoWorkspace(
+            shared_workspace=fixture.prepared,
+            mjcf_path=robot_mjcf_path,
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_process.start_prepared_workspace_process",
+        lambda **_kwargs: expected_response,
+    )
+
+    response = get_plugin(simulator_id).prepare_workspace(_request())
+
+    assert response is expected_response
+
+
+@pytest.mark.parametrize(
     "simulator_id,expected_module_name",
     [
         ("mujoco", MUJOCO_WORKSPACE_PROCESS_PARAMS.module_name),
         ("mjlab", MJLAB_WORKSPACE_PROCESS_PARAMS.module_name),
     ],
 )
-def test_mujoco_workspace_launch_context_uses_plugin_runtime_spec(
+def test_mjcf_plugin_require_workspace_process_uses_expected_module(
     simulator_id: str,
     expected_module_name: str,
 ) -> None:
-    launch_context = mujoco_adapter._mujoco_workspace_launch_context(simulator_id)
+    plugin = get_plugin(simulator_id)
 
-    assert launch_context.runtime_spec.simulator_id == simulator_id
-    assert launch_context.workspace_process.module_name == expected_module_name
+    assert plugin.as_runtime_spec().simulator_id == simulator_id
+    assert plugin.require_workspace_process().module_name == expected_module_name
 
 
 def test_stage_mjcf_mesh_assets_disambiguates_duplicate_basenames(tmp_path: Path) -> None:

@@ -234,16 +234,45 @@ class DirectUrdfSimulatorPlugin(SimulatorPlugin):
 class MjcfSimulatorPlugin(SimulatorPlugin):
     _abstract = True
 
+    def prepare_workspace_package(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+    ):
+        from backend.services.simulator_adapters.mujoco import prepare_mujoco_workspace
+
+        return prepare_mujoco_workspace(
+            request,
+            simulator_id=self.simulator_id,
+        )
+
     def prepare_workspace(
         self,
         request: SimulatorWorkspacePrepareRequest,
     ) -> SimulatorWorkspacePrepareResponse:
-        from backend.services.simulator_adapters.mujoco import start_mujoco_workspace
+        from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace
+        from backend.services.simulator_adapters.mujoco import _mujoco_error
+        from backend.services.simulator_adapters.workspace_process import (
+            start_prepared_workspace_process,
+        )
 
-        return start_mujoco_workspace(
-            request,
-            simulator_id=self.simulator_id,
+        prepared: PreparedMujocoWorkspace = self.prepare_workspace_package(request)
+        shared = prepared.shared_workspace
+        workspace_process = self.require_workspace_process()
+        return start_prepared_workspace_process(
+            runtime_spec=self.as_runtime_spec(),
+            prepared=shared,
+            simulator_asset_path=prepared.mjcf_path,
+            simulator_asset_flag="--robot-mjcf",
+            workspace_process=workspace_process,
+            error=_mujoco_error,
             simulator_label=self.label,
+            extra_simulator_args=(
+                "--robot-urdf",
+                str(shared.robot_urdf_path),
+                "--simulator-id",
+                self.simulator_id,
+            ),
+            launch_id=request.launch_id,
         )
 
     def build_check_command(
@@ -260,10 +289,7 @@ class MjcfSimulatorPlugin(SimulatorPlugin):
         )
 
         workspace_process = self.require_workspace_process()
-        prepared: PreparedMujocoWorkspace = prepare_mujoco_workspace(
-            request,
-            simulator_id=self.simulator_id,
-        )
+        prepared: PreparedMujocoWorkspace = self.prepare_workspace_package(request)
         artifact_dir = prepared.shared_workspace.workspace_dir / "artifacts"
         camera_screenshot_dir = artifact_dir / "cameras"
         report_path = artifact_dir / "report.json"
