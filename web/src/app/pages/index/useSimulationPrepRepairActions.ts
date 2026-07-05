@@ -97,6 +97,51 @@ const rejectedRepeatedInertiaFixErrors = new Set<string>([
   REPEATED_INERTIA_MANUAL_FIX_DIFFERS_TOO_MUCH_ERROR,
 ]);
 
+const buildRepeatedInertiaGroupOutcome = (
+  resultError: string
+): RepeatedInertiaGroupOutcome => {
+  if (resultError === REPEATED_INERTIA_MANUAL_FIX_ALREADY_CONSISTENT_ERROR) {
+    return {
+      tone: "resolved",
+      message: "No changes applied. Group is already consistent.",
+    };
+  }
+  if (rejectedRepeatedInertiaFixErrors.has(resultError)) {
+    return {
+      tone: "warning",
+      message:
+        "No changes applied. Fix was rejected because it would worsen the result. Manual review required.",
+    };
+  }
+  return {
+    tone: "warning",
+    message: "No changes applied. This repeated group needs manual review.",
+  };
+};
+
+const canRunRobotMirrorFix = ({
+  fixMode,
+  hasSimulationPrepFixActionInFlight,
+  isLoading,
+  value,
+}: {
+  fixMode: RobotMirrorFixMode;
+  hasSimulationPrepFixActionInFlight: boolean;
+  isLoading: boolean;
+  value: UseRobotMirrorSelectionControllerResult["robotMirrorFixAvailability"]["value"];
+}): boolean => {
+  if (hasSimulationPrepFixActionInFlight || isLoading) {
+    return false;
+  }
+  if (fixMode === "orientation-only") {
+    return value.orientationOnlyAvailable;
+  }
+  if (fixMode === "center-only") {
+    return value.centerOnlyAvailable;
+  }
+  return true;
+};
+
 const waitForViewerPaint = async (): Promise<void> => {
   await new Promise<void>((resolve) => {
     window.setTimeout(resolve, 0);
@@ -164,35 +209,16 @@ export const useSimulationPrepRepairActions = ({
         });
 
         if (result.ok === false) {
+          const outcome = buildRepeatedInertiaGroupOutcome(result.error);
           if (result.error === REPEATED_INERTIA_MANUAL_FIX_ALREADY_CONSISTENT_ERROR) {
             setRepeatedInertiaResolvedGroupKeys((current) =>
               current.includes(groupKey) ? current : [...current, groupKey]
             );
-            setRepeatedInertiaOutcomeByGroupKey((current) => ({
-              ...current,
-              [groupKey]: {
-                tone: "resolved",
-                message: "No changes applied. Group is already consistent.",
-              },
-            }));
-          } else if (rejectedRepeatedInertiaFixErrors.has(result.error)) {
-            setRepeatedInertiaOutcomeByGroupKey((current) => ({
-              ...current,
-              [groupKey]: {
-                tone: "warning",
-                message:
-                  "No changes applied. Fix was rejected because it would worsen the result. Manual review required.",
-              },
-            }));
-          } else {
-            setRepeatedInertiaOutcomeByGroupKey((current) => ({
-              ...current,
-              [groupKey]: {
-                tone: "warning",
-                message: "No changes applied. This repeated group needs manual review.",
-              },
-            }));
           }
+          setRepeatedInertiaOutcomeByGroupKey((current) => ({
+            ...current,
+            [groupKey]: outcome,
+          }));
           toast.error(result.error);
           return;
         }
@@ -306,16 +332,14 @@ export const useSimulationPrepRepairActions = ({
 
   const runRobotMirrorFix = useCallback(
     async (fixMode: RobotMirrorFixMode) => {
-      if (hasSimulationPrepFixActionInFlight || robotMirrorFixAvailability.isLoading) {
-        return;
-      }
       if (
-        fixMode === "orientation-only" &&
-        !robotMirrorFixAvailability.value.orientationOnlyAvailable
+        !canRunRobotMirrorFix({
+          fixMode,
+          hasSimulationPrepFixActionInFlight,
+          isLoading: robotMirrorFixAvailability.isLoading,
+          value: robotMirrorFixAvailability.value,
+        })
       ) {
-        return;
-      }
-      if (fixMode === "center-only" && !robotMirrorFixAvailability.value.centerOnlyAvailable) {
         return;
       }
 
