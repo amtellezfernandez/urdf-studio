@@ -12,6 +12,14 @@ from typing import Literal
 GitHubServerAuthMode = Literal["env-token", "gh-cli", "none"]
 
 
+def _read_env_str(name: str, default: str) -> str:
+    raw = os.getenv(name)
+    if not isinstance(raw, str):
+        return default
+    normalized = raw.strip()
+    return normalized or default
+
+
 def _read_float_env(name: str, default: float, *, minimum: float | None = None) -> float:
     raw = os.getenv(name)
     if raw is None:
@@ -26,13 +34,12 @@ def _read_float_env(name: str, default: float, *, minimum: float | None = None) 
         return default
     return value
 
-
-GH_BIN = os.getenv("URDF_GH_BIN", "gh").strip() or "gh"
+GH_BIN = _read_env_str("URDF_GH_BIN", "gh")
 GH_AUTH_TIMEOUT_SECONDS = _read_float_env("URDF_GH_AUTH_TIMEOUT_SECONDS", 5.0, minimum=0.0)
 GH_AUTH_CACHE_TTL_SECONDS = _read_float_env("URDF_GH_AUTH_CACHE_TTL_SECONDS", 60.0, minimum=0.0)
-GH_AUTH_HOST = os.getenv("URDF_GH_AUTH_HOST", "github.com").strip() or "github.com"
+GH_AUTH_HOST = _read_env_str("URDF_GH_AUTH_HOST", "github.com")
 GH_HOSTS_PATH = Path(
-    os.getenv("URDF_GH_HOSTS_PATH", str(Path.home() / ".config" / "gh" / "hosts.yml"))
+    _read_env_str("URDF_GH_HOSTS_PATH", str(Path.home() / ".config" / "gh" / "hosts.yml"))
 )
 
 
