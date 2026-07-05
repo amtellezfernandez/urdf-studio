@@ -32,7 +32,7 @@ from backend.services.simulator_adapters.workspace_package import (
     prepare_simulator_workspace_package,
 )
 from backend.services.simulator_adapters.workspace_process import (
-    build_workspace_prepare_response,
+    finalize_workspace_prepare_response,
     start_workspace_process_until_ready,
 )
 
@@ -122,7 +122,7 @@ def start_blender_workspace(
         launch_id=request.launch_id,
     )
     runtime_spec = plugin.as_runtime_spec()
-    return build_workspace_prepare_response(
+    return finalize_workspace_prepare_response(
         runtime_spec=runtime_spec,
         prepared=prepared,
         process=process,

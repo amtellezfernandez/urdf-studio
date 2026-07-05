@@ -7,6 +7,7 @@ import pytest
 
 from backend.services.simulator_adapters import workspace_process
 from backend.services.ilu_urdf import BundleMeshAssetsResult
+from backend.models.simulator_runtime import SimulatorRuntimeSpec, SimulatorTransferSpec
 from backend.services.simulator_adapters.params import (
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
     WORKSPACE_LAUNCH_FRAME_MAP,
@@ -14,6 +15,7 @@ from backend.services.simulator_adapters.params import (
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.simulator_adapters.workspace_process import (
     build_workspace_process_command,
+    start_prepared_workspace_process,
     start_workspace_process_until_ready,
 )
 from backend.services.simulator_adapters.workspace_launches import cancel_workspace_launch
@@ -283,3 +285,65 @@ def test_start_workspace_process_until_ready_preserves_workspace_when_cancelled_
         )
 
     assert prepared.workspace_dir.exists()
+
+
+def test_start_prepared_workspace_process_terminates_process_when_response_build_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    prepared = _prepared_workspace(tmp_path)
+
+    class _FakeProcess:
+        pid = 4321
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+    process = _FakeProcess()
+    terminated: list[_FakeProcess] = []
+
+    monkeypatch.setattr(
+        workspace_process,
+        "start_workspace_process_until_ready",
+        lambda **_kwargs: process,
+    )
+    monkeypatch.setattr(
+        workspace_process,
+        "build_workspace_prepare_response",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("response exploded")),
+    )
+
+    def fake_terminate_workspace_process(target) -> bool:
+        terminated.append(target)
+        target.alive = False
+        return True
+
+    monkeypatch.setattr(
+        workspace_process,
+        "terminate_workspace_process",
+        fake_terminate_workspace_process,
+    )
+
+    with pytest.raises(RuntimeError, match="response exploded"):
+        start_prepared_workspace_process(
+            runtime_spec=SimulatorRuntimeSpec(
+                simulator_id="pybullet",
+                label="PyBullet",
+                transfer=SimulatorTransferSpec(
+                    robot_asset_format="urdf",
+                    scene_asset_format="urdf",
+                    transfer_strategy="direct",
+                ),
+            ),
+            prepared=prepared,
+            simulator_asset_path=prepared.robot_urdf_path,
+            simulator_asset_flag="--robot-urdf",
+            workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
+            error=ValueError,
+        )
+
+    assert terminated == [process]
+    assert process.poll() == 0

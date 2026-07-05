@@ -322,6 +322,30 @@ def build_workspace_prepare_response(
     )
 
 
+def finalize_workspace_prepare_response(
+    *,
+    runtime_spec: SimulatorRuntimeSpec,
+    prepared: PreparedSimulatorWorkspace,
+    process: subprocess.Popen,
+    command: Sequence[str],
+    log_path: Path,
+    simulator_asset_path: Path,
+) -> SimulatorWorkspacePrepareResponse:
+    try:
+        return build_workspace_prepare_response(
+            runtime_spec=runtime_spec,
+            prepared=prepared,
+            process=process,
+            command=command,
+            log_path=log_path,
+            simulator_asset_path=simulator_asset_path,
+        )
+    except BaseException:
+        if process.poll() is None:
+            terminate_workspace_process(process)
+        raise
+
+
 def start_prepared_workspace_process(
     *,
     runtime_spec: SimulatorRuntimeSpec,
@@ -353,7 +377,7 @@ def start_prepared_workspace_process(
         error=error,
         launch_id=launch_id,
     )
-    return build_workspace_prepare_response(
+    return finalize_workspace_prepare_response(
         runtime_spec=runtime_spec,
         prepared=prepared,
         process=process,

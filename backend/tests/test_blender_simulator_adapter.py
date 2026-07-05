@@ -1316,6 +1316,82 @@ def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path
     assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
 
 
+def test_start_blender_workspace_terminates_process_when_response_build_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    workspace_dir = tmp_path / "workspace"
+    robot_dir = workspace_dir / "robot"
+    robot_dir.mkdir(parents=True)
+    world_package_path = workspace_dir / "world-package.json"
+    robot_urdf_path = robot_dir / "robot.urdf"
+    world_package_path.write_text("{}", encoding="utf-8")
+    robot_urdf_path.write_text("<robot name=\"demo\"><link name=\"base\"/></robot>", encoding="utf-8")
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content=robot_urdf_path.read_text(encoding="utf-8"),
+            out_path=str(robot_urdf_path),
+            assets_root=str(robot_dir / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+    )
+
+    class _FakeProcess:
+        pid = 4321
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+    process = _FakeProcess()
+    terminated: list[_FakeProcess] = []
+
+    monkeypatch.setattr(blender_adapter, "resolve_blender_executable", lambda: "/bin/blender")
+    monkeypatch.setattr(
+        blender_adapter,
+        "prepare_blender_workspace_package",
+        lambda request: prepared,
+    )
+    monkeypatch.setattr(
+        blender_adapter,
+        "start_workspace_process_until_ready",
+        lambda **_kwargs: process,
+    )
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_process.build_workspace_prepare_response",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("response exploded")),
+    )
+
+    def fake_terminate_workspace_process(target) -> bool:
+        terminated.append(target)
+        target.alive = False
+        return True
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_process.terminate_workspace_process",
+        fake_terminate_workspace_process,
+    )
+
+    with pytest.raises(RuntimeError, match="response exploded"):
+        blender_adapter.start_blender_workspace(
+            SimulatorWorkspacePrepareRequest(
+                world_package=make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>"),
+            )
+        )
+
+    assert terminated == [process]
+    assert process.poll() == 0
+
+
 def test_blender_workspace_command_uses_expected_launch_shape(tmp_path: Path) -> None:
     workspace_dir = tmp_path / "workspace"
     world_package_path = workspace_dir / "world-package.json"
