@@ -16,6 +16,7 @@ from backend.services.simulator_adapters.camera_transfer import (
     build_sim_camera_specs,
     studio_camera_to_render_view_rotation,
 )
+from backend.services.simulator_adapters import camera_transfer as camera_transfer_module
 from backend.services.simulator_adapters.camera_conventions import (
     OPENGL_CAMERA_FORWARD_LOCAL_XYZ,
     OPENGL_CAMERA_UP_LOCAL_XYZ,
@@ -241,6 +242,69 @@ def test_build_sim_camera_specs_rejects_invalid_explicit_intrinsics_fields(
     assert cameras == ()
     assert len(warnings) == 1
     assert "invalid pinhole intrinsics" in warnings[0]
+
+
+def test_build_sim_camera_specs_wraps_expected_robot_load_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text("<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>", encoding="utf-8")
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "scene camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {"width": 640, "height": 480, "fov_deg": 60},
+        }
+    ]
+
+    monkeypatch.setattr(
+        camera_transfer_module,
+        "_load_robot_for_camera_transfer",
+        lambda _path: (_ for _ in ()).throw(ValueError("bad robot model")),
+    )
+
+    with pytest.raises(ValueError, match="Camera transfer failed: Camera transfer could not load robot URDF: bad robot model"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
+
+    assert cameras == ()
+    assert warnings == ("Camera transfer could not load robot URDF: bad robot model",)
+
+
+def test_build_sim_camera_specs_propagates_unexpected_robot_load_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text("<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>", encoding="utf-8")
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "scene camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {"width": 640, "height": 480, "fov_deg": 60},
+        }
+    ]
+
+    monkeypatch.setattr(
+        camera_transfer_module,
+        "_load_robot_for_camera_transfer",
+        lambda _path: (_ for _ in ()).throw(RuntimeError("unexpected robot load failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected robot load failure"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
 
 
 def test_studio_camera_frame_maps_to_render_camera_frame() -> None:

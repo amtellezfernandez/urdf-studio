@@ -110,7 +110,7 @@ def build_sim_camera_specs(
             robot,
             world_package.world_snapshot.joint_positions,
         )
-    except Exception as exc:
+    except (ValueError, KeyError) as exc:
         warnings = (f"Camera transfer could not load robot URDF: {exc}",)
         if strict:
             raise _camera_transfer_error(warnings)
