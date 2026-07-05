@@ -92,16 +92,27 @@ export const useSimulationPrepPreflight = ({
   const hasPhysicsPreflightInputReady =
     hasLoadedFiles && physicsGenerationSourceContent.trim().length > 0;
 
+  const resetFramePreflightState = useCallback(() => {
+    framePreflightRequestIdRef.current += 1;
+    framePreflightRequestedSourceRef.current = null;
+    setFramePreflightSession(null);
+    setIsFramePreflightLoading(false);
+  }, []);
+
+  const resetPhysicsPreflightState = useCallback(() => {
+    physicsPreflightRequestIdRef.current += 1;
+    physicsPreflightRequestedSourceRef.current = null;
+    setPhysicsPreflightSession(null);
+    setIsPhysicsPreflightLoading(false);
+  }, []);
+
   const loadFramePreflight = useCallback(
     async ({
       force = false,
       sourceUrdf = vizUrdfContent,
     }: SimulationPrepPreflightLoadOptions = {}) => {
       if (sourceUrdf.trim().length === 0) {
-        framePreflightRequestIdRef.current += 1;
-        framePreflightRequestedSourceRef.current = null;
-        setFramePreflightSession(null);
-        setIsFramePreflightLoading(false);
+        resetFramePreflightState();
         return "skipped" as const;
       }
 
@@ -141,7 +152,7 @@ export const useSimulationPrepPreflight = ({
         }
       }
     },
-    [framePreflightSession, vizUrdfContent]
+    [framePreflightSession, resetFramePreflightState, vizUrdfContent]
   );
 
   const loadPhysicsPreflight = useCallback(
@@ -151,10 +162,7 @@ export const useSimulationPrepPreflight = ({
       sourceUrdf = physicsGenerationSourceContent,
     }: PhysicsPreflightLoadOptions = {}) => {
       if (!hasLoadedFiles || sourceUrdf.trim().length === 0) {
-        physicsPreflightRequestIdRef.current += 1;
-        physicsPreflightRequestedSourceRef.current = null;
-        setPhysicsPreflightSession(null);
-        setIsPhysicsPreflightLoading(false);
+        resetPhysicsPreflightState();
         return "skipped" as const;
       }
 
@@ -217,6 +225,7 @@ export const useSimulationPrepPreflight = ({
       packageRootsCacheKey,
       physicsGenerationSourceContent,
       physicsPreflightSession,
+      resetPhysicsPreflightState,
       urdfBasePath,
     ]
   );
@@ -251,11 +260,8 @@ export const useSimulationPrepPreflight = ({
     if (hasPhysicsPreflightInputReady) {
       return;
     }
-    physicsPreflightRequestIdRef.current += 1;
-    physicsPreflightRequestedSourceRef.current = null;
-    setPhysicsPreflightSession(null);
-    setIsPhysicsPreflightLoading(false);
-  }, [hasPhysicsPreflightInputReady]);
+    resetPhysicsPreflightState();
+  }, [hasPhysicsPreflightInputReady, resetPhysicsPreflightState]);
 
   useEffect(() => {
     if (!autoLoad) {
