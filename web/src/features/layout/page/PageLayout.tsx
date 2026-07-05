@@ -1,22 +1,16 @@
-import type { ComponentProps } from "react";
 import { PageShell, type PageShellProps } from "@/features/layout/page/PageShell";
 import { PageOverlays } from "@/features/layout/page/PageOverlays";
-import { PageDialogs } from "@/features/layout/page/PageDialogs";
+import { PageDialogs, type PageDialogsProps } from "@/features/layout/page/PageDialogs";
 import { WorkspacePanels } from "@/features/layout/page/WorkspacePanels";
+import type { LoadIssuesPanelProps } from "@/features/layout/page/pageLayoutTypes";
+import type { HealthActionPanelProps } from "@/features/layout/page/pageLayoutTypes";
+import type { PovCamerasOverlayProps } from "@/features/layout/page/pageLayoutTypes";
 
 export type PageLayoutProps = PageShellProps & {
-  loadIssuesPanelProps: ComponentProps<
-    typeof import("@/features/layout/page/LoadIssuesPanel").LoadIssuesPanel
-  >;
-  healthActionPanelProps: ComponentProps<
-    typeof import("@/features/layout/page/HealthActionPanel").HealthActionPanel
-  >;
-  povCamerasOverlayProps: ComponentProps<
-    typeof import("@/features/layout/page/PovCamerasOverlay").PovCamerasOverlay
-  >;
-  creationDialogsProps: ComponentProps<
-    typeof import("@/features/layout/page/CreationDialogs").CreationDialogs
-  >;
+  creationDialogsProps: PageDialogsProps["creationDialogsProps"];
+  healthActionPanelProps: HealthActionPanelProps;
+  loadIssuesPanelProps: LoadIssuesPanelProps;
+  povCamerasOverlayProps: PovCamerasOverlayProps;
 };
 
 export const PageLayout = ({

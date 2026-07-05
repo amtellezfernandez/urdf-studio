@@ -16,7 +16,7 @@ const HealthActionPanel = lazy(() =>
   }))
 );
 
-type PageOverlaysProps = {
+export type PageOverlaysProps = {
   povCamerasOverlayProps: ComponentProps<
     typeof import("@/features/layout/page/PovCamerasOverlay").PovCamerasOverlay
   >;

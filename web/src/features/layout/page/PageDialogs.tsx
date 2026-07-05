@@ -7,7 +7,7 @@ const CreationDialogs = lazy(() =>
   }))
 );
 
-type PageDialogsProps = {
+export type PageDialogsProps = {
   creationDialogsProps: ComponentProps<
     typeof import("@/features/layout/page/CreationDialogs").CreationDialogs
   >;
