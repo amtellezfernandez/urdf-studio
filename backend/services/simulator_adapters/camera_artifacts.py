@@ -46,10 +46,9 @@ def safe_artifact_name(value: str, *, default_name: str) -> str:
 def write_rgb_image(path: Path, image: np.ndarray) -> None:
     from PIL import Image
 
-    if image.ndim != 3 or image.shape[-1] < 3:
-        raise ValueError(f"Expected RGB image array, got shape {image.shape}.")
+    rgb_image = _rgb_uint8_image(image)
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(np.clip(image[..., :3], 0, 255).astype(np.uint8)).save(path)
+    Image.fromarray(rgb_image).save(path)
 
 
 def inspect_rgb_image(path: Path) -> ImageArtifactStats:
@@ -84,6 +83,12 @@ def validate_visible_rgb_image(
     if size_error:
         return size_error
     return _validate_image_visibility(path, stats=stats)
+
+
+def _rgb_uint8_image(image: np.ndarray) -> np.ndarray:
+    if image.ndim != 3 or image.shape[-1] < 3:
+        raise ValueError(f"Expected RGB image array, got shape {image.shape}.")
+    return np.clip(image[..., :3], 0, 255).astype(np.uint8)
 
 
 def _validate_image_size(
