@@ -4,6 +4,7 @@ import base64
 import builtins
 import os
 import shutil
+import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -586,6 +587,35 @@ def test_genesis_backend_resolution_rejects_generic_gpu_override_when_unavailabl
 
     with pytest.raises(ValueError, match="no Genesis GPU backend is available"):
         _resolve_genesis_backend(_FakeGenesis)
+
+
+def test_quadrants_backend_supported_returns_false_when_quadrants_module_is_missing(
+    monkeypatch,
+) -> None:
+    original_import = builtins.__import__
+
+    def _missing_import(name, *args, **kwargs):
+        if name == "quadrants" or name.startswith("quadrants."):
+            raise ImportError("quadrants unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _missing_import)
+
+    assert genesis_workspace_prepare._quadrants_backend_supported("cuda") is False
+
+
+def test_quadrants_backend_supported_preserves_unexpected_runtime_errors(
+    monkeypatch,
+) -> None:
+    quadrants_module = SimpleNamespace(cuda=object())
+    quadrants_misc_module = SimpleNamespace(
+        is_arch_supported=lambda _arch: (_ for _ in ()).throw(RuntimeError("unexpected backend probe failure"))
+    )
+    monkeypatch.setitem(sys.modules, "quadrants", quadrants_module)
+    monkeypatch.setitem(sys.modules, "quadrants.lang.misc", quadrants_misc_module)
+
+    with pytest.raises(RuntimeError, match="unexpected backend probe failure"):
+        genesis_workspace_prepare._quadrants_backend_supported("cuda")
 
 
 def test_genesis_workspace_camera_uses_native_gui_camera_when_visible() -> None:

@@ -116,7 +116,7 @@ def _quadrants_backend_supported(backend_name: str) -> bool:
 
         arch = getattr(qd, backend_name)
         return bool(is_arch_supported(arch))
-    except Exception:
+    except (ImportError, AttributeError):
         return False
 
 
