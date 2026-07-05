@@ -110,7 +110,6 @@ import { useRobotCameraCentering } from "@/features/viewer/useRobotCameraCenteri
 import { useRobotJointSync } from "@/features/viewer/useRobotJointSync";
 import { buildThumbnailCameraFrame } from "@/features/viewer/thumbnailCameraFrame";
 import { useUrdfFileContent } from "@/features/viewer/useUrdfFileContent";
-import { useDragModeEffects } from "@/features/viewer/useDragModeEffects";
 import {
   canUseViewerDragHandleMode,
   resolveEffectiveViewerDragMode,
@@ -2328,7 +2327,6 @@ export const Viewer3D = ({
       }),
     [isAssemblyWorkspace, simulationPrepPanelOpen]
   );
-  const canOpenDragModeMenu = canUseDragHandleMode;
   const effectiveDragMode = useMemo(
     () =>
       resolveEffectiveViewerDragMode({
@@ -2343,11 +2341,9 @@ export const Viewer3D = ({
     ]
   );
   const readOnlyNoticeShownAtRef = useRef<number | null>(null);
-  const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
   useEffect(() => {
     if (!canUseDragHandleMode && dragMode !== "move-joints") {
       setDragMode("move-joints");
-      setIsDragModeMenuOpen(false);
     }
   }, [canUseDragHandleMode, dragMode]);
 
@@ -3222,7 +3218,6 @@ export const Viewer3D = ({
     setIsObjectToolsOpen((previous) => !previous);
   }
   function selectDragMode(nextDragMode: DragMode) {
-    setIsDragModeMenuOpen(false);
     setDragMode(nextDragMode);
   }
   const activeRobotUuidRef = useRef<string | null>(null);
@@ -4231,11 +4226,6 @@ export const Viewer3D = ({
     robotFile: urdfFile,
   });
 
-  useDragModeEffects({
-    isDragModeMenuOpen,
-    setIsDragModeMenuOpen,
-  });
-
   usePlaybackNotifications({
     animationFrames,
     isPlaying,
@@ -4586,12 +4576,10 @@ export const Viewer3D = ({
         {viewerUi.showTopRightTools && (
           <ViewerTopTools
             activeWheelDriveCount={activeStudioWheelDriveCount}
-            canOpenDragModeMenu={canOpenDragModeMenu}
             canUseDragHandleMode={canUseDragHandleMode}
             dragMode={effectiveDragMode}
             hasSelectedWorldObject={Boolean(selectedWorldObject)}
             hasStudioWheelDrive={hasStudioWheelDrive}
-            isDragModeMenuOpen={isDragModeMenuOpen}
             isFollowingOrbit={isFollowingOrbit}
             isObjectToolsOpen={isObjectToolsOpen}
             isReadOnly={readOnlyMode}
@@ -4608,7 +4596,6 @@ export const Viewer3D = ({
             onObjectToolsToggle={toggleObjectTools}
             onResetPose={handleResetPoseWithGlobalView}
             onStopOrbitFollow={stopOrbitFollow}
-            onToggleDragModeMenu={() => setIsDragModeMenuOpen((previous) => !previous)}
             onToggleWheelDriveMode={toggleWheelDriveMode}
             onToggleWheelRoles={toggleWheelRoles}
             onWheelDriveJointToggle={handleToggleWheelDriveJoint}

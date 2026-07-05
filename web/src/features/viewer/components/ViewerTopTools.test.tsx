@@ -10,12 +10,10 @@ const createProps = (
   overrides: Partial<ViewerTopToolsProps> = {}
 ): ViewerTopToolsProps => ({
   activeWheelDriveCount: 0,
-  canOpenDragModeMenu: true,
   canUseDragHandleMode: true,
   dragMode: "drag-handle",
   hasSelectedWorldObject: false,
   hasStudioWheelDrive: false,
-  isDragModeMenuOpen: true,
   isFollowingOrbit: false,
   isObjectToolsOpen: false,
   isReadOnly: false,
@@ -32,7 +30,6 @@ const createProps = (
   onObjectToolsToggle: vi.fn(),
   onResetPose: vi.fn(),
   onStopOrbitFollow: vi.fn(),
-  onToggleDragModeMenu: vi.fn(),
   onToggleWheelDriveMode: vi.fn(),
   onToggleWheelRoles: vi.fn(),
   onWheelDriveJointToggle: vi.fn(),
@@ -55,14 +52,14 @@ describe("ViewerTopTools", () => {
       .IS_REACT_ACT_ENVIRONMENT = true;
   });
 
-  it("shows both drag modes without clipping the dropdown", async () => {
+  it("shows both drag modes directly", async () => {
     const props = createProps();
     const { container, root } = await renderViewerTopTools(props);
 
     const toolbar = container.firstElementChild;
     expect(toolbar?.className).toContain("overflow-visible");
     expect(toolbar?.className).not.toContain("overflow-y-hidden");
-    expect(container.textContent).toContain("Drag:");
+    expect(container.textContent).toContain("Drag");
     expect(container.textContent).toContain("Move Joints");
     expect(container.textContent).toContain("Drag Handle");
 
@@ -75,6 +72,21 @@ describe("ViewerTopTools", () => {
       moveJointsButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(props.onDragModeSelect).toHaveBeenCalledWith("move-joints");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps move joints visible when drag handles are unavailable", async () => {
+    const props = createProps({
+      canUseDragHandleMode: false,
+      dragMode: "move-joints",
+    });
+    const { container, root } = await renderViewerTopTools(props);
+
+    expect(container.textContent).toContain("Move Joints");
+    expect(container.textContent).not.toContain("Drag Handle");
 
     await act(async () => {
       root.unmount();

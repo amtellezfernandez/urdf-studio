@@ -12,12 +12,10 @@ type WorldObjectEditMode = "move" | "rotate" | "resize";
 
 type ViewerTopToolsProps = {
   activeWheelDriveCount: number;
-  canOpenDragModeMenu: boolean;
   canUseDragHandleMode: boolean;
   dragMode: DragMode;
   hasSelectedWorldObject: boolean;
   hasStudioWheelDrive: boolean;
-  isDragModeMenuOpen: boolean;
   isFollowingOrbit: boolean;
   isObjectToolsOpen: boolean;
   isReadOnly: boolean;
@@ -33,7 +31,6 @@ type ViewerTopToolsProps = {
   onObjectToolsToggle: () => void;
   onResetPose: () => void;
   onStopOrbitFollow: () => void;
-  onToggleDragModeMenu: () => void;
   onToggleWheelDriveMode: () => void;
   onToggleWheelRoles: () => void;
   onWheelDriveJointToggle: (jointName: string) => void;
@@ -58,6 +55,7 @@ const WORLD_OBJECT_EDIT_MODES: readonly WorldObjectEditMode[] = [
   "rotate",
   "resize",
 ];
+const DRAG_MODE_OPTIONS: readonly DragMode[] = ["move-joints", "drag-handle"];
 
 const WORLD_OBJECT_EDIT_MODE_TITLES: Record<WorldObjectEditMode, string> = {
   move: "Move (G)",
@@ -71,12 +69,10 @@ const stopPropagation = (event: MouseEvent) => {
 
 export function ViewerTopTools({
   activeWheelDriveCount,
-  canOpenDragModeMenu,
   canUseDragHandleMode,
   dragMode,
   hasSelectedWorldObject,
   hasStudioWheelDrive,
-  isDragModeMenuOpen,
   isFollowingOrbit,
   isObjectToolsOpen,
   isReadOnly,
@@ -92,70 +88,44 @@ export function ViewerTopTools({
   onObjectToolsToggle,
   onResetPose,
   onStopOrbitFollow,
-  onToggleDragModeMenu,
   onToggleWheelDriveMode,
   onToggleWheelRoles,
   onWheelDriveJointToggle,
   onDragModeSelect,
 }: ViewerTopToolsProps) {
   const hasWheelRoleEntries = studioWheelRoleDisplayEntries.length > 0;
+  const visibleDragModeOptions = canUseDragHandleMode
+    ? DRAG_MODE_OPTIONS
+    : DRAG_MODE_OPTIONS.filter((mode) => mode === "move-joints");
 
   return (
     <div className={VIEWER_TOP_TOOL_CLASSES.toolbar}>
       {!isReadOnly ? (
-        <div className="relative">
-          <button
-            type="button"
-            className={cn(
-              "flex items-center gap-1 px-3 py-1 text-xs",
-              VIEWER_TOP_TOOL_CLASSES.button,
-              isRobotLoaded
-                ? "text-foreground hover:bg-muted"
-                : VIEWER_TOP_TOOL_CLASSES.disabledButton
-            )}
-            disabled={!isRobotLoaded}
-            onClick={(event) => {
-              stopPropagation(event);
-              if (canOpenDragModeMenu) {
-                onToggleDragModeMenu();
-              }
-            }}
-          >
-            <span className="text-[10px] text-muted-foreground">Drag:</span>
-            {getDragModeDisplayName(dragMode)}
-            {canOpenDragModeMenu ? (
-              <span className="text-[10px] text-muted-foreground">▼</span>
-            ) : null}
-          </button>
-          {isDragModeMenuOpen ? (
-            <div
-              className="absolute right-0 z-50 mt-1 w-48 rounded border border-border/70 bg-background/95 text-xs shadow-md"
-              onClick={stopPropagation}
+        <div
+          className={cn(
+            "flex items-center gap-1 px-1 py-0.5 text-xs",
+            VIEWER_TOP_TOOL_CLASSES.button,
+            isRobotLoaded ? "text-foreground" : VIEWER_TOP_TOOL_CLASSES.disabledButton
+          )}
+          onClick={stopPropagation}
+        >
+          <span className="px-1 text-[10px] text-muted-foreground">Drag</span>
+          {visibleDragModeOptions.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={cn(
+                "rounded px-2 py-0.5 transition-colors",
+                dragMode === mode
+                  ? "bg-muted text-foreground font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+              disabled={!isRobotLoaded}
+              onClick={() => onDragModeSelect(mode)}
             >
-              <button
-                type="button"
-                className={cn(
-                  "w-full px-3 py-1.5 text-left transition-colors hover:bg-muted",
-                  dragMode === "move-joints" && "bg-muted/70 font-medium"
-                )}
-                onClick={() => onDragModeSelect("move-joints")}
-              >
-                Move Joints
-              </button>
-              {canUseDragHandleMode ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "w-full px-3 py-1.5 text-left transition-colors hover:bg-muted",
-                    dragMode === "drag-handle" && "bg-muted/70 font-medium"
-                  )}
-                  onClick={() => onDragModeSelect("drag-handle")}
-                >
-                  Drag Handle
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+              {getDragModeDisplayName(mode)}
+            </button>
+          ))}
         </div>
       ) : null}
 
