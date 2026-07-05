@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Iterator
 from typing import TypeVar
 
 from backend.models.simulator_runtime import (
@@ -54,16 +53,11 @@ ensure_builtin_simulator_plugins_registered()
 _plugins_by_id: dict[SimulatorId, SimulatorPlugin] = {
     p.simulator_id: p for p in get_all_plugins()
 }
-
-
-def _iter_supported_plugins() -> Iterator[SimulatorPlugin]:
-    for simulator_id in SIMULATOR_ID_VALUES:
-        plugin = _plugins_by_id.get(simulator_id)
-        if plugin is not None:
-            yield plugin
-
-
-_SUPPORTED_PLUGINS: tuple[SimulatorPlugin, ...] = tuple(_iter_supported_plugins())
+_SUPPORTED_PLUGINS: tuple[SimulatorPlugin, ...] = tuple(
+    plugin
+    for simulator_id in SIMULATOR_ID_VALUES
+    if (plugin := _plugins_by_id.get(simulator_id)) is not None
+)
 
 
 def _normalize_world_package_request(
