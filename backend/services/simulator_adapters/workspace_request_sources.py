@@ -38,16 +38,11 @@ from backend.services.world_scene_package_digest import (
 
 JsonObject: TypeAlias = dict[str, object]
 JsonObjectRecord: TypeAlias = Mapping[str, object]
+WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = WORKSPACE_SIMULATOR_IDS
 
 
 def get_workspace_simulators() -> tuple[SimulatorId, ...]:
-    return WORKSPACE_SIMULATOR_IDS
-
-
-def __getattr__(name: str) -> object:
-    if name == "WORKSPACE_SIMULATORS":
-        return get_workspace_simulators()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return WORKSPACE_SIMULATORS
 
 
 WORKSPACE_FIXTURES = (
