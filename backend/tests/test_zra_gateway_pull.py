@@ -86,6 +86,43 @@ def test_fetch_zra_gateway_decision_uses_configured_robot_source(
     assert decision == {"decision": {"status": "accept"}}
 
 
+def test_fetch_zra_gateway_decision_ignores_non_string_configured_robot_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    gateway_decision_path = tmp_path / "gateway-decision.json"
+    devices_path = tmp_path / "devices.json"
+    gateway_decision_path.write_text(
+        json.dumps({"decision": {"status": "accept"}}),
+        encoding="utf-8",
+    )
+    devices_path.write_text(
+        json.dumps(
+            [
+                {
+                    "robot_id": 123,
+                    "local_gateway_path": str(gateway_decision_path),
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        zra_gateway_pull,
+        "settings",
+        SimpleNamespace(zra_orchestrator_devices_path=str(devices_path)),
+    )
+
+    with pytest.raises(ValueError, match="No zRA gateway pull source configured"):
+        zra_gateway_pull.fetch_zra_gateway_decision(
+            ZraGatewayPullRequest(robot_id="123")
+        )
+
+
+def test_configured_source_value_normalizes_blank_string() -> None:
+    assert zra_gateway_pull._configured_source_value({"ssh_host": "   "}, "ssh_host") is None
+
+
 def test_fetch_zra_gateway_decision_rejects_non_object_local_payload(
     tmp_path: Path,
 ) -> None:

@@ -21,6 +21,13 @@ SSH_NONINTERACTIVE_ARGS = (
 )
 
 
+def _normalize_optional_str(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _load_json_object(text: str, *, source: str) -> JsonObject:
     payload = json.loads(text)
     if not isinstance(payload, dict):
@@ -45,7 +52,7 @@ def _lookup_robot_pull_source(robot_id: str) -> JsonObject | None:
     for entry in payload:
         if not isinstance(entry, dict):
             continue
-        if str(entry.get("robot_id") or "").strip() == normalized_robot_id:
+        if _normalize_optional_str(entry.get("robot_id")) == normalized_robot_id:
             return dict(entry)
     return None
 
@@ -53,8 +60,7 @@ def _lookup_robot_pull_source(robot_id: str) -> JsonObject | None:
 def _configured_source_value(configured_source: JsonObject | None, key: str) -> str | None:
     if configured_source is None:
         return None
-    value = configured_source.get(key)
-    return value if isinstance(value, str) else None
+    return _normalize_optional_str(configured_source.get(key))
 
 
 def _resolve_target(value: str | None, env_key: str) -> str | None:
