@@ -61,6 +61,23 @@ def build_workspace_expectations(
         workspace_layout,
         frame_map=frame_map,
     )
+    return _workspace_expectations(
+        request,
+        workspace_layout=workspace_layout,
+        duration_sec=duration_sec,
+        frame_map=frame_map,
+        object_contracts=object_contracts,
+    )
+
+
+def _workspace_expectations(
+    request: SimulatorWorkspacePrepareRequest,
+    *,
+    workspace_layout: StaticWorldLayout,
+    duration_sec: float,
+    frame_map: WorldLayoutFrameMap,
+    object_contracts: ExpectedObjectContracts,
+) -> WorkspaceExpectations:
     return WorkspaceExpectations(
         object_count=_active_object_count(workspace_layout),
         camera_count=len(request.world_package.world_snapshot.cameras),
