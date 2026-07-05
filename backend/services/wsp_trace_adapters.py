@@ -19,7 +19,10 @@ def _read_payload(path: Path) -> Any:
     if not stripped:
         raise ValueError(f"Trace adapter input is empty: {path}")
     if stripped.startswith("{") or stripped.startswith("["):
-        return json.loads(stripped)
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
     return [json.loads(line) for line in raw_text.splitlines() if line.strip()]
 
 
@@ -283,7 +286,10 @@ def detect_trace_adapter_source(payload: Any) -> TraceAdapterSource:
 
 def compile_trace_adapter_payload(payload: Any, *, source: TraceAdapterSource = "auto") -> PhysicalRolloutTrace:
     if isinstance(payload, list):
-        payload = {"trace_id": "jsonl-ros-trace", "messages": payload}
+        if source in {"mujoco", "genesis"}:
+            payload = {"trace_id": f"jsonl-{source}-trace", "steps": payload}
+        else:
+            payload = {"trace_id": "jsonl-ros-trace", "messages": payload}
     root = _record(payload, "trace adapter payload")
     selected_source = detect_trace_adapter_source(root) if source == "auto" else source
     if selected_source in {"mujoco", "genesis"}:

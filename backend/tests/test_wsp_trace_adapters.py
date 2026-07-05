@@ -151,6 +151,68 @@ def test_compile_simulator_file_reads_json(tmp_path) -> None:
     assert trace.metadata["source_kind"] == "mujoco"
 
 
+def test_compile_simulator_file_reads_jsonl(tmp_path) -> None:
+    trace_file = tmp_path / "mujoco_trace.jsonl"
+    steps = [
+        {
+            "t_ms": 0,
+            "entities": [
+                {
+                    "id": "robot_1",
+                    "entity_type": "robot",
+                    "position_xyz": [0.0, 0.0, 0.1],
+                    "size_xyz": [0.2, 0.2, 0.2],
+                    "battery": 0.9,
+                },
+                {
+                    "id": "pallet_1",
+                    "entity_type": "pallet",
+                    "position_xyz": [1.0, 0.0, 0.1],
+                    "size_xyz": [0.35, 0.35, 0.2],
+                    "mass_kg": 30.0,
+                    "friction": 0.25,
+                },
+            ],
+            "action": {
+                "id": "push_0",
+                "type": "push",
+                "actor": "robot_1",
+                "object": "pallet_1",
+                "params": {"delta_xyz": [0.1, 0.0, 0.0], "max_force_n": 200},
+            },
+        },
+        {
+            "t_ms": 500,
+            "entities": [
+                {
+                    "id": "robot_1",
+                    "entity_type": "robot",
+                    "position_xyz": [0.025, 0.0, 0.1],
+                    "size_xyz": [0.2, 0.2, 0.2],
+                    "battery": 0.9,
+                },
+                {
+                    "id": "pallet_1",
+                    "entity_type": "pallet",
+                    "position_xyz": [1.1, 0.0, 0.1],
+                    "size_xyz": [0.35, 0.35, 0.2],
+                    "mass_kg": 30.0,
+                    "friction": 0.25,
+                },
+            ],
+        },
+    ]
+    trace_file.write_text(
+        "\n".join(json.dumps(step) for step in steps),
+        encoding="utf-8",
+    )
+    trace = compile_simulator_file(trace_file, source="mujoco")
+
+    assert trace.trace_id == "jsonl-mujoco-trace"
+    assert len(trace.frames) == 2
+    assert trace.metadata["source_kind"] == "mujoco"
+
+
 def test_trace_adapter_cli_writes_trace_and_dataset(tmp_path) -> None:
     input_path = tmp_path / "mujoco.json"
     trace_path = tmp_path / "trace.json"
