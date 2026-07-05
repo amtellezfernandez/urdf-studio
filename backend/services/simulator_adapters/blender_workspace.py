@@ -330,7 +330,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     return None
                 try:
                     return [float(value[0]), float(value[1]), float(value[2])]
-                except Exception:
+                except (IndexError, TypeError, ValueError):
                     return None
 
 
@@ -347,7 +347,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                         abs(float(dimensions[1])) * 0.5,
                         abs(float(dimensions[2])) * 0.5,
                     ]
-                except Exception:
+                except (IndexError, TypeError, ValueError):
                     return [location]
                 if max(half_extents) <= 0.0:
                     return [location]
@@ -389,14 +389,14 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     return
                 try:
                     select_set(bool(selected))
-                except Exception:
+                except (AttributeError, RuntimeError, TypeError, ValueError):
                     return
 
 
             def select_edit_roots(robot_root, world_objects):
                 try:
                     bpy.ops.object.select_all(action="DESELECT")
-                except Exception:
+                except RuntimeError:
                     pass
                 selectable = list(world_objects) or ([robot_root] if robot_root is not None else [])
                 for obj in selectable:
@@ -404,7 +404,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 if selectable and getattr(bpy.context, "view_layer", None) is not None:
                     try:
                         bpy.context.view_layer.objects.active = selectable[0]
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError):
                         pass
 
 
@@ -434,12 +434,12 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                         shading.type = "MATERIAL"
                         shading.background_type = "VIEWPORT"
                         shading.background_color = (0.12, 0.13, 0.14)
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError, ValueError):
                         pass
                 for attr, value in (("clip_start", 0.01), ("clip_end", 100.0)):
                     try:
                         setattr(space, attr, value)
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError, ValueError):
                         pass
                 region_3d = getattr(space, "region_3d", None)
                 if region_3d is None:
@@ -449,7 +449,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     region_3d.view_location = center
                     region_3d.view_distance = max(radius * 2.6, 1.0)
                     region_3d.view_perspective = "PERSP"
-                except Exception:
+                except (AttributeError, RuntimeError, TypeError, ValueError):
                     pass
 
 
@@ -571,7 +571,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 before_import = set(bpy.data.objects)
                 try:
                     importer(filepath=str(asset_path))
-                except Exception as exc:
+                except (OSError, RuntimeError, TypeError, ValueError) as exc:
                     print(f"[urdf-studio-blender] mesh asset import failed: {{asset_path}}: {{exc}}", flush=True)
                     return None
                 imported = [obj for obj in bpy.data.objects if obj not in before_import]
@@ -677,7 +677,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 if update is not None:
                     try:
                         update()
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError):
                         pass
 
 
@@ -693,7 +693,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 before_import = set(bpy.data.objects)
                 try:
                     importer(filepath=str(path))
-                except Exception as exc:
+                except (OSError, RuntimeError, TypeError, ValueError) as exc:
                     root["urdf_studio_robot_visual_status"] = f"{{status}}_import_failed"
                     root["urdf_studio_robot_visual_error"] = str(exc)
                     print(f"[urdf-studio-blender] robot {{status}} import failed: {{exc}}", flush=True)
@@ -806,7 +806,7 @@ def build_blender_focus_script() -> str:
                     if not obj.visible_get():
                         return []
                     return [matrix_world @ Vector(corner) for corner in bound_box]
-                except Exception:
+                except (AttributeError, RuntimeError, TypeError, ValueError):
                     return []
 
 
@@ -844,17 +844,17 @@ def build_blender_focus_script() -> str:
             def select_layout_roots(roots):
                 try:
                     bpy.ops.object.select_all(action="DESELECT")
-                except Exception:
+                except RuntimeError:
                     pass
                 for obj in roots:
                     try:
                         obj.select_set(True)
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError):
                         pass
                 if roots:
                     try:
                         bpy.context.view_layer.objects.active = roots[0]
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError):
                         pass
 
 
@@ -872,7 +872,7 @@ def build_blender_focus_script() -> str:
                         region_3d.view_distance = max(radius * 3.0, 1.0)
                         region_3d.view_perspective = "PERSP"
                         focused += 1
-                    except Exception:
+                    except (AttributeError, RuntimeError, TypeError, ValueError):
                         pass
                 print(
                     f"[urdf-studio-blender] viewport_focused world_objects={len(roots)} viewports={focused}",
@@ -885,7 +885,7 @@ def build_blender_focus_script() -> str:
                 focus_layout_viewports()
                 try:
                     bpy.app.timers.register(focus_layout_viewports, first_interval=0.25)
-                except Exception:
+                except (AttributeError, RuntimeError, TypeError, ValueError):
                     pass
 
 

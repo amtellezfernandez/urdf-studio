@@ -32,6 +32,7 @@ from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_FOCUS_SCRIPT_FILENAME,
     BLENDER_ROBOT_GLB_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
+    build_blender_open_script,
     build_blender_focus_script,
     write_blender_workspace_artifacts,
 )
@@ -1280,10 +1281,22 @@ def test_blender_focus_script_frames_world_object_roots() -> None:
     focus_script = build_blender_focus_script()
 
     ast.parse(focus_script)
+    assert "except Exception" not in focus_script
     assert 'urdf_studio_kind") == "world_object"' in focus_script
     assert "view_location = center" in focus_script
     assert "view_distance = max(radius * 3.0, 1.0)" in focus_script
     assert "bpy.app.timers.register" in focus_script
+    assert "except (AttributeError, RuntimeError, TypeError, ValueError):" in focus_script
+
+
+def test_blender_open_script_uses_specific_recoverable_error_handlers(tmp_path: Path) -> None:
+    open_script = build_blender_open_script(edit_session_path=tmp_path / "session.json")
+
+    ast.parse(open_script)
+    assert "except Exception" not in open_script
+    assert "except (IndexError, TypeError, ValueError):" in open_script
+    assert "except RuntimeError:" in open_script
+    assert "except (OSError, RuntimeError, TypeError, ValueError) as exc:" in open_script
 
 
 def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path) -> None:
