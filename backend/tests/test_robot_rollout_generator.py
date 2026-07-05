@@ -22,9 +22,21 @@ def test_load_urdf_entry_rejects_missing_yourdfpy_loader(monkeypatch: pytest.Mon
 
 def test_load_urdf_entry_rejects_missing_yourdfpy_module(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_import_module(name: str) -> object:
-        raise ImportError(name)
+        raise ModuleNotFoundError(name=name)
 
     monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ValueError, match="yourdfpy is not installed"):
+        rollout_generator.load_urdf_entry("<robot name='demo'/>")
+
+
+def test_load_urdf_entry_preserves_unexpected_yourdfpy_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected yourdfpy import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected yourdfpy import failure"):
         rollout_generator.load_urdf_entry("<robot name='demo'/>")
