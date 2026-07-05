@@ -234,22 +234,22 @@ def _camera_image_manifest(
     loaded_report: LoadedParityReportView,
 ) -> tuple[str, CameraImageManifest | str]:
     parity_input, report = loaded_report
+    label = parity_input.label
     cameras = _list_field(report, "cameras")
-    expected_images_or_error = _expected_camera_images(parity_input.label, cameras)
+    expected_images_or_error = _expected_camera_images(label, cameras)
     if isinstance(expected_images_or_error, str):
-        return parity_input.label, expected_images_or_error
+        return _labeled_camera_manifest(label, expected_images_or_error)
     expected_images = expected_images_or_error
     if not expected_images:
-        return parity_input.label, {"images": []}
+        return _labeled_camera_manifest(label, {"images": []})
 
-    label = parity_input.label
     directory_or_error = _camera_image_directory(report, label=label)
     if isinstance(directory_or_error, str):
-        return label, directory_or_error
+        return _labeled_camera_manifest(label, directory_or_error)
     directory = directory_or_error
     image_paths_or_error = _camera_image_paths(directory, label=label)
     if isinstance(image_paths_or_error, str):
-        return label, image_paths_or_error
+        return _labeled_camera_manifest(label, image_paths_or_error)
     image_paths = image_paths_or_error
     names_error = _camera_image_name_error(
         image_paths,
@@ -257,10 +257,7 @@ def _camera_image_manifest(
         label=label,
     )
     if names_error is not None:
-        return (
-            label,
-            names_error,
-        )
+        return _labeled_camera_manifest(label, names_error)
 
     images: list[CameraImageEntry] = []
     image_by_name = {path.name: path for path in image_paths}
@@ -269,15 +266,15 @@ def _camera_image_manifest(
         try:
             image_stats = inspect_rgb_image(path)
         except Exception as exc:
-            return label, f"invalid camera_images artifact {path}: {exc}"
+            return _labeled_camera_manifest(label, f"invalid camera_images artifact {path}: {exc}")
         if image_stats.size != (expected["width"], expected["height"]):
-            return (
+            return _labeled_camera_manifest(
                 label,
                 f"{label} camera_images PNG {path.name} size {image_stats.size} "
                 f"does not match report camera size {(expected['width'], expected['height'])}",
             )
         if image_stats.channel_span <= MIN_VISIBLE_CHANNEL_SPAN:
-            return label, f"{label} camera_images PNG {path.name} is blank"
+            return _labeled_camera_manifest(label, f"{label} camera_images PNG {path.name} is blank")
         images.append(
             {
                 "camera_id": expected["camera_id"],
@@ -287,7 +284,14 @@ def _camera_image_manifest(
                 "height": image_stats.size[1],
             }
         )
-    return label, {"images": images}
+    return _labeled_camera_manifest(label, {"images": images})
+
+
+def _labeled_camera_manifest(
+    label: str,
+    value: CameraImageManifest | str,
+) -> tuple[str, CameraImageManifest | str]:
+    return label, value
 
 
 def _camera_image_paths(directory: Path, *, label: str) -> list[Path] | str:
