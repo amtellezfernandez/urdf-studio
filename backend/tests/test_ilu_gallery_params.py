@@ -15,6 +15,18 @@ def test_read_positive_float_env_accepts_positive_finite_value(
     assert ilu_gallery_params._read_positive_float_env("URDF_TEST_GALLERY_FLOAT", 3.0) == 12.5
 
 
+def test_read_positive_float_env_rejects_non_string_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery_params.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_GALLERY_FLOAT" else None,
+    )
+
+    assert ilu_gallery_params._read_positive_float_env("URDF_TEST_GALLERY_FLOAT", 3.0) == 3.0
+
+
 @pytest.mark.parametrize("raw_value", ["nan", "inf", "-inf", "0", "-3", "bad"])
 def test_read_positive_float_env_rejects_non_positive_or_non_finite_values(
     monkeypatch: pytest.MonkeyPatch,
@@ -33,6 +45,18 @@ def test_read_positive_int_env_rejects_non_positive_values(
     assert ilu_gallery_params._read_positive_int_env("URDF_TEST_GALLERY_INT", 4) == 4
 
 
+def test_read_positive_int_env_rejects_non_string_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery_params.os,
+        "getenv",
+        lambda name: True if name == "URDF_TEST_GALLERY_INT" else None,
+    )
+
+    assert ilu_gallery_params._read_positive_int_env("URDF_TEST_GALLERY_INT", 4) == 4
+
+
 def test_read_bool_env_supports_common_true_false_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -41,6 +65,18 @@ def test_read_bool_env_supports_common_true_false_values(
 
     monkeypatch.setenv("URDF_TEST_GALLERY_BOOL", "off")
     assert ilu_gallery_params._read_bool_env("URDF_TEST_GALLERY_BOOL", True) is False
+
+
+def test_read_bool_env_rejects_non_string_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery_params.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_GALLERY_BOOL" else None,
+    )
+
+    assert ilu_gallery_params._read_bool_env("URDF_TEST_GALLERY_BOOL", True) is True
 
 
 def test_read_path_env_expands_user_paths(
@@ -54,3 +90,18 @@ def test_read_path_env_expands_user_paths(
         "URDF_TEST_GALLERY_PATH",
         Path("/fallback"),
     ) == (tmp_path / "gallery-cache").resolve(strict=False)
+
+
+def test_read_path_env_rejects_non_string_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ilu_gallery_params.os,
+        "getenv",
+        lambda name: 123 if name == "URDF_TEST_GALLERY_PATH" else None,
+    )
+
+    assert ilu_gallery_params._read_path_env(
+        "URDF_TEST_GALLERY_PATH",
+        Path("/fallback"),
+    ) == Path("/fallback")

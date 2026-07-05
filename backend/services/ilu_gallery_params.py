@@ -20,15 +20,20 @@ DEFAULT_GALLERY_RENDER_ASSET_BATCH_SIZE = 1
 DEFAULT_GALLERY_GENERATE_MAX_CONCURRENCY = 1
 
 
+def _read_raw_env(name: str) -> str | None:
+    raw = os.getenv(name)
+    return raw if isinstance(raw, str) else None
+
+
 def _read_path_env(name: str, default: Path) -> Path:
-    raw = os.getenv(name, "").strip()
+    raw = (_read_raw_env(name) or "").strip()
     if not raw:
         return default
     return Path(raw).expanduser().resolve(strict=False)
 
 
 def _read_positive_float_env(name: str, default: float) -> float:
-    raw = os.getenv(name, "").strip()
+    raw = (_read_raw_env(name) or "").strip()
     if not raw:
         return default
     try:
@@ -41,7 +46,7 @@ def _read_positive_float_env(name: str, default: float) -> float:
 
 
 def _read_positive_int_env(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
+    raw = (_read_raw_env(name) or "").strip()
     if not raw:
         return default
     try:
@@ -52,7 +57,7 @@ def _read_positive_int_env(name: str, default: int) -> int:
 
 
 def _read_bool_env(name: str, default: bool) -> bool:
-    raw = os.getenv(name, "").strip().lower()
+    raw = (_read_raw_env(name) or "").strip().lower()
     if not raw:
         return default
     if raw in {"1", "true", "yes", "on"}:
