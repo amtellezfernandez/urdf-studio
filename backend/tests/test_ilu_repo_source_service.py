@@ -13,6 +13,7 @@ from backend.services.ilu_repo_source import (
     GitHubPublicProxyError,
     _ArchiveSnapshot,
     _extract_github_error_detail,
+    _read_env_str,
     _load_public_archive_snapshot,
     _read_float_env,
     fetch_file_bytes,
@@ -45,6 +46,22 @@ def test_read_float_env_rejects_non_string_values(monkeypatch: pytest.MonkeyPatc
     )
 
     assert _read_float_env("URDF_TEST_REPO_FLOAT", 3.0, minimum=0.0) == 3.0
+
+
+def test_read_env_str_returns_default_for_non_string_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ilu_repo_source.os,
+        "getenv",
+        lambda name: object() if name == "URDF_TEST_REPO_TEXT" else None,
+    )
+
+    assert _read_env_str("URDF_TEST_REPO_TEXT", "fallback") == "fallback"
+
+
+def test_read_env_str_returns_default_for_blank_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("URDF_TEST_REPO_TEXT", "   ")
+
+    assert _read_env_str("URDF_TEST_REPO_TEXT", "fallback") == "fallback"
 
 
 def test_list_repo_contents_uses_ilu_bridge(monkeypatch) -> None:
