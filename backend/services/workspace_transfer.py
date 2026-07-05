@@ -41,22 +41,46 @@ def _adapter_change_set_request(
     )
 
 
+def _build_workspace_prepare_request(
+    request: WorkspaceOpenRequest,
+) -> SimulatorWorkspacePrepareRequest:
+    return SimulatorWorkspacePrepareRequest(
+        world_package=request.world_package,
+        urdf_asset_path=request.urdf_asset_path,
+        mesh_assets=request.mesh_assets,
+        package_roots=request.package_roots,
+        ilu_session_id=request.ilu_session_id,
+        launch_id=request.launch_id,
+    )
+
+
 def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspacePrepareRequest:
     return normalize_simulator_workspace_prepare_request(
-        SimulatorWorkspacePrepareRequest(
-            world_package=request.world_package,
-            urdf_asset_path=request.urdf_asset_path,
-            mesh_assets=request.mesh_assets,
-            package_roots=request.package_roots,
-            ilu_session_id=request.ilu_session_id,
-            launch_id=request.launch_id,
-        )
+        _build_workspace_prepare_request(request)
     )
 
 
 def _target_descriptor_for_spec(spec: SimulatorRuntimeSpec) -> WorkspaceTransferTargetDescriptor:
     get_simulator_adapter(spec.simulator_id)
     return WorkspaceTransferTargetDescriptor.from_runtime_spec(spec)
+
+
+def _workspace_open_response(
+    target_id: WorkspaceTransferTargetId,
+    request: WorkspaceOpenRequest,
+) -> WorkspaceOpenResponse:
+    return WorkspaceOpenResponse.from_adapter_response(
+        prepare_simulator_workspace(target_id, _workspace_open_request(request))
+    )
+
+
+def _workspace_change_set_response(
+    target_id: WorkspaceTransferTargetId,
+    request: WorkspaceChangeSetApplyRequest,
+) -> WorkspaceChangeSetApplyResponse:
+    return WorkspaceChangeSetApplyResponse.from_adapter_response(
+        apply_simulator_workspace_change_set(target_id, _adapter_change_set_request(request))
+    )
 
 
 def list_workspace_transfer_targets() -> WorkspaceTransferTargetListResponse:
@@ -76,9 +100,7 @@ def open_workspace_transfer_target(
     target_id: WorkspaceTransferTargetId,
     request: WorkspaceOpenRequest,
 ) -> WorkspaceOpenResponse:
-    return WorkspaceOpenResponse.from_adapter_response(
-        prepare_simulator_workspace(target_id, _workspace_open_request(request))
-    )
+    return _workspace_open_response(target_id, request)
 
 
 def cancel_workspace_transfer_target_launch(
@@ -111,11 +133,9 @@ def resolve_workspace_change_set_target(
 def apply_workspace_transfer_change_set(
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyResponse:
-    return WorkspaceChangeSetApplyResponse.from_adapter_response(
-        apply_simulator_workspace_change_set(
-            resolve_workspace_change_set_target(request),
-            _adapter_change_set_request(request),
-        )
+    return _workspace_change_set_response(
+        resolve_workspace_change_set_target(request),
+        request,
     )
 
 
@@ -123,6 +143,4 @@ def apply_workspace_transfer_target_change_set(
     target_id: WorkspaceTransferTargetId,
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyResponse:
-    return WorkspaceChangeSetApplyResponse.from_adapter_response(
-        apply_simulator_workspace_change_set(target_id, _adapter_change_set_request(request))
-    )
+    return _workspace_change_set_response(target_id, request)
