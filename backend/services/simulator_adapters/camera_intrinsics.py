@@ -178,7 +178,10 @@ def _read_positive_float(value: object) -> float | None:
 def _read_optional_positive_float(record: CameraIntrinsicsRecord, key: str) -> OptionalFloatRead:
     if key not in record:
         return None
-    return _read_positive_float(record.get(key)) or _INVALID_OPTIONAL_NUMBER
+    parsed = _read_positive_float(record.get(key))
+    if parsed is None:
+        return _INVALID_OPTIONAL_NUMBER
+    return parsed
 
 
 def _read_optional_finite_float(
