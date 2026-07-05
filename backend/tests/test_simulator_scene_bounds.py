@@ -51,6 +51,26 @@ def test_scene_bounds_rejects_invalid_default_center() -> None:
         )
 
 
+def test_scene_bounds_rejects_invalid_default_radius() -> None:
+    with pytest.raises(ValueError, match="non-negative finite radius"):
+        scene_bounds_from_aabbs(
+            (),
+            default_center_xyz=(0.0, 0.0, 0.0),
+            default_radius_m=-0.5,
+            min_radius_m=0.1,
+        )
+
+
+def test_scene_bounds_rejects_invalid_min_radius() -> None:
+    with pytest.raises(ValueError, match="non-negative finite radius"):
+        scene_bounds_from_aabbs(
+            (((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),),
+            default_center_xyz=(0.0, 0.0, 0.0),
+            default_radius_m=0.5,
+            min_radius_m=float("nan"),
+        )
+
+
 def test_combine_aabbs_returns_none_for_empty_input() -> None:
     assert combine_aabbs(()) is None
 

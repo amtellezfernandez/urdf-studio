@@ -50,7 +50,7 @@ def _default_scene_bounds(
     radius_m: float,
 ) -> SceneBounds:
     center = _vector3(center_xyz)
-    radius = float(radius_m)
+    radius = _non_negative_finite_radius(radius_m)
     return SceneBounds(
         center_xyz=center,
         radius_m=radius,
@@ -69,7 +69,7 @@ def _scene_bounds_for_aabb(
     mins, maxs = enclosing_aabb
     center = _midpoint_vector3(mins, maxs)
     radius = max(
-        float(min_radius_m),
+        _non_negative_finite_radius(min_radius_m),
         _vector_length(_half_span_vector3(mins, maxs)),
     )
     return SceneBounds(
@@ -115,3 +115,10 @@ def _vector3(value: Sequence[float]) -> Vector3:
     if not all(math.isfinite(component) for component in parsed):
         raise ValueError("Expected a finite 3D vector.")
     return parsed[0], parsed[1], parsed[2]
+
+
+def _non_negative_finite_radius(value: float) -> float:
+    radius = float(value)
+    if not math.isfinite(radius) or radius < 0.0:
+        raise ValueError("Expected a non-negative finite radius.")
+    return radius
