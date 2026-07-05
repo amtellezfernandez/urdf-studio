@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
+
+import pytest
 
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.params import PYBULLET_WORKSPACE_PROCESS_PARAMS
@@ -77,3 +80,18 @@ def test_module_command_omits_report_flag_when_report_path_is_not_provided(tmp_p
     )
 
     assert "--report" not in command
+
+
+@pytest.mark.parametrize("duration_sec", [-1.0, math.inf, math.nan])
+def test_module_command_rejects_invalid_duration(tmp_path: Path, duration_sec: float) -> None:
+    with pytest.raises(
+        ValueError,
+        match="workspace duration_sec must be a finite non-negative number",
+    ):
+        _module_command(
+            PYBULLET_WORKSPACE_PROCESS_PARAMS,
+            world_package_path=tmp_path / "world-package.json",
+            robot_asset_flag="--robot-urdf",
+            robot_asset_path=tmp_path / "robot.urdf",
+            duration_sec=duration_sec,
+        )

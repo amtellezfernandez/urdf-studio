@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -114,6 +115,8 @@ def _workspace_process_runtime_args(
     frame_map: WorldLayoutFrameMap,
     duration_sec: float,
 ) -> tuple[str, ...]:
+    if not math.isfinite(duration_sec) or duration_sec < 0.0:
+        raise ValueError(f"workspace duration_sec must be a finite non-negative number, got {duration_sec!r}")
     return (
         "--frame-map",
         frame_map,
