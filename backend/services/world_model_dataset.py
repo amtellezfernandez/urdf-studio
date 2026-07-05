@@ -187,7 +187,7 @@ def validate_world_model_dataset_samples(
             warnings.append(f"{sample.sample_id} has no simulator export provenance.")
 
     return WorldModelDatasetReadinessReport(
-        ready=len(errors) == 0,
+        ready=not errors,
         dataset_id=dataset_id,
         sample_count=len(samples),
         executable_count=executable_count,

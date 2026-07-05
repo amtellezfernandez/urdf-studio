@@ -175,11 +175,11 @@ def build_primitive_check_report(
             }
         )
     ok = (
-        len(missing) == 0
-        and len(type_mismatches) == 0
-        and len(collision_mismatches) == 0
-        and len(color_mismatches) == 0
-        and len(duplicate_loaded_sim_names) == 0
+        not missing
+        and not type_mismatches
+        and not collision_mismatches
+        and not color_mismatches
+        and not duplicate_loaded_sim_names
         and len(loaded) == len(primitives)
         and max_position_error <= position_tolerance_m
         and max_size_error <= size_tolerance_m

@@ -200,7 +200,7 @@ class WorldRegistryService:
         errors.extend(_validate_world_snapshot_timing(manifest))
         errors.extend(_validate_world_snapshot_asset_refs(manifest))
         return WorldScenePackageValidationResponse(
-            valid=len(errors) == 0,
+            valid=not errors,
             digest_sha256=digest,
             warnings=warnings,
             errors=errors,
