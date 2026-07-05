@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -796,6 +797,32 @@ def test_report_has_camera_artifacts_accepts_existing_directory(tmp_path) -> Non
     )
 
     assert _report_has_camera_artifacts(report_path) is True
+
+
+def test_report_has_camera_artifacts_returns_false_for_invalid_json(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text("{not-json}\n", encoding="utf-8")
+
+    assert _report_has_camera_artifacts(report_path) is False
+
+
+def test_report_has_camera_artifacts_preserves_unexpected_read_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text("{}", encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def _raising_read_text(self: Path, *args, **kwargs):
+        if self == report_path:
+            raise KeyError("unexpected read failure")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", _raising_read_text)
+
+    with pytest.raises(KeyError, match="unexpected read failure"):
+        _report_has_camera_artifacts(report_path)
 
 
 def test_workspace_check_rejects_missing_camera_image_contract(tmp_path) -> None:

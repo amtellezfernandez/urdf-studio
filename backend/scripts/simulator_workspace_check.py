@@ -688,7 +688,7 @@ def _check_cross_simulator_parity(
 def _report_has_camera_artifacts(report_path: Path) -> bool:
     try:
         payload = json.loads(report_path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return False
     artifacts = payload.get("artifacts") if isinstance(payload, Mapping) else None
     if not isinstance(artifacts, Mapping):
