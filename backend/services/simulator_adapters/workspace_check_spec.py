@@ -108,6 +108,20 @@ def _prepare_direct_urdf_command(
     expected_report_artifact_dir_keys: tuple[str, ...] = (),
     expectations: WorkspaceExpectations,
 ) -> PreparedWorkspaceCommand:
+    expected_camera_log_marker = camera_log_marker or f"cameras={expectations.camera_count}"
+    expectation_fields = {
+        "expected_object_count": expectations.object_count,
+        "expected_camera_count": expectations.camera_count,
+        "expected_requested_frame_map": expectations.frame_map,
+        "expected_frame_map": expectations.resolved_frame_map,
+        "expected_object_positions_xyz": expectations.object_positions_xyz,
+        "expected_object_sizes_xyz": expectations.object_sizes_xyz,
+        "expected_object_asset_refs": expectations.object_asset_refs,
+        "expected_object_contracts": expectations.object_contracts,
+        "expected_joint_positions": expectations.joint_positions,
+        "expected_camera_ids": expectations.camera_ids,
+        "expected_camera_contracts": expectations.camera_contracts,
+    }
     return PreparedWorkspaceCommand(
         command=_module_command(
             workspace_process,
@@ -121,7 +135,7 @@ def _prepare_direct_urdf_command(
         ),
         ready_marker=workspace_process.ready_log_marker,
         expected_object_marker=object_marker,
-        expected_camera_log_marker=camera_log_marker or f"cameras={expectations.camera_count}",
+        expected_camera_log_marker=expected_camera_log_marker,
         extra_expected_markers=extra_expected_markers,
         expected_image_paths=expected_image_paths,
         expected_image_dirs=expected_image_dirs,
@@ -129,17 +143,7 @@ def _prepare_direct_urdf_command(
         expected_file_validators=expected_file_validators,
         expected_report_path=expected_report_path,
         expected_simulator_id=simulator_id,
-        expected_object_count=expectations.object_count,
-        expected_camera_count=expectations.camera_count,
-        expected_requested_frame_map=expectations.frame_map,
-        expected_frame_map=expectations.resolved_frame_map,
-        expected_object_positions_xyz=expectations.object_positions_xyz,
-        expected_object_sizes_xyz=expectations.object_sizes_xyz,
-        expected_object_asset_refs=expectations.object_asset_refs,
-        expected_object_contracts=expectations.object_contracts,
-        expected_joint_positions=expectations.joint_positions,
-        expected_camera_ids=expectations.camera_ids,
-        expected_camera_contracts=expectations.camera_contracts,
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
+        **expectation_fields,
     )
