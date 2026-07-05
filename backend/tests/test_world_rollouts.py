@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 from datetime import datetime, timezone
 
 import pytest
@@ -416,3 +417,47 @@ def test_job_fails_when_cli_is_not_configured(tmp_path) -> None:
 
     assert completed.status == WorldRolloutJobStatus.FAILED
     assert completed.error == "URDF_WORLD_ROLLOUT_CLI is not configured."
+
+
+def test_job_fails_for_expected_cli_runtime_errors(tmp_path, monkeypatch) -> None:
+    service = _build_service(tmp_path)
+    job = service.create_job(
+        WorldRolloutJobCreateRequest(
+            world_package=_build_world_package(),
+            checker_profile=_build_profile(),
+        )
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_run_cli",
+        lambda _job: (_ for _ in ()).throw(
+            subprocess.TimeoutExpired(cmd="rollout-cli", timeout=TEST_TIMEOUT_SECONDS)
+        ),
+    )
+
+    service._run_job(job.job_id)
+    completed = service.get_job(job.job_id)
+
+    assert completed.status == WorldRolloutJobStatus.FAILED
+    assert completed.error is not None
+    assert "timed out" in completed.error
+
+
+def test_job_preserves_unexpected_runtime_errors(tmp_path, monkeypatch) -> None:
+    service = _build_service(tmp_path)
+    job = service.create_job(
+        WorldRolloutJobCreateRequest(
+            world_package=_build_world_package(),
+            checker_profile=_build_profile(),
+        )
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_run_cli",
+        lambda _job: (_ for _ in ()).throw(RuntimeError("unexpected rollout failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected rollout failure"):
+        service._run_job(job.job_id)

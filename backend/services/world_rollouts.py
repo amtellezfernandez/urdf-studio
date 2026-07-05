@@ -172,7 +172,13 @@ class WorldRolloutService:
         job = self._mark_job_running(job_id)
         try:
             self._replace_job(self._run_cli(job))
-        except Exception as exc:
+        except (
+            OSError,
+            UnicodeDecodeError,
+            ValidationError,
+            subprocess.SubprocessError,
+            WorldRolloutError,
+        ) as exc:
             failed = self.get_job(job_id).model_copy(
                 update={
                     "status": WorldRolloutJobStatus.FAILED,
