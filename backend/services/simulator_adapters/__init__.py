@@ -63,6 +63,9 @@ def _iter_supported_plugins() -> Iterator[SimulatorPlugin]:
             yield plugin
 
 
+_SUPPORTED_PLUGINS: tuple[SimulatorPlugin, ...] = tuple(_iter_supported_plugins())
+
+
 def _normalize_world_package_request(
     request: WorkspacePackageRequest,
 ) -> WorkspacePackageRequest:
@@ -73,11 +76,11 @@ def _normalize_world_package_request(
 
 
 SUPPORTED_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
-    plugin.simulator_id for plugin in _iter_supported_plugins()
+    plugin.simulator_id for plugin in _SUPPORTED_PLUGINS
 )
 WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
     plugin.simulator_id
-    for plugin in _iter_supported_plugins()
+    for plugin in _SUPPORTED_PLUGINS
     if plugin.workspace_target and plugin.transfer_strategy != "planned"
 )
 WORKSPACE_SIMULATOR_ID_SET: set[SimulatorId] = set(WORKSPACE_SIMULATOR_IDS)
@@ -88,12 +91,12 @@ def get_simulator_adapter(simulator_id: SimulatorId) -> SimulatorAdapter:
 
 
 def list_simulator_runtime_descriptors() -> SimulatorRuntimeListResponse:
-    descriptors = [plugin.runtime_spec_descriptor() for plugin in _iter_supported_plugins()]
+    descriptors = [plugin.runtime_spec_descriptor() for plugin in _SUPPORTED_PLUGINS]
     return SimulatorRuntimeListResponse(simulators=descriptors)
 
 
 def list_simulator_runtime_specs() -> tuple[SimulatorRuntimeSpec, ...]:
-    return tuple(plugin.as_runtime_spec() for plugin in _iter_supported_plugins())
+    return tuple(plugin.as_runtime_spec() for plugin in _SUPPORTED_PLUGINS)
 
 
 def normalize_simulator_workspace_prepare_request(
