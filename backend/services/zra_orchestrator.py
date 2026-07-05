@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from backend.core.settings import settings
 from backend.models.attestation import (
@@ -22,6 +25,15 @@ from backend.services.zra_gateway_pull import fetch_zra_gateway_decision
 
 
 logger = logging.getLogger("urdf.zra_orchestrator")
+
+_POLL_DEVICE_FAILURES = (
+    OSError,
+    UnicodeDecodeError,
+    json.JSONDecodeError,
+    subprocess.SubprocessError,
+    ValidationError,
+    ValueError,
+)
 
 
 @dataclass(frozen=True)
@@ -171,7 +183,7 @@ class ZraOrchestratorService:
             device.last_error = None
             device.consecutive_failures = 0
             device.current_state = converted.trust_state
-        except Exception as exc:  # pragma: no cover - exercised through status behavior
+        except _POLL_DEVICE_FAILURES as exc:  # pragma: no cover - exercised through status behavior
             device.last_error = str(exc)
             device.consecutive_failures += 1
             logger.warning("zRA orchestrator poll failed for %s: %s", device.config.robot_id, exc)

@@ -225,6 +225,55 @@ def test_orchestrator_status_propagates_unexpected_device_loader_errors(
         service.status()
 
 
+def test_orchestrator_poll_tracks_expected_gateway_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.services import zra_orchestrator
+
+    service = zra_orchestrator.ZraOrchestratorService()
+    device = zra_orchestrator._DeviceRuntime(
+        config=zra_orchestrator.ZraOrchestratorDevice(robot_id="poll_bot")
+    )
+
+    monkeypatch.setattr(
+        zra_orchestrator,
+        "fetch_zra_gateway_decision",
+        lambda _request: (_ for _ in ()).throw(ValueError("invalid gateway payload")),
+    )
+
+    service._poll_device(device)
+
+    assert device.last_error == "invalid gateway payload"
+    assert device.consecutive_failures == 1
+    assert device.last_success_at is None
+    assert device.current_state == AttestationTrustState.INACTIVE
+
+
+def test_orchestrator_poll_propagates_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.services import zra_orchestrator
+
+    service = zra_orchestrator.ZraOrchestratorService()
+    device = zra_orchestrator._DeviceRuntime(
+        config=zra_orchestrator.ZraOrchestratorDevice(robot_id="poll_bot")
+    )
+
+    monkeypatch.setattr(
+        zra_orchestrator,
+        "fetch_zra_gateway_decision",
+        lambda _request: (_ for _ in ()).throw(RuntimeError("unexpected poll failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected poll failure"):
+        service._poll_device(device)
+
+    assert device.last_error is None
+    assert device.consecutive_failures == 0
+    assert device.last_success_at is None
+    assert device.current_state == AttestationTrustState.INACTIVE
+
+
 def test_pull_zra_gateway_decision_uses_existing_converter(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _local_client()
 
