@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Iterator
+from typing import TypeVar
 
 from backend.models.simulator_runtime import (
     SIMULATOR_ID_VALUES,
@@ -18,8 +20,18 @@ from backend.services.simulator_adapters.base import (
     SimulatorAdapterError,
     SimulatorCapabilityError,
 )
-from backend.services.simulator_adapters.plugin import get_all_plugins, get_plugin
+from backend.services.simulator_adapters.plugin import (
+    SimulatorPlugin,
+    get_all_plugins,
+    get_plugin,
+)
 from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
+
+WorkspacePackageRequest = TypeVar(
+    "WorkspacePackageRequest",
+    SimulatorWorkspacePrepareRequest,
+    WorkspaceChangeSetApplyRequest,
+)
 
 _BUILTIN_PLUGIN_MODULES = (
     "backend.services.simulator_adapters.genesis",
@@ -39,17 +51,21 @@ def ensure_builtin_simulator_plugins_registered() -> None:
 
 ensure_builtin_simulator_plugins_registered()
 
-_plugins_by_id = {p.simulator_id: p for p in get_all_plugins()}
+_plugins_by_id: dict[SimulatorId, SimulatorPlugin] = {
+    p.simulator_id: p for p in get_all_plugins()
+}
 
 
-def _iter_supported_plugins():
+def _iter_supported_plugins() -> Iterator[SimulatorPlugin]:
     for simulator_id in SIMULATOR_ID_VALUES:
         plugin = _plugins_by_id.get(simulator_id)
         if plugin is not None:
             yield plugin
 
 
-def _normalize_world_package_request(request):
+def _normalize_world_package_request(
+    request: WorkspacePackageRequest,
+) -> WorkspacePackageRequest:
     return request.model_copy(
         update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
         deep=True,
@@ -64,7 +80,7 @@ WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
     for plugin in _iter_supported_plugins()
     if plugin.workspace_target and plugin.transfer_strategy != "planned"
 )
-WORKSPACE_SIMULATOR_ID_SET = set(WORKSPACE_SIMULATOR_IDS)
+WORKSPACE_SIMULATOR_ID_SET: set[SimulatorId] = set(WORKSPACE_SIMULATOR_IDS)
 
 
 def get_simulator_adapter(simulator_id: SimulatorId) -> SimulatorAdapter:
