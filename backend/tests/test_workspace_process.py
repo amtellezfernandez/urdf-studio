@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.services.simulator_adapters import workspace_process
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.params import (
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
@@ -72,6 +73,39 @@ def test_start_workspace_process_until_ready_removes_workspace_for_pre_cancelled
     prepared = _prepared_workspace(tmp_path)
     launch_id = "pre-cancelled-workspace-launch"
     cancel_workspace_launch(launch_id, target_id="pybullet")
+
+    with pytest.raises(ValueError, match="PyBullet workspace launch was cancelled."):
+        start_workspace_process_until_ready(
+            command=[sys.executable, "-c", "print('unused')"],
+            prepared=prepared,
+            workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
+            simulator_id="pybullet",
+            simulator_label="PyBullet",
+            log_path=prepared.workspace_dir / "pybullet.log",
+            error=ValueError,
+            launch_id=launch_id,
+        )
+
+    assert not prepared.workspace_dir.exists()
+
+
+def test_start_workspace_process_until_ready_removes_workspace_when_attach_detects_cancellation(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    prepared = _prepared_workspace(tmp_path)
+    launch_id = "attach-cancelled-workspace-launch"
+
+    class _FakeProcess:
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(
+        workspace_process,
+        "_spawn_workspace_process",
+        lambda **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(workspace_process, "attach_workspace_launch_process", lambda *_args: False)
 
     with pytest.raises(ValueError, match="PyBullet workspace launch was cancelled."):
         start_workspace_process_until_ready(

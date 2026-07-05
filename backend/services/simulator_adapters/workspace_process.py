@@ -161,11 +161,16 @@ def _attach_workspace_process_or_raise_cancelled(
     *,
     launch_id: str | None,
     process: subprocess.Popen,
+    workspace_dir: Path,
     simulator_label: str,
     error: Callable[[str], Exception],
 ) -> None:
     if launch_id and not attach_workspace_launch_process(launch_id, process):
-        raise error(_cancelled_launch_error(simulator_label))
+        _cleanup_cancelled_launch(
+            workspace_dir=workspace_dir,
+            simulator_label=simulator_label,
+            error=error,
+        )
 
 
 def build_workspace_process_command(
@@ -221,6 +226,7 @@ def start_workspace_process_until_ready(
         _attach_workspace_process_or_raise_cancelled(
             launch_id=launch_id,
             process=process,
+            workspace_dir=prepared.workspace_dir,
             simulator_label=simulator_label,
             error=error,
         )
