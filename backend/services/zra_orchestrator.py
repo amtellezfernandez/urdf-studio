@@ -88,7 +88,7 @@ class ZraOrchestratorService:
             return
         try:
             loaded_devices = load_zra_orchestrator_devices(settings.zra_orchestrator_devices_path)
-        except Exception as exc:
+        except ValueError as exc:
             logger.warning("zRA orchestrator device config could not be loaded: %s", exc)
             loaded_devices = []
         self._devices = [_DeviceRuntime(config=device) for device in loaded_devices]

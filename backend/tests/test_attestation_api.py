@@ -208,6 +208,23 @@ def test_orchestrator_status_endpoint_ignores_invalid_devices_file(
     assert payload["devices"] == []
 
 
+def test_orchestrator_status_propagates_unexpected_device_loader_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.services import zra_orchestrator
+
+    service = zra_orchestrator.ZraOrchestratorService()
+
+    monkeypatch.setattr(
+        zra_orchestrator,
+        "load_zra_orchestrator_devices",
+        lambda _path: (_ for _ in ()).throw(RuntimeError("unexpected loader failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected loader failure"):
+        service.status()
+
+
 def test_pull_zra_gateway_decision_uses_existing_converter(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _local_client()
 
