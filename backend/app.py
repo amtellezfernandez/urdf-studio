@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
         try:
             response = await call_next(request)
         except Exception:
+            # Middleware boundary: audit unexpected handler failures before Starlette renders the 500 response.
             if should_audit_http_request(request):
                 log_http_security_event(request, status_code=500, decision="error")
             raise

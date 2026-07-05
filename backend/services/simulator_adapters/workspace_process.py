@@ -279,6 +279,7 @@ def start_workspace_process_until_ready(
             complete_workspace_launch(launch_id)
         return process
     except BaseException:
+        # Launch boundary: terminate the child process and cancel the launch record on every failure path.
         if process is not None and process.poll() is None:
             terminate_workspace_process(process)
         _cancel_workspace_launch_if_requested(
@@ -341,6 +342,7 @@ def finalize_workspace_prepare_response(
             simulator_asset_path=simulator_asset_path,
         )
     except BaseException:
+        # Response boundary: stop the spawned process if response assembly fails after launch succeeded.
         if process.poll() is None:
             terminate_workspace_process(process)
         raise

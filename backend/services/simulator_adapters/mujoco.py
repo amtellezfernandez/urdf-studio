@@ -373,6 +373,7 @@ def prepare_mujoco_workspace(
     try:
         return _prepare_mujoco_workspace_inner(prepared)
     except BaseException:
+        # Cleanup boundary: discard the staged workspace if MuJoCo preparation aborts for any reason.
         shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
         raise
 

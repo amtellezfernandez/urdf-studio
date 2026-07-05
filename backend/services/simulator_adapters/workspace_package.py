@@ -269,6 +269,7 @@ def prepare_simulator_workspace_package(
             error=error,
         )
     except BaseException:
+        # Cleanup boundary: remove the partially prepared workspace even on cancellation or interpreter shutdown.
         shutil.rmtree(workspace_dir, ignore_errors=True)
         raise
 
