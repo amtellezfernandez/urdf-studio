@@ -107,7 +107,17 @@ def _expected_camera_images(
         return ()
     if not contracts:
         return None
-    ordered_contracts = tuple(contracts[camera_id] for camera_id in camera_ids)
+    return _expected_camera_image_specs(
+        directory=directory,
+        ordered_contracts=tuple(contracts[camera_id] for camera_id in camera_ids),
+    )
+
+
+def _expected_camera_image_specs(
+    *,
+    directory: Path,
+    ordered_contracts: tuple[ExpectedCameraReport, ...],
+) -> tuple[tuple[Path, tuple[int, int]], ...]:
     return tuple(
         (
             camera_artifact_path(
