@@ -22,7 +22,7 @@ def test_dependency_health_reports_missing_dependency(
     monkeypatch.setattr(
         importlib,
         "import_module",
-        lambda _name: (_ for _ in ()).throw(ImportError("yourdfpy")),
+        lambda _name: (_ for _ in ()).throw(ModuleNotFoundError(name="yourdfpy")),
     )
 
     response = dependency_health()
@@ -44,3 +44,16 @@ def test_dependency_health_reports_incomplete_dependency(
 
     assert response.status == "ok"
     assert response.yourdfpy is False
+
+
+def test_dependency_health_preserves_unexpected_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("unexpected yourdfpy import failure")),
+    )
+
+    with pytest.raises(ImportError, match="unexpected yourdfpy import failure"):
+        dependency_health()

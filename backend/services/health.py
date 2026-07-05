@@ -8,7 +8,9 @@ from backend.models.health import HealthResponse
 def _yourdfpy_available() -> bool:
     try:
         yourdfpy_module = importlib.import_module("yourdfpy")
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        if exc.name != "yourdfpy":
+            raise
         return False
     urdf_class = getattr(yourdfpy_module, "URDF", None)
     return callable(getattr(urdf_class, "load", None))
