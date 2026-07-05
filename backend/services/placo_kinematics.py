@@ -144,7 +144,7 @@ def _get_or_create_frame_task(entry: PlacoRobotEntry, target_link: str) -> Any:
 
     try:
         frame_task = entry.solver.add_frame_task(target_link, np.eye(4))
-    except Exception as exc:
+    except (RuntimeError, ValueError, KeyError) as exc:
         raise HTTPException(
             status_code=400,
             detail=f"Target link '{target_link}' not found in URDF.",

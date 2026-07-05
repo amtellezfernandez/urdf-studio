@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
+from backend.services import placo_kinematics as placo_kinematics_module
 from backend.services.placo_kinematics import (
+    _get_or_create_frame_task,
     _quat_to_matrix,
     _resolved_weight,
     _set_placo_posture_target,
@@ -102,3 +104,44 @@ def test_set_placo_posture_target_preserves_unexpected_errors() -> None:
             {"joint_a": 0.5},
             ("joint_a", "joint_b"),
         )
+
+
+def test_get_or_create_frame_task_wraps_expected_missing_link_errors() -> None:
+    class _BrokenSolver:
+        @staticmethod
+        def add_frame_task(_target_link: str, _frame: np.ndarray) -> object:
+            raise ValueError("missing frame")
+
+    entry = placo_kinematics_module.PlacoRobotEntry(
+        urdf_hash="demo",
+        urdf_xml="<robot name='demo'/>",
+        robot=object(),
+        solver=_BrokenSolver(),
+        joint_names=[],
+        joints_task=None,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _get_or_create_frame_task(entry, "tool")
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Target link 'tool' not found in URDF."
+
+
+def test_get_or_create_frame_task_preserves_unexpected_errors() -> None:
+    class _BrokenSolver:
+        @staticmethod
+        def add_frame_task(_target_link: str, _frame: np.ndarray) -> object:
+            raise AttributeError("unexpected frame task failure")
+
+    entry = placo_kinematics_module.PlacoRobotEntry(
+        urdf_hash="demo",
+        urdf_xml="<robot name='demo'/>",
+        robot=object(),
+        solver=_BrokenSolver(),
+        joint_names=[],
+        joints_task=None,
+    )
+
+    with pytest.raises(AttributeError, match="unexpected frame task failure"):
+        _get_or_create_frame_task(entry, "tool")
