@@ -30,6 +30,11 @@ def _genesis_init_error_types(gs: Any) -> tuple[type[BaseException], ...]:
     return (RuntimeError,)
 
 
+def _is_already_initialized_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "already" in message and "initialized" in message
+
+
 def _ensure_genesis_initialized(gs: Any) -> None:
     global _GENESIS_INITIALIZED
     if _GENESIS_INITIALIZED:
@@ -37,7 +42,7 @@ def _ensure_genesis_initialized(gs: Any) -> None:
     try:
         gs.init(backend=gs.cpu, logging_level="warning")
     except _genesis_init_error_types(gs) as exc:
-        if "already" not in str(exc).lower() and "initialized" not in str(exc).lower():
+        if not _is_already_initialized_error(exc):
             raise
     _GENESIS_INITIALIZED = True
 

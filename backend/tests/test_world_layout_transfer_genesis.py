@@ -7,6 +7,7 @@ import pytest
 from backend.services import world_layout_transfer_genesis as genesis_transfer
 from backend.services.world_layout_transfer_genesis import (
     _ensure_genesis_initialized,
+    _is_already_initialized_error,
     _genesis_entity_rgba,
     _genesis_morph_full_size,
     _genesis_morph_type_name,
@@ -56,6 +57,12 @@ def test_genesis_texture_color_rejects_invalid_color_values() -> None:
     assert _genesis_texture_color(SimpleNamespace(color=None)) is None
     assert _genesis_texture_color(SimpleNamespace(color=object())) is None
     assert _genesis_texture_color(SimpleNamespace(color=("bad",))) is None
+
+
+def test_is_already_initialized_error_requires_both_terms() -> None:
+    assert _is_already_initialized_error(RuntimeError("Genesis is already initialized")) is True
+    assert _is_already_initialized_error(RuntimeError("already running")) is False
+    assert _is_already_initialized_error(RuntimeError("initialized state mismatch")) is False
 
 
 def test_genesis_init_guard_accepts_already_initialized_genesis_error(monkeypatch) -> None:
