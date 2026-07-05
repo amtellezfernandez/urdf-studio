@@ -248,6 +248,12 @@ def start_workspace_process_until_ready(
     except BaseException:
         if process is not None and process.poll() is None:
             terminate_workspace_process(process)
+        _cancel_workspace_launch_if_requested(
+            launch_id=launch_id,
+            workspace_dir=prepared.workspace_dir,
+            simulator_label=simulator_label,
+            error=error,
+        )
         raise
 
 

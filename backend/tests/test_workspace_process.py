@@ -120,3 +120,55 @@ def test_start_workspace_process_until_ready_removes_workspace_when_attach_detec
         )
 
     assert not prepared.workspace_dir.exists()
+
+
+def test_start_workspace_process_until_ready_removes_workspace_when_readiness_wait_detects_cancellation(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    prepared = _prepared_workspace(tmp_path)
+    launch_id = "wait-cancelled-workspace-launch"
+
+    class _FakeProcess:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(
+        workspace_process,
+        "_spawn_workspace_process",
+        lambda **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        workspace_process,
+        "attach_workspace_launch_process",
+        lambda *_args: True,
+    )
+
+    def _fake_wait_for_workspace_readiness(*_args, **_kwargs):
+        cancel_workspace_launch(launch_id, target_id="pybullet")
+        raise ValueError("PyBullet workspace launch was cancelled.")
+
+    monkeypatch.setattr(
+        workspace_process,
+        "wait_for_workspace_readiness",
+        _fake_wait_for_workspace_readiness,
+    )
+    monkeypatch.setattr(
+        workspace_process,
+        "terminate_workspace_process",
+        lambda _process: True,
+    )
+
+    with pytest.raises(ValueError, match="PyBullet workspace launch was cancelled."):
+        start_workspace_process_until_ready(
+            command=[sys.executable, "-c", "print('unused')"],
+            prepared=prepared,
+            workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
+            simulator_id="pybullet",
+            simulator_label="PyBullet",
+            log_path=prepared.workspace_dir / "pybullet.log",
+            error=ValueError,
+            launch_id=launch_id,
+        )
+
+    assert not prepared.workspace_dir.exists()
