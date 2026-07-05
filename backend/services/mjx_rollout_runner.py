@@ -91,8 +91,12 @@ def _write_mjx_compatible_model_xml(source_path: Path) -> Path:
     compatible_path = source_path.with_name(
         f"{source_path.stem}{_MJX_CONTACT_DISABLED_SUFFIX}{source_path.suffix}"
     )
+    try:
+        source_content = source_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Failed to read MJCF model XML: {source_path}") from exc
     compatible_path.write_text(
-        _disable_mjcf_contacts(source_path.read_text(encoding="utf-8")),
+        _disable_mjcf_contacts(source_content),
         encoding="utf-8",
     )
     return compatible_path

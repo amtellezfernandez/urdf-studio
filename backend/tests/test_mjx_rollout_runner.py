@@ -97,6 +97,20 @@ def test_run_mjx_rollout_batch_loads_model_xml_path(tmp_path: Path) -> None:
     assert {entity.entity_id for entity in episode.trace.frames[0].entities} == {"base_link"}
 
 
+def test_run_mjx_rollout_batch_rejects_invalid_model_xml_encoding(tmp_path: Path) -> None:
+    model_path = tmp_path / "robot.xml"
+    model_path.write_bytes(b"\xff\xfe\x00")
+
+    with pytest.raises(ValueError, match=r"Failed to read MJCF model XML:"):
+        run_mjx_rollout_batch(
+            MjxRolloutBatchConfig(
+                model_xml_path=model_path,
+                episode_count=1,
+                steps_per_episode=3,
+            )
+        )
+
+
 def test_run_mjx_rollout_batch_output_passes_executability_audit() -> None:
     config = MjxRolloutBatchConfig(urdf_xml=_PENDULUM_URDF, episode_count=1, steps_per_episode=5, seed=2)
 
