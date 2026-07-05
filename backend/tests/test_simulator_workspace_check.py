@@ -754,6 +754,37 @@ def test_workspace_check_rejects_wrong_camera_image_dimensions(tmp_path) -> None
     )
 
 
+def test_report_has_camera_artifacts_requires_existing_directory(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    missing_camera_dir = tmp_path / "missing-cameras"
+    report_path.write_text(
+        json.dumps(
+            {
+                "artifacts": {"camera_screenshot_dir": str(missing_camera_dir)},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _report_has_camera_artifacts(report_path) is False
+
+
+def test_report_has_camera_artifacts_accepts_existing_directory(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    camera_dir = tmp_path / "cameras"
+    camera_dir.mkdir()
+    report_path.write_text(
+        json.dumps(
+            {
+                "artifacts": {"camera_screenshot_dir": str(camera_dir)},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _report_has_camera_artifacts(report_path) is True
+
+
 def test_workspace_check_rejects_missing_camera_image_contract(tmp_path) -> None:
     camera_dir = tmp_path / "cameras"
     _write_visible_png(camera_dir / "01_scene_camera.png")

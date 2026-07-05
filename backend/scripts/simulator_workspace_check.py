@@ -694,7 +694,9 @@ def _report_has_camera_artifacts(report_path: Path) -> bool:
     if not isinstance(artifacts, Mapping):
         return False
     directory = artifacts.get("camera_screenshot_dir")
-    return isinstance(directory, str) and bool(directory.strip())
+    if not isinstance(directory, str) or not directory.strip():
+        return False
+    return Path(directory).expanduser().is_dir()
 
 
 def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
