@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib.util import find_spec
 import subprocess
-from typing import Protocol
+from typing import Callable, Protocol
 
 from backend.models.simulator_runtime import (
     SimulatorDependencySpec,
@@ -67,19 +67,27 @@ def is_python_module_available_in_python(python_executable: str, import_name: st
     return process.returncode == 0
 
 
+def _resolve_module_availability_probe(
+    python_executable: str | None,
+) -> Callable[[str], bool]:
+    if python_executable:
+        return lambda import_name: is_python_module_available_in_python(
+            python_executable,
+            import_name,
+        )
+    return is_python_module_available
+
+
 def build_runtime_dependency_statuses(
     dependencies: tuple[SimulatorDependencySpec, ...],
     *,
     python_executable: str | None = None,
 ) -> list[SimulatorRuntimeDependency]:
+    is_module_available = _resolve_module_availability_probe(python_executable)
     return [
         SimulatorRuntimeDependency(
             name=dependency.name,
-            available=(
-                is_python_module_available_in_python(python_executable, dependency.import_name)
-                if python_executable
-                else is_python_module_available(dependency.import_name)
-            ),
+            available=is_module_available(dependency.import_name),
             required=dependency.required,
             scope=dependency.scope,
         )
@@ -93,13 +101,11 @@ def format_runtime_dependency_status(
     missing_status_prefix: str,
     dependencies: list[SimulatorRuntimeDependency],
 ) -> tuple[bool, str]:
-    required_dependencies = [dependency for dependency in dependencies if dependency.required]
-    available = all(dependency.available for dependency in required_dependencies)
-    if available:
-        return True, ready_status
-    missing = ", ".join(
+    missing_required_dependencies = [
         dependency.name
-        for dependency in required_dependencies
-        if not dependency.available
-    )
-    return False, f"{missing_status_prefix}: {missing}"
+        for dependency in dependencies
+        if dependency.required and not dependency.available
+    ]
+    if not missing_required_dependencies:
+        return True, ready_status
+    return False, f"{missing_status_prefix}: {', '.join(missing_required_dependencies)}"
