@@ -5,6 +5,7 @@ import importlib
 import math
 import tempfile
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, TypeAlias
@@ -136,10 +137,8 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
             status_code=400, detail=f"Failed to build Placo robot: {exc}"
         ) from exc
     finally:
-        try:
+        with suppress(OSError):
             Path(temporary_urdf_path).unlink(missing_ok=True)
-        except OSError:
-            pass
 
     entry = PlacoRobotEntry(
         urdf_hash=urdf_hash,
@@ -187,11 +186,9 @@ def _set_placo_posture_target(
         joints_task.set_joints(posture_target)
         return
     except (RuntimeError, TypeError, ValueError):
-        pass
-
-    joint_seed = [
-        float(posture_target.get(joint_name, 0.0)) for joint_name in joint_names
-    ]
+        joint_seed = [
+            float(posture_target.get(joint_name, 0.0)) for joint_name in joint_names
+        ]
     try:
         joints_task.set_joints(joint_seed)
         return

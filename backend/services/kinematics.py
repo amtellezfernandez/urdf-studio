@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
@@ -61,10 +62,8 @@ def _load_urdf_from_xml(urdf_xml: str) -> yourdfpy.URDF:
         load_urdf = _load_yourdfpy_urdf_loader()
         loaded_urdf = load_urdf(temporary_urdf_path)
     finally:
-        try:
+        with suppress(OSError):
             Path(temporary_urdf_path).unlink(missing_ok=True)
-        except OSError:
-            pass
     return loaded_urdf
 
 
