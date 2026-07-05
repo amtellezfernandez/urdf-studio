@@ -1364,7 +1364,8 @@ def test_blender_focus_script_frames_world_object_roots() -> None:
     assert "view_location = center" in focus_script
     assert "view_distance = max(radius * 3.0, 1.0)" in focus_script
     assert "bpy.app.timers.register" in focus_script
-    assert "except (AttributeError, RuntimeError, TypeError, ValueError):" in focus_script
+    assert "from contextlib import suppress" in focus_script
+    assert "with suppress(AttributeError, RuntimeError, TypeError, ValueError):" in focus_script
 
 
 def test_blender_open_script_uses_specific_recoverable_error_handlers(tmp_path: Path) -> None:
@@ -1372,8 +1373,9 @@ def test_blender_open_script_uses_specific_recoverable_error_handlers(tmp_path: 
 
     ast.parse(open_script)
     assert "except Exception" not in open_script
+    assert "from contextlib import suppress" in open_script
     assert "except (IndexError, TypeError, ValueError):" in open_script
-    assert "except RuntimeError:" in open_script
+    assert "with suppress(RuntimeError):" in open_script
     assert "except (OSError, RuntimeError, TypeError, ValueError) as exc:" in open_script
 
 
