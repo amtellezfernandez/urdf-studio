@@ -27,6 +27,17 @@ def test_is_python_module_available_returns_false_for_import_errors(
     assert is_python_module_available("yourdfpy") is False
 
 
+def test_is_python_module_available_returns_false_for_missing_parent_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing_parent(_name: str) -> object:
+        raise ModuleNotFoundError(name="mujoco")
+
+    monkeypatch.setattr(importlib, "import_module", _missing_parent)
+
+    assert is_python_module_available("mujoco.mjx") is False
+
+
 def test_is_python_module_available_preserves_unexpected_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -38,6 +49,19 @@ def test_is_python_module_available_preserves_unexpected_errors(
 
     with pytest.raises(ImportError, match="unexpected import failure"):
         is_python_module_available("yourdfpy")
+
+
+def test_is_python_module_available_preserves_missing_nested_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing_nested_dependency(_name: str) -> object:
+        raise ModuleNotFoundError(name="unexpected_nested_dependency")
+
+    monkeypatch.setattr(importlib, "import_module", _missing_nested_dependency)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        is_python_module_available("mujoco.mjx")
+    assert exc_info.value.name == "unexpected_nested_dependency"
 
 
 def test_build_runtime_dependency_statuses_uses_selected_python_probe(monkeypatch) -> None:
