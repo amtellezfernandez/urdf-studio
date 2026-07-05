@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import builtins
+import importlib
 import numpy as np
 import pytest
 from fastapi import HTTPException
@@ -158,15 +158,18 @@ def test_load_placo_wraps_expected_robot_build_errors(monkeypatch) -> None:
 
     class _FakePlacoModule:
         RobotWrapper = _FakeRobotWrapper
+        KinematicsSolver = object
 
-    real_import = builtins.__import__
-
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+    def _fake_import_module(name: str) -> object:
         if name == "placo":
             return _FakePlacoModule()
-        return real_import(name, globals, locals, fromlist, level)
+        raise ImportError(name)
 
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        _fake_import_module,
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         _load_placo("<robot name='demo'/>")
@@ -182,18 +185,40 @@ def test_load_placo_preserves_unexpected_robot_build_errors(monkeypatch) -> None
 
     class _FakePlacoModule:
         RobotWrapper = _FakeRobotWrapper
+        KinematicsSolver = object
 
-    real_import = builtins.__import__
-
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+    def _fake_import_module(name: str) -> object:
         if name == "placo":
             return _FakePlacoModule()
-        return real_import(name, globals, locals, fromlist, level)
+        raise ImportError(name)
 
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        _fake_import_module,
+    )
 
     with pytest.raises(KeyError, match="unexpected placo robot failure"):
         _load_placo("<robot name='demo'/>")
+
+
+def test_load_placo_rejects_incomplete_module(monkeypatch) -> None:
+    def _fake_import_module(name: str) -> object:
+        if name == "placo":
+            return object()
+        raise ImportError(name)
+
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        _fake_import_module,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _load_placo("<robot name='demo'/>")
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "placo is not available; install it to enable the Placo IK solver."
 
 
 def test_placo_inverse_kinematics_wraps_expected_setup_errors(monkeypatch) -> None:

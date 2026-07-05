@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import math
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -75,14 +76,27 @@ def _quat_to_matrix(wxyz: list[float]) -> np.ndarray:
     )
 
 
-def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
+def _load_placo_module() -> Any:
     try:
-        import placo  # type: ignore
+        placo_module = importlib.import_module("placo")
     except ImportError as exc:
         raise HTTPException(
             status_code=500,
             detail="placo is not available; install it to enable the Placo IK solver.",
         ) from exc
+
+    if not callable(getattr(placo_module, "RobotWrapper", None)) or not callable(
+        getattr(placo_module, "KinematicsSolver", None)
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="placo is not available; install it to enable the Placo IK solver.",
+        )
+    return placo_module
+
+
+def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
+    placo = _load_placo_module()
 
     if not urdf_xml.strip():
         raise HTTPException(status_code=400, detail="URDF content is empty")
