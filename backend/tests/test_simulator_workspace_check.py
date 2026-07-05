@@ -909,11 +909,13 @@ def test_workspace_parity_requires_camera_artifacts(tmp_path) -> None:
 
     assert _report_has_camera_artifacts(report_path) is False
 
+    camera_dir = tmp_path / "cameras"
+    camera_dir.mkdir()
     report_path.write_text(
         json.dumps(
             {
                 "simulator": {"id": SIMULATOR_BLENDER_ID, "label": "Blender"},
-                "artifacts": {"camera_screenshot_dir": str(tmp_path / "cameras")},
+                "artifacts": {"camera_screenshot_dir": str(camera_dir)},
             }
         ),
         encoding="utf-8",
