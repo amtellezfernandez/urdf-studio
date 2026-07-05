@@ -385,6 +385,39 @@ def test_build_sim_camera_specs_rejects_duplicate_simulator_camera_names(tmp_pat
     assert "duplicates another camera" in warnings[0]
 
 
+def test_build_sim_camera_specs_rejects_duplicate_camera_ids(tmp_path: Path) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text(
+        "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    base_camera = {
+        "parent_joint": "base_link",
+        "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
+        "intrinsics": {"width": 640, "height": 480, "fov_deg": 60},
+    }
+    world_package.world_snapshot.cameras = [
+        {"id": "cam-a", "name": "wrist camera", **base_camera},
+        {"id": "cam-a", "name": "scene camera", **base_camera},
+    ]
+
+    with pytest.raises(ValueError, match="camera ids must be unique"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
+
+    assert len(cameras) == 1
+    assert cameras[0].camera_id == "cam-a"
+    assert cameras[0].sim_name == "wrist_camera"
+    assert len(warnings) == 1
+    assert "camera ids must be unique" in warnings[0]
+
+
 def test_append_cameras_to_mujoco_mjcf_adds_native_camera_without_marker_by_default() -> None:
     world_package = make_world_package("<robot name=\"demo\"><link name=\"base_link\"/></robot>")
     world_package.world_snapshot.cameras = [

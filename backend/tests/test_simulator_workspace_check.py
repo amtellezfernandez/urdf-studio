@@ -429,6 +429,19 @@ def test_workspace_check_derives_expected_camera_contracts_from_request() -> Non
     assert overhead.intrinsics_matrix[2] == (0.0, 0.0, 1.0)
 
 
+def test_workspace_check_rejects_duplicate_camera_ids_in_request() -> None:
+    request = build_demo_workspace_request()
+    request.world_package.world_snapshot.cameras[1]["id"] = request.world_package.world_snapshot.cameras[0][
+        "id"
+    ]
+
+    with pytest.raises(ValueError, match="camera ids must be unique"):
+        expected_camera_ids_for_request(request)
+
+    with pytest.raises(ValueError, match="camera ids must be unique"):
+        expected_camera_contracts_for_request(request)
+
+
 def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_path) -> None:
     request = build_demo_workspace_request()
 

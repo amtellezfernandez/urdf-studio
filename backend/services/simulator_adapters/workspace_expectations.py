@@ -158,10 +158,9 @@ def _expected_joint_positions(
 
 
 def expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
-    return tuple(
-        _expected_camera_id(camera, index=index)
-        for index, camera in enumerate(request.world_package.world_snapshot.cameras)
-    )
+    if not request.world_package.world_snapshot.cameras:
+        return ()
+    return tuple(camera.camera_id for camera in _build_expected_camera_specs(request))
 
 
 def expected_camera_contracts_for_request(
@@ -171,25 +170,6 @@ def expected_camera_contracts_for_request(
         return {}
     camera_specs = _build_expected_camera_specs(request)
     return {camera.camera_id: _expected_camera_report(camera) for camera in camera_specs}
-
-
-def _expected_camera_id(camera: object, *, index: int) -> str:
-    if isinstance(camera, Mapping):
-        explicit_id = _stripped_camera_field(camera, "id")
-        if explicit_id is not None:
-            return explicit_id
-        explicit_name = _stripped_camera_field(camera, "name")
-        if explicit_name is not None:
-            return explicit_name
-    return f"camera_{index + 1}"
-
-
-def _stripped_camera_field(camera: Mapping[str, object], field_name: str) -> str | None:
-    value = camera.get(field_name)
-    if not isinstance(value, str):
-        return None
-    stripped = value.strip()
-    return stripped or None
 
 
 def _build_expected_camera_specs(

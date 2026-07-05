@@ -125,6 +125,7 @@ def build_sim_camera_specs(
     link_transforms = _build_link_transforms(robot)
     camera_specs: list[SimCameraSpec] = []
     warnings: list[str] = []
+    used_camera_ids: set[str] = set()
     used_sim_names: set[str] = set()
 
     for index, camera_record in enumerate(cameras):
@@ -138,12 +139,19 @@ def build_sim_camera_specs(
         if warning:
             warnings.append(warning)
         if spec is not None:
+            if spec.camera_id in used_camera_ids:
+                warnings.append(
+                    f"Camera '{spec.name}' id '{spec.camera_id}' duplicates another camera; "
+                    "camera ids must be unique."
+                )
+                continue
             if spec.sim_name in used_sim_names:
                 warnings.append(
                     f"Camera '{spec.name}' simulator name '{spec.sim_name}' duplicates another camera; "
                     "camera simulator names must be unique."
                 )
                 continue
+            used_camera_ids.add(spec.camera_id)
             used_sim_names.add(spec.sim_name)
             camera_specs.append(spec)
 
