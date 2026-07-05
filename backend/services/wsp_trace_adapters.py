@@ -12,6 +12,11 @@ from backend.services.world_model_dataset import build_world_model_training_samp
 
 
 TraceAdapterSource = Literal["auto", "mujoco", "genesis", "ros", "lerobot"]
+_MCAP_DEPENDENCY_MODULE_NAMES = ("mcap", "mcap.reader", "mcap_ros2", "mcap_ros2.decoder")
+_MCAP_DEPENDENCY_ERROR = (
+    "Native MCAP reading requires the mcap packages: "
+    "pip install mcap mcap-ros2-support"
+)
 
 
 def _read_payload(path: Path) -> Any:
@@ -354,19 +359,15 @@ def _load_mcap_decoder_tools() -> tuple[Any, Any]:
     try:
         reader_module = importlib.import_module("mcap.reader")
         decoder_module = importlib.import_module("mcap_ros2.decoder")
-    except ImportError as exc:
-        raise ImportError(
-            "Native MCAP reading requires the mcap packages: "
-            "pip install mcap mcap-ros2-support"
-        ) from exc
+    except ModuleNotFoundError as exc:
+        if exc.name not in _MCAP_DEPENDENCY_MODULE_NAMES:
+            raise
+        raise ImportError(_MCAP_DEPENDENCY_ERROR) from exc
 
     make_reader = getattr(reader_module, "make_reader", None)
     decoder_factory = getattr(decoder_module, "DecoderFactory", None)
     if not callable(make_reader) or not callable(decoder_factory):
-        raise ImportError(
-            "Native MCAP reading requires the mcap packages: "
-            "pip install mcap mcap-ros2-support"
-        )
+        raise ImportError(_MCAP_DEPENDENCY_ERROR)
     return make_reader, decoder_factory
 
 

@@ -179,6 +179,45 @@ def test_compile_mcap_file_raises_import_error_when_decoder_tools_are_incomplete
         compile_mcap_file(fake_mcap)
 
 
+def test_compile_mcap_file_preserves_unexpected_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    fake_mcap = tmp_path / "test.mcap"
+    fake_mcap.write_bytes(b"MCAP0\x00")
+
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected mcap import failure")
+
+    monkeypatch.setattr(
+        "backend.services.wsp_trace_adapters.importlib.import_module",
+        _fake_import_module,
+    )
+
+    with pytest.raises(ImportError, match="unexpected mcap import failure"):
+        compile_mcap_file(fake_mcap)
+
+
+def test_compile_mcap_file_preserves_nested_missing_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    fake_mcap = tmp_path / "test.mcap"
+    fake_mcap.write_bytes(b"MCAP0\x00")
+
+    def _fake_import_module(name: str) -> object:
+        raise ModuleNotFoundError(name="unexpected_nested_dependency")
+
+    monkeypatch.setattr(
+        "backend.services.wsp_trace_adapters.importlib.import_module",
+        _fake_import_module,
+    )
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        compile_mcap_file(fake_mcap)
+    assert exc_info.value.name == "unexpected_nested_dependency"
+
+
 def test_compile_simulator_file_reads_json(tmp_path) -> None:
     trace_file = tmp_path / "mujoco_trace.json"
     trace_file.write_text(json.dumps(_sim_payload("mujoco")), encoding="utf-8")
