@@ -102,7 +102,7 @@ class MjxPlugin(SimulatorPlugin):
                 steps_per_episode=_MJX_INSPECTION_STEPS,
             )
             episode = run_mjx_rollout_batch(config)[0]
-        except Exception as exc:
+        except (ValueError, RuntimeError, IndexError) as exc:
             raise MjxWorkspaceError(f"MJX inspection rollout failed: {exc}") from exc
 
         report = _build_mjx_workspace_report(

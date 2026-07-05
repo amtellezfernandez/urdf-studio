@@ -103,3 +103,57 @@ def test_build_mjx_workspace_report_uses_rollout_summary(tmp_path: Path) -> None
         "wall_time_ms": 12.5,
         "frame_count": 3,
     }
+
+
+def test_mjx_prepare_workspace_wraps_expected_rollout_errors(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(mjx_adapter, "_MJX_WORKSPACE_ROOT", tmp_path)
+    plugin = mjx_adapter.MjxPlugin()
+    request = make_workspace_prepare_request(_PENDULUM_URDF)
+
+    prepared = SimpleNamespace(
+        mjcf_path=tmp_path / "robot.xml",
+        shared_workspace=SimpleNamespace(
+            workspace_dir=tmp_path / "workspace",
+            world_package_path=tmp_path / "workspace" / "world-package.json",
+            robot_urdf_path=tmp_path / "workspace" / "robot.urdf",
+            world_object_count=0,
+            camera_count=0,
+            bundle_result=SimpleNamespace(copied_files=0, unresolved=()),
+        ),
+    )
+
+    monkeypatch.setattr(mjx_adapter, "prepare_mujoco_workspace", lambda *_args, **_kwargs: prepared)
+    monkeypatch.setattr(
+        "backend.services.mjx_rollout_runner.run_mjx_rollout_batch",
+        lambda _config: (_ for _ in ()).throw(ValueError("bad rollout config")),
+    )
+
+    with pytest.raises(mjx_adapter.MjxWorkspaceError, match="MJX inspection rollout failed: bad rollout config"):
+        plugin.prepare_workspace(request)
+
+
+def test_mjx_prepare_workspace_propagates_unexpected_rollout_errors(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(mjx_adapter, "_MJX_WORKSPACE_ROOT", tmp_path)
+    plugin = mjx_adapter.MjxPlugin()
+    request = make_workspace_prepare_request(_PENDULUM_URDF)
+
+    prepared = SimpleNamespace(
+        mjcf_path=tmp_path / "robot.xml",
+        shared_workspace=SimpleNamespace(
+            workspace_dir=tmp_path / "workspace",
+            world_package_path=tmp_path / "workspace" / "world-package.json",
+            robot_urdf_path=tmp_path / "workspace" / "robot.urdf",
+            world_object_count=0,
+            camera_count=0,
+            bundle_result=SimpleNamespace(copied_files=0, unresolved=()),
+        ),
+    )
+
+    monkeypatch.setattr(mjx_adapter, "prepare_mujoco_workspace", lambda *_args, **_kwargs: prepared)
+    monkeypatch.setattr(
+        "backend.services.mjx_rollout_runner.run_mjx_rollout_batch",
+        lambda _config: (_ for _ in ()).throw(KeyError("unexpected rollout failure")),
+    )
+
+    with pytest.raises(KeyError, match="unexpected rollout failure"):
+        plugin.prepare_workspace(request)
