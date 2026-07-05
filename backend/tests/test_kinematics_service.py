@@ -82,11 +82,21 @@ def test_load_urdf_from_xml_rejects_missing_yourdfpy_loader(monkeypatch) -> None
 
 def test_load_urdf_from_xml_rejects_missing_yourdfpy_module(monkeypatch) -> None:
     def _fake_import_module(name: str) -> object:
-        raise ImportError(name)
+        raise ModuleNotFoundError(name=name)
 
     monkeypatch.setattr(importlib, "import_module", _fake_import_module)
 
     with pytest.raises(ValueError, match="yourdfpy is not installed"):
+        kinematics_module._load_urdf_from_xml("<robot name='demo'/>")
+
+
+def test_load_urdf_from_xml_preserves_unexpected_yourdfpy_import_errors(monkeypatch) -> None:
+    def _fake_import_module(name: str) -> object:
+        raise ImportError("unexpected yourdfpy import failure")
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    with pytest.raises(ImportError, match="unexpected yourdfpy import failure"):
         kinematics_module._load_urdf_from_xml("<robot name='demo'/>")
 
 
