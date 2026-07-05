@@ -5,11 +5,16 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from backend.models.physical_state import ActionToken, PhysicalEntity, PhysicalRolloutTrace, PhysicalStateFrame
 from backend.services.ilu_urdf import convert_urdf_to_mjcf
+
+if TYPE_CHECKING:
+    import jax
+    from mujoco import mjx
 
 _PD_GAIN = 20.0
 _PD_DAMPING = 2.0
@@ -142,21 +147,28 @@ def run_mjx_rollout_batch(config: MjxRolloutBatchConfig) -> list[MjxRolloutEpiso
     time_seconds = jnp.arange(step_count, dtype=jnp.float32) * dt
     joint_freq_scale = jnp.arange(1, mj_model.nv + 1, dtype=jnp.float32)
 
-    def action_targets(qpos0, phase_offset):
+    def action_targets(qpos0: jax.Array, phase_offset: jax.Array) -> jax.Array:
         deltas = config.action_amplitude_rad * jnp.sin(
             2.0 * jnp.pi * config.action_frequency_hz * joint_freq_scale[None, :] * time_seconds[:, None]
             + phase_offset[None, :]
         )
         return qpos0[None, :] + deltas
 
-    def single_rollout(friction_scale, mass_scale, phase_offset):
+    def single_rollout(
+        friction_scale: jax.Array,
+        mass_scale: jax.Array,
+        phase_offset: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
         model = base_mjx_model.replace(
             geom_friction=base_mjx_model.geom_friction * friction_scale,
             body_mass=base_mjx_model.body_mass * mass_scale,
         )
         targets = action_targets(base_mjx_data.qpos, phase_offset)
 
-        def step_fn(carry, target_qpos):
+        def step_fn(
+            carry: mjx.Data,
+            target_qpos: jax.Array,
+        ) -> tuple[mjx.Data, tuple[jax.Array, jax.Array, jax.Array]]:
             torque = _PD_GAIN * (target_qpos - carry.qpos) - _PD_DAMPING * carry.qvel
             next_data = mjx.step(model, carry.replace(qfrc_applied=torque))
             return next_data, (next_data.qpos, next_data.xpos, next_data.xquat)
