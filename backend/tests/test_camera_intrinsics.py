@@ -68,3 +68,23 @@ def test_focal_length_and_vertical_fov_helpers_round_trip() -> None:
     focal_length_px = focal_length_px_from_vertical_fov_deg(60.0, 480)
 
     assert vertical_fov_deg_from_focal_length_px(focal_length_px, 480) == pytest.approx(60.0)
+
+
+@pytest.mark.parametrize("fov_deg", [0.0, 180.0, float("inf"), float("nan")])
+def test_focal_length_from_vertical_fov_rejects_invalid_fov(fov_deg: float) -> None:
+    with pytest.raises(ValueError, match="vertical FOV must be a finite value in \\(0, 180\\)"):
+        focal_length_px_from_vertical_fov_deg(fov_deg, 480)
+
+
+@pytest.mark.parametrize("height_px", [0, -1, True])
+def test_camera_intrinsics_helpers_reject_invalid_height(height_px: int) -> None:
+    with pytest.raises(ValueError, match="image height must be a positive integer"):
+        focal_length_px_from_vertical_fov_deg(60.0, height_px)
+    with pytest.raises(ValueError, match="image height must be a positive integer"):
+        vertical_fov_deg_from_focal_length_px(400.0, height_px)
+
+
+@pytest.mark.parametrize("fy_px", [0.0, -1.0, float("inf"), float("nan")])
+def test_vertical_fov_from_focal_length_rejects_invalid_focal_length(fy_px: float) -> None:
+    with pytest.raises(ValueError, match="focal length must be a positive finite value"):
+        vertical_fov_deg_from_focal_length_px(fy_px, 480)

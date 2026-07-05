@@ -64,11 +64,19 @@ def pinhole_camera_intrinsics_from_record(value: object) -> PinholeCameraIntrins
 
 
 def focal_length_px_from_vertical_fov_deg(fov_deg: float, height_px: int) -> float:
+    if not is_finite_number(fov_deg) or not 0.0 < float(fov_deg) < 180.0:
+        raise ValueError(f"vertical FOV must be a finite value in (0, 180), got {fov_deg!r}")
+    if not isinstance(height_px, int) or isinstance(height_px, bool) or height_px <= 0:
+        raise ValueError(f"image height must be a positive integer, got {height_px!r}")
     half_fov_rad = math.radians(fov_deg) * 0.5
     return height_px / (2.0 * math.tan(half_fov_rad))
 
 
 def vertical_fov_deg_from_focal_length_px(fy_px: float, height_px: int) -> float:
+    if not is_finite_number(fy_px) or float(fy_px) <= 0.0:
+        raise ValueError(f"focal length must be a positive finite value, got {fy_px!r}")
+    if not isinstance(height_px, int) or isinstance(height_px, bool) or height_px <= 0:
+        raise ValueError(f"image height must be a positive integer, got {height_px!r}")
     half_fov_rad = math.atan(height_px / (2.0 * fy_px))
     return math.degrees(half_fov_rad) * 2.0
 
