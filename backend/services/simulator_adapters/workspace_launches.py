@@ -98,6 +98,20 @@ def _register_workspace_launch_record(
     )
 
 
+def _register_cancelled_workspace_launch_record(
+    *,
+    launch_id: str,
+    target_id: str,
+    created_at: float,
+) -> _WorkspaceLaunchRecord:
+    return _register_workspace_launch_record(
+        launch_id=launch_id,
+        target_id=target_id,
+        created_at=created_at,
+        cancelled=True,
+    )
+
+
 def _cancel_workspace_launch_locked(
     *,
     launch_id: str,
@@ -106,11 +120,10 @@ def _cancel_workspace_launch_locked(
 ) -> tuple[_WorkspaceLaunchRecord, bool, subprocess.Popen | None]:
     record = _launches.get(launch_id)
     if record is None:
-        record = _register_workspace_launch_record(
+        record = _register_cancelled_workspace_launch_record(
             launch_id=launch_id,
             target_id=target_id,
             created_at=now,
-            cancelled=True,
         )
         return record, False, None
     if not _record_matches_target(record, target_id):
