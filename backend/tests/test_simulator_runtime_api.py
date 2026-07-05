@@ -16,6 +16,7 @@ from backend.app import create_app
 from backend.api import simulator_runtime as simulator_runtime_api
 from backend.api import workspace_transfer as workspace_transfer_api
 from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
+import backend.services.simulator_adapters as simulator_adapters_service
 from backend.services import workspace_transfer as workspace_transfer_service
 from backend.models.simulator_runtime import (
     SIMULATOR_CANONICAL_FRAME_CONVENTION,
@@ -23,6 +24,7 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
     WorkspaceChangeSetApplyRequest,
+    SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
 )
 from backend.models.workspace_transfer import WorkspaceLaunchCancelResponse, WorkspaceOpenResponse
@@ -36,7 +38,10 @@ from backend.services.simulator_adapters import (
     list_simulator_runtime_specs,
     normalize_simulator_workspace_change_set_request,
 )
-from backend.services.simulator_adapters.base import SimulatorCapabilityError
+from backend.services.simulator_adapters.base import (
+    SimulatorAdapterError,
+    SimulatorCapabilityError,
+)
 from backend.services.simulator_adapters.blender_change_sets import build_blender_change_set_source
 from backend.services.simulator_adapters.camera_conventions import (
     world_camera_to_opengl_camera_rotation,
@@ -919,6 +924,40 @@ def test_optional_simulator_workspace_prepare_reports_missing_adapter() -> None:
 
     assert response.status_code == 501
     assert "workspace adapter is planned" in response.json()["detail"]
+
+
+def test_simulator_workspace_prepare_rejects_unavailable_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnavailableWorkspacePlugin:
+        simulator_id = "pybullet"
+        label = "PyBullet"
+        workspace_target = True
+        transfer_strategy = "direct"
+
+        def runtime_status(self) -> SimulatorRuntimeStatus:
+            return SimulatorRuntimeStatus(
+                runtimeName="pybullet",
+                available=False,
+                status="Missing optional dependency: pybullet",
+                dependencies=[],
+            )
+
+        def prepare_workspace(self, _request):
+            raise AssertionError("prepare_workspace must not run for unavailable runtimes")
+
+    monkeypatch.setattr(
+        simulator_adapters_service,
+        "get_plugin",
+        lambda _simulator_id: UnavailableWorkspacePlugin(),
+    )
+    request = SimulatorWorkspacePrepareRequest.model_validate(_open_request_payload())
+
+    with pytest.raises(SimulatorAdapterError) as exc_info:
+        simulator_adapters_service.prepare_simulator_workspace("pybullet", request)
+
+    assert exc_info.value.status_code == 503
+    assert "PyBullet runtime unavailable on this machine" in str(exc_info.value)
 
 
 def test_non_workspace_target_simulators_are_registered_but_not_openable() -> None:

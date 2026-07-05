@@ -93,6 +93,55 @@ describe("workspaceTransferLauncherDerivations", () => {
     expect(targetState.statusLabel).toBe("ready, display degraded: software OpenGL");
   });
 
+  it("marks available targets with missing optional dependencies for attention", () => {
+    const descriptor = createTargetDescriptor();
+    const status = {
+      targetId: descriptor.targetId,
+      available: true,
+      status: "ready",
+      dependencies: [
+        {
+          name: "warp",
+          available: false,
+          required: false,
+          scope: "validation" as const,
+        },
+      ],
+    };
+    const targetState = buildWorkspaceTransferTargetState({
+      descriptor,
+      lastOpenedTargetId: null,
+      loadingTargetId: null,
+      onCancelTarget: vi.fn(),
+      onOpenTarget: vi.fn(),
+      sceneSummary: formatSceneTransferSummary(3, 1),
+      status,
+    });
+
+    expect(canLaunchWorkspaceTransferTarget(descriptor, status)).toBe(true);
+    expect(targetState.canOpen).toBe(true);
+    expect(targetState.needsAttention).toBe(true);
+    expect(targetState.statusLabel).toBe("ready");
+  });
+
+  it("blocks workspace targets until an available status is confirmed", () => {
+    const descriptor = createTargetDescriptor();
+    const targetState = buildWorkspaceTransferTargetState({
+      descriptor,
+      lastOpenedTargetId: null,
+      loadingTargetId: null,
+      onCancelTarget: vi.fn(),
+      onOpenTarget: vi.fn(),
+      sceneSummary: formatSceneTransferSummary(3, 1),
+    });
+
+    expect(canLaunchWorkspaceTransferTarget(descriptor)).toBe(false);
+    expect(targetState.canOpen).toBe(false);
+    expect(targetState.statusLabel).toBe("checking");
+    expect(targetState.disabledLabel).toBe("PyBullet: checking availability");
+    expect(targetState.detail).toBe("URDF checking · 3 obj · 1 cam");
+  });
+
   it("labels unavailable and planned targets distinctly", () => {
     const unavailableDescriptor = createTargetDescriptor();
     const unavailableStatus = {
@@ -113,6 +162,7 @@ describe("workspaceTransferLauncherDerivations", () => {
       "missing display",
     );
     expect(resolveWorkspaceTransferTargetStatusLabel(plannedDescriptor)).toBe("planned");
+    expect(canLaunchWorkspaceTransferTarget(unavailableDescriptor, unavailableStatus)).toBe(false);
     expect(canLaunchWorkspaceTransferTarget(plannedDescriptor)).toBe(false);
   });
 

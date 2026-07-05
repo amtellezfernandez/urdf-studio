@@ -80,6 +80,19 @@ WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
 WORKSPACE_SIMULATOR_ID_SET: set[SimulatorId] = set(WORKSPACE_SIMULATOR_IDS)
 
 
+def _require_launchable_workspace_plugin(plugin: SimulatorPlugin) -> None:
+    if not plugin.workspace_target or plugin.transfer_strategy == "planned":
+        raise SimulatorCapabilityError(
+            f"{plugin.label} is registered for runtime discovery, "
+            "but its workspace adapter is planned."
+        )
+    status = plugin.runtime_status()
+    if not status.available:
+        raise SimulatorAdapterError(
+            f"{plugin.label} runtime unavailable on this machine: {status.status}"
+        )
+
+
 def get_simulator_adapter(simulator_id: SimulatorId) -> SimulatorAdapter:
     return get_plugin(simulator_id)
 
@@ -109,8 +122,10 @@ def prepare_simulator_workspace(
     simulator_id: SimulatorId,
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareResponse:
+    plugin = get_plugin(simulator_id)
+    _require_launchable_workspace_plugin(plugin)
     normalized_request = normalize_simulator_workspace_prepare_request(request)
-    return get_plugin(simulator_id).prepare_workspace(normalized_request)
+    return plugin.prepare_workspace(normalized_request)
 
 
 def apply_simulator_workspace_change_set(

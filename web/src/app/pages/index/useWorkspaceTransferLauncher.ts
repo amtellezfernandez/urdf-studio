@@ -17,6 +17,7 @@ import {
   buildWorkspaceTransferTargetState,
   canLaunchWorkspaceTransferTarget,
   formatSceneTransferSummary,
+  resolveWorkspaceTransferTargetStatusLabel,
 } from "@/app/pages/index/workspaceTransferLauncherDerivations";
 
 type UseWorkspaceTransferLauncherParams = {
@@ -198,7 +199,9 @@ export const useWorkspaceTransferLauncher = ({
       if (activeLaunchRef.current !== null) return;
       const status = targetStatuses[descriptor.targetId];
       if (!canLaunchWorkspaceTransferTarget(descriptor, status)) {
-        toast.message(`${descriptor.label} soon.`);
+        toast.message(
+          `${descriptor.label}: ${resolveWorkspaceTransferTargetStatusLabel(descriptor, status)}.`
+        );
         return;
       }
       if (!vizUrdfContent && !originalUrdfContent) {

@@ -1,5 +1,5 @@
 import { memo, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUpRight, ChevronsRight, LoaderCircle, Minus, X } from "lucide-react";
+import { ArrowUpRight, ChevronsRight, Info, LoaderCircle, X } from "lucide-react";
 import { CameraPreviewPanel } from "@/features/layout/panels/CameraPreviewPanel";
 import type { MeshFiles } from "@/shared/types/feature";
 import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
@@ -170,7 +170,7 @@ const WorkspaceTransferTargetButton = ({
         ) : target.canOpen ? (
           <ArrowUpRight className="h-3 w-3 text-muted-foreground/55 transition-colors group-hover:text-foreground" aria-hidden="true" />
         ) : (
-          <Minus className="h-3 w-3 text-muted-foreground/40" aria-hidden="true" />
+          <Info className="h-3 w-3 text-muted-foreground/50" aria-hidden="true" />
         )}
       </span>
     </button>

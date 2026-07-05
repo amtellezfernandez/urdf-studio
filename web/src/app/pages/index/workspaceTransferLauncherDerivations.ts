@@ -91,6 +91,7 @@ const workspaceTransferTargetNeedsAttention = (
   status?: WorkspaceTransferTargetStatus,
 ): boolean => {
   if (status?.available !== true) return false;
+  if (status.dependencies.some((dependency) => dependency.available === false)) return true;
   const normalizedStatus = status.status.trim().toLowerCase();
   return normalizedStatus !== "" && normalizedStatus !== "ready";
 };
@@ -98,7 +99,7 @@ const workspaceTransferTargetNeedsAttention = (
 export const canLaunchWorkspaceTransferTarget = (
   descriptor: WorkspaceTransferTargetDescriptor,
   status?: WorkspaceTransferTargetStatus,
-): boolean => canOpenWorkspaceTarget(descriptor) && status?.available !== false;
+): boolean => canOpenWorkspaceTarget(descriptor) && status?.available === true;
 
 export const assertWorkspacePackageCarriesSceneObjects = (
   worldPackage: WorldScenePackageManifest,
@@ -117,8 +118,10 @@ const resolveWorkspaceTransferTargetDetail = (
 ): string => {
   const assetFormat = formatWorkspaceAssetFormat(descriptor.transferPolicy.robotAssetFormat);
   const baseDetail = (() => {
-    if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} soon`;
-    if (status && !status.available) return `${assetFormat} soon`;
+    if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} planned`;
+    if (status?.available !== true) {
+      return status ? `${assetFormat} unavailable` : `${assetFormat} checking`;
+    }
     if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
     if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
     if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
@@ -140,7 +143,7 @@ export const buildWorkspaceTransferTargetState = ({
   const canOpen = canLaunchWorkspaceTransferTarget(descriptor, status);
   const disabledLabel = !canOpenWorkspaceTarget(descriptor)
     ? `${descriptor.label} planned`
-    : `${descriptor.label}: ${status?.status || "unavailable"}`;
+    : `${descriptor.label}: ${status?.status || "checking availability"}`;
   return {
     id: descriptor.targetId,
     label: descriptor.label,

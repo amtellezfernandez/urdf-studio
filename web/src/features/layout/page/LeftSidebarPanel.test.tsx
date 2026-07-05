@@ -216,4 +216,38 @@ describe("LeftSidebarPanel", () => {
       root.unmount();
     });
   });
+
+  it("shows an information icon for unavailable simulator targets", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = createProps();
+    props.workspaceTransfer = {
+      ...workspaceTransfer,
+      targets: [
+        {
+          ...workspaceTransfer.targets[0],
+          canOpen: false,
+          statusLabel: "Missing optional dependency: blender",
+          disabledLabel: "Genesis: Missing optional dependency: blender",
+        },
+      ],
+    };
+
+    await act(async () => {
+      root.render(createElement(LeftSidebarPanel, props));
+    });
+
+    const disabledButton = container.querySelector(
+      'button[aria-label="Genesis: Missing optional dependency: blender"]'
+    ) as HTMLButtonElement | null;
+    expect(disabledButton).toBeTruthy();
+    expect(disabledButton?.disabled).toBe(true);
+    expect(disabledButton?.querySelector(".lucide-info")).toBeTruthy();
+    expect(disabledButton?.querySelector(".lucide-arrow-up-right")).toBeFalsy();
+    expect(disabledButton?.querySelector("span")?.className).toContain("bg-muted");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
