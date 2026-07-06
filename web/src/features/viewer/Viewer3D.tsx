@@ -101,7 +101,10 @@ import { useRobotBoundingBoxSync } from "@/features/viewer/useRobotBoundingBoxSy
 import { useRobotCameraCentering } from "@/features/viewer/useRobotCameraCentering";
 import { useRobotJointSync } from "@/features/viewer/useRobotJointSync";
 import { useViewerLinkHighlights } from "@/features/viewer/useViewerLinkHighlights";
-import { buildThumbnailCameraFrame } from "@/features/viewer/thumbnailCameraFrame";
+import {
+  buildThumbnailCameraFrame,
+  buildThumbnailSceneBounds,
+} from "@/features/viewer/thumbnailCameraFrame";
 import { useUrdfFileContent } from "@/features/viewer/useUrdfFileContent";
 import {
   canUseViewerDragHandleMode,
@@ -914,15 +917,9 @@ const URDFModel = ({
         return;
       }
 
-      currentRobot.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(currentRobot);
-      thumbnailFramingWorldObjects.forEach((object) => {
-        if (object.isHidden) {
-          return;
-        }
-        const halfSize = object.size.clone().multiplyScalar(0.5);
-        box.expandByPoint(object.position.clone().sub(halfSize));
-        box.expandByPoint(object.position.clone().add(halfSize));
+      const box = buildThumbnailSceneBounds({
+        robot: currentRobot,
+        worldObjects: thumbnailFramingWorldObjects,
       });
       if (box.isEmpty()) {
         scheduleRetry();

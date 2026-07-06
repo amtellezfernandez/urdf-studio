@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { buildAxisFrameBasis } from "@/shared/lib/axisFrame";
-import { buildThumbnailCameraFrame } from "@/features/viewer/thumbnailCameraFrame";
+import {
+  buildThumbnailCameraFrame,
+  buildThumbnailSceneBounds,
+} from "@/features/viewer/thumbnailCameraFrame";
 
 const FRONT_WORLD = new THREE.Vector3(1, 0, 0);
 const UP_WORLD = new THREE.Vector3(0, 0, 1);
@@ -38,6 +41,32 @@ const projectPointIntoNormalizedView = ({
 };
 
 describe("buildThumbnailCameraFrame", () => {
+  it("builds thumbnail scene bounds from the robot and visible world objects", () => {
+    const robot = new THREE.Group();
+    const robotMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    robot.add(robotMesh);
+
+    const bounds = buildThumbnailSceneBounds({
+      robot,
+      worldObjects: [
+        {
+          position: new THREE.Vector3(2, 0, 0),
+          size: new THREE.Vector3(0.4, 0.4, 0.4),
+        },
+        {
+          position: new THREE.Vector3(-4, 0, 0),
+          size: new THREE.Vector3(1, 1, 1),
+          isHidden: true,
+        },
+      ],
+    });
+
+    expect(bounds.min.x).toBeCloseTo(-0.5);
+    expect(bounds.max.x).toBeCloseTo(2.2);
+    expect(bounds.min.y).toBeCloseTo(-0.5);
+    expect(bounds.max.y).toBeCloseTo(0.5);
+  });
+
   it("fits every bounding-box corner inside the frame", () => {
     const bounds = new THREE.Box3(
       new THREE.Vector3(-0.28, -0.2, 0),

@@ -39,6 +39,12 @@ export type ThumbnailCameraFrame = {
   far: number;
 };
 
+export type ThumbnailFramingObject = {
+  position: THREE.Vector3;
+  size: THREE.Vector3;
+  isHidden?: boolean;
+};
+
 const getBoxCorners = (bounds: THREE.Box3): THREE.Vector3[] =>
   BOX_CORNER_AXES.map(
     ([xAxis, yAxis, zAxis]) =>
@@ -61,6 +67,24 @@ const projectHalfExtent = (corners: readonly THREE.Vector3[], axis: THREE.Vector
 };
 
 const clamp01 = (value: number): number => THREE.MathUtils.clamp(value, 0, 1);
+
+export const buildThumbnailSceneBounds = ({
+  robot,
+  worldObjects,
+}: {
+  robot: THREE.Object3D;
+  worldObjects: readonly ThumbnailFramingObject[];
+}): THREE.Box3 => {
+  robot.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(robot);
+  worldObjects.forEach((object) => {
+    if (object.isHidden) return;
+    const halfSize = object.size.clone().multiplyScalar(0.5);
+    bounds.expandByPoint(object.position.clone().sub(halfSize));
+    bounds.expandByPoint(object.position.clone().add(halfSize));
+  });
+  return bounds;
+};
 
 export const buildThumbnailCameraFrame = ({
   bounds,
