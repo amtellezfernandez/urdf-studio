@@ -36,9 +36,9 @@ from backend.services.world_asset_refs import (
 )
 from backend.services.world_scene_contract import (
     CONCRETE_WORLD_LAYOUT_FRAME_MAPS,
+    WORLD_OBJECT_ASSET_SCALE_KEYS,
     WORLD_OBJECT_TYPES,
-    Y_UP_FRAME_CONVENTIONS,
-    Z_UP_FRAME_CONVENTIONS,
+    frame_map_from_world_frame_convention,
     normalize_world_frame_convention,
 )
 STATIC_SCENARIO_TIME_MS = 0
@@ -395,7 +395,7 @@ def _read_object_asset_scale(
     value: WorldLayoutPayloadRecord,
     index: int,
 ) -> tuple[float, float, float] | None:
-    for key in ("asset_scale_xyz", "mesh_scale_xyz", "scale_xyz"):
+    for key in WORLD_OBJECT_ASSET_SCALE_KEYS:
         if key in value:
             return _read_vector3(value.get(key), f"objects[{index}].{key}", positive=True)
     mesh = value.get("mesh")
@@ -576,11 +576,10 @@ def resolve_world_layout_frame_map(
         return layout.frame_map_hint
     if layout.frame_convention is None:
         return "identity"
+    resolved_frame_map = frame_map_from_world_frame_convention(layout.frame_convention)
+    if resolved_frame_map is not None:
+        return resolved_frame_map
     normalized = normalize_world_frame_convention(layout.frame_convention)
-    if normalized in Z_UP_FRAME_CONVENTIONS:
-        return "identity"
-    if normalized in Y_UP_FRAME_CONVENTIONS:
-        return "studio-y-up-to-z-up"
     raise WorldLayoutTransferError(
         f"Unsupported world frame convention: {layout.frame_convention}. "
         "Use ros-rep-103 for Z-up packages, studio-y-up for Studio Y-up packages, "

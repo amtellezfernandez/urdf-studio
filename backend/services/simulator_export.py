@@ -18,6 +18,7 @@ from backend.models.physical_state import (
 )
 from backend.services.executability_audit import audit_physical_rollout_trace
 from backend.services.simulator_adapters.base import is_python_module_available
+from backend.services.world_scene_contract import frame_map_from_world_frame_convention
 from backend.services.world_layout_static_transfer import (
     STUDIO_Y_UP_TO_Z_UP,
     SimPrimitive,
@@ -62,11 +63,9 @@ def _format_float_vector(values: list[float] | tuple[float, ...]) -> str:
 
 
 def _frame_map_for_simulator(frame_convention: str) -> WorldLayoutFrameMap:
-    normalized = frame_convention.strip().lower().replace("_", "-")
-    if normalized in {"studio-y-up", "urdf-studio-y-up"}:
-        return "studio-y-up-to-z-up"
-    if normalized in {"identity", "z-up", "mujoco-z-up", "genesis-z-up", "simulator-z-up", "world-z-up"}:
-        return "identity"
+    resolved = frame_map_from_world_frame_convention(frame_convention)
+    if resolved is not None:
+        return resolved
     raise ValueError(f"Unsupported physical frame convention for simulator export: {frame_convention}")
 
 
