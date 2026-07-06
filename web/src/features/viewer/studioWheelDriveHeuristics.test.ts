@@ -10,6 +10,7 @@ import {
   STUDIO_WHEEL_NAME_TOKEN_REGEX,
   STUDIO_WHEEL_REVOLUTE_SPAN_MIN_RAD,
   applyStudioDriveJointHintsToUrdf,
+  buildStudioWheelJointSearchLabel,
   extractStudioDriveJointHintsFromUrdf,
   getStudioWheelRoleLabel,
   isStudioWheelLikeLabel,
@@ -78,6 +79,22 @@ describe("studioWheelDriveHeuristics", () => {
     expect(isStudioWheelLikeLabel("caster_swivel_joint")).toBe(true);
     expect(isStudioWheelLikeLabel("revolution_41")).toBe(false);
     expect(isStudioWheelLikeLabel("revolution_41 front_wheel_right_1")).toBe(true);
+  });
+
+  it("builds wheel joint search labels from joint and link names", () => {
+    expect(
+      buildStudioWheelJointSearchLabel({
+        jointName: "revolution_41",
+        childNames: ["front_wheel_right_1"],
+      })
+    ).toBe("revolution_41 front_wheel_right_1");
+    expect(
+      buildStudioWheelJointSearchLabel({
+        jointName: "rear_axis",
+        parentName: " base_link ",
+        childNames: [" rear_tire ", ""],
+      })
+    ).toBe("rear_axis base_link rear_tire");
   });
 
   it("allows hinted drive joints even when names are not wheel-like", () => {

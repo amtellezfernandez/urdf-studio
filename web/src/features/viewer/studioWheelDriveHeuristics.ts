@@ -47,6 +47,20 @@ export const shouldIncludeStudioWheelJoint = ({
 export const getStudioWheelRoleLabel = (role: StudioWheelRole): string =>
   role === "unknown" ? "idle" : role;
 
+export const buildStudioWheelJointSearchLabel = ({
+  jointName,
+  parentName,
+  childNames = [],
+}: {
+  jointName: string;
+  parentName?: string | null;
+  childNames?: readonly (string | null | undefined)[];
+}): string =>
+  [jointName, parentName, ...childNames]
+    .map((name) => name?.trim() ?? "")
+    .filter((name) => name.length > 0)
+    .join(" ");
+
 export const isStudioWheelLikeLabel = (label: string): boolean =>
   STUDIO_WHEEL_NAME_TOKEN_REGEX.test(label);
 

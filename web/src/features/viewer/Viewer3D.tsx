@@ -176,6 +176,7 @@ import {
   createLocalStorageAdaptiveTrajectoryRepository,
 } from "@/features/ik/runtime/adaptiveTrajectoryRuntime";
 import {
+  buildStudioWheelJointSearchLabel,
   computeStudioWheelDriveAuthority,
   computeStudioWheelDriveAuthorityFromEntries,
   extractStudioDriveJointHintsFromUrdf,
@@ -494,11 +495,11 @@ const URDFModel = ({
     if (robot && activeJoint) {
       const joint = robot.joints?.[activeJoint];
       const jointLabel = joint
-        ? [
-            activeJoint,
-            joint.parent?.name ?? "",
-            ...(joint.children ?? []).map((child) => child.name || ""),
-          ].join(" ")
+        ? buildStudioWheelJointSearchLabel({
+            jointName: activeJoint,
+            parentName: joint.parent?.name,
+            childNames: (joint.children ?? []).map((child) => child.name),
+          })
         : activeJoint;
       if (isStudioWheelLikeLabel(jointLabel)) {
         draggingJointRef.current = null;
@@ -1024,11 +1025,11 @@ const URDFModel = ({
 
   const isWheelLikeJoint = useCallback((jointName: string, joint: URDFJoint | undefined) => {
     if (!joint) return false;
-    const label = [
+    const label = buildStudioWheelJointSearchLabel({
       jointName,
-      joint.parent?.name ?? "",
-      ...(joint.children ?? []).map((child) => child.name || ""),
-    ].join(" ");
+      parentName: joint.parent?.name,
+      childNames: (joint.children ?? []).map((child) => child.name),
+    });
     return isStudioWheelLikeLabel(label);
   }, []);
 

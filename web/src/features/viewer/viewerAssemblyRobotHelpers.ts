@@ -20,7 +20,10 @@ import {
   resolveWheelCenterWorldFromJointGeometry,
   resolveWheelRadiusFromJointGeometry,
 } from "@/features/viewer/studioWheelDriveModel";
-import { isStudioWheelLikeLabel } from "@/features/viewer/studioWheelDriveHeuristics";
+import {
+  buildStudioWheelJointSearchLabel,
+  isStudioWheelLikeLabel,
+} from "@/features/viewer/studioWheelDriveHeuristics";
 import { WHEEL_PLAYBACK_MOTION_PARAMS } from "@/features/viewer/playback/wheelPlaybackMotionParams";
 import { isFinitePositiveMotionDimension } from "@/features/viewer/viewer3dHelpers";
 
@@ -96,10 +99,10 @@ const detectAssemblyWheelProfile = (
     const jointType = String((joint as { jointType?: string }).jointType ?? "").toLowerCase();
     if (jointType !== "continuous" && jointType !== "revolute") return;
 
-    const childNames = (joint.children ?? [])
-      .map((child) => child.name || "")
-      .join(" ");
-    const jointLabel = `${jointName} ${childNames}`;
+    const jointLabel = buildStudioWheelJointSearchLabel({
+      jointName,
+      childNames: (joint.children ?? []).map((child) => child.name),
+    });
     if (!isStudioWheelLikeLabel(jointLabel)) return;
 
     let axisLocal = new THREE.Vector3(0, 1, 0);

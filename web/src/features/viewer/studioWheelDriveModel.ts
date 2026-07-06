@@ -9,6 +9,7 @@ import {
   worldDirectionFromLocal,
 } from "@/shared/lib/axisFrame";
 import {
+  buildStudioWheelJointSearchLabel,
   inferStudioWheelSideFromLateralOffset,
   isStudioWheelLikeLabel,
   resolveStudioActiveDriveJointNames,
@@ -301,8 +302,10 @@ export const detectStudioWheelDriveModel = (
   Object.entries(robot.joints ?? {}).forEach(([jointName, joint]) => {
     const jointType = String((joint as { jointType?: string }).jointType ?? "").toLowerCase();
     if (jointType !== "continuous" && jointType !== "revolute") return;
-    const childNames = (joint.children ?? []).map((child) => child.name || "").join(" ");
-    const label = `${jointName} ${childNames}`;
+    const label = buildStudioWheelJointSearchLabel({
+      jointName,
+      childNames: (joint.children ?? []).map((child) => child.name),
+    });
     const hasWheelLikeLabel = isStudioWheelLikeLabel(label);
     if (
       !shouldDetectStudioWheelJointByHintOrLabel({
