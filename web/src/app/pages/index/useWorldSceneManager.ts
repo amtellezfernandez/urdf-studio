@@ -147,7 +147,11 @@ export const useWorldSceneManager = ({
   );
 
   const buildCurrentWorldSceneRegistryEnvelope = useCallback(
-    async (): Promise<WorldSceneRegistryEnvelope> => {
+    async (
+      overrides?: Partial<
+        Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
+      >
+    ): Promise<WorldSceneRegistryEnvelope> => {
       const transferObjects = getObjectsForTransfer?.() ?? objectsRef.current;
       objectsRef.current = transferObjects;
       return buildWorldSceneRegistryEnvelopeFromState({
@@ -158,6 +162,7 @@ export const useWorldSceneManager = ({
         cameras,
         objects: transferObjects,
         demoMode: DEMO_MODE,
+        overrides,
       });
     },
     [
@@ -406,7 +411,7 @@ export const useWorldSceneManager = ({
     worldPublishDraft,
     worldPublishTarget,
   } = useWorldPublishController({
-    buildCurrentWorldScenePackageManifest,
+    buildCurrentWorldSceneRegistryEnvelope,
     resolvedRobotName,
   });
 

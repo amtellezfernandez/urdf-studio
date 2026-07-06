@@ -7,8 +7,7 @@ import {
   useWorldPublishController,
   type UseWorldPublishControllerResult,
 } from "@/app/pages/index/useWorldPublishController";
-import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 
 const {
   publishWorldScenePackageMock,
@@ -38,12 +37,14 @@ vi.mock("sonner", () => ({
 }));
 
 type WorldPublishManifestOverrides = Partial<
-  Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
+  Pick<WorldSceneRegistryEnvelope, "package_id" | "version" | "description"> & {
+    title: string;
+  }
 >;
 
 type BuildManifest = (
   overrides?: WorldPublishManifestOverrides
-) => Promise<WorldScenePackageManifest>;
+) => Promise<WorldSceneRegistryEnvelope>;
 
 type RenderedHarness = {
   buildManifestMock: ReturnType<typeof vi.fn>;
@@ -61,30 +62,16 @@ const WORLD_PUBLISH_CONTROLLER_TEST_FIXTURES = {
 
 const createManifest = (
   overrides: WorldPublishManifestOverrides = {}
-): WorldScenePackageManifest => ({
+): WorldSceneRegistryEnvelope => ({
   artifacts: [],
-  created_at: "2026-07-04T00:00:00Z",
   description: overrides.description,
-  interface: {
-    action_semantics: "none",
-    frame_convention: "urdf",
-    observation_modalities: [],
-    timestep_ms: 0,
-  },
   package_id: overrides.package_id ?? WORLD_PUBLISH_CONTROLLER_TEST_FIXTURES.packageId,
   provenance: {},
-  runtime_targets: [],
-  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
-  security: {
-    attestation_refs: [],
-    sbom_ref: null,
-    signature_ref: null,
-  },
-  title: overrides.title ?? WORLD_PUBLISH_CONTROLLER_TEST_FIXTURES.title,
   version: overrides.version ?? WORLD_PUBLISH_CONTROLLER_TEST_FIXTURES.version,
-  world_snapshot: {
+  world: {
     cameras: [],
     joint_positions: {},
+    name: overrides.title ?? WORLD_PUBLISH_CONTROLLER_TEST_FIXTURES.title,
     objects: [],
     scenario_duration_ms: 0,
     scenario_time_ms: 0,
@@ -106,7 +93,7 @@ const renderWorldPublishControllerHook = async (): Promise<RenderedHarness> => {
 
   const Harness = () => {
     hookValue = useWorldPublishController({
-      buildCurrentWorldScenePackageManifest: buildManifestMock,
+      buildCurrentWorldSceneRegistryEnvelope: buildManifestMock,
       resolvedRobotName: WORLD_PUBLISH_CONTROLLER_TEST_FIXTURES.robotName,
     });
     return null;

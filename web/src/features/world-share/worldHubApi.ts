@@ -3,7 +3,10 @@ import {
   WORLD_HUB_API_BASE_URL,
   isWorldHubConfigured,
 } from "@/shared/config/worldHub";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
+} from "@/features/world-share/worldScenePackageTypes";
 import { toWorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageBuilder";
 import {
   createWorldScenePackageClient,
@@ -18,8 +21,12 @@ const worldHubClient = createWorldScenePackageClient(
 
 export const isWorldHubEnabled = () => isWorldHubConfigured();
 
-export const publishWorldScenePackageToHub = (manifest: WorldScenePackageManifest) =>
-  worldHubClient.publishManifest(toWorldSceneRegistryEnvelope(manifest));
+export const publishWorldScenePackageToHub = (
+  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
+) =>
+  worldHubClient.publishManifest(
+    "world" in manifest ? manifest : toWorldSceneRegistryEnvelope(manifest)
+  );
 
 export const listWorldScenePackagesFromHub = (query?: WorldScenePackageListQuery) =>
   worldHubClient.listPackages(query);

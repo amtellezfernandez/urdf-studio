@@ -62,6 +62,7 @@ type BuildWorldSceneRegistryEnvelopeParams = {
   packageId: string;
   version: string;
   name?: string;
+  description?: string;
   urdfXml: string;
   jointPositions: Record<string, number>;
   cameras: Camera[];
@@ -263,6 +264,9 @@ export const refreshWorldSceneRegistryEnvelopeSnapshotDigest = async (
   return {
     package_id: sanitizePackageId(envelope.package_id),
     version: envelope.version,
+    ...(typeof envelope.description === "string" && envelope.description.trim()
+      ? { description: envelope.description.trim() }
+      : {}),
     provenance: { ...envelope.provenance },
     artifacts: [
       ...envelope.artifacts
@@ -338,6 +342,7 @@ export const buildWorldSceneRegistryEnvelope = async ({
   packageId,
   version,
   name,
+  description,
   urdfXml,
   jointPositions,
   cameras,
@@ -367,6 +372,7 @@ export const buildWorldSceneRegistryEnvelope = async ({
   return {
     package_id: normalizedPackageId,
     version,
+    ...(description?.trim() ? { description: description.trim() } : {}),
     provenance: provenance ?? {},
     artifacts: [worldSnapshotArtifactRef(snapshotDigest)],
     world,
@@ -379,6 +385,7 @@ export const toWorldSceneRegistryEnvelope = (
   return {
     package_id: manifest.package_id,
     version: manifest.version,
+    ...(manifest.description?.trim() ? { description: manifest.description.trim() } : {}),
     provenance: { ...manifest.provenance },
     artifacts: manifest.artifacts.map((artifact) => ({ ...artifact })),
     world: toWorldSceneDocument(manifest),

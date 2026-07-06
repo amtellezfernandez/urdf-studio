@@ -163,6 +163,7 @@ export type WorldSceneDocumentEnvelope = {
 export type WorldSceneRegistryEnvelope = {
   package_id: string;
   version: string;
+  description?: string;
   provenance: Record<string, unknown>;
   artifacts: WorldArtifactRef[];
   world: WorldSceneDocument;

@@ -82,6 +82,7 @@ type BuildWorldSceneRegistryEnvelopeFromStateParams = {
   cameras: Camera[];
   objects: CreatedObject[];
   demoMode: boolean;
+  overrides?: WorldScenePackageOverrides;
 };
 
 type WorldRolloutConfigDraft = {
@@ -209,12 +210,14 @@ export const buildWorldSceneRegistryEnvelopeFromState = async ({
   cameras,
   objects,
   demoMode,
+  overrides,
 }: BuildWorldSceneRegistryEnvelopeFromStateParams): Promise<WorldSceneRegistryEnvelope> => {
   const { buildWorldSceneRegistryEnvelope } = await loadWorldScenePackageBuilderModule();
   return buildWorldSceneRegistryEnvelope({
-    packageId: resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_ID,
-    version: WORLD_SCENE_PACKAGE_DEFAULT_VERSION,
-    name: resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
+    packageId: overrides?.package_id || resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_ID,
+    version: overrides?.version || WORLD_SCENE_PACKAGE_DEFAULT_VERSION,
+    name: overrides?.title || resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
+    description: overrides?.description,
     urdfXml: vizUrdfContent || originalUrdfContent,
     jointPositions: { ...jointValues },
     cameras,
@@ -521,7 +524,7 @@ export const createWorldSceneLayerExportDocument = async (
 };
 
 export const publishWorldScenePackage = async (
-  manifest: WorldScenePackageManifest,
+  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
   target: "registry" | "hub"
 ): Promise<WorldScenePackagePublishResponse> => {
   if (target === "hub") {

@@ -5,7 +5,7 @@ import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 import {
   createDefaultWorldPublishDraft,
   prepareWorldPublishManifestOverrides,
@@ -17,13 +17,15 @@ import {
 import { publishWorldScenePackage } from "@/app/pages/index/worldSceneRuntime";
 
 type WorldPublishManifestOverrides = Partial<
-  Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
+  Pick<WorldSceneRegistryEnvelope, "package_id" | "version" | "description"> & {
+    title: string;
+  }
 >;
 
 type UseWorldPublishControllerParams = {
-  buildCurrentWorldScenePackageManifest: (
+  buildCurrentWorldSceneRegistryEnvelope: (
     overrides?: WorldPublishManifestOverrides
-  ) => Promise<WorldScenePackageManifest>;
+  ) => Promise<WorldSceneRegistryEnvelope>;
   resolvedRobotName: string | null;
 };
 
@@ -49,7 +51,7 @@ const requirePublishTarget = (target: WorldPublishTarget): void => {
 };
 
 export const useWorldPublishController = ({
-  buildCurrentWorldScenePackageManifest,
+  buildCurrentWorldSceneRegistryEnvelope,
   resolvedRobotName,
 }: UseWorldPublishControllerParams): UseWorldPublishControllerResult => {
   const [worldPublishDialogOpen, setWorldPublishDialogOpen] = useState(false);
@@ -89,7 +91,7 @@ export const useWorldPublishController = ({
     setIsPublishingWorldPackage(true);
     try {
       requirePublishTarget(worldPublishTarget);
-      const manifest = await buildCurrentWorldScenePackageManifest(
+      const manifest = await buildCurrentWorldSceneRegistryEnvelope(
         publishDraftPreparation.manifestOverrides
       );
       const publish = await publishWorldScenePackage(manifest, worldPublishTarget);
@@ -106,7 +108,7 @@ export const useWorldPublishController = ({
       setIsPublishingWorldPackage(false);
     }
   }, [
-    buildCurrentWorldScenePackageManifest,
+    buildCurrentWorldSceneRegistryEnvelope,
     resolvedRobotName,
     worldPublishDraft,
     worldPublishTarget,
