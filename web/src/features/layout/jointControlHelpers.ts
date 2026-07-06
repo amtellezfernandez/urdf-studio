@@ -8,7 +8,7 @@ import {
 } from "@/shared/lib/urdfBrowser";
 import { RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { getJointLimitsError } from "@/shared/lib/jointLimits";
-import { parseFiniteFloatOrNull } from "@/shared/lib/numeric";
+import { isFiniteNumber, parseFiniteFloatOrNull } from "@/shared/lib/numeric";
 import { parseVector3 } from "@/features/urdf/editor/link-editor/sizeUtils";
 
 export type JointVector3 = [number, number, number];
@@ -107,7 +107,7 @@ export const resolveJointLimitDisplayValue = ({
 }): number | undefined => {
   const parsedLocalLimit = parseJointNumericInput(localLimit);
   const resolvedLimit = parsedLocalLimit ?? fallbackLimit ?? undefined;
-  if (resolvedLimit === undefined || !Number.isFinite(resolvedLimit)) {
+  if (resolvedLimit === undefined || !isFiniteNumber(resolvedLimit)) {
     return undefined;
   }
   return angleUnit === "deg" ? resolvedLimit * RAD_TO_DEG : resolvedLimit;

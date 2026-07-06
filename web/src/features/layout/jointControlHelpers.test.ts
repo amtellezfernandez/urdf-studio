@@ -147,6 +147,13 @@ describe("jointControlHelpers", () => {
         localLimit: "bad",
       })
     ).toBeUndefined();
+    expect(
+      resolveJointLimitDisplayValue({
+        angleUnit: "rad",
+        fallbackLimit: Number.POSITIVE_INFINITY,
+        localLimit: "",
+      })
+    ).toBeUndefined();
   });
 
   it("validates limit commit state", () => {

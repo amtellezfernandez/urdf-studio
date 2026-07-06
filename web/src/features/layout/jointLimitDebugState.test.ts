@@ -28,6 +28,11 @@ describe("jointLimitDebugState", () => {
       status: "invalid",
       value: null,
     });
+    expect(parseLimitAttributeDebugState(Number.POSITIVE_INFINITY)).toEqual({
+      raw: "Infinity",
+      status: "invalid",
+      value: null,
+    });
     expect(parseLimitAttributeDebugState("-1")).toEqual({
       raw: "-1",
       status: "invalid",

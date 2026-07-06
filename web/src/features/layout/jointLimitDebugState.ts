@@ -1,4 +1,4 @@
-import { isFinitePositiveNumber } from "@/shared/lib/numeric";
+import { isFiniteNumber, isFinitePositiveNumber } from "@/shared/lib/numeric";
 
 type LimitAttributeStatus = "set" | "missing" | "invalid" | "zero";
 
@@ -24,7 +24,7 @@ export const parseLimitAttributeDebugState = (
 
   const raw = typeof value === "number" ? String(value) : value.trim();
   const parsedValue = typeof value === "number" ? value : Number(raw);
-  if (raw.length === 0 || !Number.isFinite(parsedValue)) {
+  if (raw.length === 0 || !isFiniteNumber(parsedValue)) {
     return { raw, status: "invalid", value: null };
   }
   if (parsedValue < 0) {
