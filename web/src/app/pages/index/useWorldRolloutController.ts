@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { WORLD_ROLLOUT_IMPORT_ACCEPT } from "@/features/world-share/worldRolloutParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import type {
@@ -77,7 +78,7 @@ export const useWorldRolloutController = ({
       downloadWorldRolloutCampaignManifest(campaign, downloadJsonDocument);
       toast.success("World rollout campaign exported");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export rollout campaign");
+      toast.error(readUnknownErrorMessage(error, "Failed to export rollout campaign"));
     }
   }, [buildWorldRolloutInputs]);
 
@@ -102,7 +103,7 @@ export const useWorldRolloutController = ({
 
       toast.success(toWorldRolloutCompletionMessage(completedJob));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to run world rollout");
+      toast.error(readUnknownErrorMessage(error, "Failed to run world rollout"));
     }
   }, [buildWorldRolloutInputs]);
 
@@ -123,7 +124,7 @@ export const useWorldRolloutController = ({
             `World rollout imported: ${importedReview.decision_count} decisions, ${importedReview.stop_count} stops, ${importedReview.escalation_count} escalations`
           );
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to import rollout results");
+          toast.error(readUnknownErrorMessage(error, "Failed to import rollout results"));
         }
       },
     });

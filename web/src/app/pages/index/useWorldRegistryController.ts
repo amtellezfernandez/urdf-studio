@@ -3,6 +3,7 @@ import { toast } from "sonner";
 
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type {
   WorldScenePackageListEntry,
   WorldScenePackageManifest,
@@ -37,7 +38,7 @@ const requireWorldRegistry = (actionLabel: string): boolean => {
     requireFeatureGate(FEATURE_GATES.worldsRegistry, actionLabel);
     return true;
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : "World registry unavailable");
+    toast.error(readUnknownErrorMessage(error, "World registry unavailable"));
     return false;
   }
 };
@@ -59,7 +60,7 @@ export const useWorldRegistryController = ({
       const worlds = await fetchWorldRegistryPackages();
       setWorldRegistryEntries(worlds);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to refresh world registry");
+      toast.error(readUnknownErrorMessage(error, "Failed to refresh world registry"));
     } finally {
       setWorldRegistryLoading(false);
     }
@@ -90,7 +91,7 @@ export const useWorldRegistryController = ({
         applyWorldScenePackage(record.manifest);
         setWorldRegistryOpen(false);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load world package");
+        toast.error(readUnknownErrorMessage(error, "Failed to load world package"));
       }
     },
     [applyWorldScenePackage, worldRegistryVersionCache]
