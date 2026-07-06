@@ -7,9 +7,9 @@ from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorRuntimeListResponse,
     SimulatorRuntimeStatus,
-    WorkspaceChangeSetApplyRequest,
+    WorkspaceChangeSetApplyDocumentRequest,
     WorkspaceChangeSetApplyResponse,
-    SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareDocumentRequest,
     SimulatorWorkspacePrepareResponse,
 )
 from backend.services.simulator_adapters import (
@@ -43,13 +43,13 @@ async def get_runtime_status(
 @router.post("/{simulator_id}/workspace/prepare", response_model=SimulatorWorkspacePrepareResponse)
 async def prepare_simulator_workspace_route(
     simulator_id: SimulatorId,
-    request: SimulatorWorkspacePrepareRequest,
+    request: SimulatorWorkspacePrepareDocumentRequest,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> SimulatorWorkspacePrepareResponse:
     try:
         return prepare_simulator_workspace(
             simulator_id,
-            normalize_simulator_workspace_prepare_request(request),
+            normalize_simulator_workspace_prepare_request(request.to_internal_request()),
         )
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
@@ -61,11 +61,11 @@ async def prepare_simulator_workspace_route(
 )
 async def apply_simulator_workspace_change_set_route(
     simulator_id: SimulatorId,
-    request: WorkspaceChangeSetApplyRequest,
+    request: WorkspaceChangeSetApplyDocumentRequest,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorkspaceChangeSetApplyResponse:
     try:
-        return apply_simulator_workspace_change_set(simulator_id, request)
+        return apply_simulator_workspace_change_set(simulator_id, request.to_internal_request())
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:

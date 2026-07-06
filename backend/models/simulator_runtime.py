@@ -7,8 +7,14 @@ from typing import Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.json_payload import JsonObject
-from backend.models.world_scene_package import WorldScenePackageManifest
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
+from backend.models.world_scene_package import (
+    WorldScenePackageManifest,
+    WorldSceneRegistryEnvelope,
+)
+from backend.services.world_scene_package_compat import (
+    read_world_scene_package_manifest,
+    read_world_scene_registry_envelope,
+)
 
 
 SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
@@ -169,6 +175,73 @@ class WorkspaceChangeSetApplyResponse(BaseModel):
     world_package: WorldScenePackageManifest
     applied_change_count: int
     review_only_count: int
+
+
+class SimulatorWorkspacePrepareDocumentRequest(BaseModel):
+    world_package: WorldSceneRegistryEnvelope
+    urdf_asset_path: str | None = Field(default=None, max_length=512)
+    mesh_assets: list[SimulatorMeshAssetUpload] = Field(
+        default_factory=list,
+        max_length=MAX_SIMULATOR_MESH_ASSETS,
+    )
+    package_roots: dict[str, list[str]] = Field(
+        default_factory=dict,
+        max_length=MAX_SIMULATOR_PACKAGE_ROOTS,
+    )
+    ilu_session_id: str | None = Field(default=None, max_length=128)
+    launch_id: str | None = Field(default=None, max_length=128)
+
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(
+        cls,
+        value: object,
+    ) -> WorldSceneRegistryEnvelope:
+        return read_world_scene_registry_envelope(value)
+
+    @field_validator("urdf_asset_path")
+    @classmethod
+    def validate_urdf_asset_path(cls, value: str | None) -> str | None:
+        return SimulatorWorkspacePrepareRequest.validate_urdf_asset_path(value)
+
+    @field_validator("launch_id")
+    @classmethod
+    def validate_launch_id(cls, value: str | None) -> str | None:
+        return SimulatorWorkspacePrepareRequest.validate_launch_id(value)
+
+    @field_validator("package_roots")
+    @classmethod
+    def validate_package_roots(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        return SimulatorWorkspacePrepareRequest.validate_package_roots(value)
+
+    def to_internal_request(self) -> SimulatorWorkspacePrepareRequest:
+        return SimulatorWorkspacePrepareRequest(
+            world_package=self.world_package,
+            urdf_asset_path=self.urdf_asset_path,
+            mesh_assets=self.mesh_assets,
+            package_roots=self.package_roots,
+            ilu_session_id=self.ilu_session_id,
+            launch_id=self.launch_id,
+        )
+
+
+class WorkspaceChangeSetApplyDocumentRequest(BaseModel):
+    world_package: WorldSceneRegistryEnvelope
+    change_set: WorkspaceChangeSetPayload
+
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(
+        cls,
+        value: object,
+    ) -> WorldSceneRegistryEnvelope:
+        return read_world_scene_registry_envelope(value)
+
+    def to_internal_request(self) -> WorkspaceChangeSetApplyRequest:
+        return WorkspaceChangeSetApplyRequest(
+            world_package=self.world_package,
+            change_set=self.change_set,
+        )
 
 
 class SimulatorRuntimeCamelModel(BaseModel):
