@@ -16,6 +16,7 @@ import {
   resolveStudioActiveDriveJointNames,
   shouldDetectStudioWheelJointByHintOrLabel,
   shouldIncludeStudioWheelJoint,
+  toggleStudioWheelDriveJointOverride,
   toStudioWheelRoleDisplayEntries,
 } from "./studioWheelDriveHeuristics";
 
@@ -286,6 +287,60 @@ describe("studioWheelDriveHeuristics", () => {
       {}
     );
     expect(Array.from(active).sort()).toEqual(["front_left", "front_right"]);
+  });
+
+  it("toggles a follower wheel into the drive set", () => {
+    expect(
+      toggleStudioWheelDriveJointOverride({
+        jointName: "rear_left",
+        wheels: [
+          { jointName: "front_left", drivePreferred: true },
+          { jointName: "rear_left", drivePreferred: false },
+        ],
+        previousOverrides: {},
+      })
+    ).toEqual({ rear_left: true });
+  });
+
+  it("toggles a default drive wheel off", () => {
+    expect(
+      toggleStudioWheelDriveJointOverride({
+        jointName: "front_left",
+        wheels: [
+          { jointName: "front_left", drivePreferred: true },
+          { jointName: "rear_left", drivePreferred: false },
+        ],
+        previousOverrides: {},
+      })
+    ).toEqual({ front_left: false });
+  });
+
+  it("removes redundant wheel drive overrides when toggling back to defaults", () => {
+    expect(
+      toggleStudioWheelDriveJointOverride({
+        jointName: "rear_left",
+        wheels: [
+          { jointName: "front_left", drivePreferred: true },
+          { jointName: "rear_left", drivePreferred: false },
+        ],
+        previousOverrides: { rear_left: true },
+      })
+    ).toEqual({});
+  });
+
+  it("keeps wheel drive overrides unchanged for unknown joints", () => {
+    const previousOverrides = { rear_left: true };
+
+    expect(
+      toggleStudioWheelDriveJointOverride({
+        jointName: "arm_joint",
+        wheels: [
+          { jointName: "front_left", drivePreferred: true },
+          { jointName: "rear_left", drivePreferred: false },
+        ],
+        previousOverrides,
+      })
+    ).toBe(previousOverrides);
   });
 
   it("builds wheel display entries only for currently available joints", () => {

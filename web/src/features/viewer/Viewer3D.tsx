@@ -178,7 +178,7 @@ import {
   extractStudioDriveJointHintsFromUrdf,
   isStudioWheelLikeLabel,
   persistStudioDriveJointHintsToUrdf,
-  resolveStudioActiveDriveJointNames,
+  toggleStudioWheelDriveJointOverride,
   toStudioWheelRoleDisplayEntries,
   toSortedUniqueJointNames,
   type StudioWheelRole,
@@ -2778,37 +2778,11 @@ export const Viewer3D = ({
     setWheelDriveJointOverrides((previous) => {
       const model = studioWheelDriveRef.current?.model;
       if (!model) return previous;
-      const allJointNames = model.wheels.map((wheel) => wheel.jointName);
-      if (!allJointNames.includes(jointName)) return previous;
-      const defaultDriveJointNames = model.wheels
-        .filter((wheel) => wheel.drivePreferred)
-        .map((wheel) => wheel.jointName);
-      const defaultDriveJointNameSet = new Set(defaultDriveJointNames);
-      const activeDriveJointNameSet = resolveStudioActiveDriveJointNames(
-        allJointNames,
-        defaultDriveJointNames,
-        previous
-      );
-      const currentlyEnabled = activeDriveJointNameSet.has(jointName);
-      const nextEnabled = !currentlyEnabled;
-      const defaultEnabled = defaultDriveJointNameSet.has(jointName);
-
-      if (nextEnabled === defaultEnabled) {
-        if (!Object.prototype.hasOwnProperty.call(previous, jointName)) {
-          return previous;
-        }
-        const next = { ...previous };
-        delete next[jointName];
-        return next;
-      }
-
-      if (previous[jointName] === nextEnabled) {
-        return previous;
-      }
-      return {
-        ...previous,
-        [jointName]: nextEnabled,
-      };
+      return toggleStudioWheelDriveJointOverride({
+        jointName,
+        wheels: model.wheels,
+        previousOverrides: previous,
+      });
     });
   }, []);
 

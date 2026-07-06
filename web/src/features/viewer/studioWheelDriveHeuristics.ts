@@ -336,6 +336,48 @@ export const resolveStudioActiveDriveJointNames = (
   return new Set(normalizedAll);
 };
 
+export const toggleStudioWheelDriveJointOverride = ({
+  jointName,
+  wheels,
+  previousOverrides,
+}: {
+  jointName: string;
+  wheels: readonly { jointName: string; drivePreferred: boolean }[];
+  previousOverrides: Record<string, boolean>;
+}): Record<string, boolean> => {
+  const allJointNames = wheels.map((wheel) => wheel.jointName);
+  if (!allJointNames.includes(jointName)) return previousOverrides;
+
+  const defaultDriveJointNames = wheels
+    .filter((wheel) => wheel.drivePreferred)
+    .map((wheel) => wheel.jointName);
+  const defaultDriveJointNameSet = new Set(defaultDriveJointNames);
+  const activeDriveJointNameSet = resolveStudioActiveDriveJointNames(
+    allJointNames,
+    defaultDriveJointNames,
+    previousOverrides
+  );
+  const nextEnabled = !activeDriveJointNameSet.has(jointName);
+  const defaultEnabled = defaultDriveJointNameSet.has(jointName);
+
+  if (nextEnabled === defaultEnabled) {
+    if (!Object.prototype.hasOwnProperty.call(previousOverrides, jointName)) {
+      return previousOverrides;
+    }
+    const nextOverrides = { ...previousOverrides };
+    delete nextOverrides[jointName];
+    return nextOverrides;
+  }
+
+  if (previousOverrides[jointName] === nextEnabled) {
+    return previousOverrides;
+  }
+  return {
+    ...previousOverrides,
+    [jointName]: nextEnabled,
+  };
+};
+
 const STUDIO_WHEEL_NUMBER_START = 1;
 
 export const toStudioWheelRoleDisplayEntries = <TEntry extends { jointName: string }>(
