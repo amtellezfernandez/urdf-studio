@@ -38,24 +38,14 @@ from backend.services.simulator_adapters.workspace_launches import cancel_worksp
 def _adapter_change_set_request(
     request: WorkspaceChangeSetApplyRequest,
 ) -> AdapterWorkspaceChangeSetApplyRequest:
-    return AdapterWorkspaceChangeSetApplyRequest(
-        world_package=request.world_package,
-        change_set=request.change_set,
-    )
+    return request.to_internal_request()
 
 
 def _build_workspace_prepare_request(
     request: WorkspaceOpenRequest,
 ) -> SimulatorWorkspacePrepareRequest:
     try:
-        return SimulatorWorkspacePrepareRequest(
-            world_package=request.world_package,
-            urdf_asset_path=request.urdf_asset_path,
-            mesh_assets=request.mesh_assets,
-            package_roots=request.package_roots,
-            ilu_session_id=request.ilu_session_id,
-            launch_id=request.launch_id,
-        )
+        return request.to_internal_request()
     except ValidationError as exc:
         raise SimulatorAdapterError(str(exc), status_code=422) from exc
 

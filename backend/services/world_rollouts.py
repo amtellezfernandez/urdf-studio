@@ -328,7 +328,13 @@ class WorldRolloutService:
     def _build_campaign(self, request: WorldRolloutJobCreateRequest) -> WorldRolloutCampaignManifest:
         world_package = request.world_package
         campaign_id = request.campaign_id or f"{world_package.package_id}-{world_package.version}"
+        # This is the world snapshot's *identity* digest (excludes package_id/version/
+        # provenance) — used for cross-request staleness comparison, not a byte hash of
+        # the sidecar file on disk. The world-package artifact entry below instead uses
+        # sha256 of the exact bytes _write_model_json will write, matching the other
+        # artifact entries so every artifacts[].digest_sha256 means "hash of this file".
         world_package_digest = world_scene_registry_envelope_digest(world_package)
+        world_package_file_digest = _sha256_bytes(_model_json_bytes(world_package))
         checker_profile_digest = _sha256_bytes(_model_json_bytes(request.checker_profile))
         return WorldRolloutCampaignManifest(
             campaign_id=campaign_id,
@@ -344,7 +350,7 @@ class WorldRolloutService:
                 WorldRolloutArtifactRef(
                     kind=WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND,
                     uri=WORLD_ROLLOUT_INPUT_WORLD_PACKAGE_FILENAME,
-                    digest_sha256=world_package_digest,
+                    digest_sha256=world_package_file_digest,
                 ),
                 WorldRolloutArtifactRef(
                     kind=WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND,

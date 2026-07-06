@@ -310,7 +310,7 @@ def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tm
     normalized_world_package = read_world_scene_registry_envelope(world_package)
     assert _artifact_digest(
         completed, WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND
-    ) == world_scene_registry_envelope_digest(normalized_world_package)
+    ) == hashlib.sha256(world_package_path.read_bytes()).hexdigest()
     assert (
         completed.campaign.world_package.digest_sha256
         == world_scene_registry_envelope_digest(normalized_world_package)

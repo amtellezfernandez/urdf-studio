@@ -8,17 +8,19 @@ from pathlib import Path
 from threading import Lock
 from typing import Sequence
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from backend.core.settings import settings
 from backend.models.world_scene_package import (
     WorldRegistryCapabilitiesResponse,
+    WorldSceneDocument,
     WorldScenePackageListEntry,
     WorldSceneRegistryEnvelope,
     WorldScenePackageManifest,
     WorldScenePackagePublishResponse,
     WorldScenePackageValidationResponse,
     WorldScenePackageVersionRecord,
+    WorldSnapshot,
 )
 from backend.services.world_scene_package_params import (
     MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES,
@@ -72,13 +74,13 @@ def _runtime_targets_summary(manifest: WorldScenePackageManifest) -> list[str]:
     return [f"{target.name}:{target.mode}" for target in manifest.runtime_targets]
 
 
-def _canonical_world_scene_registry_envelope_json(
-    envelope: WorldSceneRegistryEnvelope,
-) -> str:
-    return json.dumps(
-        envelope.model_dump(mode="json", exclude_none=True),
-        sort_keys=True,
-        separators=(",", ":"),
+def _serialized_json_byte_length(payload: BaseModel) -> int:
+    return len(
+        json.dumps(
+            payload.model_dump(mode="json", exclude_none=True),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
     )
 
 
@@ -153,9 +155,9 @@ def _matches_tags(entry: WorldScenePackageListEntry, tags: Sequence[str] | None)
     return requested.issubset(available)
 
 
-def _validate_world_timing(envelope: WorldSceneRegistryEnvelope) -> list[str]:
-    scenario_time_ms = envelope.world.scenario_time_ms
-    scenario_duration_ms = envelope.world.scenario_duration_ms
+def _validate_world_timing(world: WorldSceneDocument | WorldSnapshot) -> list[str]:
+    scenario_time_ms = world.scenario_time_ms
+    scenario_duration_ms = world.scenario_duration_ms
 
     if scenario_duration_ms == 0 and scenario_time_ms != 0:
         return ["scenario_time_ms must be 0 when scenario_duration_ms is 0."]
@@ -164,50 +166,9 @@ def _validate_world_timing(envelope: WorldSceneRegistryEnvelope) -> list[str]:
     return []
 
 
-def _validate_world_snapshot_timing(manifest: WorldScenePackageManifest) -> list[str]:
-    scenario_time_ms = manifest.world_snapshot.scenario_time_ms
-    scenario_duration_ms = manifest.world_snapshot.scenario_duration_ms
-
-    if scenario_duration_ms == 0 and scenario_time_ms != 0:
-        return ["scenario_time_ms must be 0 when scenario_duration_ms is 0."]
-    if scenario_time_ms > scenario_duration_ms:
-        return ["scenario_time_ms must be <= scenario_duration_ms."]
-    return []
-
-
-def _validate_world_asset_refs(envelope: WorldSceneRegistryEnvelope) -> list[str]:
+def _validate_world_asset_refs(world: WorldSceneDocument | WorldSnapshot) -> list[str]:
     errors: list[str] = []
-    for index, world_object in enumerate(envelope.world.objects):
-        object_type = world_object.get("type")
-        asset_ref_entry = read_world_object_asset_ref(world_object)
-        content_asset_ref_entry = read_world_object_content_asset_ref(world_object)
-        if object_type == "mesh" and content_asset_ref_entry is None:
-            errors.append(
-                f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
-            )
-            if asset_ref_entry is None:
-                continue
-        if object_type == "splat" and content_asset_ref_entry is None:
-            errors.append(
-                f"world_snapshot.objects[{index}].splat asset reference is required for splat objects."
-            )
-            if asset_ref_entry is None:
-                continue
-        if asset_ref_entry is None:
-            continue
-        try:
-            normalize_portable_world_asset_ref(asset_ref_entry.value)
-        except ValueError:
-            errors.append(
-                f"world_snapshot.objects[{index}].{asset_ref_entry.field_path} "
-                "must be a portable relative asset reference."
-            )
-    return errors
-
-
-def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> list[str]:
-    errors: list[str] = []
-    for index, world_object in enumerate(manifest.world_snapshot.objects):
+    for index, world_object in enumerate(world.objects):
         object_type = world_object.get("type")
         asset_ref_entry = read_world_object_asset_ref(world_object)
         content_asset_ref_entry = read_world_object_content_asset_ref(world_object)
@@ -254,7 +215,7 @@ class WorldRegistryService:
             envelope = None
 
         if envelope is not None:
-            envelope_bytes = len(_canonical_world_scene_registry_envelope_json(envelope).encode("utf-8"))
+            envelope_bytes = _serialized_json_byte_length(envelope)
             digest = world_scene_registry_envelope_digest(envelope)
             if not envelope.artifacts:
                 warnings.append("No external artifacts declared. Package is embedded-only.")
@@ -264,28 +225,22 @@ class WorldRegistryService:
                     "World scene document exceeds the allowed serialized size: "
                     f"{envelope_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
                 )
-            errors.extend(_validate_world_timing(envelope))
-            errors.extend(_validate_world_asset_refs(envelope))
+            errors.extend(_validate_world_timing(envelope.world))
+            errors.extend(_validate_world_asset_refs(envelope.world))
         else:
             manifest = read_world_scene_package_manifest(payload)
             digest = world_scene_package_digest(manifest)
             if not manifest.artifacts:
                 warnings.append("No external artifacts declared. Package is embedded-only.")
             errors.extend(validate_world_snapshot_artifact_digests(manifest))
-            envelope_bytes = len(
-                json.dumps(
-                    manifest.model_dump(mode="json", exclude_none=True),
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode("utf-8")
-            )
+            envelope_bytes = _serialized_json_byte_length(manifest)
             if envelope_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
                 errors.append(
                     "World scene document exceeds the allowed serialized size: "
                     f"{envelope_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
                 )
-            errors.extend(_validate_world_snapshot_timing(manifest))
-            errors.extend(_validate_world_snapshot_asset_refs(manifest))
+            errors.extend(_validate_world_timing(manifest.world_snapshot))
+            errors.extend(_validate_world_asset_refs(manifest.world_snapshot))
         return WorldScenePackageValidationResponse(
             valid=not errors,
             digest_sha256=digest,

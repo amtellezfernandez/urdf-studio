@@ -1,6 +1,5 @@
 import type { DragEvent, ReactNode } from "react";
 import {
-  FileUp,
   Github,
   Globe,
   Info,
@@ -100,39 +99,30 @@ export const SourcePanel = ({
 };
 
 export const LocalSourceButtons = ({
-  filesLabel = "Local Files",
-  folderLabel = "Local Folder",
-  onBrowseFiles,
-  onBrowseFolder,
+  label = "Browse",
+  dropHint = "Drag a file here",
+  onBrowse,
 }: {
-  filesLabel?: string;
-  folderLabel?: string;
-  onBrowseFiles?: () => void;
-  onBrowseFolder?: () => void;
+  label?: string;
+  dropHint?: string;
+  onBrowse: () => void;
 }) => (
-  <div className="flex flex-wrap gap-2">
-    {onBrowseFolder ? (
-      <Button
-        type="button"
-        size="sm"
-        onClick={onBrowseFolder}
-        className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-      >
-        <Upload className="mr-1.5 h-3.5 w-3.5" />
-        {folderLabel}
-      </Button>
-    ) : null}
-    {onBrowseFiles ? (
-      <Button
-        type="button"
-        size="sm"
-        onClick={onBrowseFiles}
-        className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-      >
-        <FileUp className="mr-1.5 h-3.5 w-3.5" />
-        {filesLabel}
-      </Button>
-    ) : null}
+  <div className="flex items-center gap-2">
+    <div
+      aria-label={dropHint}
+      title={dropHint}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-dashed border-border/70 text-muted-foreground"
+    >
+      <Upload className="h-4 w-4" />
+    </div>
+    <Button
+      type="button"
+      size="sm"
+      onClick={onBrowse}
+      className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+    >
+      {label}
+    </Button>
   </div>
 );
 

@@ -1,30 +1,24 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.models.simulator_runtime import (
-    MAX_SIMULATOR_PACKAGE_ROOTS,
-    MAX_SIMULATOR_MESH_ASSETS,
     SimulatorId,
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
-    SimulatorMeshAssetUpload,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
     SimulatorRuntimeTransferPolicy,
     SimulatorTargetKind,
     SimulatorWorkspaceAssetFormat,
     SimulatorWorkspaceLaunchMode,
-    SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareDocumentRequest,
     SimulatorWorkspacePrepareResponse as AdapterWorkspaceOpenResponse,
+    WorkspaceChangeSetApplyDocumentRequest,
     WorkspaceChangeSetApplyResponse as AdapterWorkspaceChangeSetApplyResponse,
-    WorkspaceChangeSetPayload,
     validate_simulator_workspace_launch_id,
 )
 from backend.models.world_scene_package import WorldSceneRegistryEnvelope
-from backend.services.world_scene_package_compat import (
-    read_world_scene_registry_envelope,
-)
 
 
 WorkspaceTransferTargetId = SimulatorId
@@ -116,39 +110,8 @@ class WorkspaceTransferTargetStatus(WorkspaceTransferCamelModel):
         )
 
 
-class WorkspaceOpenRequest(BaseModel):
-    world_package: WorldSceneRegistryEnvelope
-    urdf_asset_path: str | None = Field(default=None, max_length=512)
-    mesh_assets: list[SimulatorMeshAssetUpload] = Field(
-        default_factory=list,
-        max_length=MAX_SIMULATOR_MESH_ASSETS,
-    )
-    package_roots: dict[str, list[str]] = Field(
-        default_factory=dict,
-        max_length=MAX_SIMULATOR_PACKAGE_ROOTS,
-    )
-    ilu_session_id: str | None = Field(default=None, max_length=128)
-    launch_id: str | None = Field(default=None, max_length=128)
-
-    @field_validator("world_package", mode="before")
-    @classmethod
-    def normalize_world_package(cls, value: object) -> WorldSceneRegistryEnvelope:
-        return read_world_scene_registry_envelope(value)
-
-    @field_validator("urdf_asset_path")
-    @classmethod
-    def validate_urdf_asset_path(cls, value: str | None) -> str | None:
-        return SimulatorWorkspacePrepareRequest.validate_urdf_asset_path(value)
-
-    @field_validator("launch_id")
-    @classmethod
-    def validate_launch_id(cls, value: str | None) -> str | None:
-        return SimulatorWorkspacePrepareRequest.validate_launch_id(value)
-
-    @field_validator("package_roots")
-    @classmethod
-    def validate_package_roots(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
-        return SimulatorWorkspacePrepareRequest.validate_package_roots(value)
+class WorkspaceOpenRequest(SimulatorWorkspacePrepareDocumentRequest):
+    """Same request shape as SimulatorWorkspacePrepareDocumentRequest, named for this API surface."""
 
 
 class WorkspaceLaunchCancelResponse(WorkspaceTransferCamelModel):
@@ -224,17 +187,8 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
         )
 
 
-class WorkspaceChangeSetApplyRequest(BaseModel):
-    world_package: WorldSceneRegistryEnvelope
-    change_set: WorkspaceChangeSetPayload
-
-    @field_validator("world_package", mode="before")
-    @classmethod
-    def normalize_world_package(
-        cls,
-        value: object,
-    ) -> WorldSceneRegistryEnvelope:
-        return read_world_scene_registry_envelope(value)
+class WorkspaceChangeSetApplyRequest(WorkspaceChangeSetApplyDocumentRequest):
+    """Same request shape as WorkspaceChangeSetApplyDocumentRequest, named for this API surface."""
 
 
 class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):

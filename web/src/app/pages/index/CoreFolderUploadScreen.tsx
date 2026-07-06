@@ -49,8 +49,6 @@ export const CoreFolderUploadScreen = ({
   onOpenWorldOnlyWorkspace,
 }: CoreFolderUploadScreenProps) => {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const localFilesInputRef = useRef<HTMLInputElement | null>(null);
-  const worldLayoutFileInputRef = useRef<HTMLInputElement | null>(null);
   const worldLayoutFolderInputRef = useRef<HTMLInputElement | null>(null);
   const cameraConfigFileInputRef = useRef<HTMLInputElement | null>(null);
   const { gpuMode, setGPUMode } = useGPUMode();
@@ -66,7 +64,6 @@ export const CoreFolderUploadScreen = ({
   const {
     clearLastLocalFolder,
     githubUrl,
-    githubUrdfPath,
     handleFolderSelect,
     handleRobotSourceDrop,
     isLoadingGithub,
@@ -78,7 +75,6 @@ export const CoreFolderUploadScreen = ({
     removeRecentRobotSource,
     robotSourceDropActive,
     setGithubUrl,
-    setGithubUrdfPath,
     setRobotSourceDropActive,
     setUrlSource,
     stageGithubRobot,
@@ -174,13 +170,12 @@ export const CoreFolderUploadScreen = ({
     <SourcePanel
       icon={Bot}
       title="Robot"
-      description="Load a URDF package folder, loose robot files, GitHub repository, or direct URDF/Xacro URL."
+      description="Drag a URDF package folder onto this panel, or paste a GitHub repository / direct URDF/Xacro URL."
       infoContent={
         <>
-          For a GitHub repository, paste the repo link and, if the URDF isn't at the root, its path
-          within the repo (e.g. <code>robots/arm/robot.urdf</code>). Sibling mesh files
-          (.stl/.dae/.obj/.glb/.gltf) referenced by the URDF are resolved automatically from the same
-          repository - you don't need to list them separately.
+          For a GitHub repository, paste the repo link - the URDF is found automatically. Sibling
+          mesh files (.stl/.dae/.obj/.glb/.gltf) referenced by the URDF are resolved automatically
+          from the same repository - you don't need to list them separately.
         </>
       }
       isDropActive={robotSourceDropActive}
@@ -188,8 +183,8 @@ export const CoreFolderUploadScreen = ({
       onDrop={handleRobotSourceDrop}
     >
       <LocalSourceButtons
-        onBrowseFolder={() => folderInputRef.current?.click()}
-        onBrowseFiles={() => localFilesInputRef.current?.click()}
+        dropHint="Drag a URDF here"
+        onBrowse={() => folderInputRef.current?.click()}
       />
       <form className="space-y-2" onSubmit={stageGithubRobot}>
         <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
@@ -217,14 +212,6 @@ export const CoreFolderUploadScreen = ({
             </Button>
           </div>
         </div>
-        <Input
-          type="text"
-          placeholder="Optional URDF path, e.g. robots/arm/robot.urdf"
-          value={githubUrdfPath}
-          onChange={(event) => setGithubUrdfPath(event.target.value)}
-          disabled={isLoadingGithub}
-          className="bg-background/80"
-        />
       </form>
       <form onSubmit={stageUrlRobot}>
         <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -292,8 +279,8 @@ export const CoreFolderUploadScreen = ({
       onDrop={handleCameraSourceDrop}
     >
       <LocalSourceButtons
-        filesLabel="Local File"
-        onBrowseFiles={() => cameraConfigFileInputRef.current?.click()}
+        dropHint="Drag a camera config here"
+        onBrowse={() => cameraConfigFileInputRef.current?.click()}
       />
       <RemoteSourceInput
         inputPlaceholder="https://.../camera-config.json"
@@ -370,14 +357,14 @@ export const CoreFolderUploadScreen = ({
     <SourcePanel
       icon={Globe}
       title="World"
-      description="Paste a world link, or load a folder containing the world layout JSON plus any mesh, splat, or texture assets it references. Public and GitHub file links are supported."
+      description="Drag a folder onto this panel, or paste a world link. Public and GitHub file links are supported."
       infoContent={
         <>
           A World is one JSON file describing scene objects, camera(s), and robot pose - plus,
           when a scene needs them, any <code>.glb</code>/<code>.gltf</code>/<code>.stl</code>/
-          <code>.dae</code>/<code>.obj</code>/<code>.ply</code> files it references. Pick
-          <strong> Local Folder</strong> to load the JSON and its assets together; each asset
-          reference resolves by relative path, so nothing needs to be hosted anywhere. Full schema:{" "}
+          <code>.dae</code>/<code>.obj</code>/<code>.ply</code> files it references. Drag or browse
+          a folder to load the JSON and its assets together; each asset reference resolves by
+          relative path, so nothing needs to be hosted anywhere. Full schema:{" "}
           <code>docs/specs/WORLD_FORMAT.md</code>.
         </>
       }
@@ -386,8 +373,8 @@ export const CoreFolderUploadScreen = ({
       onDrop={handleWorldSourceDrop}
     >
       <LocalSourceButtons
-        onBrowseFolder={() => worldLayoutFolderInputRef.current?.click()}
-        onBrowseFiles={() => worldLayoutFileInputRef.current?.click()}
+        dropHint="Drag a world folder here"
+        onBrowse={() => worldLayoutFolderInputRef.current?.click()}
       />
       <RemoteSourceInput
         inputPlaceholder="https://.../world-layout.json"
@@ -420,7 +407,7 @@ export const CoreFolderUploadScreen = ({
           }}
           onRemoveEntry={removeRecentWorldLayout}
           lastLocalLabel={lastLocalWorldLayout}
-          onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
+          onBrowseLocal={() => worldLayoutFolderInputRef.current?.click()}
           onClearLocal={clearLastLocalWorldLayout}
         />
       )}
@@ -455,15 +442,6 @@ export const CoreFolderUploadScreen = ({
       </div>
       <div className={`w-full ${CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryWideContainerClass}`}>
         <input
-          ref={worldLayoutFileInputRef}
-          type="file"
-          multiple
-          accept=".json,application/json,.stl,.dae,.obj,.glb,.gltf,.mtl,.ply,.spz,.splat,.ksplat,.png,.jpg,.jpeg"
-          onChange={handleWorldLayoutFileSelect}
-          className="hidden"
-          aria-label="Select world layout JSON file and assets"
-        />
-        <input
           ref={worldLayoutFolderInputRef}
           type="file"
           {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
@@ -479,15 +457,6 @@ export const CoreFolderUploadScreen = ({
           onChange={handleCameraConfigFileSelect}
           className="hidden"
           aria-label="Select camera configuration file"
-        />
-        <input
-          ref={localFilesInputRef}
-          type="file"
-          multiple
-          accept=".urdf,.xacro,.zip,.stl,.dae,.obj,.glb,.gltf,.mtl,.png,.jpg,.jpeg"
-          onChange={handleFolderSelect}
-          className="hidden"
-          aria-label="Select robot files or zip archive"
         />
         <input
           ref={folderInputRef}

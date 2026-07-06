@@ -163,9 +163,26 @@ class BlenderPlugin(SimulatorPlugin):
             request.world_package,
             request.change_set,
         )
+        updated_envelope = world_scene_registry_envelope_from_manifest(result.world_package)
+        # A Blender change set only ever touches world_snapshot.objects/cameras; the
+        # manifest round trip through read_world_scene_package_manifest synthesizes
+        # title/provenance/environment defaults for envelopes that omitted them, so
+        # restore the request's own values instead of returning those synthesized ones.
+        preserved_envelope = updated_envelope.model_copy(
+            update={
+                "description": request.world_package.description,
+                "provenance": request.world_package.provenance,
+                "world": updated_envelope.world.model_copy(
+                    update={
+                        "name": request.world_package.world.name,
+                        "environment": request.world_package.world.environment,
+                    }
+                ),
+            }
+        )
         return WorkspaceChangeSetApplyResponse(
             simulator_id=self.simulator_id,
-            world_package=world_scene_registry_envelope_from_manifest(result.world_package),
+            world_package=preserved_envelope,
             applied_change_count=result.applied_change_count,
             review_only_count=result.review_only_count,
         )

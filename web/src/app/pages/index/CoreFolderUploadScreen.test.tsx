@@ -189,10 +189,10 @@ describe("CoreFolderUploadScreen", () => {
   it("passes local world layout asset files as mesh URI asset maps", async () => {
     const screen = await renderCoreFolderUploadScreen();
     const worldFileInput = screen.container.querySelector(
-      'input[aria-label="Select world layout JSON file and assets"]'
+      'input[aria-label="Select world layout folder"]'
     );
     if (!(worldFileInput instanceof HTMLInputElement)) {
-      throw new Error("World layout file input was not rendered.");
+      throw new Error("World layout folder input was not rendered.");
     }
 
     Object.defineProperty(worldFileInput, "files", {

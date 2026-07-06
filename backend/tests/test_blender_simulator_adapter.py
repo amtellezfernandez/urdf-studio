@@ -11,7 +11,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID, SimulatorWorkspacePrepareRequest
+from backend.models.simulator_runtime import (
+    SIMULATOR_BLENDER_ID,
+    SimulatorWorkspacePrepareRequest,
+    WorkspaceChangeSetApplyRequest,
+)
 from backend.models.world_scene_package import WorldArtifactRef
 from backend.scripts import blender_workspace_prepare as blender_prepare
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
@@ -604,6 +608,39 @@ def test_blender_change_set_accepts_thin_world_envelopes(tmp_path: Path) -> None
 
     assert source["frame_convention"] == "ros-rep-103"
     assert updated.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
+
+
+def test_blender_change_set_apply_preserves_envelope_metadata(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    world_envelope_payload = world_scene_registry_envelope_json_payload(world_package)
+    world_envelope_payload.pop("description", None)
+    world_envelope_payload["provenance"] = {}
+    world_envelope_payload["world"].pop("name", None)
+    world_envelope_payload["world"].pop("environment", None)
+
+    change_set = {
+        "schema": BLENDER_CHANGE_SET_SCHEMA,
+        "source": build_blender_change_set_source(
+            world_envelope_payload,
+            world_object_ids=("crate",),
+            camera_ids=("cam-1",),
+            frame_map="identity",
+        ),
+        "changes": [_crate_layout_change(), _scene_camera_change(stable_id="cam-1")],
+        "review_only": [],
+    }
+    request = WorkspaceChangeSetApplyRequest(
+        world_package=world_envelope_payload,
+        change_set=change_set,
+    )
+
+    response = blender_adapter.BlenderPlugin().apply_workspace_change_set(request)
+
+    assert response.world_package.world.name is None
+    assert response.world_package.world.environment is None
+    assert response.world_package.provenance == {}
+    assert response.world_package.description is None
+    assert response.world_package.world.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
 
 
 def test_blender_change_set_applies_world_object_color(tmp_path: Path) -> None:
