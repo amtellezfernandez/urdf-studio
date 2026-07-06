@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
+    SimulatorMeshAssetUpload,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
     SimulatorRuntimeTransferPolicy,
@@ -18,8 +19,11 @@ from backend.models.simulator_runtime import (
     WorkspaceChangeSetPayload,
     validate_simulator_workspace_launch_id,
 )
-from backend.models.world_scene_package import WorldScenePackageManifest, WorldSceneRegistryEnvelope
-from backend.services.world_scene_package_compat import world_scene_registry_envelope_from_manifest
+from backend.models.world_scene_package import WorldSceneRegistryEnvelope
+from backend.services.world_scene_package_compat import (
+    read_world_scene_registry_envelope,
+    world_scene_registry_envelope_from_manifest,
+)
 
 
 WorkspaceTransferTargetId = SimulatorId
@@ -111,8 +115,33 @@ class WorkspaceTransferTargetStatus(WorkspaceTransferCamelModel):
         )
 
 
-class WorkspaceOpenRequest(SimulatorWorkspacePrepareRequest):
-    ...
+class WorkspaceOpenRequest(BaseModel):
+    world_package: WorldSceneRegistryEnvelope
+    urdf_asset_path: str | None = Field(default=None, max_length=512)
+    mesh_assets: list[SimulatorMeshAssetUpload] = Field(default_factory=list)
+    package_roots: dict[str, list[str]] = Field(default_factory=dict)
+    ilu_session_id: str | None = Field(default=None, max_length=128)
+    launch_id: str | None = Field(default=None, max_length=128)
+
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(cls, value: object) -> WorldSceneRegistryEnvelope:
+        return read_world_scene_registry_envelope(value)
+
+    @field_validator("urdf_asset_path")
+    @classmethod
+    def validate_urdf_asset_path(cls, value: str | None) -> str | None:
+        return SimulatorWorkspacePrepareRequest.validate_urdf_asset_path(value)
+
+    @field_validator("launch_id")
+    @classmethod
+    def validate_launch_id(cls, value: str | None) -> str | None:
+        return SimulatorWorkspacePrepareRequest.validate_launch_id(value)
+
+    @field_validator("package_roots")
+    @classmethod
+    def validate_package_roots(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        return SimulatorWorkspacePrepareRequest.validate_package_roots(value)
 
 
 class WorkspaceLaunchCancelResponse(WorkspaceTransferCamelModel):
@@ -189,8 +218,16 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
 
 
 class WorkspaceChangeSetApplyRequest(BaseModel):
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     change_set: WorkspaceChangeSetPayload
+
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(
+        cls,
+        value: object,
+    ) -> WorldSceneRegistryEnvelope:
+        return read_world_scene_registry_envelope(value)
 
 
 class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):

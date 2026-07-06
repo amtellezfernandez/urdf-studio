@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import uuid
 from types import SimpleNamespace
 from typing import cast, get_args
 from unittest.mock import patch
@@ -243,8 +244,9 @@ def _blender_change_set_payload(
 
 def test_world_registry_publish_and_get_version_roundtrip_thin_envelopes() -> None:
     payload = _thin_world_package_payload()
-    payload["package_id"] = "demo_world_registry_api"
-    payload["version"] = "1.0.1"
+    unique_suffix = uuid.uuid4().hex[:8]
+    payload["package_id"] = f"demo_world_registry_api_{unique_suffix}"
+    payload["version"] = f"1.0.{int(unique_suffix[:2], 16)}"
     with _patch_security_settings():
         publish_response = asyncio.run(
             _request_json(
@@ -840,7 +842,7 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
 
     def fake_open_workspace_transfer_target(target_id, request):
         captured["target_id"] = target_id
-        captured["request_title"] = request.world_package.title
+        captured["request_title"] = request.world_package.world.name
         captured["launch_id"] = request.launch_id
         return WorkspaceOpenResponse(
             targetId=target_id,
