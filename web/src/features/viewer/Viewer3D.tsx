@@ -21,14 +21,12 @@ import {
   worldDirectionFromLocal,
 } from "@/shared/lib/axisFrame";
 import { useCameraStore } from "@/shared/store/useCameraStore";
-import { useLinkHighlightStore } from "@/shared/store/useLinkHighlightStore";
 import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { WORLD_OBJECT_EDIT_PARAMS } from "@/features/objects/worldObjectEditParams";
 import type { Node, Edge } from "reactflow";
 import { getJointLimits, type JointAxisMap, type JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
-import jointColors from "@/shared/joint_colors.json";
 import { AxisGizmo3D } from "@/features/viewer/AxisGizmo3D";
 import { AssemblyPlacementHelpers } from "@/features/viewer/AssemblyPlacementHelpers";
 import {
@@ -69,7 +67,6 @@ import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderStat
 import {
   extractLinkPose,
   resolveJointScalarValue,
-  setEmissiveColor,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
 import { extractRobotBasePose } from "@/shared/lib/urdfRobotBasePose";
@@ -103,6 +100,7 @@ import { useMeshFilesState } from "@/features/viewer/useMeshFilesState";
 import { useRobotBoundingBoxSync } from "@/features/viewer/useRobotBoundingBoxSync";
 import { useRobotCameraCentering } from "@/features/viewer/useRobotCameraCentering";
 import { useRobotJointSync } from "@/features/viewer/useRobotJointSync";
+import { useViewerLinkHighlights } from "@/features/viewer/useViewerLinkHighlights";
 import { buildThumbnailCameraFrame } from "@/features/viewer/thumbnailCameraFrame";
 import { useUrdfFileContent } from "@/features/viewer/useUrdfFileContent";
 import {
@@ -253,7 +251,6 @@ import {
 } from "@/features/viewer/viewerAssemblyRobotHelpers";
 import {
   areSortedStringListsEqual,
-  hexToThreeJsHex,
   isEditableKeyboardTarget,
   resolveRoverApproachRobotFootprint,
 } from "@/features/viewer/viewer3dHelpers";
@@ -1059,144 +1056,12 @@ const URDFModel = ({
     thumbnailFramingWorldObjects,
   ]);
 
-  // ===== Selection & Highlight Helpers =====
-  const highlightedMeshesRef = useRef<THREE.Mesh[]>([]);
-  const highlightedLinks = useLinkHighlightStore((state) => state.highlightedLinks);
-
-  const clearHighlights = useCallback(() => {
-    highlightedMeshesRef.current.forEach((mesh) => {
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      materials.forEach((material) => {
-        setEmissiveColor(material, 0x000000);
-        const colorMaterial = material as THREE.Material & {
-          color?: { setHex: (value: number) => void };
-          userData?: { originalColor?: number };
-        };
-        if (
-          colorMaterial.color &&
-          colorMaterial.userData &&
-          typeof colorMaterial.userData.originalColor === "number"
-        ) {
-          colorMaterial.color.setHex(colorMaterial.userData.originalColor);
-        }
-        // Note: We keep the cloned material to avoid issues with material sharing
-        // The material clone is already in place, just reset emissive
-      });
-    });
-    highlightedMeshesRef.current = [];
-  }, []);
-
-  const applyHighlightToLink = useCallback(
-    (linkName: string, options?: { jointName?: string | null; colorOverride?: number }) => {
-    const robot = robotRef.current;
-    if (!robot) return;
-    const resolveLinkObject = createLinkObjectResolver(robot);
-    const link = resolveLinkObject(linkName);
-    if (!link) return;
-    
-    // Determine highlight color based on joint type from joint_colors.json
-      const jointName = options?.jointName ?? null;
-      let highlightColor = options?.colorOverride ?? hexToThreeJsHex(jointColors.light_gray);
-      if (jointName && jointLimits && options?.colorOverride === undefined) {
-        const jointInfo = jointLimits[jointName];
-        if (jointInfo && jointInfo.type) {
-          const jointType = jointInfo.type as keyof typeof jointColors;
-          if (jointColors[jointType]) {
-            highlightColor = hexToThreeJsHex(jointColors[jointType]);
-          }
-        }
-      }
-    
-    // Get all link names to detect when we hit a child link
-    const allLinkNames = new Set(Object.keys(robot.links || {}));
-    
-    // Custom traversal that stops when encountering another link
-    const traverseLinkOnly = (obj: THREE.Object3D) => {
-      // If this is a mesh, highlight it
-      if (obj instanceof THREE.Mesh) {
-        const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-        const hasHighlightableMaterial = materials.some(
-          (material) => "emissive" in material || "color" in material
-        );
-        if (hasHighlightableMaterial) {
-          const needsClone = materials.some((material) => !material.userData.isHighlighted);
-          if (needsClone) {
-            const clonedMaterials = materials.map((material) => material.clone());
-            obj.material = Array.isArray(obj.material) ? clonedMaterials : clonedMaterials[0];
-            clonedMaterials.forEach((material) => {
-              material.userData.isHighlighted = true;
-              material.userData.originalMesh = obj;
-              const colorMaterial = material as THREE.Material & {
-                color?: { getHex: () => number };
-                userData?: { originalColor?: number };
-              };
-              if (colorMaterial.color && colorMaterial.userData) {
-                colorMaterial.userData.originalColor = colorMaterial.color.getHex();
-              }
-            });
-          }
-          const activeMaterials = Array.isArray(obj.material) ? obj.material : [obj.material];
-          activeMaterials.forEach((material) => {
-            if ("emissive" in material) {
-              setEmissiveColor(material, highlightColor);
-            } else if ("color" in material) {
-              const colorMaterial = material as THREE.Material & {
-                color?: { setHex: (value: number) => void };
-              };
-              colorMaterial.color?.setHex(highlightColor);
-            }
-          });
-          highlightedMeshesRef.current.push(obj);
-        }
-      }
-      
-      // Process children, but skip if child is another link
-      for (const child of obj.children) {
-        // Skip if this child is another link (child link)
-        if (allLinkNames.has(child.name)) {
-          continue;
-        }
-        traverseLinkOnly(child);
-      }
-    };
-    
-    traverseLinkOnly(link);
-    },
-    [jointLimits]
-  );
-
-  const highlightLink = useCallback(
-    (linkName: string, jointName?: string | null) => {
-      clearHighlights();
-      applyHighlightToLink(linkName, { jointName });
-    },
-    [applyHighlightToLink, clearHighlights]
-  );
-
-  const highlightLinks = useCallback(
-    (linkNames: string[]) => {
-      clearHighlights();
-      const batchHighlightColor = hexToThreeJsHex(jointColors.light_gray);
-      linkNames.forEach((linkName) => {
-        applyHighlightToLink(linkName, {
-          colorOverride: batchHighlightColor,
-        });
-      });
-    },
-    [applyHighlightToLink, clearHighlights]
-  );
-
-  const getLinkNameForJoint = (jointName: string): string | null => {
-    const robot = robotRef.current;
-    if (!robot) return null;
-    const joint = robot.joints?.[jointName];
-    if (!joint) return null;
-    const linkNames = new Set(Object.keys(robot.links || {}));
-    for (const child of joint.children ?? []) {
-      if (linkNames.has(child.name)) return child.name;
-    }
-    return null;
-  };
+  const { highlightLink } = useViewerLinkHighlights({
+    robotRef,
+    jointLimits,
+    selectedJoint,
+    selectedLink,
+  });
 
   const isWheelLikeJoint = useCallback((jointName: string, joint: URDFJoint | undefined) => {
     if (!joint) return false;
@@ -1236,26 +1101,6 @@ const URDFModel = ({
     }
     return clampResult;
   }, [enforceStudioPlanarPose]);
-
-  // Highlight when external selection changes
-  useEffect(() => {
-    const robot = robotRef.current;
-    if (!robot) {
-      clearHighlights();
-      return;
-    }
-    if (highlightedLinks.length > 0) {
-      highlightLinks(highlightedLinks);
-    } else if (selectedJoint) {
-      const ln = getLinkNameForJoint(selectedJoint);
-      if (ln) highlightLink(ln, selectedJoint);
-    } else if (selectedLink) {
-      // Highlight the selected link directly
-      highlightLink(selectedLink);
-    } else {
-      clearHighlights();
-    }
-  }, [selectedJoint, selectedLink, highlightedLinks, highlightLinks, highlightLink, clearHighlights]);
 
   // Document-level pointer event handlers for dragging
   useEffect(() => {
