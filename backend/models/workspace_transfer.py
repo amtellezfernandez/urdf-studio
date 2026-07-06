@@ -22,7 +22,6 @@ from backend.models.simulator_runtime import (
 from backend.models.world_scene_package import WorldSceneRegistryEnvelope
 from backend.services.world_scene_package_compat import (
     read_world_scene_registry_envelope,
-    world_scene_registry_envelope_from_manifest,
 )
 
 
@@ -243,7 +242,7 @@ class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):
     ) -> "WorkspaceChangeSetApplyResponse":
         return cls(
             targetId=response.simulator_id,
-            world_package=world_scene_registry_envelope_from_manifest(response.world_package),
+            world_package=response.world_package,
             appliedChangeCount=response.applied_change_count,
             reviewOnlyCount=response.review_only_count,
         )

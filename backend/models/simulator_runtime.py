@@ -8,11 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.json_payload import JsonObject
 from backend.models.world_scene_package import (
-    WorldScenePackageManifest,
     WorldSceneRegistryEnvelope,
 )
 from backend.services.world_scene_package_compat import (
-    read_world_scene_package_manifest,
     read_world_scene_registry_envelope,
 )
 
@@ -86,7 +84,7 @@ class SimulatorMeshAssetUpload(BaseModel):
 
 
 class SimulatorWorkspacePrepareRequest(BaseModel):
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     urdf_asset_path: str | None = Field(default=None, max_length=512)
     mesh_assets: list[SimulatorMeshAssetUpload] = Field(
         default_factory=list,
@@ -111,8 +109,11 @@ class SimulatorWorkspacePrepareRequest(BaseModel):
     def normalize_world_package(
         cls,
         value: object,
-    ) -> WorldScenePackageManifest:
-        return read_world_scene_package_manifest(value)
+    ) -> WorldSceneRegistryEnvelope:
+        envelope = read_world_scene_registry_envelope(value)
+        if not envelope.world.urdf_xml:
+            raise ValueError("world_package.world.urdf_xml is required")
+        return envelope
 
     @field_validator("launch_id")
     @classmethod
@@ -158,7 +159,7 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
 
 
 class WorkspaceChangeSetApplyRequest(BaseModel):
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     change_set: WorkspaceChangeSetPayload
 
     @field_validator("world_package", mode="before")
@@ -166,13 +167,13 @@ class WorkspaceChangeSetApplyRequest(BaseModel):
     def normalize_world_package(
         cls,
         value: object,
-    ) -> WorldScenePackageManifest:
-        return read_world_scene_package_manifest(value)
+    ) -> WorldSceneRegistryEnvelope:
+        return read_world_scene_registry_envelope(value)
 
 
 class WorkspaceChangeSetApplyResponse(BaseModel):
     simulator_id: SimulatorId
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     applied_change_count: int
     review_only_count: int
 

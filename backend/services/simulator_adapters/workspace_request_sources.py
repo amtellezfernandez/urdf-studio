@@ -23,6 +23,7 @@ from backend.models.world_scene_package import (
     WorldInterfaceSpec,
     WorldRuntimeTarget,
     WorldScenePackageManifest,
+    WorldSceneRegistryEnvelope,
     WorldSnapshot,
 )
 from backend.services.simulator_adapters import WORKSPACE_SIMULATOR_IDS
@@ -30,7 +31,10 @@ from backend.services.simulator_adapters.robot_repairs import (
     GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY,
     GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
 )
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
+from backend.services.world_scene_package_compat import (
+    read_world_scene_package_manifest,
+    read_world_scene_registry_envelope,
+)
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
@@ -166,7 +170,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
     )
 
 
-def _copy_demo_world_package_with_fixture(fixture_name: str) -> WorldScenePackageManifest:
+def _copy_demo_world_package_with_fixture(fixture_name: str) -> WorldSceneRegistryEnvelope:
     request = build_demo_workspace_request()
     world_package = request.world_package.model_copy(deep=True)
     world_package.provenance = {
@@ -179,7 +183,7 @@ def _copy_demo_world_package_with_fixture(fixture_name: str) -> WorldScenePackag
 def _build_fixture_request(
     *,
     fixture_name: str,
-    world_package: WorldScenePackageManifest,
+    world_package: WorldSceneRegistryEnvelope,
     mesh_assets: Sequence[SimulatorMeshAssetUpload] | None = None,
     urdf_asset_path: str | None = None,
 ) -> SimulatorWorkspacePrepareRequest:
@@ -207,11 +211,10 @@ def _build_fixture_request(
 def build_studio_y_up_axis_workspace_request() -> SimulatorWorkspacePrepareRequest:
     world_package = _copy_demo_world_package_with_fixture("studio-y-up-axis")
     world_package.package_id = "studio-y-up-axis-workspace-check"
-    world_package.title = "Studio Y-Up Axis Workspace Check"
-    world_package.interface.frame_convention = "studio-y-up"
-    world_package.interface.observation_modalities = ["state"]
-    world_package.world_snapshot.cameras = []
-    world_package.world_snapshot.objects = [
+    world_package.world.name = "Studio Y-Up Axis Workspace Check"
+    world_package.world.environment = {"frame_convention": "studio-y-up"}
+    world_package.world.cameras = []
+    world_package.world.objects = [
         {
             "id": "axis-box",
             "name": "Axis box",
@@ -233,10 +236,9 @@ def build_mesh_asset_workspace_request() -> SimulatorWorkspacePrepareRequest:
     request = build_demo_workspace_request()
     world_package = request.world_package.model_copy(deep=True)
     world_package.package_id = "mesh-asset-workspace-check"
-    world_package.title = "Mesh Asset Workspace Check"
-    world_package.interface.observation_modalities = ["state"]
-    world_package.world_snapshot.cameras = []
-    world_package.world_snapshot.objects = [
+    world_package.world.name = "Mesh Asset Workspace Check"
+    world_package.world.cameras = []
+    world_package.world.objects = [
         {
             "id": "mesh-crate",
             "name": "Mesh crate",
@@ -271,9 +273,9 @@ def build_mesh_asset_workspace_request() -> SimulatorWorkspacePrepareRequest:
 def build_hidden_object_workspace_request() -> SimulatorWorkspacePrepareRequest:
     world_package = _copy_demo_world_package_with_fixture("hidden-object")
     world_package.package_id = "hidden-object-workspace-check"
-    world_package.title = "Hidden Object Workspace Check"
-    world_package.world_snapshot.objects = [
-        *world_package.world_snapshot.objects,
+    world_package.world.name = "Hidden Object Workspace Check"
+    world_package.world.objects = [
+        *world_package.world.objects,
         {
             "id": "hidden-transfer-probe",
             "name": "Hidden transfer probe",
@@ -295,7 +297,7 @@ def build_hidden_object_workspace_request() -> SimulatorWorkspacePrepareRequest:
 def build_xacro_source_workspace_request() -> SimulatorWorkspacePrepareRequest:
     world_package = _copy_demo_world_package_with_fixture("xacro-source")
     world_package.package_id = "xacro-source-workspace-check"
-    world_package.title = "Xacro Source Workspace Check"
+    world_package.world.name = "Xacro Source Workspace Check"
     world_package.provenance = {
         **world_package.provenance,
         "source_asset_path": "robots/so101.urdf.xacro",
@@ -318,6 +320,7 @@ def build_workspace_request_from_files(
         world_package,
         context=f"World package artifact digest invalid in {world_package_path}",
     )
+    envelope = read_world_scene_registry_envelope(world_package)
     resolved_robot_urdf_path = robot_urdf_path.expanduser().resolve()
     if not resolved_robot_urdf_path.is_file():
         raise ValueError(f"Robot URDF does not exist: {robot_urdf_path}")
@@ -326,7 +329,7 @@ def build_workspace_request_from_files(
         asset_roots=asset_roots,
     )
     return SimulatorWorkspacePrepareRequest(
-        world_package=world_package,
+        world_package=envelope,
         urdf_asset_path=_relative_to_asset_roots(
             resolved_robot_urdf_path,
             resolved_asset_roots,

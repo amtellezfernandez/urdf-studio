@@ -41,9 +41,8 @@ from backend.services.simulator_adapters.workspace_asset_staging import (
     write_workspace_asset_file,
 )
 from backend.services.world_scene_package_digest import (
-    normalize_and_require_world_snapshot_artifact_digests,
+    normalize_and_require_world_scene_registry_envelope_artifact_digests,
 )
-from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.world_layout_static_transfer import (
     count_transferable_world_objects,
     parse_static_world_layout_payload,
@@ -89,7 +88,7 @@ def _raise(error: Callable[[str], Exception], message: str) -> None:
 def normalize_simulator_workspace_package_request(
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareRequest:
-    normalized_world_package = normalize_and_require_world_snapshot_artifact_digests(
+    normalized_world_package = normalize_and_require_world_scene_registry_envelope_artifact_digests(
         request.world_package,
         context="Simulator workspace world package invalid",
     )
@@ -104,7 +103,7 @@ def normalize_simulator_workspace_package_request(
 
 def _transferable_world_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
     layout = parse_static_world_layout_payload(
-        world_scene_registry_envelope_json_payload(request.world_package)
+        request.world_package.model_dump(mode="json", exclude_none=True)
     )
     return count_transferable_world_objects(layout, include_hidden=False)
 
@@ -116,7 +115,7 @@ def _write_workspace_world_package(
 ) -> Path:
     world_package_path = workspace_dir / "world-package.json"
     world_package_path.write_text(
-        f"{json.dumps(world_scene_registry_envelope_json_payload(request.world_package), indent=2)}\n",
+        f"{request.world_package.model_dump_json(indent=2, exclude_none=True)}\n",
         encoding="utf-8",
     )
     return world_package_path
@@ -132,7 +131,7 @@ def _stage_workspace_robot_source(
     staged_urdf_relative_path = normalize_resolved_urdf_asset_path(requested_asset_path)
     staged_urdf_path = source_root / staged_urdf_relative_path
     robot_urdf_xml = normalize_root_relative_urdf_mesh_filenames(
-        request.world_package.world_snapshot.urdf_xml
+        request.world_package.world.urdf_xml or ""
     )
     write_workspace_asset_file(
         source_root,
@@ -319,7 +318,7 @@ def _prepare_simulator_workspace_package_inner(
         bundle_result=bundle_result,
         robot_urdf_xml=prepared_robot_urdf_xml,
         world_object_count=_transferable_world_object_count(request),
-        camera_count=len(request.world_package.world_snapshot.cameras),
+        camera_count=len(request.world_package.world.cameras or []),
     )
 
 

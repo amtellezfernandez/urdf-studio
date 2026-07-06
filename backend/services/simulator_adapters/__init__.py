@@ -24,7 +24,9 @@ from backend.services.simulator_adapters.plugin import (
     get_all_plugins,
     get_plugin,
 )
-from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
+from backend.services.world_scene_package_digest import (
+    normalize_world_scene_registry_envelope_artifact_digests,
+)
 
 WorkspacePackageRequest = TypeVar(
     "WorkspacePackageRequest",
@@ -64,7 +66,11 @@ def _normalize_world_package_request(
     request: WorkspacePackageRequest,
 ) -> WorkspacePackageRequest:
     return request.model_copy(
-        update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
+        update={
+            "world_package": normalize_world_scene_registry_envelope_artifact_digests(
+                request.world_package
+            )
+        },
         deep=True,
     )
 

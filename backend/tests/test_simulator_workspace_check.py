@@ -113,7 +113,7 @@ def test_workspace_check_default_targets_include_registered_workspace_plugins() 
 
 def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:
     request = build_demo_workspace_request()
-    request.world_package.world_snapshot.objects.append(
+    request.world_package.world.objects.append(
         {
             "id": "hidden-object",
             "name": "Hidden object",
@@ -157,7 +157,7 @@ def test_workspace_check_expected_object_vectors_follow_auto_frame_map() -> None
 
 def test_workspace_check_expected_object_contract_preserves_mesh_asset_refs() -> None:
     request = build_studio_y_up_axis_workspace_request()
-    request.world_package.world_snapshot.objects = [
+    request.world_package.world.objects = [
         {
             "id": "mesh-crate",
             "name": "Mesh crate",
@@ -197,9 +197,9 @@ def test_workspace_check_fixture_selects_studio_y_up_axis_request() -> None:
     request = _workspace_request_from_args(args)
 
     assert request.world_package.package_id == "studio-y-up-axis-workspace-check"
-    assert request.world_package.interface.frame_convention == "studio-y-up"
-    assert request.world_package.world_snapshot.cameras == []
-    assert [item["id"] for item in request.world_package.world_snapshot.objects] == [
+    assert request.world_package.world.environment == {"frame_convention": "studio-y-up"}
+    assert request.world_package.world.cameras == []
+    assert [item["id"] for item in request.world_package.world.objects] == [
         "axis-box"
     ]
 
@@ -219,9 +219,9 @@ def test_workspace_check_fixture_selects_mesh_asset_request() -> None:
     request = _workspace_request_from_args(args)
 
     assert request.world_package.package_id == "mesh-asset-workspace-check"
-    assert request.world_package.world_snapshot.cameras == []
-    assert request.world_package.world_snapshot.objects[0]["id"] == "mesh-crate"
-    assert request.world_package.world_snapshot.objects[0]["asset_ref"] == (
+    assert request.world_package.world.cameras == []
+    assert request.world_package.world.objects[0]["id"] == "mesh-crate"
+    assert request.world_package.world.objects[0]["asset_ref"] == (
         "assets/workspace_mesh_crate.obj"
     )
     assert "assets/workspace_mesh_crate.obj" in {asset.path for asset in request.mesh_assets}
@@ -243,7 +243,7 @@ def test_workspace_check_fixture_selects_hidden_object_request() -> None:
 
     assert request.world_package.package_id == "hidden-object-workspace-check"
     assert request.world_package.provenance["workspace_check_fixture"] == "hidden-object"
-    assert len(request.world_package.world_snapshot.objects) == 4
+    assert len(request.world_package.world.objects) == 4
     assert active_object_count(request) == 3
 
 
@@ -276,8 +276,8 @@ def test_workspace_check_fixture_selects_xacro_source_request() -> None:
     assert request.world_package.package_id == "xacro-source-workspace-check"
     assert request.urdf_asset_path == "robots/so101.urdf.xacro"
     assert request.world_package.provenance["workspace_check_fixture"] == "xacro-source"
-    assert request.world_package.world_snapshot.objects
-    assert request.world_package.world_snapshot.cameras
+    assert request.world_package.world.objects
+    assert request.world_package.world.cameras
     assert request.mesh_assets
 
 
@@ -286,14 +286,14 @@ def test_xacro_source_fixture_preserves_demo_scene_contract() -> None:
     xacro_request = build_xacro_source_workspace_request()
 
     assert xacro_request.urdf_asset_path.endswith(".urdf.xacro")
-    assert xacro_request.world_package.world_snapshot.urdf_xml == (
-        demo_request.world_package.world_snapshot.urdf_xml
+    assert xacro_request.world_package.world.urdf_xml == (
+        demo_request.world_package.world.urdf_xml
     )
-    assert xacro_request.world_package.world_snapshot.objects == (
-        demo_request.world_package.world_snapshot.objects
+    assert xacro_request.world_package.world.objects == (
+        demo_request.world_package.world.objects
     )
-    assert xacro_request.world_package.world_snapshot.cameras == (
-        demo_request.world_package.world_snapshot.cameras
+    assert xacro_request.world_package.world.cameras == (
+        demo_request.world_package.world.cameras
     )
 
 
@@ -432,9 +432,7 @@ def test_workspace_check_derives_expected_camera_contracts_from_request() -> Non
 
 def test_workspace_check_rejects_duplicate_camera_ids_in_request() -> None:
     request = build_demo_workspace_request()
-    request.world_package.world_snapshot.cameras[1]["id"] = request.world_package.world_snapshot.cameras[0][
-        "id"
-    ]
+    request.world_package.world.cameras[1]["id"] = request.world_package.world.cameras[0]["id"]
 
     with pytest.raises(ValueError, match="camera ids must be unique"):
         expected_camera_ids_for_request(request)

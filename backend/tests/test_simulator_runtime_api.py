@@ -55,8 +55,8 @@ from backend.services.simulator_adapters.params import (
 )
 from backend.services.simulator_adapters.plugin import DirectUrdfSimulatorPlugin, get_plugin
 from backend.services.world_scene_package_digest import (
-    computed_world_snapshot_digest,
-    declared_world_snapshot_digests,
+    declared_world_scene_registry_envelope_digests,
+    world_scene_registry_envelope_digest,
 )
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 
@@ -666,7 +666,7 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
 
     def fake_prepare_simulator_workspace(simulator_id, request):
         captured["simulator_id"] = simulator_id
-        captured["request_title"] = request.world_package.title
+        captured["request_title"] = request.world_package.world.name
         return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
             started=True,
@@ -712,8 +712,8 @@ def test_simulator_workspace_prepare_refreshes_stale_world_snapshot_digest(
     monkeypatch,
 ) -> None:
     def fake_prepare_simulator_workspace(simulator_id, request):
-        assert declared_world_snapshot_digests(request.world_package) == (
-            computed_world_snapshot_digest(request.world_package),
+        assert declared_world_scene_registry_envelope_digests(request.world_package) == (
+            world_scene_registry_envelope_digest(request.world_package),
         )
         return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
@@ -752,8 +752,8 @@ def test_blender_workspace_prepare_refreshes_stale_world_snapshot_digest(
 ) -> None:
     def fake_prepare_simulator_workspace(simulator_id, request):
         assert simulator_id == "blender"
-        assert declared_world_snapshot_digests(request.world_package) == (
-            computed_world_snapshot_digest(request.world_package),
+        assert declared_world_scene_registry_envelope_digests(request.world_package) == (
+            world_scene_registry_envelope_digest(request.world_package),
         )
         return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
@@ -805,8 +805,8 @@ def test_simulator_workspace_change_set_request_refreshes_stale_world_snapshot_d
 
     normalized = normalize_simulator_workspace_change_set_request(request)
 
-    assert declared_world_snapshot_digests(normalized.world_package) == (
-        computed_world_snapshot_digest(normalized.world_package),
+    assert declared_world_scene_registry_envelope_digests(normalized.world_package) == (
+        world_scene_registry_envelope_digest(normalized.world_package),
     )
 
 
@@ -832,9 +832,11 @@ def test_workspace_requests_accept_thin_world_registry_envelopes() -> None:
         }
     )
 
-    assert prepare_request.world_package.title == "Demo World"
-    assert prepare_request.world_package.interface.frame_convention == "ros-rep-103"
-    assert change_set_request.world_package.title == "Demo World"
+    assert prepare_request.world_package.world.name == "Demo World"
+    assert prepare_request.world_package.world.environment == {
+        "frame_convention": "ros-rep-103"
+    }
+    assert change_set_request.world_package.world.name == "Demo World"
 
 
 def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:
@@ -930,8 +932,10 @@ def test_workspace_transfer_open_refreshes_stale_world_snapshot_digest(monkeypat
 
     def fake_prepare_simulator_workspace(simulator_id, request):
         captured["simulator_id"] = simulator_id
-        captured["declared_digests"] = declared_world_snapshot_digests(request.world_package)
-        captured["actual_digest"] = computed_world_snapshot_digest(request.world_package)
+        captured["declared_digests"] = declared_world_scene_registry_envelope_digests(
+            request.world_package
+        )
+        captured["actual_digest"] = world_scene_registry_envelope_digest(request.world_package)
         return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
             started=True,

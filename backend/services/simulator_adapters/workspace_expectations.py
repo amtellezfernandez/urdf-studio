@@ -23,7 +23,6 @@ from backend.services.world_layout_transfer_types import (
     StaticWorldLayout,
     WorldLayoutFrameMap,
 )
-from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 
 
 @dataclass(frozen=True)
@@ -80,7 +79,7 @@ def _workspace_expectations(
 ) -> WorkspaceExpectations:
     return WorkspaceExpectations(
         object_count=_active_object_count(workspace_layout),
-        camera_count=len(request.world_package.world_snapshot.cameras),
+        camera_count=len(request.world_package.world.cameras or []),
         duration_sec=duration_sec,
         frame_map=frame_map,
         resolved_frame_map=_resolved_frame_map(workspace_layout, frame_map),
@@ -104,7 +103,7 @@ def _active_object_count(layout: StaticWorldLayout) -> int:
 
 def workspace_layout_from_request(request: SimulatorWorkspacePrepareRequest) -> StaticWorldLayout:
     return parse_static_world_layout_payload(
-        world_scene_registry_envelope_json_payload(request.world_package)
+        request.world_package.model_dump(mode="json", exclude_none=True)
     )
 
 
@@ -155,12 +154,12 @@ def _expected_joint_positions(
 ) -> dict[str, float]:
     return {
         str(name): float(position)
-        for name, position in request.world_package.world_snapshot.joint_positions.items()
+        for name, position in (request.world_package.world.joint_positions or {}).items()
     }
 
 
 def expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
-    if not request.world_package.world_snapshot.cameras:
+    if not request.world_package.world.cameras:
         return ()
     return tuple(camera.camera_id for camera in _build_expected_camera_specs(request))
 
@@ -168,7 +167,7 @@ def expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -
 def expected_camera_contracts_for_request(
     request: SimulatorWorkspacePrepareRequest,
 ) -> dict[str, ExpectedCameraReport]:
-    if not request.world_package.world_snapshot.cameras:
+    if not request.world_package.world.cameras:
         return {}
     camera_specs = _build_expected_camera_specs(request)
     return {camera.camera_id: _expected_camera_report(camera) for camera in camera_specs}
@@ -181,7 +180,7 @@ def _build_expected_camera_specs(
         robot_urdf_path = Path(directory) / "robot.urdf"
         _write_temporary_robot_urdf(
             robot_urdf_path,
-            request.world_package.world_snapshot.urdf_xml,
+            request.world_package.world.urdf_xml or "",
         )
         camera_specs, _warnings = build_sim_camera_specs(
             request.world_package,

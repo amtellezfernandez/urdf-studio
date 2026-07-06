@@ -11,7 +11,11 @@ from backend.models.simulator_runtime import (
     SimulatorWorkspacePrepareRequest,
     validate_simulator_relative_path,
 )
-from backend.models.world_scene_package import WorldArtifactRef, WorldRuntimeTarget
+from backend.models.world_scene_package import (
+    WorldArtifactRef,
+    WorldRuntimeTarget,
+    WorldSceneRegistryEnvelope,
+)
 from backend.services.ilu_session import IluSessionError
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.workspace_package import (
@@ -19,8 +23,8 @@ from backend.services.simulator_adapters.workspace_package import (
 )
 from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
 from backend.services.world_scene_package_digest import (
-    computed_world_snapshot_digest,
-    declared_world_snapshot_digests,
+    declared_world_scene_registry_envelope_digests,
+    world_scene_registry_envelope_digest,
 )
 from backend.tests.simulator_adapter_test_utils import make_world_package
 
@@ -99,10 +103,10 @@ def test_prepare_simulator_workspace_refreshes_stale_world_snapshot_digest(
         error=ValueError,
     )
     staged_payload = json.loads(prepared.world_package_path.read_text(encoding="utf-8"))
-    staged_world_package = world_package.model_validate(staged_payload)
+    staged_world_package = WorldSceneRegistryEnvelope.model_validate(staged_payload)
 
-    assert declared_world_snapshot_digests(staged_world_package) == (
-        computed_world_snapshot_digest(staged_world_package),
+    assert declared_world_scene_registry_envelope_digests(staged_world_package) == (
+        world_scene_registry_envelope_digest(staged_world_package),
     )
 
 
@@ -450,7 +454,8 @@ def test_prepare_simulator_workspace_writes_schema_compatible_world_package(tmp_
 
     payload = json.loads(prepared.world_package_path.read_text(encoding="utf-8"))
     assert "description" not in payload
-    assert payload["runtime_targets"] == [{"name": "blender", "mode": "python"}]
+    assert "runtime_targets" not in payload
+    assert payload["world"]["urdf_xml"] == "<robot name=\"demo\"><link name=\"base\"/></robot>"
 
 
 def test_prepare_simulator_workspace_records_scene_counts(tmp_path) -> None:
@@ -482,7 +487,7 @@ def test_prepare_simulator_workspace_records_scene_counts(tmp_path) -> None:
         {
             "id": "cam",
             "name": "Camera",
-            "link_name": "base",
+            "parent_joint": "base",
             "pose": {"xyz": [0.0, 0.0, 1.0], "rpy": [0.0, 0.0, 0.0]},
             "intrinsics": {"width": 320, "height": 240, "fov_deg": 60.0},
         }

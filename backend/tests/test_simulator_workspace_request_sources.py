@@ -5,7 +5,6 @@ import pytest
 from backend.models.world_scene_package import WorldArtifactRef
 from backend.services.simulator_adapters.workspace_request_sources import (
     MESH_ASSET_FIXTURE_PATH,
-    WORKSPACE_SIMULATORS,
     _build_fixture_request,
     _resolve_workspace_asset_roots,
     build_demo_workspace_request,
@@ -15,8 +14,8 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     build_workspace_request_from_files,
 )
 from backend.services.world_scene_package_digest import (
-    computed_world_snapshot_digest,
-    declared_world_snapshot_digests,
+    declared_world_scene_registry_envelope_digests,
+    world_scene_registry_envelope_digest,
 )
 from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
@@ -25,22 +24,20 @@ def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> N
     request = build_demo_workspace_request()
 
     assert request.urdf_asset_path == "robot.urdf"
-    assert request.world_package.interface.frame_convention == "ros-rep-103"
+    assert request.world_package.world.environment == {"frame_convention": "ros-rep-103"}
     assert len(request.mesh_assets) > 0
-    assert len(request.world_package.world_snapshot.objects) == 3
-    assert len(request.world_package.world_snapshot.cameras) == 3
-    assert [camera["id"] for camera in request.world_package.world_snapshot.cameras] == [
+    assert len(request.world_package.world.objects) == 3
+    assert len(request.world_package.world.cameras or []) == 3
+    assert [camera["id"] for camera in request.world_package.world.cameras or []] == [
         "so101_overhead_scene",
         "so101_gripper_down",
         "so101_port_oblique",
     ]
-    assert request.world_package.world_snapshot.cameras[0]["pose"] == {
+    assert (request.world_package.world.cameras or [])[0]["pose"] == {
         "xyz": [0.2, 0.02, 0.75],
         "rpy": [0.0, 1.3909428270024187, 0.0],
     }
-    assert [target.name for target in request.world_package.runtime_targets] == list(
-        WORKSPACE_SIMULATORS
-    )
+    assert request.world_package.package_id == "so101-simulator-workspaces-check"
 
 
 def test_studio_y_up_axis_workspace_request_contains_axis_probe() -> None:
@@ -48,10 +45,9 @@ def test_studio_y_up_axis_workspace_request_contains_axis_probe() -> None:
 
     assert request.urdf_asset_path == "robot.urdf"
     assert request.world_package.package_id == "studio-y-up-axis-workspace-check"
-    assert request.world_package.interface.frame_convention == "studio-y-up"
-    assert request.world_package.interface.observation_modalities == ["state"]
-    assert request.world_package.world_snapshot.cameras == []
-    assert request.world_package.world_snapshot.objects == [
+    assert request.world_package.world.environment == {"frame_convention": "studio-y-up"}
+    assert request.world_package.world.cameras == []
+    assert request.world_package.world.objects == [
         {
             "id": "axis-box",
             "name": "Axis box",
@@ -72,9 +68,8 @@ def test_mesh_asset_workspace_request_contains_mesh_object_and_upload() -> None:
 
     assert request.urdf_asset_path == "robot.urdf"
     assert request.world_package.package_id == "mesh-asset-workspace-check"
-    assert request.world_package.interface.observation_modalities == ["state"]
-    assert request.world_package.world_snapshot.cameras == []
-    assert request.world_package.world_snapshot.objects == [
+    assert request.world_package.world.cameras == []
+    assert request.world_package.world.objects == [
         {
             "id": "mesh-crate",
             "name": "Mesh crate",
@@ -97,10 +92,10 @@ def test_hidden_object_workspace_request_keeps_hidden_source_but_active_count_st
     assert request.urdf_asset_path == "robot.urdf"
     assert request.world_package.package_id == "hidden-object-workspace-check"
     assert request.world_package.provenance["workspace_check_fixture"] == "hidden-object"
-    assert len(request.world_package.world_snapshot.objects) == 4
+    assert len(request.world_package.world.objects) == 4
     hidden_objects = [
         item
-        for item in request.world_package.world_snapshot.objects
+        for item in request.world_package.world.objects
         if item.get("is_hidden") is True
     ]
     assert [item["id"] for item in hidden_objects] == ["hidden-transfer-probe"]
@@ -111,7 +106,6 @@ def test_build_fixture_request_does_not_mutate_input_world_package_provenance() 
     base_request = build_demo_workspace_request()
     world_package = base_request.world_package.model_copy(deep=True)
     original_provenance = dict(world_package.provenance)
-    original_runtime_targets = list(world_package.runtime_targets)
 
     request = _build_fixture_request(
         fixture_name="custom-fixture",
@@ -120,7 +114,7 @@ def test_build_fixture_request_does_not_mutate_input_world_package_provenance() 
 
     assert request.world_package.provenance["workspace_check_fixture"] == "custom-fixture"
     assert world_package.provenance == original_provenance
-    assert list(world_package.runtime_targets) == original_runtime_targets
+    assert world_package.package_id == base_request.world_package.package_id
 
 
 def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> None:
@@ -298,8 +292,8 @@ def test_workspace_request_from_files_repairs_stale_world_snapshot_artifact_dige
         asset_roots=(asset_root,),
     )
 
-    assert declared_world_snapshot_digests(request.world_package) == (
-        computed_world_snapshot_digest(request.world_package),
+    assert declared_world_scene_registry_envelope_digests(request.world_package) == (
+        world_scene_registry_envelope_digest(request.world_package),
     )
 
 

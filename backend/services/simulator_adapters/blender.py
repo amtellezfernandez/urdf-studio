@@ -35,6 +35,7 @@ from backend.services.simulator_adapters.workspace_process import (
     finalize_workspace_prepare_response,
     start_workspace_process_until_ready,
 )
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_from_manifest
 
 
 class BlenderWorkspaceError(SimulatorAdapterError):
@@ -164,7 +165,7 @@ class BlenderPlugin(SimulatorPlugin):
         )
         return WorkspaceChangeSetApplyResponse(
             simulator_id=self.simulator_id,
-            world_package=result.world_package,
+            world_package=world_scene_registry_envelope_from_manifest(result.world_package),
             applied_change_count=result.applied_change_count,
             review_only_count=result.review_only_count,
         )
