@@ -2,6 +2,7 @@
 
 import { createLruCache } from "@/shared/lib/cache";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
+import { nowMs } from "@/shared/lib/time";
 import {
   buildRoverApproachWorldNavigationContext,
   countIncludedObstacles,
@@ -34,7 +35,6 @@ const contextCache = createLruCache<RoverApproachWorldNavigationContext>(
   ROVER_APPROACH_WORLD_NAVIGATION_WORKER_PARAMS.sceneCacheLimit
 );
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 const getNavigationContext = (
   request: RoverApproachWorldRouteRequest

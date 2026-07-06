@@ -1,4 +1,5 @@
 import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
+import { nowMs } from "@/shared/lib/time";
 import { recordRoverApproachNavigationDiagnostics } from "./approachWorldNavigationDebug";
 import {
   countIncludedObstacles,
@@ -37,8 +38,6 @@ const broker = createWorkerTaskBroker<
     },
   );
 });
-const nowMs = () =>
-  typeof performance !== "undefined" ? performance.now() : Date.now();
 
 export const resolveRoverApproachWorldRouteAsync = async (
   request: RoverApproachWorldRouteRequest,
