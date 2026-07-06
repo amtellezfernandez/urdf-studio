@@ -256,7 +256,11 @@ export const validateLocalWorldSceneManifest = (
     );
   }
   if (manifest.world_snapshot) {
-    errors.push(...validateWorldJointPositions(manifest.world_snapshot.joint_positions));
+    errors.push(
+      ...validateWorldSceneLayerSnapshot(worldSceneManifestToLayerSnapshot(manifest)).map(
+        toWorldSnapshotValidationMessage
+      )
+    );
   }
   if (!Array.isArray(manifest.world_snapshot?.cameras)) {
     errors.push("world_snapshot.cameras must be an array");
@@ -286,12 +290,6 @@ export const validateLocalWorldSceneManifest = (
   if (!isIntegerNumber(manifest.world_snapshot?.scenario_duration_ms)) {
     errors.push("world_snapshot.scenario_duration_ms must be an integer");
   }
-  if (Array.isArray(manifest.world_snapshot?.objects)) {
-    errors.push(...validateSerializableWorldObjects(manifest.world_snapshot.objects));
-  }
-  if (Array.isArray(manifest.world_snapshot?.cameras)) {
-    errors.push(...validateSerializableWorldCameras(manifest.world_snapshot.cameras));
-  }
   if (
     isIntegerNumber(manifest.world_snapshot?.scenario_time_ms) &&
     isIntegerNumber(manifest.world_snapshot?.scenario_duration_ms)
@@ -309,6 +307,12 @@ export const validateLocalWorldSceneManifest = (
   errors.push(...validateWorldSecurity(manifest.security));
   return errors;
 };
+
+const toWorldSnapshotValidationMessage = (error: string): string =>
+  error
+    .replace(/^world layout cameras/, "world snapshot cameras")
+    .replace(/^world layout urdf_xml/, "world_snapshot.urdf_xml")
+    .replace(/^world layout joint_positions/, "world_snapshot.joint_positions");
 
 const toParsedWorldSceneLayerSnapshot = (
   value: unknown,

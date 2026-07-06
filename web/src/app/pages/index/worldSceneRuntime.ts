@@ -360,20 +360,13 @@ export const validateWorldScenePackageLocally = async (
   manifest: WorldScenePackageManifest
 ) => {
   const [
-    {
-      validateLocalWorldSceneManifest,
-      validateWorldSceneLayerSnapshot,
-      worldSceneManifestToLayerSnapshot,
-    },
+    { validateLocalWorldSceneManifest },
     { computeWorldSnapshotDigest },
   ] = await Promise.all([
     loadWorldSceneManifestModule(),
     loadWorldScenePackageBuilderModule(),
   ]);
   const localErrors = validateLocalWorldSceneManifest(manifest);
-  const layerErrors = validateWorldSceneLayerSnapshot(
-    worldSceneManifestToLayerSnapshot(manifest)
-  );
   const artifactErrors: string[] = [];
   const worldSnapshotArtifacts = Array.isArray(manifest.artifacts)
     ? manifest.artifacts.filter(
@@ -407,7 +400,6 @@ export const validateWorldScenePackageLocally = async (
   }
   const combinedErrors = uniquePreservingOrder([
     ...localErrors,
-    ...layerErrors,
     ...artifactErrors,
   ]);
   const isStaticScene = manifest.world_snapshot.scenario_duration_ms === 0;
