@@ -96,6 +96,17 @@ const isWorldSnapshotArtifact = (
 
 const artifactBasename = (uri: string) => getFilenameFromPath(uri, uri).toLowerCase();
 
+const uniquePreservingOrder = (values: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  values.forEach((value) => {
+    if (seen.has(value)) return;
+    seen.add(value);
+    unique.push(value);
+  });
+  return unique;
+};
+
 const rolloutArtifactBasenames = (
   campaign: WorldRolloutCampaignManifest,
   kind: string
@@ -393,7 +404,11 @@ export const validateWorldScenePackageLocally = async (
       }
     });
   }
-  const combinedErrors = [...localErrors, ...layerErrors, ...artifactErrors];
+  const combinedErrors = uniquePreservingOrder([
+    ...localErrors,
+    ...layerErrors,
+    ...artifactErrors,
+  ]);
   const isStaticScene = manifest.world_snapshot.scenario_duration_ms === 0;
   return {
     combinedErrors,

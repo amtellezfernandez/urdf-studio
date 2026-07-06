@@ -107,10 +107,6 @@ export const useWorldSceneManager = ({
   const [worldScenePackageImportDialogOpen, setWorldScenePackageImportDialogOpen] =
     useState(false);
   const [isImportingWorldScenePackage, setIsImportingWorldScenePackage] = useState(false);
-  const [activeWorldSnapshotRef, setActiveWorldSnapshotRef] = useState<{
-    package_id: string;
-    version: string;
-  } | null>(null);
 
   const closeWorldLayoutImportDialog = useCallback(() => {
     setWorldLayoutImportDialogOpen(false);
@@ -287,17 +283,12 @@ export const useWorldSceneManager = ({
       });
       applyWorldSceneObjects(snapshot.objects);
       setJointValues(snapshot.joint_positions);
-      setActiveWorldSnapshotRef({
-        package_id: manifest.package_id,
-        version: manifest.version,
-      });
       toast.success(`Loaded world package ${manifest.package_id}@${manifest.version}`);
     },
     [
       addCamera,
       applyWorldSceneObjects,
       clearCameras,
-      setActiveWorldSnapshotRef,
       setJointValues,
       updateUrdfFile,
     ]
@@ -337,7 +328,6 @@ export const useWorldSceneManager = ({
           const changeSet = JSON.parse(await file.text()) as unknown;
           const applied = await applyWorkspaceChangeSet(currentWorldPackage, changeSet);
           applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
-          setActiveWorldSnapshotRef(null);
           const reviewOnly =
             applied.reviewOnlyCount > 0 ? `, ${applied.reviewOnlyCount} review-only` : "";
           toast.success(
@@ -348,7 +338,7 @@ export const useWorldSceneManager = ({
         }
       },
     });
-  }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest, setActiveWorldSnapshotRef]);
+  }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest]);
 
   const {
     handlePublishCurrentWorldScenePackage,
@@ -568,7 +558,6 @@ export const useWorldSceneManager = ({
   }, [importWorldLayoutFromUrl]);
 
   return {
-    activeWorldSnapshotRef,
     buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
