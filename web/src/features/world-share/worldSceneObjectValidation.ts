@@ -106,6 +106,20 @@ const validateWorldObjectMeshMetadata = (
       })
     );
   }
+  if (value.mesh_scale_xyz !== undefined) {
+    errors.push(
+      ...validateFiniteVector(value.mesh_scale_xyz, `${objectLabel}.mesh_scale_xyz`, {
+        requirePositive: true,
+      })
+    );
+  }
+  if (value.scale_xyz !== undefined) {
+    errors.push(
+      ...validateFiniteVector(value.scale_xyz, `${objectLabel}.scale_xyz`, {
+        requirePositive: true,
+      })
+    );
+  }
 
   if (value.mesh !== undefined) {
     if (!isRecord(value.mesh)) {

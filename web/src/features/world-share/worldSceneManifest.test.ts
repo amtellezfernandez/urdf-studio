@@ -502,6 +502,25 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toEqual([]);
   });
 
+  it("validates layout mesh scale aliases on world objects", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            id: "mesh-crate",
+            name: "Mesh crate",
+            type: "mesh",
+            asset_ref: "assets/crate.obj",
+            mesh_scale_xyz: [1, 1.2, 1.4],
+            scale_xyz: [1.1, 1.3, 1.5],
+          },
+        ],
+      })
+    );
+    expect(errors).toEqual([]);
+  });
+
   it("accepts v1.1 world objects with linked appearance, physics, and consistency layers", () => {
     const errors = validateLocalWorldSceneManifest({
       ...createManifest({

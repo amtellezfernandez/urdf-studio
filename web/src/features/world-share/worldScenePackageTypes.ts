@@ -106,6 +106,8 @@ export type SerializableWorldObject = {
   consistency?: SerializableWorldObjectConsistencySpec;
   asset_ref?: string;
   asset_scale_xyz?: [number, number, number];
+  mesh_scale_xyz?: [number, number, number];
+  scale_xyz?: [number, number, number];
   mesh?: SerializableWorldObjectMeshSpec;
   source?: WorldObjectSource;
   tracked_joint_name?: string | null;

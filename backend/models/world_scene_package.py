@@ -396,8 +396,9 @@ def _raise_for_invalid_object_mesh_metadata(
 ) -> None:
     if "asset_ref" in world_object:
         _raise_for_portable_asset_ref(world_object.get("asset_ref"), f"{object_path}.asset_ref")
-    if "asset_scale_xyz" in world_object:
-        _raise_for_positive_vector3(world_object.get("asset_scale_xyz"), f"{object_path}.asset_scale_xyz")
+    for field_name in ("asset_scale_xyz", "mesh_scale_xyz", "scale_xyz"):
+        if field_name in world_object:
+            _raise_for_positive_vector3(world_object.get(field_name), f"{object_path}.{field_name}")
     mesh = world_object.get("mesh")
     if mesh is not None and not _is_record(mesh):
         raise ValueError(f"{object_path}.mesh must be an object.")

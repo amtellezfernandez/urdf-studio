@@ -110,6 +110,24 @@ def test_world_snapshot_accepts_valid_world_object_contract() -> None:
     assert manifest.world_snapshot.objects[0]["id"] == "crate"
 
 
+def test_world_snapshot_accepts_layout_mesh_scale_aliases() -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "mesh",
+            "asset_ref": "assets/crate.obj",
+            "mesh_scale_xyz": [1.0, 1.1, 1.2],
+            "scale_xyz": [1.3, 1.4, 1.5],
+        }
+    ]
+
+    manifest = WorldScenePackageManifest.model_validate(payload)
+
+    assert manifest.world_snapshot.objects[0]["mesh_scale_xyz"] == [1.0, 1.1, 1.2]
+    assert manifest.world_snapshot.objects[0]["scale_xyz"] == [1.3, 1.4, 1.5]
+
+
 def test_world_snapshot_accepts_v1_1_appearance_physics_consistency_contract() -> None:
     payload = _manifest_payload()
     payload["schema_version"] = "1.1.0"
