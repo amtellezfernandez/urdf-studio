@@ -11,7 +11,10 @@ import {
 } from "@/features/world-share/workspaceTransferApi";
 import { computeWorldSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
 import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
+} from "@/features/world-share/worldScenePackageTypes";
 
 const { guardedFetchMock } = vi.hoisted(() => ({
   guardedFetchMock: vi.fn(),
@@ -93,12 +96,20 @@ describe("workspaceTransferApi", () => {
     expect(prepared.cameraCount).toBe(2);
     const requestBody = JSON.parse(
       guardedFetchMock.mock.calls[0][1].body as string
-    ) as { launch_id: string; world_package: WorldScenePackageManifest };
+    ) as { launch_id: string; world_package: WorldSceneRegistryEnvelope };
     expect(requestBody.launch_id).toBe("launch-123");
     expect(requestBody.world_package.artifacts).toContainEqual(expect.objectContaining({
       kind: "world_snapshot",
-      digest_sha256: await computeWorldSnapshotDigest(requestBody.world_package.world_snapshot),
+      digest_sha256: await computeWorldSnapshotDigest({
+        urdf_xml: requestBody.world_package.world.urdf_xml ?? "<robot name='world'/>",
+        joint_positions: requestBody.world_package.world.joint_positions ?? {},
+        cameras: requestBody.world_package.world.cameras ?? [],
+        objects: requestBody.world_package.world.objects,
+        scenario_time_ms: requestBody.world_package.world.scenario_time_ms,
+        scenario_duration_ms: requestBody.world_package.world.scenario_duration_ms,
+      }),
     }));
+    expect(requestBody.world_package.world.name).toBe("Demo World");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/workspace-transfer/targets/genesis/open"),
       expect.objectContaining({
@@ -225,9 +236,16 @@ describe("workspaceTransferApi", () => {
 
     const requestBody = JSON.parse(
       guardedFetchMock.mock.calls[0][1].body as string
-    ) as { world_package: WorldScenePackageManifest };
+    ) as { world_package: WorldSceneRegistryEnvelope };
     const expectedDigest = await computeWorldSnapshotDigest(
-      requestBody.world_package.world_snapshot
+      {
+        urdf_xml: requestBody.world_package.world.urdf_xml ?? "<robot name='world'/>",
+        joint_positions: requestBody.world_package.world.joint_positions ?? {},
+        cameras: requestBody.world_package.world.cameras ?? [],
+        objects: requestBody.world_package.world.objects,
+        scenario_time_ms: requestBody.world_package.world.scenario_time_ms,
+        scenario_duration_ms: requestBody.world_package.world.scenario_duration_ms,
+      }
     );
     expect(requestBody.world_package.artifacts).toEqual([
       {
@@ -236,6 +254,7 @@ describe("workspaceTransferApi", () => {
         uri: "inline://snapshot",
       },
     ]);
+    expect(requestBody.world_package.world.name).toBe("Demo World");
   });
 
   it("builds package-root aliases for browser mesh uploads", async () => {

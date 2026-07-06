@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.json_payload import JsonObject
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 
 
 SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
@@ -99,6 +100,14 @@ class SimulatorWorkspacePrepareRequest(BaseModel):
             return None
         return validate_simulator_relative_path(value, "URDF asset path")
 
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(
+        cls,
+        value: object,
+    ) -> WorldScenePackageManifest:
+        return read_world_scene_package_manifest(value)
+
     @field_validator("launch_id")
     @classmethod
     def validate_launch_id(cls, value: str | None) -> str | None:
@@ -145,6 +154,14 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
 class WorkspaceChangeSetApplyRequest(BaseModel):
     world_package: WorldScenePackageManifest
     change_set: WorkspaceChangeSetPayload
+
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(
+        cls,
+        value: object,
+    ) -> WorldScenePackageManifest:
+        return read_world_scene_package_manifest(value)
 
 
 class WorkspaceChangeSetApplyResponse(BaseModel):

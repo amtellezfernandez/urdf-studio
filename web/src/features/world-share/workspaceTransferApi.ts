@@ -10,6 +10,7 @@ import {
   buildWorkspaceTransferMeshAssetUploads,
 } from "@/features/world-share/workspaceTransferMeshAssets";
 import { throwIfWorkspaceTransferAborted } from "@/features/world-share/workspaceTransferAbort";
+import { toWorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageBuilder";
 
 export { buildWorkspaceTransferMeshAssetUploads };
 export type { WorkspaceTransferTargetDescriptor, WorkspaceTransferTargetId };
@@ -132,7 +133,7 @@ export const openWorkspaceTransferTarget = async ({
       },
       signal,
       body: JSON.stringify({
-        world_package: transferWorldPackage,
+        world_package: toWorldSceneRegistryEnvelope(transferWorldPackage),
         urdf_asset_path: urdfAssetPath || undefined,
         mesh_assets: meshAssets,
         package_roots: packageRoots ?? {},
@@ -195,7 +196,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: transferWorldPackage,
+        world_package: toWorldSceneRegistryEnvelope(transferWorldPackage),
         change_set: changeSet,
       }),
     },
@@ -225,7 +226,7 @@ export const applyWorkspaceChangeSet = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: transferWorldPackage,
+        world_package: toWorldSceneRegistryEnvelope(transferWorldPackage),
         change_set: changeSet,
       }),
     },

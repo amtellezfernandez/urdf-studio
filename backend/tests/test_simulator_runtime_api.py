@@ -124,6 +124,28 @@ def _world_package_payload() -> dict:
     }
 
 
+def _thin_world_package_payload() -> dict:
+    payload = _world_package_payload()
+    return {
+        "package_id": payload["package_id"],
+        "version": payload["version"],
+        "provenance": payload["provenance"],
+        "artifacts": payload["artifacts"],
+        "world": {
+            "name": payload["title"],
+            "urdf_xml": payload["world_snapshot"]["urdf_xml"],
+            "joint_positions": payload["world_snapshot"]["joint_positions"],
+            "cameras": payload["world_snapshot"]["cameras"],
+            "objects": payload["world_snapshot"]["objects"],
+            "scenario_time_ms": payload["world_snapshot"]["scenario_time_ms"],
+            "scenario_duration_ms": payload["world_snapshot"]["scenario_duration_ms"],
+            "environment": {
+                "frame_convention": payload["interface"]["frame_convention"],
+            },
+        },
+    }
+
+
 def _open_request_payload() -> dict:
     return {
         "world_package": _world_package_payload(),
@@ -736,6 +758,33 @@ def test_simulator_workspace_change_set_request_refreshes_stale_world_snapshot_d
     assert declared_world_snapshot_digests(normalized.world_package) == (
         computed_world_snapshot_digest(normalized.world_package),
     )
+
+
+def test_workspace_requests_accept_thin_world_registry_envelopes() -> None:
+    thin_world_package = _thin_world_package_payload()
+
+    prepare_request = SimulatorWorkspacePrepareRequest.model_validate(
+        {
+            "world_package": thin_world_package,
+            "urdf_asset_path": "robot.urdf",
+            "mesh_assets": [],
+            "package_roots": {},
+        }
+    )
+    change_set_request = WorkspaceChangeSetApplyRequest.model_validate(
+        {
+            "world_package": thin_world_package,
+            "change_set": {
+                "schema": "urdf-studio.blender-change-set.v1",
+                "changes": [],
+                "review_only": [],
+            },
+        }
+    )
+
+    assert prepare_request.world_package.title == "Demo World"
+    assert prepare_request.world_package.interface.frame_convention == "ros-rep-103"
+    assert change_set_request.world_package.title == "Demo World"
 
 
 def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:
