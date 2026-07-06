@@ -213,53 +213,75 @@ const resolveRoverApproachNavigationTimeoutBonusMs = (
       ROVER_APPROACH_NAVIGATION_CONFIG.timeoutBonusPerWaypointMs,
   );
 
-function buildRouteResult(params: {
-  mode: "direct";
+type BuildRouteResultParams =
+  | {
+      mode: "direct";
+      waypointWorlds: THREE.Vector3[];
+      pathClearanceM: number;
+      plannerSummary: RoverNavigationPlanSummary;
+    }
+  | {
+      mode: "path";
+      waypointWorlds: THREE.Vector3[];
+      pathClearanceM: number;
+      usedDetourFallback: boolean;
+      plannerSummary: RoverNavigationPlanSummary;
+    }
+  | {
+      mode: "blocked";
+      waypointWorlds: THREE.Vector3[];
+      pathClearanceM: number;
+      plannerSummary: RoverNavigationPlanSummary;
+    };
+
+type RouteResultBase = {
   waypointWorlds: THREE.Vector3[];
   pathClearanceM: number;
-  usedDetourFallback: false;
+  minimumClearanceM: number | null;
+  timeoutBonusMs: number;
   plannerSummary: RoverNavigationPlanSummary;
-}): Extract<RoverApproachWorldRouteResult, { mode: "direct" }>;
-function buildRouteResult(params: {
-  mode: "path";
-  waypointWorlds: THREE.Vector3[];
-  pathClearanceM: number;
-  usedDetourFallback: boolean;
-  plannerSummary: RoverNavigationPlanSummary;
-}): Extract<RoverApproachWorldRouteResult, { mode: "path" }>;
-function buildRouteResult(params: {
-  mode: "blocked";
-  waypointWorlds: THREE.Vector3[];
-  pathClearanceM: number;
-  usedDetourFallback: false;
-  plannerSummary: RoverNavigationPlanSummary;
-}): Extract<RoverApproachWorldRouteResult, { mode: "blocked" }>;
-function buildRouteResult({
+};
+
+const buildRouteResultBase = ({
   mode,
   waypointWorlds,
   pathClearanceM,
-  usedDetourFallback,
   plannerSummary,
-}: {
-  mode: RoverApproachWorldRouteResult["mode"];
-  waypointWorlds: THREE.Vector3[];
-  pathClearanceM: number;
-  usedDetourFallback: boolean;
-  plannerSummary: RoverNavigationPlanSummary;
-}): RoverApproachWorldRouteResult {
+}: BuildRouteResultParams): RouteResultBase => ({
+  waypointWorlds,
+  pathClearanceM,
+  minimumClearanceM: plannerSummary.minimumClearanceM,
+  timeoutBonusMs:
+    mode === "path"
+      ? resolveRoverApproachNavigationTimeoutBonusMs(waypointWorlds.length)
+      : 0,
+  plannerSummary,
+});
+
+const buildRouteResult = (
+  params: BuildRouteResultParams,
+): RoverApproachWorldRouteResult => {
+  const base = buildRouteResultBase(params);
+  if (params.mode === "path") {
+    return {
+      mode: "path",
+      ...base,
+      usedDetourFallback: params.usedDetourFallback,
+    };
+  }
+  if (params.mode === "direct") {
+    return {
+      mode: "direct",
+      ...base,
+      usedDetourFallback: false,
+    };
+  }
   return {
-    mode,
-    waypointWorlds,
-    pathClearanceM,
-    minimumClearanceM: plannerSummary.minimumClearanceM,
-    timeoutBonusMs:
-      mode === "path"
-        ? resolveRoverApproachNavigationTimeoutBonusMs(waypointWorlds.length)
-        : 0,
-    usedDetourFallback,
-    plannerSummary,
-  } as RoverApproachWorldRouteResult;
-}
+    mode: "blocked",
+    ...base,
+    usedDetourFallback: false,
+  };
+};
 
 const resolveRoverApproachRoutePolylineClear = ({
   segmentStartWorld,
@@ -332,7 +354,6 @@ const resolveValidatedNavigationDecisionRoute = ({
       mode: "blocked",
       waypointWorlds: [],
       pathClearanceM,
-      usedDetourFallback: false,
       plannerSummary: {
         ...plannerSummary,
         mode: "blocked",
@@ -347,7 +368,6 @@ const resolveValidatedNavigationDecisionRoute = ({
       mode: "direct",
       waypointWorlds,
       pathClearanceM,
-      usedDetourFallback: false,
       plannerSummary,
     });
   }
@@ -543,7 +563,6 @@ export const resolveRoverApproachWorldRoute = ({
       mode: "blocked",
       waypointWorlds: [],
       pathClearanceM,
-      usedDetourFallback: false,
       plannerSummary,
     });
   }
@@ -563,7 +582,6 @@ export const resolveRoverApproachWorldRoute = ({
       mode: "blocked",
       waypointWorlds: [],
       pathClearanceM,
-      usedDetourFallback: false,
       plannerSummary,
     });
   }
@@ -595,7 +613,6 @@ export const resolveRoverApproachWorldRoute = ({
         mode: "blocked",
         waypointWorlds: [],
         pathClearanceM,
-        usedDetourFallback: false,
         plannerSummary: {
           ...plannerSummary,
           mode: "blocked",
