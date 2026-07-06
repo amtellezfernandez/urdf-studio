@@ -10,14 +10,12 @@ from pathlib import Path
 from typing import Literal, Sequence, TypeAlias, TypedDict, TypeGuard, cast
 
 import numpy as np
+from pydantic import ValidationError
 from scipy.spatial.transform import Rotation
 
 from backend.models.json_payload import JsonObject
 from backend.models.world_scene_package import (
-    WorldSnapshot,
-    raise_for_invalid_world_scene_cameras,
-    raise_for_invalid_world_scene_objects,
-    raise_for_non_finite_world_payload_numbers,
+    WorldSceneDocument,
 )
 from backend.services.world_layout_transfer_constants import (
     COLOR_TOLERANCE,
@@ -530,67 +528,37 @@ def _read_snapshot_from_payload(
 
 
 def _read_optional_snapshot_state(
-    snapshot: WorldLayoutPayloadRecord,
+    document: WorldSceneDocument,
 ) -> tuple[str | None, dict[str, float] | None, tuple[JsonObject, ...]]:
-    has_embedded_state = any(
-        key in snapshot for key in ("urdf_xml", "joint_positions", "cameras")
-    )
-    if not has_embedded_state:
+    if (
+        document.urdf_xml is None
+        and document.joint_positions is None
+        and document.cameras is None
+    ):
         return None, None, ()
-    try:
-        validated = WorldSnapshot.model_validate(
-            {
-                "urdf_xml": snapshot.get("urdf_xml", "<robot name='world_layout'/>"),
-                "joint_positions": snapshot.get("joint_positions", {}),
-                "cameras": snapshot.get("cameras", []),
-                "objects": [],
-                "scenario_time_ms": snapshot.get("scenario_time_ms"),
-                "scenario_duration_ms": snapshot.get("scenario_duration_ms"),
-            }
-        )
-        raise_for_non_finite_world_payload_numbers(snapshot.get("objects", []))
-        raise_for_invalid_world_scene_objects(
-            cast(list[JsonObject], snapshot.get("objects", [])),
-            require_mesh_asset_ref=False,
-        )
-    except (TypeError, ValueError) as exc:
-        raise WorldLayoutTransferError(f"Invalid embedded world state: {exc}") from exc
     return (
-        validated.urdf_xml if "urdf_xml" in snapshot else None,
-        validated.joint_positions if "joint_positions" in snapshot else None,
-        tuple(validated.cameras) if "cameras" in snapshot else (),
+        document.urdf_xml,
+        document.joint_positions,
+        tuple(document.cameras) if document.cameras is not None else (),
     )
 
 
 def _validate_layout_snapshot_contract(
     snapshot: WorldLayoutPayloadRecord,
-    *,
-    raw_objects: list[object],
     scenario_time_ms: int,
     scenario_duration_ms: int,
-) -> None:
+) -> WorldSceneDocument:
+    payload: dict[str, object] = {
+        "objects": snapshot.get("objects"),
+        "scenario_time_ms": scenario_time_ms,
+        "scenario_duration_ms": scenario_duration_ms,
+    }
+    for optional_key in ("name", "urdf_xml", "joint_positions", "cameras", "environment"):
+        if optional_key in snapshot:
+            payload[optional_key] = snapshot.get(optional_key)
     try:
-        raise_for_non_finite_world_payload_numbers(raw_objects)
-        raise_for_invalid_world_scene_objects(
-            cast(list[JsonObject], raw_objects),
-            require_mesh_asset_ref=False,
-        )
-        cameras = snapshot.get("cameras", [])
-        raise_for_non_finite_world_payload_numbers(cameras)
-        if not isinstance(cameras, list):
-            raise ValueError("cameras must be an array.")
-        raise_for_invalid_world_scene_cameras(cast(list[JsonObject], cameras))
-        WorldSnapshot.model_validate(
-            {
-                "urdf_xml": snapshot.get("urdf_xml", "<robot name='world_layout'/>"),
-                "joint_positions": snapshot.get("joint_positions", {}),
-                "cameras": [],
-                "objects": [],
-                "scenario_time_ms": scenario_time_ms,
-                "scenario_duration_ms": scenario_duration_ms,
-            }
-        )
-    except (TypeError, ValueError) as exc:
+        return WorldSceneDocument.model_validate(payload)
+    except (TypeError, ValueError, ValidationError) as exc:
         raise WorldLayoutTransferError(f"Invalid world layout content: {exc}") from exc
 
 
@@ -600,13 +568,12 @@ def parse_static_world_layout_payload(payload: object) -> StaticWorldLayout:
     if not isinstance(raw_objects, list):
         raise WorldLayoutTransferError("World layout objects must be an array")
     scenario_time_ms, scenario_duration_ms = _read_static_timing(envelope.snapshot)
-    _validate_layout_snapshot_contract(
+    validated_document = _validate_layout_snapshot_contract(
         envelope.snapshot,
-        raw_objects=raw_objects,
-        scenario_time_ms=scenario_time_ms,
-        scenario_duration_ms=scenario_duration_ms,
+        scenario_time_ms,
+        scenario_duration_ms,
     )
-    urdf_xml, joint_positions, cameras = _read_optional_snapshot_state(envelope.snapshot)
+    urdf_xml, joint_positions, cameras = _read_optional_snapshot_state(validated_document)
     objects = tuple(
         _read_world_object(raw_object, index)
         for index, raw_object in enumerate(raw_objects)
