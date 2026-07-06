@@ -44,6 +44,24 @@ describe("cameraIntrinsics", () => {
     );
   });
 
+  it("normalizes dimensions and clamps fov to camera-safe bounds", () => {
+    const low = normalizeCameraIntrinsics({
+      width: 0,
+      height: -10,
+      fov_deg: -20,
+    });
+    expect(low.width).toBe(1);
+    expect(low.height).toBe(1);
+    expect(low.fov_deg).toBeCloseTo(1, 6);
+
+    const high = normalizeCameraIntrinsics({
+      width: 640,
+      height: 480,
+      fov_deg: 220,
+    });
+    expect(high.fov_deg).toBeCloseTo(179, 6);
+  });
+
   it("applies calibrated projection matrix to perspective camera", () => {
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
     const intrinsics = normalizeCameraIntrinsics({
@@ -65,4 +83,3 @@ describe("cameraIntrinsics", () => {
     expect(Math.abs(camera.projectionMatrix.elements[9])).toBeGreaterThan(0);
   });
 });
-

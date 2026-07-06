@@ -1,5 +1,6 @@
 import type { PerspectiveCamera } from "three";
 import type { CameraDistortion, CameraIntrinsics } from "@/shared/types/camera";
+import { clampNumber } from "@/shared/lib/numeric";
 
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 480;
@@ -17,7 +18,7 @@ const clampDimension = (value: number | undefined, fallback: number) => {
 
 const clampFov = (value: number | undefined, fallback = DEFAULT_FOV_DEG) => {
   if (!Number.isFinite(value)) return fallback;
-  return Math.min(179, Math.max(1, value as number));
+  return clampNumber(value as number, 1, 179);
 };
 
 const normalizeDistortion = (
@@ -177,4 +178,3 @@ export const applyIntrinsicsToPerspectiveCamera = (
   camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
   return normalized;
 };
-

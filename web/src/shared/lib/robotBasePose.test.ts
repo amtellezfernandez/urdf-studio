@@ -40,6 +40,18 @@ describe("robotBasePose", () => {
     expect(angularDistance).toBeLessThan(Math.PI / 2);
   });
 
+  it("clamps interpolation alpha to the valid range", () => {
+    expect(interpolateRobotBasePose(BASE_POSE_A, BASE_POSE_B, -1)?.position).toEqual(
+      BASE_POSE_A.position
+    );
+    expect(interpolateRobotBasePose(BASE_POSE_A, BASE_POSE_B, 2)?.position).toEqual(
+      BASE_POSE_B.position
+    );
+    expect(interpolateRobotBasePose(BASE_POSE_A, BASE_POSE_B, Number.NaN)?.position).toEqual(
+      BASE_POSE_A.position
+    );
+  });
+
   it("detects meaningful delta based on thresholds", () => {
     expect(
       hasMeaningfulRobotBasePoseDelta(BASE_POSE_A, BASE_POSE_A, 0.001, 0.001)

@@ -1,9 +1,10 @@
 import type { RobotBasePose } from "@/shared/types/feature";
+import { clampNumber } from "@/shared/lib/numeric";
 
 const QUATERNION_NORMALIZE_EPSILON = 1e-12;
 const QUATERNION_LERP_THRESHOLD = 0.9995;
 
-const clampUnit = (value: number) => Math.min(1, Math.max(-1, value));
+const clampQuaternionDot = (value: number) => clampNumber(value, -1, 1);
 
 const normalizeQuaternion = (quaternion: RobotBasePose["quaternion"]) => {
   const magnitude = Math.hypot(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
@@ -23,7 +24,7 @@ const quaternionDot = (lhs: RobotBasePose["quaternion"], rhs: RobotBasePose["qua
 
 const clampLerpAlpha = (alpha: number) => {
   if (!Number.isFinite(alpha)) return 0;
-  return Math.min(1, Math.max(0, alpha));
+  return clampNumber(alpha, 0, 1);
 };
 
 export const cloneRobotBasePose = (
@@ -68,7 +69,7 @@ export const quaternionAngularDistanceRad = (
 ) => {
   const left = normalizeQuaternion(lhs);
   const right = normalizeQuaternion(rhs);
-  const dot = Math.abs(clampUnit(quaternionDot(left, right)));
+  const dot = Math.abs(clampQuaternionDot(quaternionDot(left, right)));
   return 2 * Math.acos(dot);
 };
 
@@ -110,7 +111,7 @@ export const interpolateRobotBasePose = (
 
   const fromQuat = normalizeQuaternion(fromPose.quaternion);
   let toQuat = normalizeQuaternion(toPose.quaternion);
-  let dot = clampUnit(quaternionDot(fromQuat, toQuat));
+  let dot = clampQuaternionDot(quaternionDot(fromQuat, toQuat));
 
   if (dot < 0) {
     dot = -dot;
