@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import {
   buildFrameLockedJointValues,
+  clampFrameIndexToFrameRange,
   clampTimestampToFrameRange,
   resolveFrameIndexAtOrAfterTimestamp,
   resolveFrameIndexAtOrBeforeTimestamp,
@@ -16,6 +17,17 @@ const frames: AnimationFrame[] = [
 ];
 
 describe("playbackSampling", () => {
+  it("clamps frame indices to available frames", () => {
+    expect(clampFrameIndexToFrameRange(frames, -4)).toBe(0);
+    expect(clampFrameIndexToFrameRange(frames, 1)).toBe(1);
+    expect(clampFrameIndexToFrameRange(frames, 99)).toBe(2);
+  });
+
+  it("falls back to the first frame for empty or non-finite indices", () => {
+    expect(clampFrameIndexToFrameRange(frames, Number.NaN)).toBe(0);
+    expect(clampFrameIndexToFrameRange([], 4)).toBe(0);
+  });
+
   it("clamps timestamps to frame range", () => {
     expect(clampTimestampToFrameRange(frames, 900)).toBe(1000);
     expect(clampTimestampToFrameRange(frames, 1150)).toBe(1150);

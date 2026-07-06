@@ -1,4 +1,5 @@
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
+import { clampFrameIndexToFrameRange } from "@/features/viewer/playbackSampling";
 
 type ResolveRemountPreservedFrameTimestampParams = {
   animationFrames: AnimationFrame[] | null;
@@ -13,7 +14,7 @@ export const resolveRemountPreservedFrameTimestamp = ({
     return null;
   }
 
-  const clampedIndex = Math.max(0, Math.min(currentFrameIndex, animationFrames.length - 1));
+  const clampedIndex = clampFrameIndexToFrameRange(animationFrames, currentFrameIndex);
   const timestamp = animationFrames[clampedIndex]?.timestamp;
   return Number.isFinite(timestamp) ? timestamp ?? null : null;
 };

@@ -4,6 +4,7 @@ import type { URDFRobot } from "urdf-loader";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import type { FramePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
 import type { AnimationController } from "@/features/viewer/useAnimationController";
+import { clampFrameIndexToFrameRange } from "@/features/viewer/playbackSampling";
 import { validateAnimationFrames } from "@/features/viewer/validateAnimationFrames";
 
 type UsePlaybackHandlersParams = {
@@ -111,7 +112,7 @@ export const usePlaybackHandlers = ({
       const autoplay = options?.autoplay ?? false;
       const applyInitialFrame = options?.applyInitialFrame ?? true;
       const startFrame = options?.startFrame ?? 0;
-      const clampedIndex = Math.max(0, Math.min(startFrame, frames.length - 1));
+      const clampedIndex = clampFrameIndexToFrameRange(frames, startFrame);
       const targetFrame = frames[clampedIndex];
 
       setAnimationFrames(frames);
@@ -143,7 +144,7 @@ export const usePlaybackHandlers = ({
   const handleStopAnimation = useCallback(() => {
     if (animationFrames && animationFrames.length > 0) {
       const currentFrameIdx = animationController.currentFrameIndexRef.current ?? 0;
-      const clampedIndex = Math.max(0, Math.min(currentFrameIdx, animationFrames.length - 1));
+      const clampedIndex = clampFrameIndexToFrameRange(animationFrames, currentFrameIdx);
       const targetFrame = animationFrames[clampedIndex];
       const targetTimestamp = targetFrame?.timestamp ?? animationFrames[0].timestamp;
 
@@ -189,7 +190,7 @@ export const usePlaybackHandlers = ({
       onPlayingChange?.(false);
       animationController.setPaused(true);
 
-      const clampedIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));
+      const clampedIndex = clampFrameIndexToFrameRange(animationFrames, frameIndex);
       const targetFrame = animationFrames[clampedIndex];
 
       if (targetFrame) {

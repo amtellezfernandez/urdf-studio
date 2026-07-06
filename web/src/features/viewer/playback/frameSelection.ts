@@ -1,5 +1,6 @@
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import {
+  clampFrameIndexToFrameRange,
   clampTimestampToFrameRange,
   resolveFrameIndexAtOrBeforeTimestamp,
 } from "@/features/viewer/playbackSampling";
@@ -24,7 +25,7 @@ export const resolveFrozenPlaybackFrameSelection = (
   frames: AnimationFrame[],
   fallbackFrameIndex: number
 ): PlaybackFrameSelection => {
-  const clampedIndex = Math.max(0, Math.min(fallbackFrameIndex, frames.length - 1));
+  const clampedIndex = clampFrameIndexToFrameRange(frames, fallbackFrameIndex);
   const firstTimestamp = frames[0]?.timestamp ?? 0;
   const frameTime = frames[clampedIndex]?.timestamp ?? firstTimestamp;
   return {

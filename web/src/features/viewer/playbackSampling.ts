@@ -10,6 +10,15 @@ export const clampTimestampToFrameRange = (
   return Math.max(first, Math.min(timestamp, last));
 };
 
+export const clampFrameIndexToFrameRange = (
+  frames: AnimationFrame[],
+  frameIndex: number
+) => {
+  if (frames.length === 0) return 0;
+  const safeIndex = Number.isFinite(frameIndex) ? frameIndex : 0;
+  return Math.max(0, Math.min(safeIndex, frames.length - 1));
+};
+
 export const resolveFrameIndexAtOrAfterTimestamp = (
   frames: AnimationFrame[],
   timestamp: number
