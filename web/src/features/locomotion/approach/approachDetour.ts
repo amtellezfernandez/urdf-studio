@@ -2,9 +2,8 @@ import * as THREE from "three";
 import { normalizeDirection, projectVectorOntoPlane } from "@/shared/lib/axisFrame";
 import {
   clampNumber,
-  clampNumberToMin,
   isFiniteNumber,
-  toFiniteNumberOrFallback,
+  toFiniteNumberAtLeastOrFallback,
   toNonNegativeFiniteNumberOrFallback,
 } from "@/shared/lib/numeric";
 import { ROVER_APPROACH_DETOUR_CONFIG } from "./approachDetourParams";
@@ -49,9 +48,6 @@ export type SegmentAssessment = {
   firstBlockingObstacleId: string | null;
 };
 
-const resolveNonNegativeDistanceM = (value: number): number =>
-  toNonNegativeFiniteNumberOrFallback(value, 0);
-
 const clampUnitInterval = (value: number): number => clampNumber(value, 0, 1);
 
 const projectWorldPointToPlane = (
@@ -64,9 +60,9 @@ const projectWorldPointToPlane = (
   return planeOriginWorld.clone().add(planarOffset);
 };
 
-const ensureFiniteRadiusM = (value: number): number =>
-  clampNumberToMin(
-    toFiniteNumberOrFallback(value, ROVER_APPROACH_DETOUR_CONFIG.obstacleRadiusLowerBoundM),
+const resolveObstacleRadiusM = (radiusM: number): number =>
+  toFiniteNumberAtLeastOrFallback(
+    radiusM,
     ROVER_APPROACH_DETOUR_CONFIG.obstacleRadiusLowerBoundM
   );
 
@@ -77,7 +73,7 @@ export const assessRoverApproachPlanarSegmentClearance = ({
   obstacles,
   pathClearanceM,
 }: AssessPlanarSegmentParams): SegmentAssessment => {
-  const clampedPathClearanceM = resolveNonNegativeDistanceM(pathClearanceM);
+  const clampedPathClearanceM = toNonNegativeFiniteNumberOrFallback(pathClearanceM, 0);
   const startPlanar = projectWorldPointToPlane(
     segmentStartWorld,
     segmentStartWorld,
@@ -101,7 +97,7 @@ export const assessRoverApproachPlanarSegmentClearance = ({
       segmentStartWorld,
       upAxisWorld
     );
-    const obstacleRadiusM = ensureFiniteRadiusM(obstacle.radiusM) + clampedPathClearanceM;
+    const obstacleRadiusM = resolveObstacleRadiusM(obstacle.radiusM) + clampedPathClearanceM;
     let closestPoint = startPlanar;
     let t = 0;
     if (segmentLengthSq > ROVER_APPROACH_DETOUR_CONFIG.segmentLengthEpsilonSq) {
@@ -166,9 +162,9 @@ export const resolvePlanarProjectedObstacleRadiusM = ({
   halfExtentsWorld: THREE.Vector3;
   upAxisWorld: THREE.Vector3;
 }): number => {
-  const hx = resolveNonNegativeDistanceM(halfExtentsWorld.x);
-  const hy = resolveNonNegativeDistanceM(halfExtentsWorld.y);
-  const hz = resolveNonNegativeDistanceM(halfExtentsWorld.z);
+  const hx = toNonNegativeFiniteNumberOrFallback(halfExtentsWorld.x, 0);
+  const hy = toNonNegativeFiniteNumberOrFallback(halfExtentsWorld.y, 0);
+  const hz = toNonNegativeFiniteNumberOrFallback(halfExtentsWorld.z, 0);
   const upAxis = normalizeDirection(upAxisWorld.clone(), DEFAULT_UP_AXIS);
   const corners = [
     new THREE.Vector3(-hx, -hy, -hz),
@@ -185,7 +181,7 @@ export const resolvePlanarProjectedObstacleRadiusM = ({
     const planarCorner = projectVectorOntoPlane(corner, upAxis);
     maxProjectedRadiusM = Math.max(maxProjectedRadiusM, planarCorner.length());
   });
-  return ensureFiniteRadiusM(maxProjectedRadiusM);
+  return resolveObstacleRadiusM(maxProjectedRadiusM);
 };
 
 export const resolveRoverApproachDetourWaypoint = ({
@@ -252,8 +248,8 @@ export const resolveRoverApproachDetourWaypoint = ({
   }
 
   const radialOffsetM =
-    ensureFiniteRadiusM(primaryObstacle.radiusM) +
-    resolveNonNegativeDistanceM(pathClearanceM) +
+    resolveObstacleRadiusM(primaryObstacle.radiusM) +
+    toNonNegativeFiniteNumberOrFallback(pathClearanceM, 0) +
     ROVER_APPROACH_DETOUR_CONFIG.waypointExtraOffsetM;
   const candidateWaypoints = ([1, -1] as const)
     .map((sideSign) =>

@@ -6,6 +6,7 @@ import {
   isFiniteNumber,
   isFinitePositiveNumber,
   parseFiniteFloatOrNull,
+  toFiniteNumberAtLeastOrFallback,
   toFiniteNumberOrFallback,
   toFiniteNumberOrNull,
   toNonNegativeFiniteNumberOrFallback,
@@ -38,6 +39,14 @@ describe("numeric", () => {
     expect(toFiniteNumberOrFallback(Number.NaN, 9)).toBe(9);
     expect(toFiniteNumberOrFallback(Number.POSITIVE_INFINITY, 9)).toBe(9);
     expect(toFiniteNumberOrFallback(undefined, 9)).toBe(9);
+  });
+
+  it("falls back and clamps values to a minimum", () => {
+    expect(toFiniteNumberAtLeastOrFallback(4, 1)).toBe(4);
+    expect(toFiniteNumberAtLeastOrFallback(-1, 0)).toBe(0);
+    expect(toFiniteNumberAtLeastOrFallback(Number.NaN, 2)).toBe(2);
+    expect(toFiniteNumberAtLeastOrFallback(undefined, 2, 3)).toBe(3);
+    expect(toFiniteNumberAtLeastOrFallback(undefined, 2, 1)).toBe(2);
   });
 
   it("returns null for non-finite values", () => {

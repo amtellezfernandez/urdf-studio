@@ -31,6 +31,12 @@ export const toFiniteNumberOrNull = (value: unknown): number | null =>
 export const toFiniteNumberOrFallback = (value: unknown, fallback: number): number =>
   isFiniteNumber(value) ? value : fallback;
 
+export const toFiniteNumberAtLeastOrFallback = (
+  value: unknown,
+  min: number,
+  fallback: number = min
+): number => clampNumberToMin(toFiniteNumberOrFallback(value, fallback), min);
+
 export const toPositiveFiniteNumberOrNull = (value: unknown): number | null => {
   const finiteValue = toFiniteNumberOrNull(value);
   return finiteValue !== null && finiteValue > 0 ? finiteValue : null;

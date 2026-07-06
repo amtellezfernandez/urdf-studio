@@ -1,6 +1,6 @@
 import {
   clampNumber,
-  clampNumberToMin,
+  toFiniteNumberAtLeastOrFallback,
   toFiniteNumberOrFallback,
   toNonNegativeFiniteNumberOrNull,
   toPositiveFiniteNumberOrNull,
@@ -71,7 +71,7 @@ export const planRoverApproach = ({
     preferredDistanceTolerance === null
       ? ROVER_APPROACH_CONFIG.distanceToleranceM
       : Math.min(ROVER_APPROACH_CONFIG.distanceToleranceM, preferredDistanceTolerance);
-  const safeDistance = clampNumberToMin(toFiniteNumberOrFallback(distanceToTargetM, 0), 0);
+  const safeDistance = toFiniteNumberAtLeastOrFallback(distanceToTargetM, 0);
   const safeDot = toFiniteNumberOrFallback(forwardDotTarget, 1);
 
   if (!wheelDriveEnabled) {

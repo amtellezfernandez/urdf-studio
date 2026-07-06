@@ -5,6 +5,7 @@ import {
   resolveRoverApproachDetourWaypoint,
   type RoverApproachPlanarObstacle,
 } from "./approachDetour";
+import { ROVER_APPROACH_DETOUR_CONFIG } from "./approachDetourParams";
 
 const WORLD_UP = new THREE.Vector3(0, 0, 1);
 const SEGMENT_START = new THREE.Vector3(0, 0, 0);
@@ -97,5 +98,14 @@ describe("approachDetour", () => {
     });
 
     expect(radiusM).toBeCloseTo(0.25, 6);
+  });
+
+  it("uses the configured lower bound for degenerate projected obstacle radius", () => {
+    const radiusM = resolvePlanarProjectedObstacleRadiusM({
+      halfExtentsWorld: new THREE.Vector3(0, 0, 0),
+      upAxisWorld: WORLD_UP,
+    });
+
+    expect(radiusM).toBe(ROVER_APPROACH_DETOUR_CONFIG.obstacleRadiusLowerBoundM);
   });
 });
