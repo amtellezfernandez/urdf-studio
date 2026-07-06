@@ -6,6 +6,7 @@ import {
   computeWorldSnapshotDigest,
   refreshWorldScenePackageSnapshotDigest,
   stableStringify,
+  toWorldSceneRegistryEnvelope,
   toSerializableWorldObject,
   toWorldSceneLayerDownloadName,
   toWorldScenePackageDownloadName,
@@ -207,6 +208,44 @@ describe("buildWorldScenePackageManifest", () => {
     expect(manifest.world_snapshot.objects[0].orbit_inclination_deg).toBe(
       TEST_OBJECT_ORBIT_INCLINATION_DEG
     );
+  });
+
+  it("converts package manifests to thin registry envelopes", async () => {
+    const manifest = await buildWorldScenePackageManifest({
+      packageId: "Demo World",
+      version: "1.0.0",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [TEST_CAMERA],
+      objects: [TEST_OBJECT],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+      provenance: {
+        owner: "scene-team",
+        environment: {
+          preset: "default",
+        },
+      },
+    });
+
+    const envelope = toWorldSceneRegistryEnvelope(manifest);
+
+    expect(envelope.package_id).toBe(manifest.package_id);
+    expect(envelope.version).toBe(manifest.version);
+    expect(envelope.provenance).toEqual(manifest.provenance);
+    expect(envelope.world.name).toBe(manifest.title);
+    expect(envelope.world.urdf_xml).toBe(manifest.world_snapshot.urdf_xml);
+    expect(envelope.world.joint_positions).toEqual(manifest.world_snapshot.joint_positions);
+    expect(envelope.world.cameras).toEqual(manifest.world_snapshot.cameras);
+    expect(envelope.world.objects).toEqual(manifest.world_snapshot.objects);
+    expect(envelope.world.environment).toEqual({
+      preset: "default",
+      frame_convention: manifest.interface.frame_convention,
+    });
+    expect(envelope).not.toHaveProperty("created_at");
+    expect(envelope).not.toHaveProperty("runtime_targets");
+    expect(envelope).not.toHaveProperty("interface");
+    expect(envelope).not.toHaveProperty("security");
   });
 
   it("serializes rotation for non-point primitives and normalizes primitive size semantics", async () => {

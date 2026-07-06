@@ -191,3 +191,37 @@ def test_load_world_package_reports_invalid_json_with_path(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match=r"Invalid world package JSON in .*world-package\.json"):
         load_world_package(world_package_path)
+
+
+def test_load_world_package_accepts_thin_world_registry_envelope(tmp_path: Path) -> None:
+    world_package_path = tmp_path / "world-package.json"
+    world_package_path.write_text(
+        json.dumps(
+            {
+                "package_id": "scene-first-world",
+                "version": "2.0.0",
+                "provenance": {},
+                "artifacts": [],
+                "world": {
+                    "name": "Scene First World",
+                    "urdf_xml": "<robot name='demo'><link name='base_link'/></robot>",
+                    "joint_positions": {"joint_1": 0.25},
+                    "cameras": [],
+                    "objects": [],
+                    "scenario_time_ms": 0,
+                    "scenario_duration_ms": 0,
+                    "environment": {
+                        "frame_convention": "ros-rep-103",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    world_package = load_world_package(world_package_path)
+
+    assert world_package.package_id == "scene-first-world"
+    assert world_package.title == "Scene First World"
+    assert world_package.world_snapshot.joint_positions == {"joint_1": 0.25}
+    assert world_package.interface.frame_convention == "ros-rep-103"

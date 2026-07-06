@@ -1,36 +1,44 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import ValidationError
 
 from backend.core.simulator_security import require_simulator_operator_access_async
 from backend.models.world_scene_package import (
     WorldRegistryCapabilitiesResponse,
     WorldScenePackageListEntry,
-    WorldScenePackageManifest,
     WorldScenePackagePublishResponse,
     WorldScenePackageValidationResponse,
     WorldScenePackageVersionRecord,
 )
 from backend.services.world_registry import world_registry_service
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 
 router = APIRouter(prefix="/worlds/packages", tags=["world-packages"])
 
 
 @router.post("/validate", response_model=WorldScenePackageValidationResponse)
 async def validate_world_scene_package(
-    manifest: WorldScenePackageManifest,
+    payload: object,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldScenePackageValidationResponse:
+    try:
+        manifest = read_world_scene_package_manifest(payload)
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return world_registry_service.validate(manifest)
 
 
 @router.post("", response_model=WorldScenePackagePublishResponse)
 async def publish_world_scene_package(
-    manifest: WorldScenePackageManifest,
+    payload: object,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldScenePackagePublishResponse:
     try:
+        manifest = read_world_scene_package_manifest(payload)
         return world_registry_service.publish(manifest)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except FileExistsError as exc:

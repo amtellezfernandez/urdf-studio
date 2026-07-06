@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import { toWorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageBuilder";
 import {
   createWorldScenePackageClient,
   type WorldScenePackageListQuery,
@@ -13,10 +14,10 @@ const localWorldRegistryClient = createWorldScenePackageClient(
 );
 
 export const validateWorldScenePackageManifest = (manifest: WorldScenePackageManifest) =>
-  localWorldRegistryClient.validateManifest(manifest);
+  localWorldRegistryClient.validateManifest(toWorldSceneRegistryEnvelope(manifest));
 
 export const publishWorldScenePackageManifest = (manifest: WorldScenePackageManifest) =>
-  localWorldRegistryClient.publishManifest(manifest);
+  localWorldRegistryClient.publishManifest(toWorldSceneRegistryEnvelope(manifest));
 
 export const listWorldScenePackages = (query?: WorldScenePackageListQuery) =>
   localWorldRegistryClient.listPackages(query);

@@ -18,6 +18,7 @@ from backend.services.world_layout_static_transfer import (
     parse_static_world_layout_payload,
     resolve_world_layout_frame_map,
 )
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
@@ -189,7 +190,7 @@ def load_world_package(path: Path) -> WorldScenePackageManifest:
         raise ValueError(f"Failed to read world package: {path}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid world package JSON in {path}: {exc}") from exc
-    world_package = WorldScenePackageManifest.model_validate(payload)
+    world_package = read_world_scene_package_manifest(payload)
     return normalize_and_require_world_snapshot_artifact_digests(
         world_package,
         context=f"World package artifact digest invalid in {path}",

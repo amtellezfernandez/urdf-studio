@@ -19,6 +19,7 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
 )
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_registry import WorldRegistryService
 
 
@@ -192,6 +193,46 @@ def test_publish_accepts_v1_1_appearance_physics_world() -> None:
         assert validation.valid is True
         assert validation.errors == []
         assert publish_result.created is True
+
+
+def test_publish_accepts_thin_world_registry_envelope() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = read_world_scene_package_manifest(
+            {
+                "package_id": "scene-first-world",
+                "version": "2.0.0",
+                "provenance": {
+                    "owner": "scene-team",
+                    "tags": ["Scene", "Thin"],
+                },
+                "artifacts": [],
+                "world": {
+                    "name": "Scene First World",
+                    "urdf_xml": "<robot name='demo'/>",
+                    "joint_positions": {"joint_1": TEST_WORLD_JOINT_VALUE_RAD},
+                    "cameras": [],
+                    "objects": [],
+                    "scenario_time_ms": 0,
+                    "scenario_duration_ms": 0,
+                    "environment": {
+                        "frame_convention": "ros-rep-103",
+                    },
+                },
+            }
+        )
+
+        validation = service.validate(manifest)
+        publish_result = service.publish(manifest)
+        packages = service.list_packages()
+
+        assert validation.valid is True
+        assert publish_result.created is True
+        assert packages[0].package_id == "scene-first-world"
+        assert packages[0].title == "Scene First World"
+        assert packages[0].owner == "scene-team"
+        assert packages[0].tags == ["scene", "thin"]
 
 
 def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:

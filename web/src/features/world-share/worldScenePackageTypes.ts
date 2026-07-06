@@ -144,6 +144,25 @@ export type WorldScenePackageManifest = {
   security: WorldSecuritySpec;
 };
 
+export type WorldSceneRegistryEnvelopeWorld = {
+  name?: string;
+  objects: SerializableWorldObject[];
+  scenario_time_ms: number;
+  scenario_duration_ms: number;
+  urdf_xml?: string;
+  joint_positions?: Record<string, number>;
+  cameras?: Camera[];
+  environment?: Record<string, unknown> | null;
+};
+
+export type WorldSceneRegistryEnvelope = {
+  package_id: string;
+  version: string;
+  provenance: Record<string, unknown>;
+  artifacts: WorldArtifactRef[];
+  world: WorldSceneRegistryEnvelopeWorld;
+};
+
 export type WorldScenePackageValidationResponse = {
   valid: boolean;
   digest_sha256: string;

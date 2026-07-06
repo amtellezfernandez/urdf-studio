@@ -2,6 +2,7 @@ import { guardedFetch } from "@/shared/lib/backendGuard";
 import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 import type { BackendIdList } from "@/shared/config/backends";
 import type {
+  WorldSceneRegistryEnvelope,
   WorldScenePackageListEntry,
   WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
@@ -68,12 +69,12 @@ export const createWorldScenePackageClient = (
   };
 
   return {
-    validateManifest: (manifest: WorldScenePackageManifest) =>
+    validateManifest: (manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope) =>
       requestJson<WorldScenePackageValidationResponse>("/validate", {
         body: manifest,
         method: "POST",
       }),
-    publishManifest: (manifest: WorldScenePackageManifest) =>
+    publishManifest: (manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope) =>
       requestJson<WorldScenePackagePublishResponse>("", { body: manifest, method: "POST" }),
     listPackages: (query: WorldScenePackageListQuery = {}) => {
       const queryString = toQueryString({

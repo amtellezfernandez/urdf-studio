@@ -4,6 +4,7 @@ import {
   isWorldHubConfigured,
 } from "@/shared/config/worldHub";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import { toWorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageBuilder";
 import {
   createWorldScenePackageClient,
   type WorldScenePackageListQuery,
@@ -18,7 +19,7 @@ const worldHubClient = createWorldScenePackageClient(
 export const isWorldHubEnabled = () => isWorldHubConfigured();
 
 export const publishWorldScenePackageToHub = (manifest: WorldScenePackageManifest) =>
-  worldHubClient.publishManifest(manifest);
+  worldHubClient.publishManifest(toWorldSceneRegistryEnvelope(manifest));
 
 export const listWorldScenePackagesFromHub = (query?: WorldScenePackageListQuery) =>
   worldHubClient.listPackages(query);

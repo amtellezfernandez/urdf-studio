@@ -30,6 +30,7 @@ from backend.services.simulator_adapters.robot_repairs import (
     GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY,
     GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
 )
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
@@ -312,7 +313,7 @@ def build_workspace_request_from_files(
     robot_urdf_path: Path,
     asset_roots: Sequence[Path] = (),
 ) -> SimulatorWorkspacePrepareRequest:
-    world_package = WorldScenePackageManifest.model_validate(_load_json(world_package_path))
+    world_package = read_world_scene_package_manifest(_load_json(world_package_path))
     world_package = normalize_and_require_world_snapshot_artifact_digests(
         world_package,
         context=f"World package artifact digest invalid in {world_package_path}",
