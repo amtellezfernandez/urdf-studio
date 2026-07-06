@@ -32,6 +32,17 @@ describe("resolveJointValueRange", () => {
     expect(range.hasFiniteHardLimits).toBe(false);
   });
 
+  it("falls back to zero when the current value is not finite", () => {
+    const range = resolveJointValueRange({
+      jointName: "arm_joint",
+      jointInfo: { type: "continuous", lower: null, upper: null },
+      currentValue: Number.NaN,
+    });
+
+    expect(range.displayMin).toBeCloseTo(-JOINT_RANGE_PARAMS.defaultDisplayHalfRangeRad);
+    expect(range.displayMax).toBeCloseTo(JOINT_RANGE_PARAMS.defaultDisplayHalfRangeRad);
+  });
+
   it("uses wider display window for wheel-like unlimited joints", () => {
     const range = resolveJointValueRange({
       jointName: "front_left_wheel_joint",

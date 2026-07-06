@@ -4,7 +4,11 @@ import {
   WHEEL_GROUP_LABEL_PATTERN,
   WHEEL_JOINT_NAME_PATTERN,
 } from "@/features/layout/jointRangeParams";
-import { toFiniteNumberOrNull } from "@/shared/lib/numeric";
+import {
+  isFiniteNumber,
+  toFiniteNumberOrFallback,
+  toFiniteNumberOrNull,
+} from "@/shared/lib/numeric";
 
 type ResolveJointValueRangeInput = {
   jointName: string;
@@ -23,10 +27,10 @@ export type JointValueRange = {
 
 const ensureMinDisplaySpan = (min: number, max: number): { min: number; max: number } => {
   const span = max - min;
-  if (Number.isFinite(span) && span >= JOINT_RANGE_PARAMS.minDisplaySpanRad) {
+  if (isFiniteNumber(span) && span >= JOINT_RANGE_PARAMS.minDisplaySpanRad) {
     return { min, max };
   }
-  const center = Number.isFinite(min) && Number.isFinite(max) ? (min + max) * 0.5 : 0;
+  const center = isFiniteNumber(min) && isFiniteNumber(max) ? (min + max) * 0.5 : 0;
   const halfSpan = JOINT_RANGE_PARAMS.minDisplaySpanRad * 0.5;
   return {
     min: center - halfSpan,
@@ -66,7 +70,7 @@ export const resolveJointValueRange = ({
     lower = swappedLower;
   }
 
-  const finiteCurrent = Number.isFinite(currentValue) ? currentValue : 0;
+  const finiteCurrent = toFiniteNumberOrFallback(currentValue, 0);
 
   if (lower !== null && upper !== null) {
     const display = ensureMinDisplaySpan(lower, upper);
