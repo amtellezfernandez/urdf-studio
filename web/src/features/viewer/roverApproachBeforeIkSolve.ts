@@ -24,7 +24,6 @@ import {
   type StudioWheelDriveModel,
 } from "@/features/viewer/studioWheelDriveModel";
 import { resolveJointScalarValue } from "@/features/viewer/viewer-helpers";
-import { areApproachArmResetTargetsSettled } from "@/features/viewer/approachArmReset";
 import { WHEEL_PLAYBACK_MOTION_PARAMS } from "@/features/viewer/playback/wheelPlaybackMotionParams";
 import type {
   IkObjectPreSolveContext,
@@ -88,6 +87,12 @@ import {
   shouldFallbackToTargetCenteredRoverRoute,
   shouldUseObjectContactRouteClearance,
 } from "@/features/viewer/roverApproachRoutePlanning";
+import {
+  nextAnimationFrameTimeMs,
+  nowMs,
+  resolveRoverApproachAsyncAbortResult,
+  waitForApproachArmResetAfterLocomotion,
+} from "@/features/viewer/roverApproachLifecycle";
 
 export {
   resolveLockedRoverApproachRoutePreviewPoints,
@@ -115,6 +120,7 @@ export {
   shouldFallbackToTargetCenteredRoverRoute,
   shouldUseObjectContactRouteClearance,
 } from "@/features/viewer/roverApproachRoutePlanning";
+export { resolveRoverApproachAsyncAbortReason } from "@/features/viewer/roverApproachLifecycle";
 
 const resolveActiveRoverApproachLegTarget = ({
   activeWaypointLeg,
@@ -148,17 +154,6 @@ const selectRoverApproachRuntimeBlockingObject = ({
 export type StudioWheelDriveState = {
   model: StudioWheelDriveModel;
   previousAngles: Record<string, number>;
-};
-
-export type RoverApproachAsyncAbortReason =
-  | "wheel-disabled"
-  | "manual-base-drag"
-  | "stale-solve";
-
-type ResolveRoverApproachAsyncAbortReasonArgs = {
-  manualApproachInterrupted: boolean;
-  wheelDriveEnabled: boolean;
-  isStaleSolve: boolean;
 };
 
 type ExecuteRoverApproachBeforeIkSolveArgs = {
@@ -210,44 +205,6 @@ type ExecuteRoverApproachBeforeIkSolveArgs = {
   ) => number;
 };
 
-export const resolveRoverApproachAsyncAbortReason = ({
-  manualApproachInterrupted,
-  wheelDriveEnabled,
-  isStaleSolve,
-}: ResolveRoverApproachAsyncAbortReasonArgs): RoverApproachAsyncAbortReason | null => {
-  if (!wheelDriveEnabled) return "wheel-disabled";
-  if (manualApproachInterrupted) return "manual-base-drag";
-  if (isStaleSolve) return "stale-solve";
-  return null;
-};
-
-const resolveRoverApproachAsyncAbortResult = ({
-  manualApproachInterrupted,
-  wheelDriveEnabled,
-  isStaleSolve,
-  durationMs,
-}: ResolveRoverApproachAsyncAbortReasonArgs & {
-  durationMs?: number;
-}): IkObjectPreSolveResult | null => {
-  const reason = resolveRoverApproachAsyncAbortReason({
-    manualApproachInterrupted,
-    wheelDriveEnabled,
-    isStaleSolve,
-  });
-  if (!reason) return null;
-  return {
-    status: "cancelled",
-    reason,
-    durationMs,
-  };
-};
-
-const nowMs = (): number =>
-  typeof performance !== "undefined" ? performance.now() : Date.now();
-
-const nextAnimationFrameTimeMs = (): Promise<number> =>
-  new Promise<number>((resolve) => requestAnimationFrame((time) => resolve(time)));
-
 const resolveRoverApproachBaseObject = (
   robot: URDFRobot,
   armReachEnvelope: ReturnType<typeof resolveArmReachEnvelope>
@@ -263,64 +220,6 @@ const resolveRoverApproachBaseObject = (
     robotAny.getObjectByName?.(baseLinkName) ??
     (robot as THREE.Object3D)
   );
-};
-
-const waitForApproachArmResetAfterLocomotion = async ({
-  robot,
-  targetJointValues,
-  manualApproachInterruptRef,
-  wheelDriveEnabledRef,
-  isStaleSolve,
-  reportProgress,
-  distanceToTargetM,
-  yawErrorRad,
-}: {
-  robot: URDFRobot | null;
-  targetJointValues: Readonly<Record<string, number>>;
-  manualApproachInterruptRef: { current: boolean };
-  wheelDriveEnabledRef: { current: boolean };
-  isStaleSolve: () => boolean;
-  reportProgress: IkObjectPreSolveContext["reportProgress"];
-  distanceToTargetM: number;
-  yawErrorRad: number;
-}): Promise<IkObjectPreSolveResult | null> => {
-  if (Object.keys(targetJointValues).length === 0) {
-    return null;
-  }
-  let armResetSettledFrameCount = 0;
-  let armResetFrameTimeMs = nowMs();
-  const armResetDeadlineMs =
-    armResetFrameTimeMs + ROVER_APPROACH_CONFIG.armResetSettleTimeoutMs;
-  while (armResetFrameTimeMs < armResetDeadlineMs) {
-    const armResetAbortResult = resolveRoverApproachAsyncAbortResult({
-      manualApproachInterrupted: manualApproachInterruptRef.current,
-      wheelDriveEnabled: wheelDriveEnabledRef.current,
-      isStaleSolve: isStaleSolve(),
-    });
-    if (armResetAbortResult) {
-      return armResetAbortResult;
-    }
-    const armResetSettled = areApproachArmResetTargetsSettled({
-      robot,
-      targetJointValues,
-      jointToleranceRad: ROVER_APPROACH_CONFIG.armResetJointToleranceRad,
-    });
-    if (armResetSettled) {
-      armResetSettledFrameCount += 1;
-      if (armResetSettledFrameCount >= ROVER_APPROACH_CONFIG.armResetSettleFrames) {
-        break;
-      }
-    } else {
-      armResetSettledFrameCount = 0;
-    }
-    reportProgress({
-      phase: "idle",
-      distanceToTargetM,
-      yawErrorDeg: (yawErrorRad * 180) / Math.PI,
-    });
-    armResetFrameTimeMs = await nextAnimationFrameTimeMs();
-  }
-  return null;
 };
 
 export const executeRoverApproachBeforeIkSolve = async ({
