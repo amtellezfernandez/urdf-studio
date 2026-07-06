@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import threading
 import uuid
@@ -27,7 +28,10 @@ from backend.models.world_rollouts import (
     WorldRolloutTraceRecord,
 )
 from backend.models.world_scene_package import WorldScenePackageManifest
-from backend.services.world_scene_package_digest import world_scene_package_digest
+from backend.services.world_scene_package_digest import (
+    world_scene_package_digest,
+    world_scene_package_json_payload,
+)
 from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND,
     WORLD_ROLLOUT_DEFAULT_RUNNER_KIND,
@@ -493,6 +497,8 @@ class WorldRolloutService:
 
 
 def _model_json_bytes(payload: BaseModel) -> bytes:
+    if isinstance(payload, WorldScenePackageManifest):
+        return json.dumps(world_scene_package_json_payload(payload), indent=2).encode("utf-8")
     return payload.model_dump_json(indent=2).encode("utf-8")
 
 

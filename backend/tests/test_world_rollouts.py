@@ -263,10 +263,14 @@ def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tm
     assert completed.output_manifest_path == str(
         job_dir / WORLD_ROLLOUT_OUTPUT_DIRNAME / WORLD_ROLLOUT_OUTPUT_CAMPAIGN_FILENAME
     )
+    written_world_package = WorldScenePackageManifest.model_validate_json(
+        world_package_path.read_text(encoding="utf-8")
+    )
     assert _artifact_digest(completed, WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND) == world_scene_package_digest(
         world_package
     )
     assert completed.campaign.world_package.digest_sha256 == world_scene_package_digest(world_package)
+    assert world_scene_package_digest(written_world_package) == world_scene_package_digest(world_package)
     assert _artifact_digest(completed, WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND) == _digest_file(
         checker_profile_path
     )
