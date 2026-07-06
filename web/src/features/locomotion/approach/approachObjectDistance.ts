@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import type { WorldObjectPrimitiveType } from "@/features/objects";
-import { clampNumber } from "./approachMath";
+import {
+  clampNumber,
+  clampNumberToMin,
+  isFiniteNumber,
+  isFinitePositiveNumber,
+  toNonNegativeFiniteNumberOrFallback,
+} from "@/shared/lib/numeric";
 import { ROVER_APPROACH_OBJECT_DISTANCE_PARAMS } from "./approachObjectDistanceParams";
 
 export type ApproachObjectPrimitiveType = Exclude<WorldObjectPrimitiveType, "mesh">;
@@ -36,21 +42,31 @@ export const resolveApproachObjectPrimitiveType = (
   type: WorldObjectPrimitiveType
 ): ApproachObjectPrimitiveType => (type === "mesh" ? "cube" : type);
 
+const resolveObjectDimensionM = (dimensionM: number): number =>
+  toNonNegativeFiniteNumberOrFallback(dimensionM, 0);
+
+const resolveObjectHalfExtentM = (dimensionM: number): number =>
+  resolveObjectDimensionM(dimensionM) * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale;
+
 const resolveMaxObjectDimensionM = (object: ApproachObjectGeometry): number =>
-  Math.max(0, object.size.x, object.size.y, object.size.z);
+  Math.max(
+    resolveObjectDimensionM(object.size.x),
+    resolveObjectDimensionM(object.size.y),
+    resolveObjectDimensionM(object.size.z)
+  );
 
-const resolvePointSupportRadiusM = (object: ApproachObjectGeometry): number =>
-  resolveMaxObjectDimensionM(object) * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale;
-
-const resolveSphereSupportRadiusM = (object: ApproachObjectGeometry): number =>
+const resolveMaxHalfExtentSupportRadiusM = (object: ApproachObjectGeometry): number =>
   resolveMaxObjectDimensionM(object) * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale;
 
 const resolveCylinderSupportRadiusM = (
   object: ApproachObjectGeometry,
   normalizedDirection: { x: number; y: number; z: number }
 ): number => {
-  const radius = Math.max(0, object.size.x, object.size.y) * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale;
-  const halfHeight = Math.max(0, object.size.z) * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale;
+  const radius = Math.max(
+    resolveObjectHalfExtentM(object.size.x),
+    resolveObjectHalfExtentM(object.size.y)
+  );
+  const halfHeight = resolveObjectHalfExtentM(object.size.z);
   const radialWeight = Math.hypot(normalizedDirection.x, normalizedDirection.y);
   return radius * radialWeight + Math.abs(normalizedDirection.z) * halfHeight;
 };
@@ -70,23 +86,14 @@ const resolveCubeSupportRadiusM = (
       .invert();
     localDirection.applyQuaternion(inverseRotation);
   }
-  const halfExtentX = Math.max(
-    0,
-    object.size.x * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale
-  );
-  const halfExtentY = Math.max(
-    0,
-    object.size.y * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale
-  );
-  const halfExtentZ = Math.max(
-    0,
-    object.size.z * ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.halfExtentScale
-  );
+  const halfExtentX = resolveObjectHalfExtentM(object.size.x);
+  const halfExtentY = resolveObjectHalfExtentM(object.size.y);
+  const halfExtentZ = resolveObjectHalfExtentM(object.size.z);
   const support =
     Math.abs(localDirection.x) * halfExtentX +
     Math.abs(localDirection.y) * halfExtentY +
     Math.abs(localDirection.z) * halfExtentZ;
-  return Math.max(0, support);
+  return clampNumberToMin(support, 0);
 };
 
 export const resolveRoverPlanarObjectApproachDistance = ({
@@ -95,7 +102,7 @@ export const resolveRoverPlanarObjectApproachDistance = ({
 }: ResolveRoverPlanarObjectApproachDistanceParams): RoverPlanarObjectApproachDistance => {
   const centerDistanceSq = targetDirectionPlanarWorld.lengthSq();
   if (
-    !Number.isFinite(centerDistanceSq) ||
+    !isFiniteNumber(centerDistanceSq) ||
     centerDistanceSq <= ROVER_APPROACH_OBJECT_DISTANCE_PARAMS.directionLengthEpsilonSq
   ) {
     return {
@@ -105,7 +112,7 @@ export const resolveRoverPlanarObjectApproachDistance = ({
     };
   }
   const centerDistanceM = targetDirectionPlanarWorld.length();
-  if (!Number.isFinite(centerDistanceM) || centerDistanceM <= 0) {
+  if (!isFinitePositiveNumber(centerDistanceM)) {
     return {
       centerDistanceM: 0,
       supportRadiusM: 0,
@@ -119,17 +126,15 @@ export const resolveRoverPlanarObjectApproachDistance = ({
     z: targetDirectionPlanarWorld.z * inverseDistanceM,
   };
   const supportRadiusM =
-    object.type === "point"
-      ? resolvePointSupportRadiusM(object)
-      : object.type === "sphere"
-        ? resolveSphereSupportRadiusM(object)
-        : object.type === "cylinder"
-          ? resolveCylinderSupportRadiusM(object, normalizedDirection)
-          : resolveCubeSupportRadiusM(object, normalizedDirection);
+    object.type === "point" || object.type === "sphere"
+      ? resolveMaxHalfExtentSupportRadiusM(object)
+      : object.type === "cylinder"
+        ? resolveCylinderSupportRadiusM(object, normalizedDirection)
+        : resolveCubeSupportRadiusM(object, normalizedDirection);
   const clampedSupportRadiusM = clampNumber(supportRadiusM, 0, centerDistanceM);
   return {
     centerDistanceM,
     supportRadiusM: clampedSupportRadiusM,
-    surfaceDistanceM: Math.max(0, centerDistanceM - clampedSupportRadiusM),
+    surfaceDistanceM: clampNumberToMin(centerDistanceM - clampedSupportRadiusM, 0),
   };
 };

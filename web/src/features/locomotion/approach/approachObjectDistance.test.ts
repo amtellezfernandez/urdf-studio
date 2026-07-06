@@ -103,6 +103,28 @@ describe("resolveRoverPlanarObjectApproachDistance", () => {
     expect(distance.surfaceDistanceM).toBe(0);
   });
 
+  it("returns zero distances for non-finite planar direction vectors", () => {
+    const distance = resolveRoverPlanarObjectApproachDistance({
+      object: createObject(),
+      targetDirectionPlanarWorld: new THREE.Vector3(Number.NaN, 0, 0),
+    });
+    expect(distance.centerDistanceM).toBe(0);
+    expect(distance.supportRadiusM).toBe(0);
+    expect(distance.surfaceDistanceM).toBe(0);
+  });
+
+  it("ignores invalid object dimensions when resolving support radius", () => {
+    const distance = resolveRoverPlanarObjectApproachDistance({
+      object: createObject({
+        size: new THREE.Vector3(Number.NaN, -1, Number.POSITIVE_INFINITY),
+      }),
+      targetDirectionPlanarWorld: new THREE.Vector3(CENTER_DISTANCE_METERS, 0, 0),
+    });
+    expect(distance.centerDistanceM).toBeCloseTo(CENTER_DISTANCE_METERS);
+    expect(distance.supportRadiusM).toBe(0);
+    expect(distance.surfaceDistanceM).toBeCloseTo(CENTER_DISTANCE_METERS);
+  });
+
   it("never returns negative surface distance when object contains base projection", () => {
     const distance = resolveRoverPlanarObjectApproachDistance({
       object: createObject({
