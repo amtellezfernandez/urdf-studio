@@ -18,7 +18,6 @@ import { applyJointValues } from "@/shared/lib/urdf-joints";
 import {
   localDirectionFromWorld,
   projectDirectionOntoPlane,
-  resolveForwardWorldFromWheelAxes,
   worldDirectionFromLocal,
 } from "@/shared/lib/axisFrame";
 import { useCameraStore } from "@/shared/store/useCameraStore";
@@ -35,10 +34,7 @@ import { AssemblyPlacementHelpers } from "@/features/viewer/AssemblyPlacementHel
 import {
   computeAssemblyContactPairs,
   resolveAssemblyNearestContactSnap,
-  type AssemblyMeshProxy,
   type AssemblyPlacementRobot,
-  type AssemblyWheelJoint,
-  type AssemblyWheelProfile,
 } from "@/features/viewer/assemblyPlacementContact";
 import { ASSEMBLY_PLACEMENT_CONTACT_PARAMS } from "@/features/viewer/assemblyPlacementContactParams";
 import { CustomAxesHelper } from "@/features/viewer/CustomAxesHelper";
@@ -196,11 +192,8 @@ import {
   detectStudioWheelDriveModel,
   getPreferredStudioDriveWheels,
   getStudioWheelTravelForBodyMotion,
-  resolveFallbackWheelRadiusMeters,
   resolveSafeMotionDimension,
   resolveStudioWheelMarkerAnchorObject,
-  resolveWheelCenterWorldFromJointGeometry,
-  resolveWheelRadiusFromJointGeometry,
   type StudioWheelDriveModel,
   type StudioWheelRoleDisplayEntry,
   type StudioWheelRoleEntry,
@@ -253,10 +246,15 @@ import {
   buildViewerRenderPerformancePolicy,
 } from "@/features/viewer/viewerPerformancePolicy";
 import {
+  applyAssemblyWheelRollForWorldDelta,
+  collectAssemblyMeshProxies,
+  detectAssemblyWheelProfile,
+  resolveAssemblyForwardWorld,
+} from "@/features/viewer/viewerAssemblyRobotHelpers";
+import {
   areSortedStringListsEqual,
   hexToThreeJsHex,
   isEditableKeyboardTarget,
-  isFinitePositiveMotionDimension,
   resolveRoverApproachRobotFootprint,
 } from "@/features/viewer/viewer3dHelpers";
 export interface Viewer3DProps {
@@ -537,130 +535,6 @@ const URDFModel = ({
     animationController.setManualDragActive(false);
     onDragActiveChange?.(false);
   }, [animationController, onDragActiveChange]);
-
-  const collectAssemblyMeshProxies = useCallback((robot: URDFRobot): AssemblyMeshProxy[] => {
-    const proxies: AssemblyMeshProxy[] = [];
-    robot.traverse((node) => {
-      const mesh = node as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
-      if (!geometry) return;
-      if (!geometry.boundingBox) {
-        geometry.computeBoundingBox();
-      }
-      if (!geometry.boundingBox) return;
-      proxies.push({
-        mesh,
-        localBounds: geometry.boundingBox.clone(),
-      });
-    });
-    return proxies;
-  }, []);
-
-  const detectAssemblyWheelProfile = useCallback((robot: URDFRobot): AssemblyWheelProfile | null => {
-    const joints = Object.entries(robot.joints ?? {});
-    const wheelCandidates: AssemblyWheelJoint[] = [];
-    const measuredRadiiMeters: number[] = [];
-    const wheelCenters: THREE.Vector3[] = [];
-
-    joints.forEach(([jointName, joint]) => {
-      const jointType = String((joint as { jointType?: string }).jointType ?? "").toLowerCase();
-      if (jointType !== "continuous" && jointType !== "revolute") return;
-
-      const childNames = (joint.children ?? [])
-        .map((child) => child.name || "")
-        .join(" ");
-      const jointLabel = `${jointName} ${childNames}`;
-      if (!isStudioWheelLikeLabel(jointLabel)) return;
-
-      let axisLocal = new THREE.Vector3(0, 1, 0);
-      const jointAxis = (joint as { axis?: THREE.Vector3 }).axis;
-      if (jointAxis instanceof THREE.Vector3 && jointAxis.lengthSq() > 1e-10) {
-        axisLocal = jointAxis.clone().normalize();
-      }
-
-      const measuredRadiusMeters = resolveWheelRadiusFromJointGeometry(joint);
-      if (isFinitePositiveMotionDimension(measuredRadiusMeters)) {
-        measuredRadiiMeters.push(measuredRadiusMeters);
-      }
-      const wheelCenterWorld = resolveWheelCenterWorldFromJointGeometry(joint);
-      if (wheelCenterWorld) {
-        wheelCenters.push(wheelCenterWorld);
-      }
-
-      wheelCandidates.push({
-        jointName,
-        joint,
-        axisLocal,
-        radius: measuredRadiusMeters ?? Number.NaN,
-        directionSign: 1,
-      });
-    });
-
-    if (wheelCandidates.length === 0) return null;
-    const fallbackRadiusMeters = resolveFallbackWheelRadiusMeters({
-      robot,
-      wheelCenters,
-      measuredRadiiMeters,
-    });
-    wheelCandidates.forEach((wheel) => {
-      wheel.radius = isFinitePositiveMotionDimension(wheel.radius)
-        ? wheel.radius
-        : fallbackRadiusMeters;
-    });
-
-    const averageAxisWorld = new THREE.Vector3();
-    wheelCandidates.forEach((wheel) => {
-      const worldAxis = worldDirectionFromLocal(wheel.axisLocal, robot.quaternion);
-      averageAxisWorld.add(worldAxis);
-    });
-    const worldUp = new THREE.Vector3(0, 1, 0);
-    const forwardWorld = resolveForwardWorldFromWheelAxes(
-      averageAxisWorld,
-      worldUp,
-      worldDirectionFromLocal(new THREE.Vector3(1, 0, 0), robot.quaternion)
-    );
-    const forwardLocal = projectDirectionOntoPlane(
-      localDirectionFromWorld(forwardWorld, robot.quaternion),
-      new THREE.Vector3(0, 1, 0),
-      new THREE.Vector3(1, 0, 0)
-    );
-
-    return {
-      forwardLocal,
-      wheels: wheelCandidates,
-    };
-  }, []);
-
-  const getAssemblyForwardWorld = useCallback((entry: AssemblyPlacementRobot): THREE.Vector3 | null => {
-    const profile = entry.wheelProfile;
-    if (!profile || profile.wheels.length === 0) return null;
-    const forward = projectDirectionOntoPlane(
-      worldDirectionFromLocal(profile.forwardLocal, entry.robot.quaternion),
-      new THREE.Vector3(0, 1, 0),
-      new THREE.Vector3(1, 0, 0)
-    );
-    return forward;
-  }, []);
-
-  const applyWheelRollForWorldDelta = useCallback(
-    (entry: AssemblyPlacementRobot, deltaX: number, deltaZ: number) => {
-      const profile = entry.wheelProfile;
-      if (!profile || profile.wheels.length === 0) return;
-      const forward = getAssemblyForwardWorld(entry);
-      if (!forward) return;
-      const travel = deltaX * forward.x + deltaZ * forward.z;
-      if (Math.abs(travel) <= WHEEL_PLAYBACK_MOTION_PARAMS.motionEpsilon) return;
-
-      profile.wheels.forEach((wheel) => {
-        const radius = resolveSafeMotionDimension(wheel.radius);
-        const current = resolveJointScalarValue(wheel.joint) ?? 0;
-        wheel.joint.setJointValue(current - (travel / radius) * wheel.directionSign);
-      });
-      entry.robot.updateMatrixWorld(true);
-    },
-    [getAssemblyForwardWorld]
-  );
 
   const syncAssemblyPlacementState = useCallback(
     (updatePoses: boolean) => {
@@ -1003,8 +877,6 @@ const URDFModel = ({
     packageRoots,
     secondaryModels,
     syncAssemblyPlacementState,
-    collectAssemblyMeshProxies,
-    detectAssemblyWheelProfile,
     onRobotReadyChange,
   ]);
 
@@ -1411,7 +1283,7 @@ const URDFModel = ({
         const prevZ = drag.robot.position.z;
         const nextX = drag.startPosition.x + (point.x - drag.startPoint.x);
         const nextZ = drag.startPosition.z + (point.z - drag.startPoint.z);
-        const forward = getAssemblyForwardWorld(entry);
+        const forward = resolveAssemblyForwardWorld(entry);
         if (forward) {
           const requestedDeltaX = nextX - prevX;
           const requestedDeltaZ = nextZ - prevZ;
@@ -1451,7 +1323,7 @@ const URDFModel = ({
         } else {
           drag.lockedOtherId = null;
         }
-        applyWheelRollForWorldDelta(
+        applyAssemblyWheelRollForWorldDelta(
           entry,
           drag.robot.position.x - prevX,
           drag.robot.position.z - prevZ
@@ -1667,12 +1539,10 @@ const URDFModel = ({
     onStudioBaseDragEnd,
     rendererDomRef,
     setStoreJointValue,
-    applyWheelRollForWorldDelta,
     dragMode,
     enforceStudioPlanarPose,
     enforceWheelPlanarPose,
     getStudioGroundPlane,
-    getAssemblyForwardWorld,
     isWheelLikeJoint,
     wheelDriveEnabled,
     wheelDriveJointOverrides,
