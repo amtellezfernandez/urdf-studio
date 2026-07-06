@@ -5,6 +5,7 @@ import { Html } from "@react-three/drei";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import { API_BASE_URL } from "@/shared/config/api";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   buildIkOrientationPayload,
   normalizeIkTargetPoseForRobotBase,
@@ -313,7 +314,7 @@ export const IKDragControls = ({
       })
       .catch((error) => {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Native IKD model load failed";
+        const message = readUnknownErrorMessage(error, "Native IKD model load failed");
         if (lastNativeModelErrorRef.current !== message) {
           lastNativeModelErrorRef.current = message;
           console.warn("[IKD] Model preload failed:", message);
@@ -642,7 +643,7 @@ export const IKDragControls = ({
         if (isStaleSession()) {
           return;
         }
-        const message = error instanceof Error ? error.message : String(error ?? "");
+        const message = readUnknownErrorMessage(error, String(error ?? ""));
         if (/abort/i.test(message)) {
           // Abort is expected when a newer drag target supersedes the request.
           return;
@@ -651,7 +652,7 @@ export const IKDragControls = ({
         toast.error("IK solve failed. Is the IK server running?");
         setIkDebugState({
           status: "error",
-          error: error instanceof Error ? error.message : "IK solve failed",
+          error: readUnknownErrorMessage(error, "IK solve failed"),
           durationMs: null,
           diagnostics: null,
         });

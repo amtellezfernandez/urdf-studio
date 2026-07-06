@@ -18,6 +18,7 @@ import { isIkFailure, solveIk } from "@/features/ik/ikClient";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 import type { OrientationMode } from "@/features/ik/registry";
@@ -515,8 +516,7 @@ export const useIkSolver = ({
             if (isStaleSolve()) {
               return null;
             }
-            const message =
-              error instanceof Error ? error.message : fallbackErrorMessage;
+            const message = readUnknownErrorMessage(error, fallbackErrorMessage);
             clearRememberedBlockedTarget();
             setIkDebugState({
               roverApproachStatus: "failed",

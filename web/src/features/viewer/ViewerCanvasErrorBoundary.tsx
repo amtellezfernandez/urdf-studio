@@ -3,6 +3,7 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from "react";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { Button } from "@/shared/ui/button";
 
 type ViewerCanvasErrorBoundaryProps = {
@@ -24,7 +25,7 @@ export class ViewerCanvasErrorBoundary extends Component<
   };
 
   static getDerivedStateFromError(error: unknown): ViewerCanvasErrorBoundaryState {
-    const message = error instanceof Error ? error.message : "Unknown render error";
+    const message = readUnknownErrorMessage(error, "Unknown render error");
     return { hasError: true, message };
   }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { IKD_APPROACH_WS_URL } from "@/shared/config/runtime";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { IKD_APPROACH_TASK_STREAM_PARAMS } from "@/features/viewer/ikdApproachTaskParams";
 import {
   IKD_APPROACH_SCHEMA_VERSION,
@@ -88,7 +89,7 @@ export const useIkdApproachTaskStream = ({
         .getState()
         .setConnectionStatus(
           "error",
-          error instanceof Error ? error.message : "Failed to connect IKD approach websocket"
+          readUnknownErrorMessage(error, "Failed to connect IKD approach websocket")
         );
     }
   }, [clearReconnect, enabled]);
