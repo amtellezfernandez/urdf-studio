@@ -12,6 +12,7 @@ import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { applyRobotBasePose } from "@/shared/lib/urdfRobotBasePose";
 import { applyIntrinsicsToPerspectiveCamera, normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
@@ -424,7 +425,7 @@ export const CameraViewportPreview = ({
     } catch (error) {
       robotRef.current = null;
       setRobot(null);
-      setLoadingError(error instanceof Error ? error.message : "Failed to parse URDF.");
+      setLoadingError(readUnknownErrorMessage(error, "Failed to parse URDF."));
     }
 
     return () => {

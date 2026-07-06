@@ -1,6 +1,7 @@
 import { Camera, CameraConfig, CameraConfigFile } from "@/shared/types/camera";
 import jsyaml from "js-yaml";
 import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 const toSerializableIntrinsics = (intrinsics: Camera["intrinsics"]) => ({
   width: intrinsics.width,
@@ -51,7 +52,8 @@ export function parseCameraConfig(content: string, filename: string): CameraConf
       }
     }
   } catch (error) {
-    throw new Error(`Failed to parse camera config: ${error instanceof Error ? error.message : "Unknown error"}`);
+    const message = readUnknownErrorMessage(error, "Unknown error");
+    throw new Error(`Failed to parse camera config: ${message}`);
   }
 
   if (!configFile || !Array.isArray(configFile.cameras)) {

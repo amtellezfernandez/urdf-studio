@@ -4,6 +4,7 @@ import { Button } from "@/shared/ui/button";
 import { Upload } from "lucide-react";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { parseCameraConfig } from "@/features/camera";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { toast } from "sonner";
 
 interface CameraConfigUploadProps {
@@ -28,7 +29,7 @@ export function CameraConfigUpload({ open, onOpenChange }: CameraConfigUploadPro
       toast.success(`Loaded ${config.cameras.length} camera(s) from ${file.name}`);
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load camera config');
+      toast.error(readUnknownErrorMessage(error, "Failed to load camera config"));
     }
 
     // Reset input
