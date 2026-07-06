@@ -30,5 +30,6 @@ export const canOpenWorkspaceTarget = (
 ): boolean => descriptor.capabilities.workspaceTarget;
 
 export const WORKSPACE_TRANSFER_PARAMS = {
+  abortMessage: "Workspace transfer cancelled.",
   maxAssetAliases: 64,
 } as const;

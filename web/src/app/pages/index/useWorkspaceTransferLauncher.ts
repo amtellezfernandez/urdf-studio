@@ -9,6 +9,10 @@ import {
   type WorkspaceTransferTargetDescriptor,
   type WorkspaceTransferTargetStatus,
 } from "@/features/world-share/workspaceTransferApi";
+import {
+  isWorkspaceTransferAbortError,
+  throwIfWorkspaceTransferAborted,
+} from "@/features/world-share/workspaceTransferAbort";
 import type { WorkspaceTransferTargetId } from "@/features/world-share/workspaceTransferParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import { WORKSPACE_TRANSFER_LAUNCHER_PARAMS } from "@/app/pages/index/workspaceTransferLauncherParams";
@@ -38,23 +42,6 @@ type WorkspaceTransferLaunch = {
   targetLabel: string;
   launchId: string;
   controller: AbortController;
-};
-
-const isWorkspaceTransferAbortError = (error: unknown): boolean => {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-  return error instanceof Error && error.name === "AbortError";
-};
-
-const throwIfWorkspaceTransferAborted = (signal: AbortSignal): void => {
-  if (!signal.aborted) return;
-  if (typeof DOMException !== "undefined") {
-    throw new DOMException("Workspace transfer cancelled.", "AbortError");
-  }
-  const error = new Error("Workspace transfer cancelled.");
-  error.name = "AbortError";
-  throw error;
 };
 
 const createWorkspaceTransferLaunchId = (): string => {

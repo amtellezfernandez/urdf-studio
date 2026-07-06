@@ -1,4 +1,5 @@
 import { WORKSPACE_TRANSFER_PARAMS } from "@/features/world-share/workspaceTransferParams";
+import { throwIfWorkspaceTransferAborted } from "@/features/world-share/workspaceTransferAbort";
 import { blobToBase64 } from "@/shared/lib/blobEncoding";
 
 export type WorkspaceTransferMeshAssetUpload = {
@@ -109,21 +110,6 @@ const buildAssetAliases = (
   });
 
   return [...aliases];
-};
-
-const createWorkspaceTransferAbortError = (): Error => {
-  if (typeof DOMException !== "undefined") {
-    return new DOMException("Workspace transfer cancelled.", "AbortError");
-  }
-  const error = new Error("Workspace transfer cancelled.");
-  error.name = "AbortError";
-  return error;
-};
-
-export const throwIfWorkspaceTransferAborted = (signal?: AbortSignal): void => {
-  if (signal?.aborted) {
-    throw createWorkspaceTransferAbortError();
-  }
 };
 
 export const buildWorkspaceTransferMeshAssetUploads = async (

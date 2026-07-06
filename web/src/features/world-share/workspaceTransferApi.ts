@@ -7,8 +7,8 @@ import {
 } from "@/features/world-share/workspaceTransferParams";
 import {
   buildWorkspaceTransferMeshAssetUploads,
-  throwIfWorkspaceTransferAborted,
 } from "@/features/world-share/workspaceTransferMeshAssets";
+import { throwIfWorkspaceTransferAborted } from "@/features/world-share/workspaceTransferAbort";
 
 export { buildWorkspaceTransferMeshAssetUploads };
 export type { WorkspaceTransferTargetDescriptor, WorkspaceTransferTargetId };
