@@ -139,6 +139,10 @@ describe("resolveRoverApproachCommandYawErrorRad", () => {
       NEGATIVE_SAMPLE_YAW
     );
   });
+
+  it("falls back to zero for non-finite yaw commands", () => {
+    expect(resolveRoverApproachCommandYawErrorRad("rotate", NON_FINITE_YAW)).toBe(0);
+  });
 });
 
 describe("moveRoverApproachValueToward", () => {
@@ -150,6 +154,12 @@ describe("moveRoverApproachValueToward", () => {
 
   it("snaps to target when max delta is non-positive", () => {
     expect(moveRoverApproachValueToward(START_SPEED, TARGET_SPEED, 0)).toBe(TARGET_SPEED);
+  });
+
+  it("snaps to target when max delta is non-finite", () => {
+    expect(moveRoverApproachValueToward(START_SPEED, TARGET_SPEED, Number.POSITIVE_INFINITY)).toBe(
+      TARGET_SPEED
+    );
   });
 
   it("returns zero when current or target speed is non-finite", () => {
@@ -313,6 +323,43 @@ describe("resolveAppliedRoverApproachMotion", () => {
     expect(motion.angularTravelRad).toBeCloseTo(-0.01);
     expect(motion.speedState.angularSpeedRadps).toBeCloseTo(-0.01 / DEFAULT_DT_SEC);
     expect(motion.completedExactTurn).toBe(true);
+  });
+
+  it("preserves positive applied dt values below the frame clamp", () => {
+    const smallPositiveDtSec = ROVER_APPROACH_CONFIG.minDtSec * 0.5;
+    const motion = resolveAppliedRoverApproachMotion({
+      speedState: {
+        linearSpeedMps: 1,
+        angularSpeedRadps: 0,
+      },
+      dtSec: smallPositiveDtSec,
+      remainingDistanceM: 1,
+      remainingYawErrorRad: 0,
+      phase: "translate",
+    });
+
+    expect(motion.linearTravelM).toBeCloseTo(smallPositiveDtSec);
+    expect(motion.speedState.linearSpeedMps).toBeCloseTo(1);
+  });
+
+  it("falls back to zero for non-finite applied motion values", () => {
+    const motion = resolveAppliedRoverApproachMotion({
+      speedState: {
+        linearSpeedMps: Number.POSITIVE_INFINITY,
+        angularSpeedRadps: Number.NaN,
+      },
+      dtSec: Number.NaN,
+      remainingDistanceM: Number.POSITIVE_INFINITY,
+      remainingYawErrorRad: Number.NaN,
+      phase: "rotate",
+      enforceExactTurnStop: true,
+    });
+
+    expect(motion.linearTravelM).toBe(0);
+    expect(motion.angularTravelRad).toBe(0);
+    expect(motion.speedState.linearSpeedMps).toBe(0);
+    expect(motion.speedState.angularSpeedRadps).toBe(0);
+    expect(motion.completedExactTurn).toBe(false);
   });
 });
 

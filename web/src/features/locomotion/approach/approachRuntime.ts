@@ -1,3 +1,9 @@
+import {
+  clampNumberToMin,
+  isFiniteNumber,
+  isFinitePositiveNumber,
+  toFiniteNumberOrFallback,
+} from "@/shared/lib/numeric";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import { computeRoverApproachRotateTravelRad, computeRoverApproachStep } from "./approachExecutor";
 import type {
@@ -12,8 +18,6 @@ export type RoverApproachSpeedState = {
   linearSpeedMps: number;
   angularSpeedRadps: number;
 };
-
-const toFiniteSigned = (value: number): number => (Number.isFinite(value) ? value : 0);
 
 export const resolveInitialRoverApproachPhase = (
   yawErrorRad: number
@@ -49,7 +53,7 @@ export const resolveRoverApproachCommandYawErrorRad = (
   phase: RoverApproachRuntimePhase,
   yawErrorRad: number
 ): number => {
-  const yawError = toFiniteSigned(yawErrorRad);
+  const yawError = toFiniteNumberOrFallback(yawErrorRad, 0);
   if (phase === "translate") {
     return yawError * ROVER_APPROACH_CONFIG.yawTranslateCommandScale;
   }
@@ -61,10 +65,10 @@ export const moveRoverApproachValueToward = (
   target: number,
   maxDelta: number
 ): number => {
-  if (!Number.isFinite(current) || !Number.isFinite(target)) {
+  if (!isFiniteNumber(current) || !isFiniteNumber(target)) {
     return 0;
   }
-  if (!Number.isFinite(maxDelta) || maxDelta <= 0) {
+  if (!isFinitePositiveNumber(maxDelta)) {
     return target;
   }
   if (target > current) return Math.min(target, current + maxDelta);
@@ -94,7 +98,7 @@ export const resolveRoverApproachFrame = ({
   plan,
 }: ResolveRoverApproachFrameParams): ResolveRoverApproachFrameResult => {
   if (!plan.allowTranslationYawAssist) {
-    const exactLockedYawErrorRad = toFiniteSigned(yawErrorRad);
+    const exactLockedYawErrorRad = toFiniteNumberOrFallback(yawErrorRad, 0);
     const lockedTurnComplete =
       Math.abs(exactLockedYawErrorRad) <= ROVER_APPROACH_CONFIG.appliedTravelEpsilon;
     if (phase === "rotate" && !lockedTurnComplete) {
@@ -161,7 +165,10 @@ export const resolveRoverApproachDesiredSpeeds = ({
   driveAngularScale,
   dtSec,
 }: ResolveRoverApproachDesiredSpeedsParams): RoverApproachSpeedState => {
-  const safeDtSec = Math.max(dtSec, ROVER_APPROACH_CONFIG.speedDtDenominatorEpsilonSec);
+  const safeDtSec = clampNumberToMin(
+    dtSec,
+    ROVER_APPROACH_CONFIG.speedDtDenominatorEpsilonSec
+  );
   return {
     linearSpeedMps: (step.linearTravelM * driveLinearScale) / safeDtSec,
     angularSpeedRadps: (step.angularTravelRad * driveAngularScale) / safeDtSec,
@@ -184,8 +191,8 @@ type ResolveAppliedRoverApproachMotionResult = {
   completedExactTurn: boolean;
 };
 
-const clampNonNegativeFinite = (value: number): number =>
-  Number.isFinite(value) && value > 0 ? value : 0;
+const resolveNonNegativeFiniteOrZero = (value: number): number =>
+  clampNumberToMin(toFiniteNumberOrFallback(value, 0), 0);
 
 export const resolveAppliedRoverApproachMotion = ({
   speedState,
@@ -195,22 +202,26 @@ export const resolveAppliedRoverApproachMotion = ({
   phase,
   enforceExactTurnStop = false,
 }: ResolveAppliedRoverApproachMotionParams): ResolveAppliedRoverApproachMotionResult => {
-  const appliedDtSec =
-    Number.isFinite(dtSec) && dtSec > 0 ? dtSec : ROVER_APPROACH_CONFIG.minDtSec;
-  const speedDtSec = Math.max(appliedDtSec, ROVER_APPROACH_CONFIG.speedDtDenominatorEpsilonSec);
+  const appliedDtSec = isFinitePositiveNumber(dtSec) ? dtSec : ROVER_APPROACH_CONFIG.minDtSec;
+  const speedDtSec = clampNumberToMin(
+    appliedDtSec,
+    ROVER_APPROACH_CONFIG.speedDtDenominatorEpsilonSec
+  );
   const unclampedLinearTravelM =
-    Math.max(0, toFiniteSigned(speedState.linearSpeedMps)) * appliedDtSec;
+    resolveNonNegativeFiniteOrZero(speedState.linearSpeedMps) * appliedDtSec;
   const linearTravelM = Math.min(
     unclampedLinearTravelM,
-    clampNonNegativeFinite(remainingDistanceM)
+    resolveNonNegativeFiniteOrZero(remainingDistanceM)
   );
-  const unclampedAngularTravelRad = toFiniteSigned(speedState.angularSpeedRadps) * appliedDtSec;
+  const unclampedAngularTravelRad =
+    toFiniteNumberOrFallback(speedState.angularSpeedRadps, 0) * appliedDtSec;
   let angularTravelRad = unclampedAngularTravelRad;
   let completedExactTurn = false;
   if (enforceExactTurnStop && phase === "rotate") {
-    const remainingYawAbsRad = Math.abs(toFiniteSigned(remainingYawErrorRad));
+    const remainingYawError = toFiniteNumberOrFallback(remainingYawErrorRad, 0);
+    const remainingYawAbsRad = Math.abs(remainingYawError);
     const angularDirection =
-      Math.sign(toFiniteSigned(remainingYawErrorRad)) || Math.sign(unclampedAngularTravelRad);
+      Math.sign(remainingYawError) || Math.sign(unclampedAngularTravelRad);
     const appliedAngularAbsRad = Math.min(Math.abs(unclampedAngularTravelRad), remainingYawAbsRad);
     angularTravelRad = appliedAngularAbsRad * angularDirection;
     completedExactTurn =
