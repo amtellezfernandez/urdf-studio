@@ -20,6 +20,11 @@ describe("getJointValueColor", () => {
     expect(getJointValueColor(1, -1, 1, true)).toBe("#fecaca");
   });
 
+  it("clamps out-of-range values to the nearest edge color", () => {
+    expect(getJointValueColor(-5, -1, 1, true)).toBe("#fecaca");
+    expect(getJointValueColor(5, -1, 1, true)).toBe("#fecaca");
+  });
+
   it("interpolates toward warning near the range edge", () => {
     expect(getJointValueColor(0.25, -1, 1, true)).toBe("#ddf5cc");
   });

@@ -1,3 +1,5 @@
+import { clampNumber } from "@/shared/lib/numeric";
+
 const JOINT_VALUE_COLOR_PARAMS = {
   limitCenterColor: "#bbf7d0",
   limitWarningColor: "#fef3c7",
@@ -10,11 +12,9 @@ type RgbColor = {
   blue: number;
 };
 
-const clampUnitInterval = (value: number): number => Math.min(1, Math.max(0, value));
-
 const hexToRgbColor = (hexColor: string): RgbColor => {
   const normalizedHexColor = hexColor.replace("#", "");
-  const packedRgb = parseInt(normalizedHexColor, 16);
+  const packedRgb = Number.parseInt(normalizedHexColor, 16);
   return {
     red: (packedRgb >> 16) & 255,
     green: (packedRgb >> 8) & 255,
@@ -32,7 +32,7 @@ const rgbColorToHex = ({ red, green, blue }: RgbColor): string => {
 const interpolateHexColor = (startColor: string, endColor: string, amount: number): string => {
   const startRgbColor = hexToRgbColor(startColor);
   const endRgbColor = hexToRgbColor(endColor);
-  const interpolationAmount = clampUnitInterval(amount);
+  const interpolationAmount = clampNumber(amount, 0, 1);
 
   return rgbColorToHex({
     red: Math.round(
@@ -57,7 +57,7 @@ export const getJointValueColor = (
     return JOINT_VALUE_COLOR_PARAMS.limitCenterColor;
   }
 
-  const clampedValue = Math.min(Math.max(value, min), max);
+  const clampedValue = clampNumber(value, min, max);
   const range = max - min;
   if (range <= 0) {
     return JOINT_VALUE_COLOR_PARAMS.limitWarningColor;
@@ -65,7 +65,7 @@ export const getJointValueColor = (
 
   const normalizedValue = (clampedValue - min) / range;
   const distanceToEdge = Math.min(normalizedValue, 1 - normalizedValue);
-  const edgeCloseness = clampUnitInterval(1 - distanceToEdge / 0.5);
+  const edgeCloseness = clampNumber(1 - distanceToEdge / 0.5, 0, 1);
 
   if (edgeCloseness <= 0.5) {
     return interpolateHexColor(
