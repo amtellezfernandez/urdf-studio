@@ -1,5 +1,6 @@
 type ReadResponseErrorDetailOptions = {
   detailKeys?: readonly string[];
+  fallbackToResponseText?: boolean;
   fallback?: string;
 };
 
@@ -7,6 +8,7 @@ export const readResponseErrorDetail = async (
   response: Response,
   {
     detailKeys = ["detail", "error"],
+    fallbackToResponseText = true,
     fallback = response.statusText || `HTTP ${response.status}`,
   }: ReadResponseErrorDetailOptions = {}
 ): Promise<string> => {
@@ -20,8 +22,8 @@ export const readResponseErrorDetail = async (
       if (typeof value === "string" && value.trim()) return value.trim();
     }
   } catch {
-    return text;
+    return fallbackToResponseText ? text : fallback;
   }
 
-  return text;
+  return fallbackToResponseText ? text : fallback;
 };

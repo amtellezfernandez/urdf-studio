@@ -1,6 +1,4 @@
-type BackendErrorPayload = {
-  detail?: unknown;
-};
+import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 
 export const assertBackendResponseOk = async (
   response: Response,
@@ -10,14 +8,10 @@ export const assertBackendResponseOk = async (
     return;
   }
 
-  let detail = fallbackMessage;
-  try {
-    const payload = (await response.json()) as BackendErrorPayload;
-    if (typeof payload.detail === "string" && payload.detail.trim()) {
-      detail = payload.detail;
-    }
-  } catch {
-    // Keep the caller-provided message when the backend does not return JSON.
-  }
+  const detail = await readResponseErrorDetail(response, {
+    detailKeys: ["detail"],
+    fallback: fallbackMessage,
+    fallbackToResponseText: false,
+  });
   throw new Error(detail);
 };

@@ -32,4 +32,15 @@ describe("readResponseErrorDetail", () => {
       readResponseErrorDetail(response, { fallback: "Missing resource" })
     ).resolves.toBe("Missing resource");
   });
+
+  it("can preserve caller fallback instead of raw response text", async () => {
+    const response = new Response("plain failure", { status: 500 });
+
+    await expect(
+      readResponseErrorDetail(response, {
+        fallback: "Backend request failed",
+        fallbackToResponseText: false,
+      })
+    ).resolves.toBe("Backend request failed");
+  });
 });
