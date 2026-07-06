@@ -51,6 +51,19 @@ describe("approachDetour", () => {
     }
   });
 
+  it("treats non-finite path clearance as zero instead of ignoring obstacles", () => {
+    const result = resolveRoverApproachDetourWaypoint({
+      segmentStartWorld: SEGMENT_START,
+      segmentEndWorld: SEGMENT_END,
+      upAxisWorld: WORLD_UP,
+      obstacles: [createObstacle("obs", new THREE.Vector3(1, 0, 0), 0.2)],
+      pathClearanceM: Number.NaN,
+    });
+
+    expect(result.mode).toBe("detour");
+    expect(result.blockingObstacleId).toBe("obs");
+  });
+
   it("returns direct when every detour candidate still collides", () => {
     const result = resolveRoverApproachDetourWaypoint({
       segmentStartWorld: SEGMENT_START,
@@ -76,5 +89,13 @@ describe("approachDetour", () => {
 
     expect(radiusM).toBeCloseTo(Math.sqrt(0.5 * 0.5 + 0.25 * 0.25), 6);
   });
-});
 
+  it("ignores invalid projected obstacle half extents", () => {
+    const radiusM = resolvePlanarProjectedObstacleRadiusM({
+      halfExtentsWorld: new THREE.Vector3(Number.NaN, 0.25, Number.POSITIVE_INFINITY),
+      upAxisWorld: WORLD_UP,
+    });
+
+    expect(radiusM).toBeCloseTo(0.25, 6);
+  });
+});
