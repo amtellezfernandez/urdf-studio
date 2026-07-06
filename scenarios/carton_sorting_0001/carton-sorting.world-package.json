@@ -1,0 +1,127 @@
+{
+  "package_id": "carton-sorting",
+  "version": "1.0.0",
+  "description": "Carton sorting demo world: table, one carton, two bins.",
+  "provenance": {
+    "source": "urdf-studio-scenarios"
+  },
+  "artifacts": [],
+  "world": {
+    "name": "Carton Sorting",
+    "objects": [
+      {
+        "id": "work_table",
+        "name": "Work table",
+        "type": "cube",
+        "position_xyz": [
+          0.45,
+          0.0,
+          0.36
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          0.7,
+          0.9,
+          0.72
+        ],
+        "color": "#8b5cf6",
+        "physics": {
+          "fixed": true,
+          "collision": true,
+          "friction": 0.9
+        }
+      },
+      {
+        "id": "carton_1",
+        "name": "Red carton",
+        "type": "cube",
+        "position_xyz": [
+          0.4,
+          -0.15,
+          0.775
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          0.07,
+          0.07,
+          0.07
+        ],
+        "color": "#ef4444",
+        "physics": {
+          "fixed": false,
+          "collision": true,
+          "mass_kg": 0.15,
+          "friction": 0.8
+        }
+      },
+      {
+        "id": "bin_a",
+        "name": "Bin A",
+        "type": "cube",
+        "position_xyz": [
+          0.45,
+          0.3,
+          0.76
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          0.18,
+          0.18,
+          0.08
+        ],
+        "color": "#22c55e",
+        "physics": {
+          "fixed": true,
+          "collision": true,
+          "friction": 0.9
+        }
+      },
+      {
+        "id": "bin_b",
+        "name": "Bin B",
+        "type": "cube",
+        "position_xyz": [
+          0.45,
+          -0.42,
+          0.76
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          0.18,
+          0.18,
+          0.08
+        ],
+        "color": "#3b82f6",
+        "physics": {
+          "fixed": true,
+          "collision": true,
+          "friction": 0.9
+        }
+      }
+    ],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0,
+    "urdf_xml": "<robot name='carton_sorting_arm'><link name='base_link'/></robot>",
+    "joint_positions": {},
+    "cameras": [],
+    "environment": {
+      "frame_convention": "ros-rep-103"
+    }
+  }
+}
