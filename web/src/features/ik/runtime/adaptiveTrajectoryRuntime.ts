@@ -3,6 +3,7 @@ import {
   writeBrowserStorageItem,
 } from "@/shared/lib/browserStorage";
 import { isRecord } from "@/shared/lib/records";
+import { clampNumber } from "../ikMath";
 
 export type TrajectoryJointSpec = {
   jointName: string;
@@ -30,9 +31,6 @@ export type AdaptiveTrajectoryRepository = {
   load: (contextKey: string) => AdaptiveTrajectoryProfile | null;
   save: (contextKey: string, profile: AdaptiveTrajectoryProfile) => void;
 };
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
 
 const computeQuinticEaseInOut = (t: number): number =>
   t * t * t * (t * (t * 6 - 15) + 10);
@@ -73,12 +71,12 @@ const sanitizeProfile = (
 ): AdaptiveTrajectoryProfile => {
   if (!isRecord(profile)) return { ...DEFAULT_ADAPTIVE_TRAJECTORY_PROFILE };
   return {
-    speedScale: clamp(
+    speedScale: clampNumber(
       readFiniteNumber(profile, "speedScale", 1),
       0.8,
       1.5
     ),
-    accelerationScale: clamp(
+    accelerationScale: clampNumber(
       readFiniteNumber(profile, "accelerationScale", 1),
       0.8,
       1.8
@@ -206,7 +204,7 @@ export class AdaptiveTrajectoryRuntime {
 
   step(currentValues: Record<string, number>, elapsedSec: number, dtSec: number): AdaptiveTrajectoryStepResult {
     this.frameCount += 1;
-    const t = clamp(
+    const t = clampNumber(
       elapsedSec / Math.max(this.config.durationSec, 1e-6),
       0,
       1
@@ -304,7 +302,7 @@ export class AdaptiveTrajectoryRuntime {
         0.01,
         spec.maxVelocity * this.profile.speedScale
       );
-      this.velocityState[spec.jointName] = clamp(velocity, -maxVelocity, maxVelocity);
+      this.velocityState[spec.jointName] = clampNumber(velocity, -maxVelocity, maxVelocity);
       this.lastCommanded[spec.jointName] = applied;
       if (Math.abs(spec.targetValue - applied) <= this.config.epsilon) {
         this.velocityState[spec.jointName] = 0;
@@ -334,15 +332,15 @@ export class AdaptiveTrajectoryRuntime {
       runtimeMs <= this.config.durationSec * 1000 * 1.35;
 
     if (projectedRate > 0.24) {
-      this.profile.speedScale = clamp(this.profile.speedScale * 0.96, 0.8, 1.5);
-      this.profile.accelerationScale = clamp(
+      this.profile.speedScale = clampNumber(this.profile.speedScale * 0.96, 0.8, 1.5);
+      this.profile.accelerationScale = clampNumber(
         this.profile.accelerationScale * 0.95,
         0.8,
         1.8
       );
     } else if (rapidAndClean) {
-      this.profile.speedScale = clamp(this.profile.speedScale * 1.03, 0.8, 1.5);
-      this.profile.accelerationScale = clamp(
+      this.profile.speedScale = clampNumber(this.profile.speedScale * 1.03, 0.8, 1.5);
+      this.profile.accelerationScale = clampNumber(
         this.profile.accelerationScale * 1.015,
         0.8,
         1.8
@@ -350,7 +348,7 @@ export class AdaptiveTrajectoryRuntime {
     }
 
     if (this.maxVelocityJump > 2.2) {
-      this.profile.accelerationScale = clamp(
+      this.profile.accelerationScale = clampNumber(
         this.profile.accelerationScale * 0.96,
         0.8,
         1.8

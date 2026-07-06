@@ -2,6 +2,7 @@ import * as THREE from "three";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { resolveRobotObjectByName } from "@/features/viewer/viewer-helpers";
+import { clampNumber } from "./ikMath";
 import type { IkSolvePayload, IkSolveResponse, IkSolveStrategy } from "./types";
 
 type SolveResult = {
@@ -24,9 +25,6 @@ const FLOOR_SOFT_CLEARANCE_M = 0.05;
 const FLOOR_HARD_CLEARANCE_M = 0.0;
 const SELF_CROWD_SOFT_DIST_M = 0.12;
 const SELF_CROWD_HARD_DIST_M = 0.06;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
 
 const readJointValue = (joint: URDFJoint) =>
   Array.isArray(joint.jointValue) ? (joint.jointValue[0] ?? 0) : 0;
@@ -128,7 +126,7 @@ const applyJointLimitCenterBias = (
   const centerNorm = (value - center) / halfRange;
   const bias =
     -centerNorm * biasStrength * Math.max(0, Math.abs(centerNorm) - deadband);
-  return clamp(value + bias, lower, upper);
+  return clampNumber(value + bias, lower, upper);
 };
 
 const buildSeedCandidates = (
@@ -389,7 +387,7 @@ const runCcdForSeed = (
       if (joint.jointType === "prismatic") {
         const alongAxis = axisWorld.dot(toTarget) - axisWorld.dot(toEnd);
         const current = readJointValue(joint);
-        const limited = clamp(alongAxis, -MAX_STEP_LINEAR, MAX_STEP_LINEAR);
+        const limited = clampNumber(alongAxis, -MAX_STEP_LINEAR, MAX_STEP_LINEAR);
         let next = current + limited;
         next = applyJointLimitCenterBias(
           next,
@@ -410,7 +408,7 @@ const runCcdForSeed = (
 
         projEnd.normalize();
         projTarget.normalize();
-        const dot = clamp(projEnd.dot(projTarget), -1, 1);
+        const dot = clampNumber(projEnd.dot(projTarget), -1, 1);
         const angle = Math.acos(dot);
         if (!Number.isFinite(angle) || angle < 1e-4) {
           continue;
@@ -418,7 +416,7 @@ const runCcdForSeed = (
 
         cross.crossVectors(projEnd, projTarget);
         const direction = Math.sign(cross.dot(axisWorld)) || 1;
-        const delta = clamp(direction * angle, -MAX_STEP_RAD, MAX_STEP_RAD);
+        const delta = clampNumber(direction * angle, -MAX_STEP_RAD, MAX_STEP_RAD);
         const current = readJointValue(joint);
         let next = current + delta;
         if (joint.jointType !== "continuous") {
