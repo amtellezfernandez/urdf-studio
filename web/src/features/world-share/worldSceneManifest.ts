@@ -3,11 +3,15 @@ import type {
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import {
+  WORLD_SCENE_PACKAGE_DEFAULT_ACTION_SEMANTICS,
+  WORLD_SCENE_PACKAGE_DEFAULT_FRAME_CONVENTION,
+  WORLD_SCENE_PACKAGE_DEFAULT_TIMESTEP_MS,
   STATIC_WORLD_LAYOUT_KIND,
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
   STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS,
   STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS,
   WORLD_SCENE_PACKAGE_LIMITS,
+  WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
   WORLD_SCENE_PACKAGE_SUPPORTED_SCHEMA_VERSIONS,
 } from "@/features/world-share/worldScenePackageParams";
 import { WORLD_SCENE_PACKAGE_FIELDS } from "@/features/world-share/worldSceneManifestSchema";
@@ -58,6 +62,7 @@ export type StaticWorldSceneLayerSnapshot = {
 };
 
 export type WorldSceneLayerSnapshot = StaticWorldSceneLayerSnapshot;
+const DEFAULT_WORLD_SCENE_PACKAGE_CREATED_AT = "1970-01-01T00:00:00.000Z";
 
 const toStaticWorldSceneLayerSnapshot = (
   snapshot: ParsedWorldSceneLayerSnapshot
@@ -134,11 +139,75 @@ const readValidWorldSceneManifestCandidate = (
   return manifest && isWorldSceneManifest(manifest) ? manifest : null;
 };
 
+const readWorldSceneRegistryEnvelopeCandidate = (
+  payload: unknown
+): WorldScenePackageManifest | null => {
+  if (!isRecord(payload)) return null;
+  if (!isString(payload.package_id) || !payload.package_id.trim()) return null;
+  if (!isString(payload.version) || !payload.version.trim()) return null;
+  if (!isRecord(payload.world)) return null;
+  const environment = isRecord(payload.environment)
+    ? payload.environment
+    : isRecord(payload.world.environment)
+      ? payload.world.environment
+      : null;
+  const world = toParsedWorldSceneLayerSnapshot(payload.world, environment);
+  if (!world) return null;
+  const provenance = isRecord(payload.provenance)
+    ? { ...payload.provenance }
+    : {};
+  if (environment) {
+    provenance.environment =
+      isRecord(provenance.environment)
+        ? { ...provenance.environment, ...environment }
+        : environment;
+  }
+  const frameConvention =
+    environment && isString(environment.frame_convention) && environment.frame_convention.trim()
+      ? environment.frame_convention
+      : WORLD_SCENE_PACKAGE_DEFAULT_FRAME_CONVENTION;
+  return {
+    schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
+    package_id: payload.package_id.trim(),
+    version: payload.version.trim(),
+    title: (world.name || payload.package_id).trim(),
+    created_at:
+      isString(payload.created_at) && !Number.isNaN(Date.parse(payload.created_at))
+        ? payload.created_at
+        : DEFAULT_WORLD_SCENE_PACKAGE_CREATED_AT,
+    runtime_targets: [],
+    interface: {
+      observation_modalities:
+        Array.isArray(world.cameras) && world.cameras.length > 0 ? ["rgb", "proprio"] : ["proprio"],
+      action_semantics: WORLD_SCENE_PACKAGE_DEFAULT_ACTION_SEMANTICS,
+      timestep_ms: WORLD_SCENE_PACKAGE_DEFAULT_TIMESTEP_MS,
+      frame_convention: frameConvention,
+    },
+    artifacts: Array.isArray(payload.artifacts) ? payload.artifacts : [],
+    world_snapshot: {
+      urdf_xml: world.urdf_xml ?? "<robot name='world'/>",
+      joint_positions: world.joint_positions ?? {},
+      cameras: world.cameras ?? [],
+      objects: world.objects as SerializableWorldObject[],
+      scenario_time_ms: world.scenario_time_ms,
+      scenario_duration_ms: world.scenario_duration_ms,
+    },
+    provenance,
+    security: {
+      signature_ref: null,
+      attestation_refs: [],
+      sbom_ref: null,
+    },
+  };
+};
+
 export const readWorldSceneManifestFromUnknown = (
   payload: unknown
 ): WorldScenePackageManifest | null => {
   const manifest = readWorldSceneManifestCandidate(payload);
   if (manifest) return manifest;
+  const registryEnvelope = readWorldSceneRegistryEnvelopeCandidate(payload);
+  if (registryEnvelope) return registryEnvelope;
   if (isRecord(payload)) {
     return readWorldSceneManifestCandidate(payload.manifest);
   }

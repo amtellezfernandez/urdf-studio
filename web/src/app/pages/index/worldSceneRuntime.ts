@@ -159,10 +159,10 @@ export const downloadWorldScenePackageManifest = async (
   manifest: WorldScenePackageManifest,
   downloadJsonDocument: (payload: unknown, filename: string) => void
 ) => {
-  const { toWorldScenePackageDownloadName } =
+  const { toWorldScenePackageDownloadName, toWorldSceneRegistryEnvelope } =
     await loadWorldScenePackageBuilderModule();
   const filename = toWorldScenePackageDownloadName(manifest.package_id, manifest.version);
-  downloadJsonDocument(manifest, filename);
+  downloadJsonDocument(toWorldSceneRegistryEnvelope(manifest), filename);
 };
 
 export const createWorldRolloutCheckerProfile = ({
