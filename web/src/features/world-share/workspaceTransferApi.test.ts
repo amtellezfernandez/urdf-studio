@@ -10,11 +10,7 @@ import {
   openWorkspaceTransferTarget,
 } from "@/features/world-share/workspaceTransferApi";
 import { computeWorldSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
-import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
-import type {
-  WorldScenePackageManifest,
-  WorldSceneRegistryEnvelope,
-} from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 
 const { guardedFetchMock } = vi.hoisted(() => ({
   guardedFetchMock: vi.fn(),
@@ -23,37 +19,6 @@ const { guardedFetchMock } = vi.hoisted(() => ({
 vi.mock("@/shared/lib/backendGuard", () => ({
   guardedFetch: guardedFetchMock,
 }));
-
-const createWorldPackage = (): WorldScenePackageManifest => ({
-  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
-  package_id: "demo_world",
-  version: "1.0.0",
-  title: "Demo World",
-  description: undefined,
-  created_at: "2026-01-01T00:00:00.000Z",
-  runtime_targets: [],
-  interface: {
-    observation_modalities: ["state"],
-    action_semantics: "joint_position",
-    timestep_ms: 10,
-    frame_convention: "ros-rep-103",
-  },
-  artifacts: [],
-  world_snapshot: {
-    urdf_xml: "<robot name=\"demo\"><link name=\"base\"/></robot>",
-    joint_positions: {},
-    cameras: [],
-    objects: [],
-    scenario_time_ms: 0,
-    scenario_duration_ms: 0,
-  },
-  provenance: {},
-  security: {
-    signature_ref: null,
-    attestation_refs: [],
-    sbom_ref: null,
-  },
-});
 
 const createWorldEnvelope = (): WorldSceneRegistryEnvelope => ({
   package_id: "demo_world",
@@ -104,7 +69,7 @@ describe("workspaceTransferApi", () => {
     const prepared = await openWorkspaceTransferTarget({
       targetId: "genesis",
       launchId: "launch-123",
-      worldPackage: createWorldPackage(),
+      worldPackage: createWorldEnvelope(),
       meshFiles: {},
       targetLabel: "Genesis",
     });
@@ -163,7 +128,7 @@ describe("workspaceTransferApi", () => {
 
     await openWorkspaceTransferTarget({
       targetId: "genesis",
-      worldPackage: createWorldPackage(),
+      worldPackage: createWorldEnvelope(),
       meshFiles: {},
       targetLabel: "Genesis",
       signal: controller.signal,
@@ -226,7 +191,7 @@ describe("workspaceTransferApi", () => {
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
     );
-    const worldPackage = createWorldPackage();
+    const worldPackage = createWorldEnvelope();
     worldPackage.artifacts = [
       {
         kind: "world_snapshot",
@@ -234,7 +199,7 @@ describe("workspaceTransferApi", () => {
         uri: "inline://snapshot",
       },
     ];
-    worldPackage.world_snapshot.objects = [
+    worldPackage.world.objects = [
       {
         id: "crate",
         name: "Crate",
@@ -382,7 +347,7 @@ describe("workspaceTransferApi", () => {
 
     const response = await applyWorkspaceTransferTargetChangeSet(
       "blender",
-      createWorldPackage(),
+      createWorldEnvelope(),
       {
         schema: "urdf-studio.blender-change-set.v1",
         changes: [],
@@ -416,7 +381,7 @@ describe("workspaceTransferApi", () => {
       )
     );
 
-    const response = await applyWorkspaceChangeSet(createWorldPackage(), {
+    const response = await applyWorkspaceChangeSet(createWorldEnvelope(), {
       schema: "urdf-studio.blender-change-set.v1",
       changes: [],
     });

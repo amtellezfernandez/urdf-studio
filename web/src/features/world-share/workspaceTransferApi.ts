@@ -1,10 +1,7 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
-import type {
-  WorldScenePackageManifest,
-  WorldSceneRegistryEnvelope,
-} from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 import {
   type WorkspaceTransferTargetDescriptor,
   type WorkspaceTransferTargetId,
@@ -13,7 +10,7 @@ import {
   buildWorkspaceTransferMeshAssetUploads,
 } from "@/features/world-share/workspaceTransferMeshAssets";
 import { throwIfWorkspaceTransferAborted } from "@/features/world-share/workspaceTransferAbort";
-import { toWorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageBuilder";
+import { refreshWorldSceneRegistryEnvelopeSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
 
 export { buildWorkspaceTransferMeshAssetUploads };
 export type { WorkspaceTransferTargetDescriptor, WorkspaceTransferTargetId };
@@ -70,7 +67,7 @@ export type WorkspaceChangeSetApplyResponse = {
 export type OpenWorkspaceTransferTargetParams = {
   targetId: WorkspaceTransferTargetId;
   launchId?: string | null;
-  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope;
+  worldPackage: WorldSceneRegistryEnvelope;
   urdfAssetPath?: string | null;
   meshFiles: Record<string, Blob>;
   packageRoots?: Record<string, string[]>;
@@ -92,23 +89,10 @@ const workspaceTransferTargetPath = (
 
 const workspaceTransferBasePath = (): string => "/workspace-transfer";
 
-const loadWorldScenePackageBuilderModule = () =>
-  import("@/features/world-share/worldScenePackageBuilder");
-
 const refreshWorkspaceWorldPackageDigest = async (
-  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope
+  worldPackage: WorldSceneRegistryEnvelope
 ): Promise<WorldSceneRegistryEnvelope> => {
-  const {
-    refreshWorldScenePackageSnapshotDigest,
-    refreshWorldSceneRegistryEnvelopeSnapshotDigest,
-  } =
-    await loadWorldScenePackageBuilderModule();
-  if ("world" in worldPackage) {
-    return refreshWorldSceneRegistryEnvelopeSnapshotDigest(worldPackage);
-  }
-  return toWorldSceneRegistryEnvelope(
-    await refreshWorldScenePackageSnapshotDigest(worldPackage)
-  );
+  return refreshWorldSceneRegistryEnvelopeSnapshotDigest(worldPackage);
 };
 
 const formatTargetName = (
@@ -194,7 +178,7 @@ export const cancelWorkspaceTransferTargetLaunch = async ({
 
 export const applyWorkspaceTransferTargetChangeSet = async (
   targetId: WorkspaceTransferTargetId,
-  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
+  worldPackage: WorldSceneRegistryEnvelope,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
   const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
@@ -224,7 +208,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
 };
 
 export const applyWorkspaceChangeSet = async (
-  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
+  worldPackage: WorldSceneRegistryEnvelope,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
   const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);

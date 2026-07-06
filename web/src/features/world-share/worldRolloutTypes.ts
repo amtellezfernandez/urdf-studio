@@ -1,7 +1,4 @@
-import type {
-  WorldScenePackageManifest,
-  WorldSceneRegistryEnvelope,
-} from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 
 export type WorldRolloutArtifactRef = {
   kind: string;
@@ -77,7 +74,7 @@ export type WorldRolloutDecisionRecord = {
 };
 
 export type WorldRolloutJobCreateRequest = {
-  world_package: WorldScenePackageManifest | WorldSceneRegistryEnvelope;
+  world_package: WorldSceneRegistryEnvelope;
   checker_profile: WorldRolloutCheckerProfile;
   campaign_id?: string;
   rollout_params: Record<string, unknown>;
