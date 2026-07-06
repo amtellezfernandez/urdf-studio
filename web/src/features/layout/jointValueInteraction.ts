@@ -8,6 +8,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DEG_TO_RAD } from "@/shared/lib/angleConversions";
+import { clampNumberToOptionalBounds, toFiniteNumberOrNull } from "@/shared/lib/numeric";
 import { lockDocumentBodyInteraction } from "@/features/layout/documentBodyInteractionLock";
 import {
   isJointResetShortcut,
@@ -55,14 +56,12 @@ interface ApplyJointValueOptions {
 }
 
 export const clampJointValue = (value: number, lower: number, upper: number): number => {
-  let clamped = value;
-  if (Number.isFinite(lower)) {
-    clamped = Math.max(lower, clamped);
-  }
-  if (Number.isFinite(upper)) {
-    clamped = Math.min(upper, clamped);
-  }
-  return clamped;
+  const finiteLower = toFiniteNumberOrNull(lower);
+  const finiteUpper = toFiniteNumberOrNull(upper);
+  return clampNumberToOptionalBounds(value, {
+    min: finiteLower ?? undefined,
+    max: finiteUpper ?? undefined,
+  });
 };
 
 export const snapJointValue = (value: number, shouldSnap: boolean): number => {

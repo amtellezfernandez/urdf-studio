@@ -11,6 +11,8 @@ describe("joint value interaction helpers", () => {
   it("clamps only against finite bounds", () => {
     expect(clampJointValue(2, -1, 1)).toBe(1);
     expect(clampJointValue(-2, -1, 1)).toBe(-1);
+    expect(clampJointValue(-2, -1, Number.POSITIVE_INFINITY)).toBe(-1);
+    expect(clampJointValue(2, Number.NEGATIVE_INFINITY, 1)).toBe(1);
     expect(clampJointValue(2, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY)).toBe(2);
   });
 
