@@ -59,6 +59,20 @@ describe("useJointStore velocity limiting", () => {
     expect(next).toBeCloseTo(0.2, 6);
   });
 
+  it("normalizes global and per-joint velocity limits", () => {
+    useJointStore.getState().setGlobalMaxJointVelocity(0);
+    expect(useJointStore.getState().globalMaxJointVelocity).toBe(1);
+
+    useJointStore.getState().setGlobalMaxJointVelocity(1e-8);
+    expect(useJointStore.getState().globalMaxJointVelocity).toBe(1e-4);
+
+    useJointStore.getState().setJointMaxVelocity("j1", 1e-8);
+    expect(useJointStore.getState().jointVelocityLimits.j1).toBe(1e-4);
+
+    useJointStore.getState().setJointMaxVelocity("j1", null);
+    expect(useJointStore.getState().jointVelocityLimits.j1).toBeUndefined();
+  });
+
   it("stores loaded URDF reset joint values separately from live joint values", () => {
     const initialJointValues: Record<string, number> = {
       shoulder: TEST_JOINT_STORE_POSES.initialShoulderRad,

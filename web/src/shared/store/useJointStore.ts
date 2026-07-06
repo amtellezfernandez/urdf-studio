@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { clampNumberToMin } from "@/shared/lib/numeric";
 
 type JointValues = Record<string, number>;
 
@@ -74,6 +75,16 @@ interface JointStore {
 const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 const MIN_VELOCITY = 1e-4;
+const FALLBACK_DT_SEC = 1 / 1000;
+
+const isFinitePositiveNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0;
+
+const normalizeStoredVelocityLimit = (velocity: number): number | null =>
+  isFinitePositiveNumber(velocity) ? clampNumberToMin(velocity, MIN_VELOCITY) : null;
+
+const resolvePositiveDeltaTimeSec = (rawDtSec: number): number =>
+  isFinitePositiveNumber(rawDtSec) ? rawDtSec : FALLBACK_DT_SEC;
 
 const limitJointDelta = (
   target: number,
@@ -82,13 +93,13 @@ const limitJointDelta = (
   lastTimestamp: number,
   now: number
 ) => {
-  if (maxVelocity === null || !Number.isFinite(maxVelocity) || maxVelocity <= 0) {
+  if (!isFinitePositiveNumber(maxVelocity)) {
     return target;
   }
 
   const rawDt = (now - lastTimestamp) / 1000;
   // Fail-safe toward stricter limiting when timestamps are invalid or identical.
-  const dt = Number.isFinite(rawDt) && rawDt > 0 ? rawDt : 1 / 1000;
+  const dt = resolvePositiveDeltaTimeSec(rawDt);
   const maxDelta = maxVelocity * dt;
   const delta = target - current;
 
@@ -104,7 +115,7 @@ const resolveEffectiveMaxVelocity = (state: JointStore, jointName: string): numb
   const candidate =
     override !== undefined && override !== null ? override : state.globalMaxJointVelocity;
 
-  if (!Number.isFinite(candidate) || candidate <= 0) {
+  if (!isFinitePositiveNumber(candidate)) {
     return null;
   }
 
@@ -129,16 +140,17 @@ export const useJointStore = create<JointStore>((set, get) => ({
   setVelocityLimitEnabled: () => set({ velocityLimitEnabled: true }),
   setGlobalMaxJointVelocity: (velocity) =>
     set(() => ({
-      globalMaxJointVelocity:
-        Number.isFinite(velocity) && velocity > 0 ? Math.max(velocity, MIN_VELOCITY) : 1,
+      globalMaxJointVelocity: normalizeStoredVelocityLimit(velocity) ?? 1,
     })),
   setJointMaxVelocity: (jointName, velocity) =>
     set((state) => {
       const next = { ...state.jointVelocityLimits };
-      if (velocity === null || !Number.isFinite(velocity) || velocity <= 0) {
+      const normalizedVelocity =
+        velocity === null ? null : normalizeStoredVelocityLimit(velocity);
+      if (normalizedVelocity === null) {
         delete next[jointName];
       } else {
-        next[jointName] = Math.max(velocity, MIN_VELOCITY);
+        next[jointName] = normalizedVelocity;
       }
       return { jointVelocityLimits: next };
     }),
