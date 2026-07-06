@@ -487,7 +487,6 @@ const Index = () => {
   });
   const {
     buildCurrentWorldSceneRegistryEnvelope,
-    buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,

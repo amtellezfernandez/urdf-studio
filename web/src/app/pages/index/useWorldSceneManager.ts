@@ -12,8 +12,8 @@ import {
 } from "@/features/world-share/worldScenePackageParams";
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
 import type {
-  WorldScenePackageManifest,
   WorldSceneRegistryEnvelope,
+  WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransferApi";
 import type { CreatedObject } from "@/features/objects";
@@ -34,7 +34,6 @@ import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
   buildWorldSceneDocumentFromState,
   buildWorldSceneRegistryEnvelopeFromState,
-  buildWorldScenePackageManifestFromState,
   createWorldSceneLayerExportDocument,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneLayerText,
@@ -116,35 +115,6 @@ export const useWorldSceneManager = ({
     setWorldLayoutImportDialogOpen(false);
     setWorldLayoutImportUrlDraft("");
   }, []);
-
-  const buildCurrentWorldScenePackageManifest = useCallback(
-    async (
-      overrides?: Partial<
-        Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
-      >
-    ) => {
-      const transferObjects = getObjectsForTransfer?.() ?? objectsRef.current;
-      objectsRef.current = transferObjects;
-      return buildWorldScenePackageManifestFromState({
-        resolvedRobotName,
-        vizUrdfContent,
-        originalUrdfContent,
-        jointValues,
-        cameras,
-        objects: transferObjects,
-        demoMode: DEMO_MODE,
-        overrides,
-      });
-    },
-    [
-      cameras,
-      getObjectsForTransfer,
-      jointValues,
-      originalUrdfContent,
-      resolvedRobotName,
-      vizUrdfContent,
-    ]
-  );
 
   const buildCurrentWorldSceneRegistryEnvelope = useCallback(
     async (
@@ -618,7 +588,6 @@ export const useWorldSceneManager = ({
 
   return {
     buildCurrentWorldSceneRegistryEnvelope,
-    buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,

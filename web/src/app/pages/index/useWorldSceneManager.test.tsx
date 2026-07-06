@@ -159,7 +159,7 @@ describe("useWorldSceneManager", () => {
     });
   });
 
-  it("builds transfer packages from the live object source when provided", async () => {
+  it("builds transfer world envelopes from the live object source when provided", async () => {
     const fixture = {
       urdf: '<robot name="demo"><link name="base"/></robot>',
     };
@@ -220,16 +220,12 @@ describe("useWorldSceneManager", () => {
       await Promise.resolve();
     });
 
-    let objectIds: string[] = [];
     let envelopeObjectIds: string[] = [];
     await act(async () => {
-      const manifest = await manager?.buildCurrentWorldScenePackageManifest();
-      objectIds = manifest?.world_snapshot.objects.map((object) => object.id) ?? [];
       const envelope = await manager?.buildCurrentWorldSceneRegistryEnvelope();
       envelopeObjectIds = envelope?.world.objects.map((object) => object.id) ?? [];
     });
 
-    expect(objectIds).toEqual(["live-crate"]);
     expect(envelopeObjectIds).toEqual(["live-crate"]);
 
     await act(async () => {

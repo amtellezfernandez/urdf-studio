@@ -52,17 +52,6 @@ type WorldScenePackageOverrides = Partial<
   Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
 >;
 
-type BuildWorldScenePackageManifestFromStateParams = {
-  resolvedRobotName: string | null;
-  vizUrdfContent: string;
-  originalUrdfContent: string;
-  jointValues: Record<string, number>;
-  cameras: Camera[];
-  objects: CreatedObject[];
-  demoMode: boolean;
-  overrides?: WorldScenePackageOverrides;
-};
-
 type BuildWorldSceneDocumentFromStateParams = {
   resolvedRobotName: string | null;
   vizUrdfContent: string;
@@ -141,44 +130,6 @@ const rolloutArtifactBasenames = (
       .filter((artifact) => artifact.kind === kind)
       .map((artifact) => artifactBasename(artifact.uri))
   );
-
-export const buildWorldScenePackageManifestFromState = async ({
-  resolvedRobotName,
-  vizUrdfContent,
-  originalUrdfContent,
-  jointValues,
-  cameras,
-  objects,
-  demoMode,
-  overrides,
-}: BuildWorldScenePackageManifestFromStateParams): Promise<WorldScenePackageManifest> => {
-  const { buildWorldScenePackageManifest } =
-    await loadWorldScenePackageBuilderModule();
-  const packageId =
-    overrides?.package_id ||
-    resolvedRobotName ||
-    DEFAULT_WORLD_SCENE_PACKAGE_ID;
-  const title = overrides?.title || resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE;
-  const version = overrides?.version || WORLD_SCENE_PACKAGE_DEFAULT_VERSION;
-
-  return buildWorldScenePackageManifest({
-    packageId,
-    version,
-    title,
-    description: overrides?.description,
-    urdfXml: vizUrdfContent || originalUrdfContent,
-    jointPositions: { ...jointValues },
-    cameras,
-    objects,
-    scenarioTimeMs: 0,
-    scenarioDurationMs: 0,
-    provenance: {
-      source: "urdf-studio",
-      app_mode: demoMode ? "demo" : "interactive",
-      created_from: "ui",
-    },
-  });
-};
 
 export const buildWorldSceneDocumentFromState = async ({
   resolvedRobotName,
