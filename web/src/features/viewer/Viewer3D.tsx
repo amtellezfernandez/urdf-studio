@@ -241,6 +241,7 @@ import {
   isObjectTargetInteractionActive,
   shouldShowRoverApproachGuideForSelectedObject,
 } from "@/features/viewer/objectTargetClickPolicy";
+import { resolveSelectedWorldObjectKeyboardAction } from "@/features/viewer/selectedWorldObjectKeyboardAction";
 import {
   buildRepeatedInertiaSymmetryVisualizationScopeKey,
   buildRobotMirrorSymmetryVisualizationScopeKey,
@@ -3549,35 +3550,32 @@ export const Viewer3D = ({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isEditableKeyboardTarget(event.target)) {
+      const action = resolveSelectedWorldObjectKeyboardAction({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        readOnlyMode,
+        isEditableTarget: isEditableKeyboardTarget(event.target),
+      });
+      if (!action) {
         return;
       }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (action === "clear-selection") {
         setSelectedObject(null);
         return;
       }
-      if (event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        event.stopPropagation();
+      if (action === "focus") {
         focusWorldObject(selectedObject);
         return;
       }
-      if (readOnlyMode) {
-        return;
-      }
-      if (event.shiftKey && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        event.stopPropagation();
+      if (action === "duplicate") {
         duplicateObject(selectedObject.id);
         return;
       }
-      if (event.key === "Delete" || event.key === "Backspace") {
-        event.preventDefault();
-        event.stopPropagation();
-        removeObject(selectedObject.id);
-      }
+      removeObject(selectedObject.id);
     };
 
     window.addEventListener("keydown", handleKeyDown);
