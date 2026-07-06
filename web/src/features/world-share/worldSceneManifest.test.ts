@@ -738,6 +738,32 @@ describe("worldSceneManifest static scene validation", () => {
     expect(parsed?.name).toBe("Desk setup");
   });
 
+  it("reads scene-first world layout fields from world envelopes", () => {
+    const parsed = readWorldSceneLayerFromUnknown({
+      world: {
+        name: "Desk setup",
+        urdf_xml: "<robot name='demo'/>",
+        joint_positions: { joint_1: 0.5 },
+        cameras: [createWorldCamera()],
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+        environment: {
+          frame_convention: "ros-rep-103",
+          preset: "default",
+        },
+      },
+    });
+    expect(parsed?.name).toBe("Desk setup");
+    expect(parsed?.urdf_xml).toBe("<robot name='demo'/>");
+    expect(parsed?.joint_positions).toEqual({ joint_1: 0.5 });
+    expect(parsed?.cameras).toHaveLength(1);
+    expect(parsed?.environment).toEqual({
+      frame_convention: "ros-rep-103",
+      preset: "default",
+    });
+  });
+
   it("reads world layout fields from valid WSP envelopes", () => {
     const parsed = readWorldSceneLayerFromUnknown({
       ...createManifest(),

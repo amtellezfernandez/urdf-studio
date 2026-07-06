@@ -341,6 +341,50 @@ def test_parse_static_world_layout_preserves_optional_robot_state_and_environmen
     assert layout.environment == {"frame_convention": "ros-rep-103"}
 
 
+def test_parse_static_world_layout_accepts_scene_first_world_envelope() -> None:
+    payload = {
+        "world": {
+            "name": "scene-first-layout",
+            "urdf_xml": "<robot name='demo'/>",
+            "joint_positions": {"joint_1": 0.5},
+            "cameras": [
+                {
+                    "id": "cam-1",
+                    "name": "Scene camera",
+                    "parent_joint": "base_link",
+                    "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+                    "intrinsics": {"width": 640, "height": 480, "fov_deg": 60.0},
+                }
+            ],
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "cube",
+                    "position_xyz": [0.0, 0.0, 0.0],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.2, 0.2],
+                    "color": "#22c55e",
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+            "environment": {
+                "frame_convention": "ros-rep-103",
+            },
+        }
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+
+    assert layout.name == "scene-first-layout"
+    assert layout.urdf_xml == "<robot name='demo'/>"
+    assert layout.joint_positions == {"joint_1": 0.5}
+    assert len(layout.cameras) == 1
+    assert layout.environment == {"frame_convention": "ros-rep-103"}
+    assert layout.frame_convention == "ros-rep-103"
+
+
 def test_build_primitives_warns_for_duplicate_object_ids_and_names() -> None:
     payload = {
         "world_layout": {

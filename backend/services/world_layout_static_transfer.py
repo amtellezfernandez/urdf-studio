@@ -432,8 +432,13 @@ def resolve_world_layout_asset_path(asset_ref: str | None, roots: Sequence[Path]
     return None
 
 
-def _read_frame_map_hint(payload: WorldLayoutPayloadRecord) -> ConcreteWorldLayoutFrameMap | None:
+def _read_frame_map_hint(
+    payload: WorldLayoutPayloadRecord,
+    snapshot: WorldLayoutPayloadRecord | None = None,
+) -> ConcreteWorldLayoutFrameMap | None:
     environment = payload.get("environment")
+    if not _is_record(environment) and snapshot is not None:
+        environment = snapshot.get("environment")
     if not _is_record(environment):
         return None
     raw_frame_map = _read_optional_string(environment.get("frame_map"))
@@ -464,6 +469,9 @@ def _read_frame_convention(
     environment = payload.get("environment")
     if _is_record(environment):
         return _read_optional_string(environment.get("frame_convention"))
+    snapshot_environment = snapshot.get("environment")
+    if _is_record(snapshot_environment):
+        return _read_optional_string(snapshot_environment.get("frame_convention"))
     return None
 
 
@@ -484,7 +492,22 @@ def _read_snapshot_from_payload(
             source_kind="world_layout",
             environment=payload.get("environment") if _is_record(payload.get("environment")) else None,
             frame_convention=_read_frame_convention(payload, snapshot),
-            frame_map_hint=_read_frame_map_hint(payload),
+            frame_map_hint=_read_frame_map_hint(payload, snapshot),
+        )
+    if _is_record(payload.get("world")):
+        snapshot = payload["world"]
+        raw_name = snapshot.get("name")
+        name = raw_name if isinstance(raw_name, str) else "static-world-layout"
+        environment = payload.get("environment")
+        if not _is_record(environment):
+            environment = snapshot.get("environment")
+        return _WorldLayoutSnapshotEnvelope(
+            snapshot=snapshot,
+            name=name,
+            source_kind="world_layout",
+            environment=environment if _is_record(environment) else None,
+            frame_convention=_read_frame_convention(payload, snapshot),
+            frame_map_hint=_read_frame_map_hint(payload, snapshot),
         )
     if _is_record(payload.get("world_snapshot")):
         snapshot = payload["world_snapshot"]
@@ -496,9 +519,9 @@ def _read_snapshot_from_payload(
             source_kind="world_snapshot",
             environment=payload.get("environment") if _is_record(payload.get("environment")) else None,
             frame_convention=_read_frame_convention(payload, snapshot),
-            frame_map_hint=_read_frame_map_hint(payload),
+            frame_map_hint=_read_frame_map_hint(payload, snapshot),
         )
-    raise WorldLayoutTransferError("Payload must contain world_layout, world_snapshot, or manifest")
+    raise WorldLayoutTransferError("Payload must contain world, world_layout, world_snapshot, or manifest")
 
 
 def _read_optional_snapshot_state(

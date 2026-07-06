@@ -331,6 +331,17 @@ export const readWorldSceneLayerFromUnknown = (
     );
   }
 
+  if (isRecord(payload) && isRecord(payload.world)) {
+    return toParsedWorldSceneLayerSnapshot(
+      payload.world,
+      isRecord(payload.environment)
+        ? payload.environment
+        : isRecord(payload.world.environment)
+          ? payload.world.environment
+          : null
+    );
+  }
+
   if (isRecord(payload) && isRecord(payload.world_layout)) {
     return toParsedWorldSceneLayerSnapshot(
       payload.world_layout,
