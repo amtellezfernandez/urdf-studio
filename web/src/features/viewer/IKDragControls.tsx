@@ -16,6 +16,10 @@ import {
   resolveIkDragHandleOpacity,
 } from "@/features/viewer/ikDragHandleVisuals";
 import {
+  createIkDragAllowedJointNameSet,
+  filterIkDragJointValuesToActiveArmChain,
+} from "@/features/viewer/ikDragJointFiltering";
+import {
   cancelIk,
   isIkFailure,
   solveIk as solveIkRequest,
@@ -43,8 +47,6 @@ import {
   worldToRobotQuaternion,
 } from "@/features/viewer/drag-runtime";
 import { cloneIkDragReferenceCamera } from "@/features/viewer/ikDragCamera";
-
-const NON_ARM_JOINT_PATTERN = /(wheel|caster|drive|tire)/i;
 
 type DisabledNativeTelemetry = {
   sequence_applied?: number;
@@ -176,52 +178,17 @@ export const IKDragControls = ({
   const tmpWorldQuaternionRef = useRef(new THREE.Quaternion());
   const tmpLocalQuaternionRef = useRef(new THREE.Quaternion());
   const allowedJointNamesSet = useMemo(
-    () =>
-      new Set(
-        (allowedJointNames ?? [])
-          .map((jointName) => jointName.trim())
-          .filter(Boolean)
-      ),
+    () => createIkDragAllowedJointNameSet(allowedJointNames),
     [allowedJointNames]
   );
 
   const filterJointValuesToActiveArmChain = useCallback(
     (jointValues: Record<string, number>): Record<string, number> => {
-      if (allowedJointNamesSet.size > 0) {
-        const strictFiltered: Record<string, number> = {};
-        allowedJointNamesSet.forEach((jointName) => {
-          const value = jointValues[jointName];
-          if (typeof value === "number" && Number.isFinite(value)) {
-            strictFiltered[jointName] = value;
-          }
-        });
-        if (Object.keys(strictFiltered).length > 0) {
-          return strictFiltered;
-        }
-      }
-
-      const chainJointNames = runtimeCacheRef.current.chainJointNames;
-      const filtered: Record<string, number> = {};
-
-      if (chainJointNames && chainJointNames.size > 0) {
-        chainJointNames.forEach((jointName) => {
-          const value = jointValues[jointName];
-          if (typeof value === "number" && Number.isFinite(value)) {
-            filtered[jointName] = value;
-          }
-        });
-        if (Object.keys(filtered).length > 0) {
-          return filtered;
-        }
-      }
-
-      Object.entries(jointValues).forEach(([jointName, value]) => {
-        if (!Number.isFinite(value)) return;
-        if (NON_ARM_JOINT_PATTERN.test(jointName)) return;
-        filtered[jointName] = value;
+      return filterIkDragJointValuesToActiveArmChain({
+        jointValues,
+        allowedJointNames: allowedJointNamesSet,
+        chainJointNames: runtimeCacheRef.current.chainJointNames,
       });
-
-      return Object.keys(filtered).length > 0 ? filtered : jointValues;
     },
     [allowedJointNamesSet]
   );
