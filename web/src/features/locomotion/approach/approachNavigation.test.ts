@@ -10,6 +10,7 @@ import {
   buildRoverApproachNavigationScene,
   planRoverApproachNavigationPath,
   planRoverApproachNavigationPathInScene,
+  resolveRoverApproachFootprintSupportRadiusM,
   type RoverApproachRobotFootprint,
 } from "./approachNavigation";
 
@@ -59,6 +60,20 @@ const WIDE_ROBOT_FOOTPRINT: RoverApproachRobotFootprint = {
 };
 
 describe("approachNavigation", () => {
+  it("ignores invalid robot footprint dimensions for support radius", () => {
+    const supportRadiusM = resolveRoverApproachFootprintSupportRadiusM({
+      robotFootprint: {
+        halfLengthM: Number.NaN,
+        halfWidthM: Number.POSITIVE_INFINITY,
+      },
+      forwardWorld: new THREE.Vector3(1, 0, 0),
+      upAxisWorld: WORLD_UP,
+      targetDirectionWorld: new THREE.Vector3(1, 1, 0),
+    });
+
+    expect(supportRadiusM).toBe(0);
+  });
+
   it("keeps direct navigation when the path is already clear", () => {
     const result = planRoverApproachNavigationPath({
       segmentStartWorld: SEGMENT_START_WORLD,

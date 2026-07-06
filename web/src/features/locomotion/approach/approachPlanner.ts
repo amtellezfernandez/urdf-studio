@@ -2,8 +2,8 @@ import {
   clampNumber,
   clampNumberToMin,
   toFiniteNumberOrFallback,
-  toFiniteNumberOrNull,
   toNonNegativeFiniteNumberOrNull,
+  toPositiveFiniteNumberOrNull,
 } from "@/shared/lib/numeric";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import type { RoverApproachPlan } from "./approachTypes";
@@ -18,10 +18,8 @@ type RoverApproachPlannerInput = {
   preferredDistanceToleranceM?: number | null;
 };
 
-const resolvePositiveReachRadiusM = (armReachRadiusM: number | null): number | null => {
-  const reachRadiusM = toFiniteNumberOrNull(armReachRadiusM);
-  return reachRadiusM !== null && reachRadiusM > 0 ? reachRadiusM : null;
-};
+const resolvePositiveReachRadiusM = (armReachRadiusM: number | null): number | null =>
+  toPositiveFiniteNumberOrNull(armReachRadiusM);
 
 export const resolveRoverApproachStopDistance = (armReachRadiusM: number | null): number => {
   const reachRadiusM = resolvePositiveReachRadiusM(armReachRadiusM);

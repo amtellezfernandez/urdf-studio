@@ -10,6 +10,8 @@ import {
   toFiniteNumberOrNull,
   toNonNegativeFiniteNumberOrFallback,
   toNonNegativeFiniteNumberOrNull,
+  toPositiveFiniteNumberOrFallback,
+  toPositiveFiniteNumberOrNull,
 } from "@/shared/lib/numeric";
 
 describe("numeric", () => {
@@ -58,6 +60,21 @@ describe("numeric", () => {
     expect(toNonNegativeFiniteNumberOrFallback(4, 9)).toBe(4);
     expect(toNonNegativeFiniteNumberOrFallback(-1, 9)).toBe(9);
     expect(toNonNegativeFiniteNumberOrFallback(Number.NaN, 9)).toBe(9);
+  });
+
+  it("returns null for non-positive or non-finite values", () => {
+    expect(toPositiveFiniteNumberOrNull(0.1)).toBe(0.1);
+    expect(toPositiveFiniteNumberOrNull(0)).toBeNull();
+    expect(toPositiveFiniteNumberOrNull(-1)).toBeNull();
+    expect(toPositiveFiniteNumberOrNull(Number.NaN)).toBeNull();
+    expect(toPositiveFiniteNumberOrNull(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
+  it("falls back for non-positive or non-finite values", () => {
+    expect(toPositiveFiniteNumberOrFallback(0.1, 9)).toBe(0.1);
+    expect(toPositiveFiniteNumberOrFallback(0, 9)).toBe(9);
+    expect(toPositiveFiniteNumberOrFallback(-1, 9)).toBe(9);
+    expect(toPositiveFiniteNumberOrFallback(Number.NaN, 9)).toBe(9);
   });
 
   it("identifies only finite numbers", () => {

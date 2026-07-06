@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { normalizeDirection, projectVectorOntoPlane } from "@/shared/lib/axisFrame";
+import { toPositiveFiniteNumberOrFallback } from "@/shared/lib/numeric";
 import {
   type RoverApproachPlanarObstacle,
 } from "./approachDetour";
@@ -133,9 +134,6 @@ type OrientedRobotFootprint = {
   halfLengthM: number;
   halfWidthM: number;
 };
-
-const resolveFinitePositive = (value: number, fallback: number): number =>
-  Number.isFinite(value) && value > 0 ? value : fallback;
 
 const toPlanarBasis = ({
   originWorld,
@@ -371,7 +369,7 @@ const toCellCenterPlanar = ({
 }): THREE.Vector2 => new THREE.Vector2(minX + coord.x * cellSizeM, minY + coord.y * cellSizeM);
 
 const clampPositive = (value: number): number =>
-  Number.isFinite(value) && value > 0 ? value : 0;
+  toPositiveFiniteNumberOrFallback(value, 0);
 
 const toPlanarVector = (basis: PlanarBasis, vectorWorld: THREE.Vector3): THREE.Vector2 => {
   const planarVectorWorld = projectVectorOntoPlane(vectorWorld.clone(), basis.upWorld);
@@ -388,7 +386,7 @@ const normalizePlanarAxis = (
 
 const resolveObstacleAxisAlignedHalfExtents = (obstacle: PlanarObstacle): THREE.Vector2 => {
   if (obstacle.shape !== "box") {
-    const radiusM = resolveFinitePositive(
+    const radiusM = toPositiveFiniteNumberOrFallback(
       obstacle.radiusM,
       ROVER_APPROACH_DETOUR_CONFIG.obstacleRadiusLowerBoundM
     );
@@ -476,7 +474,7 @@ const resolvePointClearanceToObstacle = ({
       obstacle,
     });
   }
-  const obstacleRadiusM = resolveFinitePositive(
+  const obstacleRadiusM = toPositiveFiniteNumberOrFallback(
     obstacle.radiusM,
     ROVER_APPROACH_DETOUR_CONFIG.obstacleRadiusLowerBoundM
   );
@@ -1166,7 +1164,7 @@ const buildBlockedCellKeySet = ({
     const maxExtentM =
       obstacle.shape === "box"
         ? Math.max(obstacle.halfExtentU, obstacle.halfExtentV)
-        : resolveFinitePositive(
+        : toPositiveFiniteNumberOrFallback(
             obstacle.radiusM,
             ROVER_APPROACH_DETOUR_CONFIG.obstacleRadiusLowerBoundM
           );
