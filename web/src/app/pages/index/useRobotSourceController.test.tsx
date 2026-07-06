@@ -3,7 +3,10 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CORE_FOLDER_UPLOAD_SCREEN_PARAMS } from "@/app/pages/index/coreFolderUploadScreenState";
+import {
+  CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
+  recentRobotSourceKey,
+} from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
 import { useRobotSourceController } from "@/app/pages/index/useRobotSourceController";
 
@@ -185,6 +188,66 @@ describe("useRobotSourceController", () => {
       urdfPath: ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.githubUrdfPath,
     });
     expect(harness.getHook().loadedRobotName).toBe("robot.urdf");
+    expect(harness.getHook().recentRobotSources).toEqual([
+      {
+        kind: "github",
+        repoUrl: ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.githubRepoUrl,
+        urdfPath: ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.githubUrdfPath,
+      },
+    ]);
+    expect(
+      JSON.parse(
+        localStorage.getItem(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentRobotSourcesStorageKey) ?? "[]"
+      )
+    ).toHaveLength(1);
+
+    await harness.unmount();
+  });
+
+  it("remembers a loaded remote robot URL and restages it from recents", async () => {
+    const harness = await renderRobotSourceController();
+
+    await act(async () => {
+      harness.getHook().setUrlSource(ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.remoteRobotUrl);
+      await flushAsyncWork();
+    });
+    await act(async () => {
+      harness.getHook().stageUrlRobot();
+      await flushAsyncWork();
+    });
+    await act(async () => {
+      await harness.getHook().loadStagedRobot();
+    });
+
+    expect(harness.onUrlSelectedMock).toHaveBeenCalledWith(
+      ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.remoteRobotUrl
+    );
+    const recentSources = harness.getHook().recentRobotSources;
+    expect(recentSources).toEqual([
+      { kind: "url", url: ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.remoteRobotUrl },
+    ]);
+
+    await act(async () => {
+      harness.getHook().stageRecentRobotSource(recentRobotSourceKey(recentSources[0]));
+      await flushAsyncWork();
+    });
+
+    expect(harness.getHook().stagedRobot?.label).toBe("robot.urdf");
+    expect(harness.getHook().urlSource).toBe(
+      ROBOT_SOURCE_CONTROLLER_TEST_FIXTURES.remoteRobotUrl
+    );
+
+    await act(async () => {
+      harness.getHook().removeRecentRobotSource(recentRobotSourceKey(recentSources[0]));
+      await flushAsyncWork();
+    });
+
+    expect(harness.getHook().recentRobotSources).toEqual([]);
+    expect(
+      JSON.parse(
+        localStorage.getItem(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentRobotSourcesStorageKey) ?? "[]"
+      )
+    ).toEqual([]);
 
     await harness.unmount();
   });

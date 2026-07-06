@@ -1,13 +1,13 @@
 import type { DragEvent, ReactNode } from "react";
 import {
   FileUp,
-  Folder,
   Github,
   Globe,
   Info,
   Loader2,
   Upload,
   X,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,7 +21,7 @@ import {
 } from "@/shared/ui/tooltip";
 import {
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
-  deriveSourceLabel,
+  type RecentLinkEntry,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 
 export const SourcePanel = ({
@@ -140,24 +140,24 @@ export const RecentLinkPanel = ({
   title,
   emptyLabel,
   entries,
-  onLoadUrl,
-  onRemoveUrl,
+  onLoadEntry,
+  onRemoveEntry,
   lastLocalLabel,
   onBrowseLocal,
   onClearLocal,
 }: {
   title: string;
   emptyLabel: string;
-  entries: string[];
-  onLoadUrl: (url: string) => void | Promise<void>;
-  onRemoveUrl: (url: string) => void;
+  entries: RecentLinkEntry[];
+  onLoadEntry: (entryKey: string) => void | Promise<void>;
+  onRemoveEntry: (entryKey: string) => void;
   lastLocalLabel?: string | null;
   onBrowseLocal: () => void;
   onClearLocal: () => void;
 }) => (
   <div className="space-y-2 rounded-md border border-border/70 bg-background/40 p-2.5">
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Folder className="h-3.5 w-3.5" />
+      <Zap className="h-3.5 w-3.5" />
       <span>{title}</span>
     </div>
     {entries.length === 0 && !lastLocalLabel ? (
@@ -166,20 +166,20 @@ export const RecentLinkPanel = ({
       <div className="flex flex-wrap gap-2">
         {entries.map((entry) => (
           <button
-            key={entry}
+            key={entry.key}
             type="button"
             className="group inline-flex max-w-full items-center gap-1 rounded-md border border-border/30 bg-background/20 px-1.5 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-border/45 hover:bg-background/35 hover:text-foreground"
-            title={entry}
+            title={entry.title}
             onClick={() => {
-              void onLoadUrl(entry);
+              void onLoadEntry(entry.key);
             }}
           >
-            <span className="max-w-[170px] truncate">{deriveSourceLabel(entry, entry)}</span>
+            <span className="max-w-[170px] truncate">{entry.label}</span>
             <X
               className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(event) => {
                 event.stopPropagation();
-                onRemoveUrl(entry);
+                onRemoveEntry(entry.key);
               }}
             />
           </button>
@@ -191,7 +191,6 @@ export const RecentLinkPanel = ({
             title={`Browse ${lastLocalLabel} again`}
             onClick={onBrowseLocal}
           >
-            <Folder className="h-3 w-3" />
             <span className="max-w-[170px] truncate">local · {lastLocalLabel}</span>
             <X
               className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100"
