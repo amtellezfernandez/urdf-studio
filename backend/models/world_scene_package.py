@@ -240,7 +240,7 @@ def _raise_for_invalid_vector3(value: object, path: str) -> None:
             raise ValueError(f"{path}[{axis}] must be a finite number.")
 
 
-WORLD_OBJECT_TYPES = {"cube", "point", "sphere", "cylinder", "mesh"}
+WORLD_OBJECT_TYPES = {"cube", "point", "sphere", "cylinder", "mesh", "splat"}
 WORLD_OBJECT_SOURCES = {
     "user",
     "world-scenario",
@@ -411,6 +411,8 @@ def _raise_for_invalid_object_mesh_metadata(
             _raise_for_positive_vector3(mesh.get("scale_xyz"), f"{object_path}.mesh.scale_xyz")
     if world_object.get("type") == "mesh" and not _has_wsp_mesh_asset_ref(world_object):
         raise ValueError(f"{object_path}.mesh asset reference is required for mesh objects.")
+    if world_object.get("type") == "splat" and not _has_wsp_mesh_asset_ref(world_object):
+        raise ValueError(f"{object_path}.splat asset reference is required for splat objects.")
 
 
 def _raise_for_invalid_object_appearance(

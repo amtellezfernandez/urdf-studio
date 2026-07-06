@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
@@ -55,6 +55,95 @@ const OBJECT_EDITOR_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
 
 const OBJECT_EDIT_MODES: ObjectEditMode[] = ["move", "rotate", "resize"];
 const OBJECT_TRANSFORM_SPACES: ObjectTransformSpace[] = ["world", "local"];
+
+const SPLAT_SCALE_MIN = 0.001;
+const SPLAT_SCALE_MAX = 1000;
+// Multiplicative scrub: each pixel of horizontal drag multiplies the scale by
+// e^(±sensitivity), so dragging feels uniform across magnitudes and can never
+// push the scale to zero or negative.
+const SPLAT_SCALE_DRAG_SENSITIVITY = 0.005;
+
+type ObjectScaleScrubFieldProps = {
+  value: number;
+  onScrub: (value: number) => void;
+  onCommit: (value: number) => void;
+};
+
+function ObjectScaleScrubField({ value, onScrub, onCommit }: ObjectScaleScrubFieldProps) {
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startValue: number;
+    lastValue: number;
+  } | null>(null);
+
+  const clampScale = (next: number) =>
+    Math.min(SPLAT_SCALE_MAX, Math.max(SPLAT_SCALE_MIN, next));
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is a nicety (keeps the drag alive outside the strip);
+      // scrubbing still works without it.
+    }
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startValue: value,
+      lastValue: value,
+    };
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - dragState.startX;
+    const next = clampScale(
+      dragState.startValue * Math.exp(deltaX * SPLAT_SCALE_DRAG_SENSITIVITY)
+    );
+    dragState.lastValue = next;
+    onScrub(next);
+  };
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    dragStateRef.current = null;
+    onCommit(dragState.lastValue);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div
+        role="slider"
+        aria-label="Splat scale"
+        aria-valuenow={value}
+        aria-valuemin={SPLAT_SCALE_MIN}
+        aria-valuemax={SPLAT_SCALE_MAX}
+        title="Drag horizontally to scale"
+        className="h-5 flex-1 cursor-ew-resize select-none rounded bg-[#2a2a2a] text-center text-[10px] leading-5 text-[#d4d4d4] transition-colors hover:bg-[#3d3d3d]"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
+        {`× ${Number(value.toPrecision(3))}`}
+      </div>
+      <LabeledNumberField
+        label="Scale"
+        value={value}
+        onValueChange={(next) => onCommit(next)}
+        step={0.01}
+        min={SPLAT_SCALE_MIN}
+        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
+        labelClassName="sr-only"
+        wrapperClassName="w-16 space-y-0"
+      />
+    </div>
+  );
+}
 
 function ObjectVectorFields({
   min,
@@ -154,6 +243,7 @@ export const ObjectEditorPanel = ({
   const objects = useObjectStore((state) => state.objects);
   const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
   const updateObjectSize = useObjectStore((state) => state.updateObjectSize);
+  const updateObjectAssetScale = useObjectStore((state) => state.updateObjectAssetScale);
   const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
   const updateIkTargetType = useObjectStore((state) => state.updateIkTargetType);
   const updateOrbitParams = useObjectStore((state) => state.updateOrbitParams);
@@ -169,6 +259,7 @@ export const ObjectEditorPanel = ({
   const canRedoObjectEdit = useObjectStore((state) => state.canRedo);
 
   const selectedObject = objects.find((object) => object.id === objectId);
+  const isSplatObject = selectedObject?.type === "splat";
   const updateSelectedObjectPosition = useCallback(
     (position: THREE.Vector3) => {
       if (!selectedObject) {
@@ -186,6 +277,24 @@ export const ObjectEditorPanel = ({
       updateObjectSize(selectedObject.id, size);
     },
     [selectedObject, updateObjectSize]
+  );
+  const scrubSelectedObjectAssetScale = useCallback(
+    (scale: number) => {
+      if (!selectedObject) {
+        return;
+      }
+      updateObjectAssetScale(selectedObject.id, scale, { trackHistory: false });
+    },
+    [selectedObject, updateObjectAssetScale]
+  );
+  const commitSelectedObjectAssetScale = useCallback(
+    (scale: number) => {
+      if (!selectedObject) {
+        return;
+      }
+      updateObjectAssetScale(selectedObject.id, scale);
+    },
+    [selectedObject, updateObjectAssetScale]
   );
   const updateSelectedObjectTrackedJoint = useCallback(
     (value: string) => {
@@ -370,9 +479,9 @@ export const ObjectEditorPanel = ({
                       ? "bg-[#3d3d3d] text-white"
                       : "text-[#d4d4d4] hover:text-white"
                   }`}
-                  title={mode === "resize" ? "Resize" : undefined}
+                  title={mode === "resize" ? (isSplatObject ? "Scale" : "Resize") : undefined}
                 >
-                  {toObjectEditModeLabel(mode)}
+                  {mode === "resize" && isSplatObject ? "Scale" : toObjectEditModeLabel(mode)}
                 </button>
               ))}
             </div>
@@ -413,18 +522,28 @@ export const ObjectEditorPanel = ({
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Size" labelWidth="w-16" className="items-start">
-            <ObjectVectorFields
-              vector={selectedObject.size}
-              useCompactStackedInputs={useCompactStackedInputs}
-              min={0.01}
-              onAxisValueChange={(axis, value) =>
-                updateObjectVectorAxis(selectedObject.size, axis, value, (nextVector) =>
-                  updateSelectedObjectSize(nextVector)
-                )
-              }
-            />
-          </BlenderPropertyRow>
+          {isSplatObject ? (
+            <BlenderPropertyRow label="Scale" labelWidth="w-16">
+              <ObjectScaleScrubField
+                value={selectedObject.assetScale?.x ?? 1}
+                onScrub={scrubSelectedObjectAssetScale}
+                onCommit={commitSelectedObjectAssetScale}
+              />
+            </BlenderPropertyRow>
+          ) : (
+            <BlenderPropertyRow label="Size" labelWidth="w-16" className="items-start">
+              <ObjectVectorFields
+                vector={selectedObject.size}
+                useCompactStackedInputs={useCompactStackedInputs}
+                min={0.01}
+                onAxisValueChange={(axis, value) =>
+                  updateObjectVectorAxis(selectedObject.size, axis, value, (nextVector) =>
+                    updateSelectedObjectSize(nextVector)
+                  )
+                }
+              />
+            </BlenderPropertyRow>
+          )}
 
           <BlenderPropertyRow label="Reference" labelWidth="w-16">
             <Select

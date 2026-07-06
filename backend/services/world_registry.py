@@ -152,6 +152,11 @@ def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> 
                 f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
             )
             continue
+        if object_type == "splat" and asset_ref_entry is None:
+            errors.append(
+                f"world_snapshot.objects[{index}].splat asset reference is required for splat objects."
+            )
+            continue
         if asset_ref_entry is None:
             continue
         try:

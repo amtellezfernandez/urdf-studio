@@ -79,6 +79,11 @@ interface ObjectStore {
     size: THREE.Vector3,
     options?: ObjectMutationOptions,
   ) => void;
+  updateObjectAssetScale: (
+    id: string,
+    scale: number,
+    options?: ObjectMutationOptions,
+  ) => void;
   setObjectHidden: (id: string, isHidden: boolean) => void;
   updateTrackedJoint: (id: string, jointName: string | null) => void;
   updateIkTargetType: (id: string, ikTargetType: "punctual" | "orbit") => void;
@@ -440,6 +445,30 @@ export const useObjectStore = create<ObjectStore & ObjectStoreInternalState>(
             cloneCreatedObject({
               ...object,
               size: normalizeWorldObjectSizeVector({ type: object.type, size }),
+            }),
+          ),
+          selectedObjectId: state.selectedObjectId,
+        };
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
+    },
+
+    updateObjectAssetScale: (id, scale, options) => {
+      if (!Number.isFinite(scale) || scale <= 0) {
+        return;
+      }
+      const previousSnapshot = captureSnapshot(get());
+      set((state) => {
+        const nextSnapshot: ObjectSnapshot = {
+          objects: updateObjectById(state.objects, id, (object) =>
+            cloneCreatedObject({
+              ...object,
+              assetScale: new THREE.Vector3(scale, scale, scale),
             }),
           ),
           selectedObjectId: state.selectedObjectId,

@@ -385,10 +385,14 @@ export const CreatedObjects = ({
             0, 0, -comAxisHalfLength,
             0, 0, comAxisHalfLength,
           ]);
+          const shouldRenderEditHandles =
+            editable &&
+            isSelected &&
+            !(createdObject.type === "splat" && objectEditMode === "resize");
 
           return (
             <group key={createdObject.id}>
-              {editable && isSelected && (
+              {shouldRenderEditHandles && (
                 <WorldObjectEditHandles
                   object={createdObject}
                   mode={objectEditMode}

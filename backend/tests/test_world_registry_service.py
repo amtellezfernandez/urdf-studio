@@ -194,6 +194,35 @@ def test_publish_accepts_v1_1_appearance_physics_world() -> None:
         assert publish_result.created is True
 
 
+def test_validate_accepts_direct_splat_world_object() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        payload = build_manifest("direct-splat-world", "1.0.0").model_dump(mode="json")
+        payload["world_snapshot"]["objects"] = [
+            {
+                "id": "port-splat",
+                "name": "Port splat",
+                "type": "splat",
+                "position_xyz": [0.0, 0.0, 0.0],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [1.0, 1.0, 1.0],
+                "color": "#94a3b8",
+                "asset_ref": "assets/port.spz",
+                "asset_scale_xyz": [1.0, 1.0, 1.0],
+                "mesh": {
+                    "uri": "assets/port.spz",
+                },
+            }
+        ]
+        manifest = WorldScenePackageManifest.model_validate(payload)
+
+        validation = service.validate(manifest)
+
+        assert validation.valid is True
+        assert validation.errors == []
+
+
 def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:
     with TemporaryDirectory() as temp_dir:
         registry_path = f"{temp_dir}/world-registry.json"

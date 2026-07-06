@@ -54,6 +54,23 @@ import { useWorldPublishController } from "@/app/pages/index/useWorldPublishCont
 import { useWorldRegistryController } from "@/app/pages/index/useWorldRegistryController";
 import { useWorldRolloutController } from "@/app/pages/index/useWorldRolloutController";
 
+const WORLD_SCENE_PACKAGE_WITH_ASSETS_IMPORT_ACCEPT = [
+  WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
+  ".stl",
+  ".dae",
+  ".obj",
+  ".glb",
+  ".gltf",
+  ".mtl",
+  ".ply",
+  ".spz",
+  ".splat",
+  ".ksplat",
+  ".png",
+  ".jpg",
+  ".jpeg",
+].join(",");
+
 type UseWorldSceneManagerParams = {
   addCamera: (camera: Omit<Camera, "id">) => void;
   addObject: (
@@ -106,6 +123,7 @@ export const useWorldSceneManager = ({
   const worldLayoutImportHandledRef = useRef(false);
   const defaultWorldLayoutAppliedRef = useRef(false);
   const localWorldLayoutObjectUrlsRef = useRef<string[]>([]);
+  const localWorldPackageObjectUrlsRef = useRef<string[]>([]);
   const objectsRef = useRef(objects);
 
   const [worldLayoutImportDialogOpen, setWorldLayoutImportDialogOpen] = useState(false);
@@ -268,14 +286,14 @@ export const useWorldSceneManager = ({
   );
 
   const applyImportedWorldScenePackage = useCallback(
-    (manifest: WorldScenePackageManifest) => {
+    (manifest: WorldScenePackageManifest, meshUriContext?: MeshUriResolutionContext) => {
       const snapshot = manifest.world_snapshot;
       updateUrdfFile(snapshot.urdf_xml, `${manifest.package_id}-${manifest.version}.urdf`);
       clearCameras();
       toImportedWorldSceneCameras(snapshot.cameras).forEach((camera) => {
         addCamera(camera);
       });
-      applyWorldSceneObjects(snapshot.objects);
+      applyWorldSceneObjects(snapshot.objects, meshUriContext);
       setJointValues(snapshot.joint_positions);
       setActiveWorldSnapshotRef({
         package_id: manifest.package_id,
@@ -300,14 +318,23 @@ export const useWorldSceneManager = ({
 
   const handleImportWorldScenePackageFromFileDialog = useCallback(() => {
     openFileSelectionDialog({
-      accept: WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
-      onFiles: async ([file]) => {
-        if (!file) return;
+      accept: WORLD_SCENE_PACKAGE_WITH_ASSETS_IMPORT_ACCEPT,
+      multiple: true,
+      onFiles: async (files) => {
+        const { assetFiles, layoutFile: file } = splitWorldLayoutFolderFiles(files);
+        if (!file) {
+          toast.error("Select a scene package JSON file.");
+          return;
+        }
         setIsImportingWorldScenePackage(true);
         try {
+          const assetMapResult = await buildWorldLayoutFolderAssetMap(assetFiles);
+          localWorldPackageObjectUrlsRef.current.push(...assetMapResult.objectUrls);
           const raw = await file.text();
           const manifest = await parseWorldSceneManifestText(raw);
-          applyImportedWorldScenePackage(manifest);
+          applyImportedWorldScenePackage(manifest, {
+            assetMap: assetMapResult.assetMap,
+          });
           setWorldScenePackageImportDialogOpen(false);
           setWorldScenePackageImportUrlDraft("");
         } catch (error) {
@@ -457,6 +484,14 @@ export const useWorldSceneManager = ({
   useEffect(() => {
     objectsRef.current = objects;
   }, [objects]);
+
+  useEffect(
+    () => () => {
+      localWorldPackageObjectUrlsRef.current.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+      localWorldPackageObjectUrlsRef.current = [];
+    },
+    []
+  );
 
   const handleImportWorldLayoutFromLinkDialog = useCallback(async () => {
     setIsImportingWorldLayout(true);

@@ -1,0 +1,353 @@
+{
+  "world_layout": {
+    "name": "world-layout-2026-07-05",
+    "objects": [
+      {
+        "id": "object-0",
+        "name": "object-0",
+        "type": "cube",
+        "position_xyz": [
+          0.9,
+          0,
+          0.05
+        ],
+        "size_xyz": [
+          0.34,
+          0.26,
+          0.1
+        ],
+        "color": "#1f2937",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-1",
+        "name": "object-1",
+        "type": "cube",
+        "position_xyz": [
+          0.96049934650201,
+          0.4164746377586059,
+          0.07200000000000001
+        ],
+        "size_xyz": [
+          0.14,
+          0.14,
+          0.14
+        ],
+        "color": "#f97316",
+        "source": "world-scenario",
+        "tracked_joint_name": "Moving_Jaw_08d-v1",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-2",
+        "name": "object-2",
+        "type": "cube",
+        "position_xyz": [
+          0.25123242830294945,
+          -0.7932194871545394,
+          0.067
+        ],
+        "size_xyz": [
+          0.13,
+          0.13,
+          0.13
+        ],
+        "color": "#38bdf8",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-3",
+        "name": "object-3",
+        "type": "cube",
+        "position_xyz": [
+          -0.9747095115771905,
+          0.9225302022795108,
+          0.14200000000000002
+        ],
+        "size_xyz": [
+          0.08,
+          0.34,
+          0.28
+        ],
+        "color": "#64748b",
+        "source": "world-scenario",
+        "tracked_joint_name": "Moving_Jaw_08d-v1",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-4",
+        "name": "object-4",
+        "type": "cube",
+        "position_xyz": [
+          -1.3060401577794474,
+          -0.6769286965018142,
+          0.05882220693398267
+        ],
+        "size_xyz": [
+          0.1,
+          0.1,
+          0.1
+        ],
+        "color": "#22c55e",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-5",
+        "name": "object-5",
+        "type": "cube",
+        "position_xyz": [
+          -1.8963228800936787,
+          0.5781810425091436,
+          0.14200000000000002
+        ],
+        "size_xyz": [
+          0.12,
+          0.12,
+          0.28
+        ],
+        "color": "#eab308",
+        "source": "world-scenario",
+        "tracked_joint_name": "Moving_Jaw_08d-v1",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-6",
+        "name": "object-6",
+        "type": "point",
+        "position_xyz": [
+          -0.05939815891460572,
+          0.6734159098161647,
+          0.12753150646574796
+        ],
+        "size_xyz": [
+          0.02,
+          0.02,
+          0.02
+        ],
+        "color": "#fde047",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      },
+      {
+        "id": "object-7",
+        "name": "object-7",
+        "type": "point",
+        "position_xyz": [
+          -0.9924267177069999,
+          -1.7747237869981063,
+          0.1878164904518053
+        ],
+        "size_xyz": [
+          0.02,
+          0.02,
+          0.02
+        ],
+        "color": "#fb7185",
+        "source": "world-scenario",
+        "tracked_joint_name": "Moving_Jaw_08d-v1",
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      },
+      {
+        "id": "object-8",
+        "name": "object-8",
+        "type": "cube",
+        "position_xyz": [
+          0.6655411750976774,
+          0.9120971434604354,
+          0.08441638590302318
+        ],
+        "size_xyz": [
+          0.16,
+          0.12,
+          0.12
+        ],
+        "color": "#a855f7",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-9",
+        "name": "object-9",
+        "type": "cube",
+        "position_xyz": [
+          0.7742360910380638,
+          -0.7280581673522525,
+          0.057
+        ],
+        "size_xyz": [
+          0.15,
+          0.15,
+          0.11
+        ],
+        "color": "#14b8a6",
+        "source": "world-scenario",
+        "tracked_joint_name": "Moving_Jaw_08d-v1",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-10",
+        "name": "object-10",
+        "type": "cube",
+        "position_xyz": [
+          2.3817741916243858,
+          0.4562137065227168,
+          0.19805637075100097
+        ],
+        "size_xyz": [
+          0.12,
+          0.12,
+          0.38
+        ],
+        "color": "#f43f5e",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-11",
+        "name": "object-11",
+        "type": "cube",
+        "position_xyz": [
+          -2.1200359151761203,
+          -0.5455995247564172,
+          0.06382034278940409
+        ],
+        "size_xyz": [
+          0.26,
+          0.1,
+          0.08
+        ],
+        "color": "#0ea5e9",
+        "source": "world-scenario",
+        "tracked_joint_name": "Moving_Jaw_08d-v1",
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "object-12",
+        "name": "object-12",
+        "type": "point",
+        "position_xyz": [
+          0.6631777271612151,
+          -0.15031733831226834,
+          0.1093703138991259
+        ],
+        "size_xyz": [
+          0.02,
+          0.02,
+          0.02
+        ],
+        "color": "#fbbf24",
+        "source": "world-scenario",
+        "tracked_joint_name": "base_plate_layer1-v5",
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      },
+      {
+        "id": "object-13",
+        "name": "object-13",
+        "type": "splat",
+        "position_xyz": [
+          0,
+          0,
+          0.8
+        ],
+        "size_xyz": [
+          1,
+          1,
+          1
+        ],
+        "color": "#94a3b8",
+        "source": "user",
+        "tracked_joint_name": null,
+        "is_ik_target": false,
+        "ik_target_type": "punctual",
+        "rotation_rpy_rad": [
+          -1.5707963267948966,
+          0,
+          0
+        ],
+        "asset_ref": "0-world-500k.spz",
+        "asset_scale_xyz": [
+          1.4246328994854194,
+          1.4246328994854194,
+          1.4246328994854194
+        ],
+        "mesh": {
+          "uri": "0-world-500k.spz"
+        }
+      }
+    ],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  }
+}

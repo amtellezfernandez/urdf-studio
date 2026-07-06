@@ -122,6 +122,11 @@ export type MeshUriResolutionContext = {
   assetMap?: Readonly<Record<string, string>>;
 };
 
+type SerializableSceneObject = WorldScenePackageManifest["world_snapshot"]["objects"][number];
+type SerializableAppearanceRepresentation = NonNullable<
+  SerializableSceneObject["appearance"]
+>["representations"][number];
+
 const resolveMeshUriFromAssetMap = (
   meshUri: string,
   assetMap: Readonly<Record<string, string>>
@@ -185,19 +190,64 @@ const toImportedWorldMetadata = (
   return Object.keys(worldMetadata).length > 0 ? worldMetadata : undefined;
 };
 
+const readPreferredAssetRepresentation = (
+  object: SerializableSceneObject
+): SerializableAppearanceRepresentation | undefined => {
+  const representations = object.appearance?.representations ?? [];
+  return (
+    representations.find((representation) => representation.kind === "splat") ??
+    representations.find((representation) => representation.kind === "mesh")
+  );
+};
+
+const readObjectAssetRef = (
+  object: SerializableSceneObject,
+  representation?: SerializableAppearanceRepresentation
+): string | undefined =>
+  object.asset_ref ??
+  object.mesh?.asset_ref ??
+  object.mesh?.path ??
+  object.mesh?.filename ??
+  representation?.asset_ref ??
+  object.mesh?.uri;
+
+const readObjectAssetUri = (
+  object: SerializableSceneObject,
+  representation?: SerializableAppearanceRepresentation
+): string | undefined =>
+  object.mesh?.uri ??
+  object.mesh?.asset_ref ??
+  object.mesh?.path ??
+  object.mesh?.filename ??
+  object.asset_ref ??
+  representation?.asset_ref;
+
+const readObjectAssetScale = (
+  object: SerializableSceneObject,
+  representation?: SerializableAppearanceRepresentation
+): Vector3 | undefined => {
+  const scale = object.asset_scale_xyz ?? representation?.scale_xyz;
+  return scale ? new Vector3(scale[0], scale[1], scale[2]) : undefined;
+};
+
 function toImportedObjectParams(
-  object: WorldScenePackageManifest["world_snapshot"]["objects"][number],
+  object: SerializableSceneObject,
   meshUriContext: MeshUriResolutionContext = {}
 ): Omit<CreatedObject, "id"> {
+  const assetRepresentation = readPreferredAssetRepresentation(object);
+  const importedObjectType: CreatedObject["type"] =
+    object.type === "mesh" && assetRepresentation?.kind === "splat"
+      ? "splat"
+      : object.type;
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
     object.ik_target_type === "orbit" ? "orbit" : "punctual";
   const geometry = resolveWorldObjectGeometry({
-    type: object.type,
+    type: importedObjectType,
     position: { x: object.position_xyz[0], y: object.position_xyz[1], z: object.position_xyz[2] },
     size: { x: object.size_xyz[0], y: object.size_xyz[1], z: object.size_xyz[2] },
   });
   const importedObject: Omit<CreatedObject, "id"> = {
-    type: object.type,
+    type: importedObjectType,
     position: geometry.position,
     rotation: normalizeWorldObjectRotationEuler(
       object.rotation_rpy_rad
@@ -210,15 +260,9 @@ function toImportedObjectParams(
     ),
     size: geometry.size,
     color: object.color,
-    assetRef: object.asset_ref ?? object.mesh?.asset_ref,
-    assetScale: object.asset_scale_xyz
-      ? new Vector3(
-          object.asset_scale_xyz[0],
-          object.asset_scale_xyz[1],
-          object.asset_scale_xyz[2]
-        )
-      : undefined,
-    meshUri: resolveMeshUri(object.mesh?.uri, meshUriContext),
+    assetRef: readObjectAssetRef(object, assetRepresentation),
+    assetScale: readObjectAssetScale(object, assetRepresentation),
+    meshUri: resolveMeshUri(readObjectAssetUri(object, assetRepresentation), meshUriContext),
     isHidden: object.is_hidden === true,
     source: object.source ?? "user",
     worldMetadata: toImportedWorldMetadata(object),
