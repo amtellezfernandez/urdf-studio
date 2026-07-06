@@ -1,3 +1,5 @@
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
+
 export const STRUCTURE_GROUP_ORDER: Record<string, number> = {
   base: 0,
   body: 1,
@@ -33,7 +35,7 @@ export const parseStructureGroupLabel = (
       STRUCTURE_GROUP_ORDER[kind] === undefined
         ? STRUCTURE_GROUP_DEFAULTS.label
         : kind,
-    index: Number.isFinite(index) ? index : DEFAULT_GROUP_INDEX,
+    index: toFiniteNumberOrFallback(index, DEFAULT_GROUP_INDEX),
   };
 };
 

@@ -17,6 +17,13 @@ describe("structureGroupHelpers", () => {
     });
   });
 
+  it("uses the default group index when the numeric suffix overflows", () => {
+    expect(parseStructureGroupLabel(`arm${"9".repeat(400)}`)).toEqual({
+      kind: "arm",
+      index: Number.POSITIVE_INFINITY,
+    });
+  });
+
   it("normalizes display labels", () => {
     expect(normalizeStructureGroupDisplayLabel("arm2")).toBe("Arm2");
     expect(normalizeStructureGroupDisplayLabel("")).toBe("Other");
