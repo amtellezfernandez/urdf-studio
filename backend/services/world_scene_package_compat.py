@@ -191,7 +191,10 @@ def read_world_scene_registry_envelope(payload: object) -> WorldSceneRegistryEnv
 def world_scene_registry_envelope_json_payload(
     manifest: WorldScenePackageManifest,
 ) -> JsonObject:
-    return world_scene_registry_envelope_from_manifest(manifest).model_dump(mode="json")
+    return world_scene_registry_envelope_from_manifest(manifest).model_dump(
+        mode="json",
+        exclude_none=True,
+    )
 
 
 def world_scene_registry_envelope_from_manifest(

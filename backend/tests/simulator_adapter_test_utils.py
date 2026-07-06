@@ -10,7 +10,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
-from backend.services.world_scene_package_digest import world_scene_package_json_payload
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 
 
@@ -53,6 +53,6 @@ def make_workspace_prepare_request(urdf_xml: str) -> SimulatorWorkspacePrepareRe
 
 def write_world_package_file(path: Path, world_package: WorldScenePackageManifest) -> None:
     path.write_text(
-        json.dumps(world_scene_package_json_payload(world_package)),
+        json.dumps(world_scene_registry_envelope_json_payload(world_package)),
         encoding="utf-8",
     )

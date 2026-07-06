@@ -42,8 +42,8 @@ from backend.services.simulator_adapters.workspace_asset_staging import (
 )
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
-    world_scene_package_json_payload,
 )
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.world_layout_static_transfer import (
     count_transferable_world_objects,
     parse_static_world_layout_payload,
@@ -104,7 +104,7 @@ def normalize_simulator_workspace_package_request(
 
 def _transferable_world_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
     layout = parse_static_world_layout_payload(
-        world_scene_package_json_payload(request.world_package)
+        world_scene_registry_envelope_json_payload(request.world_package)
     )
     return count_transferable_world_objects(layout, include_hidden=False)
 
@@ -116,7 +116,7 @@ def _write_workspace_world_package(
 ) -> Path:
     world_package_path = workspace_dir / "world-package.json"
     world_package_path.write_text(
-        f"{json.dumps(world_scene_package_json_payload(request.world_package), indent=2)}\n",
+        f"{json.dumps(world_scene_registry_envelope_json_payload(request.world_package), indent=2)}\n",
         encoding="utf-8",
     )
     return world_package_path
