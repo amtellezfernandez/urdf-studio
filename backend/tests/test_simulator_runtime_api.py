@@ -1068,8 +1068,9 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    updated_object = payload["world_package"]["world_snapshot"]["objects"][0]
+    updated_object = payload["world_package"]["world"]["objects"][0]
     assert payload["targetId"] == "blender"
+    assert payload["world_package"]["world"]["environment"]["frame_convention"] == "ros-rep-103"
     assert updated_object["position_xyz"] == [1.0, 2.0, 3.0]
     assert updated_object["rotation_rpy_rad"] == [0.0, 0.0, 0.0]
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]

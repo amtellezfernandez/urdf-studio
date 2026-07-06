@@ -15,7 +15,7 @@ from backend.models.world_scene_package import (
 from backend.services.world_registry import world_registry_service
 from backend.services.world_scene_package_compat import (
     read_world_scene_package_manifest,
-    world_scene_registry_envelope_json_payload,
+    world_scene_registry_envelope_from_manifest,
 )
 
 router = APIRouter(prefix="/worlds/packages", tags=["world-packages"])
@@ -84,7 +84,7 @@ async def get_world_scene_package_version(
             version=record.version,
             digest_sha256=record.digest_sha256,
             published_at=record.published_at,
-            manifest=world_scene_registry_envelope_json_payload(record.manifest),
+            manifest=world_scene_registry_envelope_from_manifest(record.manifest),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

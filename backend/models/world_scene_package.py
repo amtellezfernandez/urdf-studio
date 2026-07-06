@@ -682,6 +682,110 @@ class WorldScenePackageManifest(BaseModel):
         return value
 
 
+class WorldSceneDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    objects: list[WorldScenePayload] = Field(..., max_length=MAX_OBJECTS_PER_WORLD)
+    scenario_time_ms: int = Field(..., ge=MIN_SCENARIO_TIME_MS)
+    scenario_duration_ms: int = Field(
+        ...,
+        ge=MIN_SCENARIO_DURATION_MS,
+        le=MAX_SCENARIO_DURATION_MS,
+    )
+    urdf_xml: str | None = Field(default=None, min_length=1, max_length=MAX_WORLD_SNAPSHOT_URDF_CHARS)
+    joint_positions: dict[str, float] | None = Field(default=None, max_length=MAX_JOINTS_PER_WORLD)
+    cameras: list[WorldScenePayload] | None = Field(default=None, max_length=MAX_CAMERAS_PER_WORLD)
+    environment: WorldScenePayload | None = None
+
+    @field_validator("name", "urdf_xml", mode="before")
+    @classmethod
+    def _validate_optional_strings_are_not_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field must be omitted or a string.")
+        return value
+
+    @field_validator("joint_positions", mode="before")
+    @classmethod
+    def _validate_optional_joint_positions_are_numbers(cls, value: object) -> object:
+        if value is None or not isinstance(value, dict):
+            return value
+        for joint_name, joint_position in value.items():
+            if not _is_finite_number(joint_position):
+                raise ValueError(f"joint_positions[{joint_name!r}] must be a finite number.")
+        return value
+
+    @field_validator("joint_positions")
+    @classmethod
+    def _validate_optional_finite_joint_positions(
+        cls,
+        value: dict[str, float] | None,
+    ) -> dict[str, float] | None:
+        if value is None:
+            return None
+        for joint_name, joint_position in value.items():
+            if not math.isfinite(joint_position):
+                raise ValueError(f"joint_positions[{joint_name!r}] must be finite.")
+        return value
+
+    @field_validator("scenario_time_ms", "scenario_duration_ms", mode="before")
+    @classmethod
+    def _validate_scene_timing_is_integer(cls, value: object) -> object:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("must be an integer millisecond value.")
+        return value
+
+    @field_validator("objects")
+    @classmethod
+    def _validate_document_objects(cls, value: list[WorldScenePayload]) -> list[WorldScenePayload]:
+        raise_for_non_finite_world_payload_numbers(value)
+        raise_for_invalid_world_scene_objects(value, require_mesh_asset_ref=False)
+        return value
+
+    @field_validator("cameras")
+    @classmethod
+    def _validate_optional_document_cameras(
+        cls,
+        value: list[WorldScenePayload] | None,
+    ) -> list[WorldScenePayload] | None:
+        if value is None:
+            return None
+        raise_for_non_finite_world_payload_numbers(value)
+        raise_for_invalid_world_scene_cameras(value)
+        return value
+
+    @field_validator("environment")
+    @classmethod
+    def _validate_environment_payload(
+        cls,
+        value: WorldScenePayload | None,
+    ) -> WorldScenePayload | None:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("environment must be an object.")
+        raise_for_non_finite_world_payload_numbers(value)
+        return value
+
+
+class WorldSceneRegistryEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    package_id: str = Field(..., min_length=1)
+    version: str = Field(..., min_length=1)
+    description: str | None = None
+    provenance: WorldScenePayload
+    artifacts: list[WorldArtifactRef] = Field(..., max_length=MAX_ARTIFACT_REFS)
+    world: WorldSceneDocument
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def _validate_envelope_description_is_not_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("description must be omitted or a string.")
+        return value
+
+
 class WorldScenePackageValidationResponse(BaseModel):
     valid: bool
     digest_sha256: str
@@ -728,7 +832,7 @@ class WorldScenePackageVersionDocumentRecord(BaseModel):
     version: str
     digest_sha256: str
     published_at: datetime
-    manifest: JsonObject
+    manifest: WorldSceneRegistryEnvelope
 
 
 class WorldRegistryBackendStatus(BaseModel):

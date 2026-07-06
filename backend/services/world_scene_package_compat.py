@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from backend.models.world_scene_package import (
     WorldInterfaceSpec,
+    WorldSceneRegistryEnvelope,
     WorldScenePackageManifest,
     WorldSecuritySpec,
     WorldSnapshot,
@@ -103,34 +104,42 @@ def _world_snapshot_from_world_payload(world: Mapping[str, object]) -> WorldSnap
 
 def is_world_scene_registry_envelope_payload(payload: object) -> bool:
     return (
-        _is_record(payload)
-        and "package_id" in payload
-        and "version" in payload
-        and _is_record(payload.get("world"))
+        isinstance(payload, WorldSceneRegistryEnvelope)
+        or (
+            _is_record(payload)
+            and "package_id" in payload
+            and "version" in payload
+            and _is_record(payload.get("world"))
+        )
     )
 
 
 def manifest_from_world_scene_registry_envelope(payload: object) -> WorldScenePackageManifest:
-    if not _is_record(payload):
-        raise ValueError("World scene registry envelope must be a JSON object.")
-    world = payload.get("world")
-    if not _is_record(world):
-        raise ValueError("World scene registry envelope must contain a world object.")
+    if isinstance(payload, WorldSceneRegistryEnvelope):
+        envelope = payload
+        world = envelope.world.model_dump(mode="python", exclude_none=True)
+        payload_dict = envelope.model_dump(mode="python", exclude_none=True)
+    else:
+        if not _is_record(payload):
+            raise ValueError("World scene registry envelope must be a JSON object.")
+        envelope = WorldSceneRegistryEnvelope.model_validate(payload)
+        world = envelope.world.model_dump(mode="python", exclude_none=True)
+        payload_dict = envelope.model_dump(mode="python", exclude_none=True)
 
-    environment = _read_environment(payload, world)
-    provenance = _normalize_provenance(payload, environment)
-    created_at = _read_created_at(payload, provenance)
-    frame_convention = _read_frame_convention(payload, world)
+    environment = _read_environment(payload_dict, world)
+    provenance = _normalize_provenance(payload_dict, environment)
+    created_at = _read_created_at(payload_dict, provenance)
+    frame_convention = _read_frame_convention(payload_dict, world)
     snapshot = _world_snapshot_from_world_payload(world)
     observation_modalities = ["rgb", "proprio"] if snapshot.cameras else ["proprio"]
     normalized_payload: dict[str, object] = {
         "schema_version": WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1_1,
-        "package_id": payload.get("package_id"),
-        "version": payload.get("version"),
+        "package_id": envelope.package_id,
+        "version": envelope.version,
         "title": (
             _read_optional_string(world.get("name"))
-            or _read_optional_string(payload.get("title"))
-            or payload.get("package_id")
+            or _read_optional_string(payload_dict.get("title"))
+            or envelope.package_id
         ),
         "created_at": created_at,
         "runtime_targets": [],
@@ -140,7 +149,7 @@ def manifest_from_world_scene_registry_envelope(payload: object) -> WorldScenePa
             timestep_ms=_DEFAULT_TIMESTEP_MS,
             frame_convention=frame_convention,
         ),
-        "artifacts": payload.get("artifacts", []),
+        "artifacts": envelope.artifacts,
         "world_snapshot": snapshot,
         "provenance": provenance,
         "security": WorldSecuritySpec(
@@ -149,7 +158,7 @@ def manifest_from_world_scene_registry_envelope(payload: object) -> WorldScenePa
             sbom_ref=None,
         ),
     }
-    description = _read_optional_string(payload.get("description"))
+    description = envelope.description
     if description is not None:
         normalized_payload["description"] = description
 
@@ -170,11 +179,17 @@ def read_world_scene_package_manifest(payload: object) -> WorldScenePackageManif
 def world_scene_registry_envelope_json_payload(
     manifest: WorldScenePackageManifest,
 ) -> JsonObject:
+    return world_scene_registry_envelope_from_manifest(manifest).model_dump(mode="json")
+
+
+def world_scene_registry_envelope_from_manifest(
+    manifest: WorldScenePackageManifest,
+) -> WorldSceneRegistryEnvelope:
     environment = _read_environment(
         {"environment": manifest.provenance.get("environment")},
         {},
     )
-    world: JsonObject = {
+    world_payload: JsonObject = {
         "name": manifest.title,
         "objects": manifest.world_snapshot.objects,
         "scenario_time_ms": manifest.world_snapshot.scenario_time_ms,
@@ -186,13 +201,16 @@ def world_scene_registry_envelope_json_payload(
     if environment is not None:
         environment_payload = dict(environment)
         environment_payload["frame_convention"] = manifest.interface.frame_convention
-        world["environment"] = environment_payload
+        world_payload["environment"] = environment_payload
     else:
-        world["environment"] = {"frame_convention": manifest.interface.frame_convention}
-    return {
+        world_payload["environment"] = {"frame_convention": manifest.interface.frame_convention}
+    payload: dict[str, object] = {
         "package_id": manifest.package_id,
         "version": manifest.version,
         "provenance": manifest.provenance,
         "artifacts": manifest.model_dump(mode="json")["artifacts"],
-        "world": world,
+        "world": world_payload,
     }
+    if manifest.description is not None:
+        payload["description"] = manifest.description
+    return WorldSceneRegistryEnvelope.model_validate(payload)

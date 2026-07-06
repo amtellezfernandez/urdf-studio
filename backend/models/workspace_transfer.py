@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.models.json_payload import JsonObject
 from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorRuntimeCapabilities,
@@ -19,8 +18,8 @@ from backend.models.simulator_runtime import (
     WorkspaceChangeSetPayload,
     validate_simulator_workspace_launch_id,
 )
-from backend.models.world_scene_package import WorldScenePackageManifest
-from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
+from backend.models.world_scene_package import WorldScenePackageManifest, WorldSceneRegistryEnvelope
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_from_manifest
 
 
 WorkspaceTransferTargetId = SimulatorId
@@ -196,7 +195,7 @@ class WorkspaceChangeSetApplyRequest(BaseModel):
 
 class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):
     target_id: WorkspaceTransferTargetId = Field(..., alias="targetId")
-    world_package: JsonObject
+    world_package: WorldSceneRegistryEnvelope
     applied_change_count: int = Field(..., alias="appliedChangeCount")
     review_only_count: int = Field(..., alias="reviewOnlyCount")
 
@@ -207,7 +206,7 @@ class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):
     ) -> "WorkspaceChangeSetApplyResponse":
         return cls(
             targetId=response.simulator_id,
-            world_package=world_scene_registry_envelope_json_payload(response.world_package),
+            world_package=world_scene_registry_envelope_from_manifest(response.world_package),
             appliedChangeCount=response.applied_change_count,
             reviewOnlyCount=response.review_only_count,
         )
