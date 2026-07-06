@@ -7,7 +7,10 @@ from typing import Literal, TypeAlias, TypeGuard
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.json_payload import JsonObject
-from backend.services.world_asset_refs import normalize_portable_world_asset_ref
+from backend.services.world_asset_refs import (
+    has_world_object_content_asset_ref,
+    normalize_portable_world_asset_ref,
+)
 from backend.services.world_scene_contract import (
     WORLD_OBJECT_MESH_ASSET_KEYS,
     WORLD_OBJECT_TYPES,
@@ -562,24 +565,7 @@ def _raise_for_invalid_object_consistency(value: object, object_path: str) -> No
 
 
 def _has_wsp_mesh_asset_ref(world_object: WorldScenePayload) -> bool:
-    if _is_non_empty_string(world_object.get("asset_ref")):
-        return _is_portable_asset_ref(world_object.get("asset_ref"))
-    mesh = world_object.get("mesh")
-    if _is_record(mesh) and any(
-        _is_non_empty_string(mesh.get(field_name)) and _is_portable_asset_ref(mesh.get(field_name))
-        for field_name in WORLD_OBJECT_MESH_ASSET_KEYS
-    ):
-        return True
-    appearance = world_object.get("appearance")
-    if not _is_record(appearance) or not isinstance(appearance.get("representations"), list):
-        return False
-    return any(
-        _is_record(representation)
-        and representation.get("kind") in {"mesh", "splat"}
-        and _is_non_empty_string(representation.get("asset_ref"))
-        and _is_portable_asset_ref(representation.get("asset_ref"))
-        for representation in appearance["representations"]
-    )
+    return has_world_object_content_asset_ref(world_object)
 
 
 def _has_physics_collision_geometry(world_object: WorldScenePayload) -> bool:

@@ -34,7 +34,9 @@ from backend.services.world_scene_package_digest import (
     world_scene_package_digest,
 )
 from backend.services.world_asset_refs import (
+    has_world_object_content_asset_ref,
     normalize_portable_world_asset_ref,
+    read_world_object_content_asset_ref,
     read_world_object_asset_ref,
 )
 
@@ -147,11 +149,13 @@ def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> 
     for index, world_object in enumerate(manifest.world_snapshot.objects):
         object_type = world_object.get("type")
         asset_ref_entry = read_world_object_asset_ref(world_object)
-        if object_type == "mesh" and asset_ref_entry is None:
+        content_asset_ref_entry = read_world_object_content_asset_ref(world_object)
+        if object_type == "mesh" and content_asset_ref_entry is None:
             errors.append(
                 f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
             )
-            continue
+            if asset_ref_entry is None:
+                continue
         if asset_ref_entry is None:
             continue
         try:

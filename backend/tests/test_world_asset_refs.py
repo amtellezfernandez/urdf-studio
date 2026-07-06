@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 
 from backend.services.world_asset_refs import (
+    has_world_object_content_asset_ref,
     normalize_portable_world_asset_ref,
+    read_world_object_content_asset_ref,
     read_world_object_asset_ref,
 )
 
@@ -50,3 +52,39 @@ def test_read_world_object_asset_ref_falls_back_to_nested_mesh_value() -> None:
     assert asset_ref is not None
     assert asset_ref.value == "  assets/crate.obj  "
     assert asset_ref.field_path == "geometry.mesh.filename"
+
+
+def test_read_world_object_content_asset_ref_ignores_physics_collision_asset_ref() -> None:
+    asset_ref = read_world_object_content_asset_ref(
+        {
+            "physics": {
+                "collision_geometry": {
+                    "asset_ref": "assets/collider.obj",
+                }
+            },
+            "mesh": {
+                "path": "assets/render.obj",
+            },
+        }
+    )
+
+    assert asset_ref is not None
+    assert asset_ref.value == "assets/render.obj"
+    assert asset_ref.field_path == "mesh.path"
+
+
+def test_has_world_object_content_asset_ref_requires_portable_ref() -> None:
+    assert has_world_object_content_asset_ref({"asset_ref": "assets/crate.obj"}) is True
+    assert has_world_object_content_asset_ref({"asset_ref": "/tmp/crate.obj"}) is False
+    assert (
+        has_world_object_content_asset_ref(
+            {
+                "physics": {
+                    "collision_geometry": {
+                        "asset_ref": "assets/collider.obj",
+                    }
+                }
+            }
+        )
+        is False
+    )

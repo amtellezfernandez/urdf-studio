@@ -88,3 +88,43 @@ def read_world_object_asset_ref(value: Mapping[str, object]) -> WorldObjectAsset
                         field_path=f"appearance.representations[{index}].asset_ref",
                     )
     return None
+
+
+def read_world_object_content_asset_ref(value: Mapping[str, object]) -> WorldObjectAssetRef | None:
+    for key in WORLD_OBJECT_ASSET_REF_KEYS:
+        asset_ref = value.get(key)
+        if isinstance(asset_ref, str) and asset_ref.strip():
+            return WorldObjectAssetRef(value=asset_ref, field_path=key)
+    mesh = value.get("mesh")
+    if isinstance(mesh, Mapping):
+        for key in WORLD_OBJECT_MESH_ASSET_REF_KEYS:
+            asset_ref = mesh.get(key)
+            if isinstance(asset_ref, str) and asset_ref.strip():
+                return WorldObjectAssetRef(value=asset_ref, field_path=f"mesh.{key}")
+    appearance = value.get("appearance")
+    if isinstance(appearance, Mapping):
+        representations = appearance.get("representations")
+        if isinstance(representations, list):
+            for index, representation in enumerate(representations):
+                if not isinstance(representation, Mapping):
+                    continue
+                if representation.get("kind") not in WORLD_OBJECT_APPEARANCE_ASSET_REF_KINDS:
+                    continue
+                asset_ref = representation.get("asset_ref")
+                if isinstance(asset_ref, str) and asset_ref.strip():
+                    return WorldObjectAssetRef(
+                        value=asset_ref,
+                        field_path=f"appearance.representations[{index}].asset_ref",
+                    )
+    return None
+
+
+def has_world_object_content_asset_ref(value: Mapping[str, object]) -> bool:
+    asset_ref = read_world_object_content_asset_ref(value)
+    if asset_ref is None:
+        return False
+    try:
+        normalize_portable_world_asset_ref(asset_ref.value)
+    except ValueError:
+        return False
+    return True
