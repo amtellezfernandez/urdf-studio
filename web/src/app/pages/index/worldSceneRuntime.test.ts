@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildWorldSceneDocumentFromState,
   buildWorldRolloutConfigFromDraft,
   createWorldSceneLayerExportDocument,
   createWorldRolloutCheckerProfile,
@@ -505,8 +506,20 @@ describe("worldSceneRuntime world layout import", () => {
         },
       ],
     });
+    const worldDocument = {
+      name: "Desk setup",
+      urdf_xml: manifestPayload.world_snapshot.urdf_xml,
+      joint_positions: { shoulder: 0.5 },
+      cameras: manifestPayload.world_snapshot.cameras,
+      objects: manifestPayload.world_snapshot.objects,
+      scenario_time_ms: 0,
+      scenario_duration_ms: 0,
+      environment: {
+        frame_convention: "ros-rep-103",
+      },
+    };
 
-    const { payload } = await createWorldSceneLayerExportDocument("Desk setup", manifestPayload, {
+    const { payload } = await createWorldSceneLayerExportDocument("Desk setup", worldDocument, {
       includeRobotState: true,
     });
 
@@ -520,6 +533,32 @@ describe("worldSceneRuntime world layout import", () => {
         scenario_time_ms: 0,
         scenario_duration_ms: 0,
       },
+      environment: {
+        frame_convention: "ros-rep-103",
+      },
+    });
+  });
+
+  it("builds authored world documents from live studio state", async () => {
+    const worldDocument = await buildWorldSceneDocumentFromState({
+      resolvedRobotName: "demo-scene",
+      vizUrdfContent: "<robot name='demo'/>",
+      originalUrdfContent: "",
+      jointValues: { shoulder: 0.5 },
+      cameras: [],
+      objects: [],
+      worldName: "Desk setup",
+      includeRobotState: true,
+    });
+
+    expect(worldDocument).toEqual({
+      name: "Desk setup",
+      urdf_xml: "<robot name='demo'/>",
+      joint_positions: { shoulder: 0.5 },
+      cameras: [],
+      objects: [],
+      scenario_time_ms: 0,
+      scenario_duration_ms: 0,
       environment: {
         frame_convention: "ros-rep-103",
       },

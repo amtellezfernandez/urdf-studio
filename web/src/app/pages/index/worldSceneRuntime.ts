@@ -10,6 +10,7 @@ import type { Camera } from "@/shared/types/camera";
 import { WORLD_SCENE_PACKAGE_DEFAULT_VERSION } from "@/features/world-share/worldScenePackageParams";
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
 import type {
+  WorldSceneDocument,
   WorldScenePackageListEntry,
   WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
@@ -59,6 +60,17 @@ type BuildWorldScenePackageManifestFromStateParams = {
   objects: CreatedObject[];
   demoMode: boolean;
   overrides?: WorldScenePackageOverrides;
+};
+
+type BuildWorldSceneDocumentFromStateParams = {
+  resolvedRobotName: string | null;
+  vizUrdfContent: string;
+  originalUrdfContent: string;
+  jointValues: Record<string, number>;
+  cameras: Camera[];
+  objects: CreatedObject[];
+  worldName?: string;
+  includeRobotState?: boolean;
 };
 
 type WorldRolloutConfigDraft = {
@@ -153,6 +165,28 @@ export const buildWorldScenePackageManifestFromState = async ({
       app_mode: demoMode ? "demo" : "interactive",
       created_from: "ui",
     },
+  });
+};
+
+export const buildWorldSceneDocumentFromState = async ({
+  resolvedRobotName,
+  vizUrdfContent,
+  originalUrdfContent,
+  jointValues,
+  cameras,
+  objects,
+  worldName,
+  includeRobotState = false,
+}: BuildWorldSceneDocumentFromStateParams): Promise<WorldSceneDocument> => {
+  const { buildWorldSceneDocument } = await loadWorldScenePackageBuilderModule();
+  return buildWorldSceneDocument({
+    name: worldName || resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
+    urdfXml: includeRobotState ? vizUrdfContent || originalUrdfContent : undefined,
+    jointPositions: includeRobotState ? { ...jointValues } : undefined,
+    cameras: includeRobotState ? cameras : undefined,
+    objects,
+    scenarioTimeMs: 0,
+    scenarioDurationMs: 0,
   });
 };
 
@@ -419,25 +453,19 @@ export const validateWorldScenePackageRemotely = async (
 
 export const createWorldSceneLayerExportDocument = async (
   worldLayoutName: string,
-  manifest: WorldScenePackageManifest,
+  worldDocument: WorldSceneDocument,
   options: {
     includeRobotState?: boolean;
   } = {}
 ) => {
-  const [
-    { createStaticWorldSceneLayerSnapshot, validateWorldSceneLayerSnapshot },
-    { toWorldSceneDocument },
-  ] = await Promise.all([
-    loadWorldSceneManifestModule(),
-    loadWorldScenePackageBuilderModule(),
-  ]);
-  const worldDocument = toWorldSceneDocument(manifest);
+  const [{ createStaticWorldSceneLayerSnapshot, validateWorldSceneLayerSnapshot }] =
+    await Promise.all([loadWorldSceneManifestModule()]);
   const worldLayout: WorldSceneLayerSnapshot = createStaticWorldSceneLayerSnapshot({
     name: worldLayoutName,
-    objects: manifest.world_snapshot.objects,
-    urdf_xml: options.includeRobotState ? manifest.world_snapshot.urdf_xml : undefined,
-    joint_positions: options.includeRobotState ? manifest.world_snapshot.joint_positions : undefined,
-    cameras: options.includeRobotState ? manifest.world_snapshot.cameras : undefined,
+    objects: worldDocument.objects,
+    urdf_xml: options.includeRobotState ? worldDocument.urdf_xml : undefined,
+    joint_positions: options.includeRobotState ? worldDocument.joint_positions : undefined,
+    cameras: options.includeRobotState ? worldDocument.cameras : undefined,
     environment: worldDocument.environment ?? null,
   });
   const validationErrors = validateWorldSceneLayerSnapshot(worldLayout);

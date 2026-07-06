@@ -46,6 +46,18 @@ type BuildWorldScenePackageManifestParams = {
   provenance?: Record<string, unknown>;
 };
 
+type BuildWorldSceneDocumentParams = {
+  name?: string;
+  urdfXml?: string;
+  jointPositions?: Record<string, number>;
+  cameras?: Camera[];
+  objects: CreatedObject[];
+  scenarioTimeMs: number;
+  scenarioDurationMs: number;
+  environment?: Record<string, unknown> | null;
+  frameConvention?: string;
+};
+
 const normalizeSnapshotInteger = (value: unknown, fieldLabel: string): number => {
   const normalized = assertFiniteWorldSceneNumber(value, fieldLabel);
   if (!Number.isInteger(normalized)) {
@@ -135,6 +147,21 @@ const cloneWorldSnapshot = (
   ),
 });
 
+const worldSceneDocumentEnvironment = ({
+  environment,
+  frameConvention,
+}: {
+  environment?: Record<string, unknown> | null;
+  frameConvention?: string;
+}): Record<string, unknown> | null => {
+  const normalized =
+    environment && typeof environment === "object" && !Array.isArray(environment)
+      ? { ...environment }
+      : {};
+  normalized.frame_convention = frameConvention || WORLD_SCENE_PACKAGE_DEFAULT_FRAME_CONVENTION;
+  return Object.keys(normalized).length > 0 ? normalized : null;
+};
+
 const worldSnapshotArtifactRef = (digest: string): WorldArtifactRef => ({
   kind: "world_snapshot",
   digest_sha256: digest,
@@ -196,6 +223,36 @@ export const toWorldSceneDocument = (
     joint_positions: worldSnapshot.joint_positions,
     cameras: worldSnapshot.cameras,
     ...(environment ? { environment } : {}),
+  };
+};
+
+export const buildWorldSceneDocument = ({
+  name,
+  urdfXml,
+  jointPositions,
+  cameras,
+  objects,
+  scenarioTimeMs,
+  scenarioDurationMs,
+  environment,
+  frameConvention,
+}: BuildWorldSceneDocumentParams): WorldSceneDocument => {
+  const normalizedEnvironment = worldSceneDocumentEnvironment({
+    environment,
+    frameConvention,
+  });
+  return {
+    ...(name?.trim() ? { name: name.trim() } : {}),
+    objects: serializeWorldSceneObjects(objects),
+    scenario_time_ms: normalizeSnapshotInteger(scenarioTimeMs, "scenario_time_ms"),
+    scenario_duration_ms: normalizeSnapshotInteger(
+      scenarioDurationMs,
+      "scenario_duration_ms"
+    ),
+    ...(urdfXml?.trim() ? { urdf_xml: urdfXml } : {}),
+    ...(jointPositions ? { joint_positions: cloneJointPositions(jointPositions) } : {}),
+    ...(cameras ? { cameras: cameras.map(cloneCamera) } : {}),
+    ...(normalizedEnvironment ? { environment: normalizedEnvironment } : {}),
   };
 };
 

@@ -27,6 +27,7 @@ import {
 } from "@/app/pages/index/indexPageHelpers";
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
+  buildWorldSceneDocumentFromState,
   buildWorldScenePackageManifestFromState,
   createWorldSceneLayerExportDocument,
   loadWorldScenePackageFromImportParams,
@@ -185,15 +186,24 @@ export const useWorldSceneManager = ({
         toast.error("World layout name is required");
         return;
       }
-      const manifest = await buildCurrentWorldScenePackageManifest({
-        title: worldLayoutName,
-      });
       const includeRobotState = window.confirm(
         "Include robot state, joint positions, and cameras in the world layout export?"
       );
+      const transferObjects = getObjectsForTransfer?.() ?? objectsRef.current;
+      objectsRef.current = transferObjects;
+      const worldDocument = await buildWorldSceneDocumentFromState({
+        resolvedRobotName,
+        vizUrdfContent,
+        originalUrdfContent,
+        jointValues,
+        cameras,
+        objects: transferObjects,
+        worldName: worldLayoutName,
+        includeRobotState,
+      });
       const { filename, payload } = await createWorldSceneLayerExportDocument(
         worldLayoutName,
-        manifest,
+        worldDocument,
         { includeRobotState }
       );
       downloadJsonDocument(payload, filename);
@@ -201,7 +211,14 @@ export const useWorldSceneManager = ({
     } catch (error) {
       toast.error(readUnknownErrorMessage(error, "Failed to export world layout"));
     }
-  }, [buildCurrentWorldScenePackageManifest]);
+  }, [
+    cameras,
+    getObjectsForTransfer,
+    jointValues,
+    originalUrdfContent,
+    resolvedRobotName,
+    vizUrdfContent,
+  ]);
 
   const handleImportWorldLayoutFromUrl = useCallback(() => {
     setWorldLayoutImportUrlDraft("");
