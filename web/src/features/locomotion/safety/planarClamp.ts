@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 
 export type PlanarClampReason = "y" | "roll" | "pitch";
 
@@ -24,12 +25,12 @@ export const enforcePlanarBasePose = (
   options: EnforcePlanarBasePoseOptions = {}
 ): PlanarClampResult => {
   const groundHeightFn = options.groundHeightFn ?? FLAT_GROUND_HEIGHT_FN;
-  const epsilon = Number.isFinite(options.epsilon) ? Math.max(options.epsilon ?? 0, 0) : 1e-6;
+  const epsilon = Math.max(toFiniteNumberOrFallback(options.epsilon, 1e-6), 0);
   const lockRollPitch = options.lockRollPitch !== false;
   const updateMatrixWorld = options.updateMatrixWorld !== false;
 
   const sampledHeight = groundHeightFn(object.position.x, object.position.z);
-  const floorHeight = Number.isFinite(sampledHeight) ? sampledHeight : 0;
+  const floorHeight = toFiniteNumberOrFallback(sampledHeight, 0);
   const reasons: PlanarClampReason[] = [];
 
   if (Math.abs(object.position.y - floorHeight) > epsilon) {

@@ -32,6 +32,24 @@ describe("enforcePlanarBasePose", () => {
     expect(object.rotation.y).toBeCloseTo(0.3, 8);
   });
 
+  it("falls back for non-finite numeric inputs", () => {
+    const object = new THREE.Object3D();
+    object.position.set(0, 0.5, 0);
+    object.rotation.set(Number.POSITIVE_INFINITY, 0, 0.2);
+
+    const result = enforcePlanarBasePose(object, {
+      epsilon: Number.NaN,
+      groundHeightFn: () => Number.POSITIVE_INFINITY,
+    });
+
+    expect(result.floorHeight).toBe(0);
+    expect(result.clamped).toBe(true);
+    expect(result.reasons).toEqual(["y", "roll", "pitch"]);
+    expect(object.position.y).toBe(0);
+    expect(object.rotation.x).toBe(0);
+    expect(object.rotation.z).toBe(0);
+  });
+
   it("is a no-op when already planar", () => {
     const object = new THREE.Object3D();
     object.position.set(0, 0, 0);
