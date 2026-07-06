@@ -176,6 +176,18 @@ def read_world_scene_package_manifest(payload: object) -> WorldScenePackageManif
     return WorldScenePackageManifest.model_validate(payload)
 
 
+def read_world_scene_registry_envelope(payload: object) -> WorldSceneRegistryEnvelope:
+    if isinstance(payload, WorldSceneRegistryEnvelope):
+        return payload
+    if isinstance(payload, WorldScenePackageManifest):
+        return world_scene_registry_envelope_from_manifest(payload)
+    if is_world_scene_registry_envelope_payload(payload):
+        return WorldSceneRegistryEnvelope.model_validate(payload)
+    return world_scene_registry_envelope_from_manifest(
+        WorldScenePackageManifest.model_validate(payload)
+    )
+
+
 def world_scene_registry_envelope_json_payload(
     manifest: WorldScenePackageManifest,
 ) -> JsonObject:

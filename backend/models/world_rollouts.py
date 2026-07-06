@@ -7,8 +7,8 @@ from typing import TypeAlias
 from pydantic import BaseModel, Field, field_validator
 
 from backend.models.json_payload import JsonObject
-from backend.models.world_scene_package import WorldScenePackageManifest
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
+from backend.models.world_scene_package import WorldSceneRegistryEnvelope
+from backend.services.world_scene_package_compat import read_world_scene_registry_envelope
 from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_CAMPAIGN_SCHEMA_VERSION,
     WORLD_ROLLOUT_CHECKER_PROFILE_SCHEMA_VERSION,
@@ -158,7 +158,7 @@ class WorldRolloutDecisionRecord(BaseModel):
 
 
 class WorldRolloutJobCreateRequest(BaseModel):
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     checker_profile: WorldRolloutCheckerProfile
     campaign_id: str | None = Field(default=None, min_length=1)
     rollout_params: WorldRolloutPayload = Field(default_factory=dict)
@@ -169,8 +169,8 @@ class WorldRolloutJobCreateRequest(BaseModel):
     def normalize_world_package(
         cls,
         value: object,
-    ) -> WorldScenePackageManifest:
-        return read_world_scene_package_manifest(value)
+    ) -> WorldSceneRegistryEnvelope:
+        return read_world_scene_registry_envelope(value)
 
 
 class WorldRolloutJobResponse(BaseModel):
