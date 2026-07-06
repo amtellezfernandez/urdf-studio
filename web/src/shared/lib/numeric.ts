@@ -19,5 +19,8 @@ export const clampNumberToOptionalBounds = (
   return boundedValue;
 };
 
+export const isFinitePositiveNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0;
+
 export const toFiniteNumberOrFallback = (value: unknown, fallback: number): number =>
   Number.isFinite(value) ? (value as number) : fallback;

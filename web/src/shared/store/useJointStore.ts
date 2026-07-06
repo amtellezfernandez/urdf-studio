@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { clampNumberToMin } from "@/shared/lib/numeric";
+import { clampNumberToMin, isFinitePositiveNumber } from "@/shared/lib/numeric";
 
 type JointValues = Record<string, number>;
 
@@ -76,9 +76,6 @@ const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Da
 
 const MIN_VELOCITY = 1e-4;
 const FALLBACK_DT_SEC = 1 / 1000;
-
-const isFinitePositiveNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value) && value > 0;
 
 const normalizeStoredVelocityLimit = (velocity: number): number | null =>
   isFinitePositiveNumber(velocity) ? clampNumberToMin(velocity, MIN_VELOCITY) : null;

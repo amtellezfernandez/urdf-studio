@@ -1,15 +1,17 @@
 import type { PerspectiveCamera } from "three";
 import type { CameraDistortion, CameraIntrinsics } from "@/shared/types/camera";
-import { clampNumber, clampNumberToMin, toFiniteNumberOrFallback } from "@/shared/lib/numeric";
+import {
+  clampNumber,
+  clampNumberToMin,
+  isFinitePositiveNumber,
+  toFiniteNumberOrFallback,
+} from "@/shared/lib/numeric";
 
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 480;
 const DEFAULT_FOV_DEG = 70;
 const MIN_NEAR = 0.001;
 const MIN_FAR_DELTA = 0.01;
-
-const isFinitePositive = (value: number | undefined): value is number =>
-  Number.isFinite(value) && value > 0;
 
 const clampDimension = (value: number | undefined, fallback: number) => {
   if (!Number.isFinite(value)) return fallback;
@@ -53,8 +55,8 @@ export const normalizeCameraIntrinsics = (intrinsics: CameraIntrinsics): CameraI
   const height = clampDimension(intrinsics.height, DEFAULT_HEIGHT);
   const fallbackFov = clampFov(intrinsics.fov_deg, DEFAULT_FOV_DEG);
 
-  const hasFx = isFinitePositive(intrinsics.fx);
-  const hasFy = isFinitePositive(intrinsics.fy);
+  const hasFx = isFinitePositiveNumber(intrinsics.fx);
+  const hasFy = isFinitePositiveNumber(intrinsics.fy);
 
   let fx = hasFx ? intrinsics.fx : undefined;
   let fy = hasFy ? intrinsics.fy : undefined;
