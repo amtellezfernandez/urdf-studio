@@ -33,4 +33,17 @@ describe("resolveRoverApproachLockedGoalState", () => {
     expect(state.yawErrorRad).toBeCloseTo(0);
     expect(state.forwardDotFacingTarget).toBeCloseTo(1);
   });
+
+  it("falls back to the world-up plane when the up axis is invalid", () => {
+    const state = resolveRoverApproachLockedGoalState({
+      basePositionWorld: new THREE.Vector3(0, 0, 0),
+      navigationGoalWorld: new THREE.Vector3(0, 0, 2),
+      forwardWorld: FORWARD_WORLD,
+      upAxisWorld: new THREE.Vector3(0, 0, 0),
+    });
+
+    expect(state.distanceToGoalM).toBe(0);
+    expect(state.yawErrorRad).toBe(0);
+    expect(state.forwardDotFacingTarget).toBe(1);
+  });
 });

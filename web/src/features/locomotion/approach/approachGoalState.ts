@@ -1,16 +1,7 @@
 import * as THREE from "three";
+import { projectVectorOntoPlane } from "@/shared/lib/axisFrame";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import { computeSignedPlanarYawErrorRad } from "./approachExecutor";
-
-const projectRoverApproachVectorOntoPlane = (
-  vector: THREE.Vector3,
-  planeNormal: THREE.Vector3
-) => {
-  const normalizedPlaneNormal = planeNormal.clone().normalize();
-  return vector.sub(
-    normalizedPlaneNormal.multiplyScalar(vector.dot(normalizedPlaneNormal))
-  );
-};
 
 export const resolveRoverApproachLockedGoalState = ({
   basePositionWorld,
@@ -27,7 +18,7 @@ export const resolveRoverApproachLockedGoalState = ({
   forwardWorld: THREE.Vector3;
   upAxisWorld: THREE.Vector3;
 }) => {
-  const toNavigationGoalPlanarWorld = projectRoverApproachVectorOntoPlane(
+  const toNavigationGoalPlanarWorld = projectVectorOntoPlane(
     navigationGoalWorld.clone().sub(basePositionWorld),
     upAxisWorld
   );
@@ -42,7 +33,7 @@ export const resolveRoverApproachLockedGoalState = ({
       forwardDotFacingTarget: 1,
     };
   }
-  const toFacingTargetPlanarWorld = projectRoverApproachVectorOntoPlane(
+  const toFacingTargetPlanarWorld = projectVectorOntoPlane(
     facingDirectionSourceWorld,
     upAxisWorld
   );

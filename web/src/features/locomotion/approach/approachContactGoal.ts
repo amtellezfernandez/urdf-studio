@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { resolveWorldObjectGeometry } from "@/features/objects";
+import { projectVectorOntoPlane } from "@/shared/lib/axisFrame";
 import { toNonNegativeFiniteNumberOrFallback } from "@/shared/lib/numeric";
 import type { WorldObjectObstacleSource } from "./approachObstacleProjection";
 import {
@@ -102,19 +103,6 @@ const resolvePreferredDirectionCount = (
 const CONTACT_GOAL_ROUTE_EXCLUDED_OBSTACLE_ID: string | null = null;
 const CONTACT_GOAL_ROUTE_PATH_CLEARANCE_M =
   ROVER_APPROACH_CONTACT_GOAL_PARAMS.routePathClearanceM;
-
-const resolveContactNonNegativeDistanceM = (value: number): number =>
-  toNonNegativeFiniteNumberOrFallback(value, 0);
-
-const projectVectorOntoPlane = (
-  vector: THREE.Vector3,
-  planeNormal: THREE.Vector3,
-) => {
-  const normalizedPlaneNormal = planeNormal.clone().normalize();
-  return vector.sub(
-    normalizedPlaneNormal.multiplyScalar(vector.dot(normalizedPlaneNormal)),
-  );
-};
 
 const normalizePlanarDirection = (
   value: THREE.Vector3,
@@ -242,8 +230,8 @@ const shouldUseCompactTargetSurfaceCorridor = ({
     return true;
   }
   const planarExtents = [
-    resolveContactNonNegativeDistanceM(objectGeometry.size.x),
-    resolveContactNonNegativeDistanceM(objectGeometry.size.y),
+    toNonNegativeFiniteNumberOrFallback(objectGeometry.size.x, 0),
+    toNonNegativeFiniteNumberOrFallback(objectGeometry.size.y, 0),
   ].sort((left, right) => left - right);
   const planarMinExtent = planarExtents[0] ?? 0;
   const planarMaxExtent = planarExtents[1] ?? 0;
@@ -308,7 +296,10 @@ const resolveContactGoalOffsetM = ({
   robotFootprint,
   upAxisWorld,
 }: ContactGoalOffsetParams) => {
-  const roverBaseSupportRadiusM = resolveContactNonNegativeDistanceM(roverBaseRadiusM);
+  const roverBaseSupportRadiusM = toNonNegativeFiniteNumberOrFallback(
+    roverBaseRadiusM,
+    0
+  );
   const robotSupportRadiusM = Math.max(
     roverBaseSupportRadiusM,
     resolveRoverApproachFootprintSupportRadiusM({
