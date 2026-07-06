@@ -15,3 +15,6 @@ export const clampNumberToOptionalBounds = (
   if (max !== undefined) boundedValue = Math.min(max, boundedValue);
   return boundedValue;
 };
+
+export const toFiniteNumberOrFallback = (value: unknown, fallback: number): number =>
+  Number.isFinite(value) ? (value as number) : fallback;

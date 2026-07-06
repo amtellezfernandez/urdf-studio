@@ -1,3 +1,5 @@
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
+
 export type Vector3Tuple = [number, number, number];
 
 export const parseVector3Tuple = (
@@ -6,9 +8,9 @@ export const parseVector3Tuple = (
 ): Vector3Tuple => {
   const parts = value.trim().split(/\s+/).map((part) => Number(part));
   return [
-    Number.isFinite(parts[0]) ? parts[0] : fallback[0],
-    Number.isFinite(parts[1]) ? parts[1] : fallback[1],
-    Number.isFinite(parts[2]) ? parts[2] : fallback[2],
+    toFiniteNumberOrFallback(parts[0], fallback[0]),
+    toFiniteNumberOrFallback(parts[1], fallback[1]),
+    toFiniteNumberOrFallback(parts[2], fallback[2]),
   ];
 };
 

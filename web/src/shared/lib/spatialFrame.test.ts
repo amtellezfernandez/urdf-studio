@@ -93,6 +93,29 @@ describe("spatialFrame", () => {
     expect(scale.z).toBeCloseTo(4, 8);
   });
 
+  it("falls back for non-finite URDF pose components", () => {
+    const matrix = composeUrdfPoseMatrix(
+      {
+        xyz: [Number.NaN, 2, Number.POSITIVE_INFINITY],
+        rpy: [Number.NaN, 0, Number.NaN],
+        scale: [Number.NaN, 3, Number.NEGATIVE_INFINITY],
+      },
+      new THREE.Matrix4()
+    );
+
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    matrix.decompose(position, quaternion, scale);
+
+    expect(position.x).toBeCloseTo(0, 8);
+    expect(position.y).toBeCloseTo(2, 8);
+    expect(position.z).toBeCloseTo(0, 8);
+    expect(scale.x).toBeCloseTo(1, 8);
+    expect(scale.y).toBeCloseTo(3, 8);
+    expect(scale.z).toBeCloseTo(1, 8);
+  });
+
   it("keeps URDF cylinder axis correction aligned with +Z", () => {
     const mappedAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(
       URDF_CYLINDER_TO_THREE_AXIS_QUATERNION

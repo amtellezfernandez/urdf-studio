@@ -1,6 +1,6 @@
 import type { PerspectiveCamera } from "three";
 import type { CameraDistortion, CameraIntrinsics } from "@/shared/types/camera";
-import { clampNumber } from "@/shared/lib/numeric";
+import { clampNumber, toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 480;
@@ -71,8 +71,8 @@ export const normalizeCameraIntrinsics = (intrinsics: CameraIntrinsics): CameraI
     fx = fy * (width / height);
   }
 
-  const cx = Number.isFinite(intrinsics.cx) ? (intrinsics.cx as number) : width * 0.5;
-  const cy = Number.isFinite(intrinsics.cy) ? (intrinsics.cy as number) : height * 0.5;
+  const cx = toFiniteNumberOrFallback(intrinsics.cx, width * 0.5);
+  const cy = toFiniteNumberOrFallback(intrinsics.cy, height * 0.5);
   const fov_deg = verticalFovDegFromFocalLengthPx(fy, height);
 
   return {

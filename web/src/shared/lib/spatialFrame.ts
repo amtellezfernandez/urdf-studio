@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 
 // URDF rpy follows fixed-axis roll(X)-pitch(Y)-yaw(Z), which maps to intrinsic ZYX in Three.js.
 const URDF_RPY_ORDER: THREE.EulerOrder = "ZYX";
@@ -28,9 +29,6 @@ const URDF_TEMP_EULER = new THREE.Euler(0, 0, 0, URDF_RPY_ORDER);
 const URDF_TEMP_ROTATION = new THREE.Quaternion();
 const URDF_TEMP_SCALE = new THREE.Vector3(1, 1, 1);
 const URDF_TEMP_CENTER_OFFSET = new THREE.Vector3();
-
-const toFiniteOrFallback = (value: number, fallback: number) =>
-  Number.isFinite(value) ? value : fallback;
 
 export const createIdentityRigidFrame = (): RigidFrame => ({
   position: new THREE.Vector3(),
@@ -94,15 +92,15 @@ export const composeUrdfPoseMatrix = (
   const scaleValues = params.scale ?? DEFAULT_SCALE;
 
   URDF_TEMP_POSITION.set(
-    toFiniteOrFallback(xyz[0], 0),
-    toFiniteOrFallback(xyz[1], 0),
-    toFiniteOrFallback(xyz[2], 0)
+    toFiniteNumberOrFallback(xyz[0], 0),
+    toFiniteNumberOrFallback(xyz[1], 0),
+    toFiniteNumberOrFallback(xyz[2], 0)
   );
 
   URDF_TEMP_EULER.set(
-    toFiniteOrFallback(rpy[0], 0),
-    toFiniteOrFallback(rpy[1], 0),
-    toFiniteOrFallback(rpy[2], 0),
+    toFiniteNumberOrFallback(rpy[0], 0),
+    toFiniteNumberOrFallback(rpy[1], 0),
+    toFiniteNumberOrFallback(rpy[2], 0),
     URDF_RPY_ORDER
   );
   URDF_TEMP_ROTATION.setFromEuler(URDF_TEMP_EULER);
@@ -111,9 +109,9 @@ export const composeUrdfPoseMatrix = (
   }
 
   URDF_TEMP_SCALE.set(
-    toFiniteOrFallback(scaleValues[0], 1),
-    toFiniteOrFallback(scaleValues[1], 1),
-    toFiniteOrFallback(scaleValues[2], 1)
+    toFiniteNumberOrFallback(scaleValues[0], 1),
+    toFiniteNumberOrFallback(scaleValues[1], 1),
+    toFiniteNumberOrFallback(scaleValues[2], 1)
   );
 
   if (centerOffset) {

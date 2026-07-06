@@ -62,6 +62,19 @@ describe("cameraIntrinsics", () => {
     expect(high.fov_deg).toBeCloseTo(179, 6);
   });
 
+  it("falls back to centered principal point for non-finite calibration values", () => {
+    const intrinsics = normalizeCameraIntrinsics({
+      width: 640,
+      height: 480,
+      fov_deg: 70,
+      cx: Number.NaN,
+      cy: Number.POSITIVE_INFINITY,
+    });
+
+    expect(intrinsics.cx).toBeCloseTo(320, 6);
+    expect(intrinsics.cy).toBeCloseTo(240, 6);
+  });
+
   it("applies calibrated projection matrix to perspective camera", () => {
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
     const intrinsics = normalizeCameraIntrinsics({
