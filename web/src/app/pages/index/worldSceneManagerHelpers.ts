@@ -14,6 +14,7 @@ import {
   fetchWorldRolloutJob,
 } from "@/app/pages/index/worldSceneRuntime";
 import { getFilenameFromPath } from "@/app/pages/index/pathNames";
+import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
 
 function downloadBlobDocument(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -122,29 +123,24 @@ const resolveMeshUri = (
   }
 };
 
-const cloneSerializableValue = <TValue,>(value: TValue): TValue => {
-  if (typeof structuredClone === "function") return structuredClone(value) as TValue;
-  return JSON.parse(JSON.stringify(value)) as TValue;
-};
-
 const toImportedWorldMetadata = (
   object: WorldScenePackageManifest["world_snapshot"]["objects"][number]
 ): CreatedObject["worldMetadata"] => {
   const worldMetadata: CreatedObject["worldMetadata"] = {};
   if (object.appearance !== undefined) {
-    worldMetadata.appearance = cloneSerializableValue(object.appearance);
+    worldMetadata.appearance = cloneJsonSerializableValue(object.appearance);
   }
   if (object.consistency !== undefined) {
-    worldMetadata.consistency = cloneSerializableValue(object.consistency);
+    worldMetadata.consistency = cloneJsonSerializableValue(object.consistency);
   }
   if (object.mesh !== undefined) {
-    worldMetadata.mesh = cloneSerializableValue(object.mesh);
+    worldMetadata.mesh = cloneJsonSerializableValue(object.mesh);
   }
   if (object.physics !== undefined) {
-    worldMetadata.physics = cloneSerializableValue(object.physics);
+    worldMetadata.physics = cloneJsonSerializableValue(object.physics);
   }
   if (object.simulation !== undefined) {
-    worldMetadata.simulation = cloneSerializableValue(object.simulation);
+    worldMetadata.simulation = cloneJsonSerializableValue(object.simulation);
   }
   return Object.keys(worldMetadata).length > 0 ? worldMetadata : undefined;
 };

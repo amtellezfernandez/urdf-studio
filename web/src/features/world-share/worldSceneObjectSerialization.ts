@@ -10,6 +10,7 @@ import {
   WORLD_SCENE_PACKAGE_DEFAULT_ORBIT_RADIUS,
   WORLD_SCENE_PACKAGE_DEFAULT_ORBIT_SECONDARY_OFFSET_DEG,
 } from "@/features/world-share/worldScenePackageParams";
+import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
 import type { SerializableWorldObject } from "@/features/world-share/worldScenePackageTypes";
 
 const isAbsoluteOrRootedUrl = (value: string): boolean =>
@@ -43,10 +44,7 @@ const cloneWorldObjectMetadata = (
   metadata: CreatedObject["worldMetadata"]
 ): CreatedObject["worldMetadata"] => {
   if (!metadata) return undefined;
-  if (typeof structuredClone === "function") {
-    return structuredClone(metadata) as CreatedObject["worldMetadata"];
-  }
-  return JSON.parse(JSON.stringify(metadata)) as CreatedObject["worldMetadata"];
+  return cloneJsonSerializableValue(metadata);
 };
 
 export const toSerializableWorldObject = (object: CreatedObject): SerializableWorldObject => {

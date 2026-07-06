@@ -7,6 +7,7 @@ import {
   type WorldObjectPrimitiveType,
 } from "./worldObjectGeometry";
 import { WORLD_OBJECT_STORE_PARAMS } from "./worldObjectStoreParams";
+import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
 import type { WorldObjectSource } from "@/shared/types/worldObject";
 import type { SerializableWorldObject } from "@/features/world-share/worldScenePackageTypes";
 
@@ -130,10 +131,7 @@ const cloneCreatedObjectWorldMetadata = (
   metadata: CreatedObjectWorldMetadata | undefined,
 ): CreatedObjectWorldMetadata | undefined => {
   if (!metadata) return undefined;
-  if (typeof structuredClone === "function") {
-    return structuredClone(metadata) as CreatedObjectWorldMetadata;
-  }
-  return JSON.parse(JSON.stringify(metadata)) as CreatedObjectWorldMetadata;
+  return cloneJsonSerializableValue(metadata);
 };
 
 const cloneCreatedObject = (object: CreatedObject): CreatedObject => ({
