@@ -23,8 +23,8 @@ import {
 } from "@/features/world-share/worldSceneManifestFieldValidation";
 import { validateSerializableWorldObjects } from "@/features/world-share/worldSceneObjectValidation";
 import {
+  isFiniteWorldSceneNumber,
   isIntegerNumber,
-  isNumber,
   isOneOf,
   isRecord,
   isString,
@@ -88,7 +88,7 @@ export const coerceWorldSceneSnapshot = (
 const coerceWorldSceneSnapshotCandidate = (
   value: unknown
 ): WorldScenePackageManifest["world_snapshot"] | null =>
-  coerceWorldSceneSnapshotWithTiming(value, isNumber);
+  coerceWorldSceneSnapshotWithTiming(value, isFiniteWorldSceneNumber);
 
 export const isWorldSceneManifest = (
   payload: unknown
@@ -238,7 +238,12 @@ const toParsedWorldSceneLayerSnapshot = (
 ): ParsedWorldSceneLayerSnapshot | null => {
   if (!isRecord(value)) return null;
   if (!Array.isArray(value.objects)) return null;
-  if (!isNumber(value.scenario_time_ms) || !isNumber(value.scenario_duration_ms)) return null;
+  if (
+    !isFiniteWorldSceneNumber(value.scenario_time_ms) ||
+    !isFiniteWorldSceneNumber(value.scenario_duration_ms)
+  ) {
+    return null;
+  }
   return {
     name: isString(value.name) ? value.name : undefined,
     objects: value.objects,

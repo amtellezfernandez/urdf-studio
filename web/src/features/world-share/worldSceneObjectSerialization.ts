@@ -12,25 +12,19 @@ import {
 } from "@/features/world-share/worldScenePackageParams";
 import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
 import type { SerializableWorldObject } from "@/features/world-share/worldScenePackageTypes";
+import { assertFiniteWorldSceneNumber } from "@/features/world-share/worldSceneNumber";
 
 const isAbsoluteOrRootedUrl = (value: string): boolean =>
   value.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(value);
-
-const normalizeObjectNumber = (value: unknown, fieldLabel: string): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`${fieldLabel} must be a finite number.`);
-  }
-  return value;
-};
 
 const toSerializableAssetScale = (
   assetScale: CreatedObject["assetScale"] | undefined
 ): [number, number, number] | undefined => {
   if (!assetScale) return undefined;
   const scale: [number, number, number] = [
-    normalizeObjectNumber(assetScale.x, "asset_scale_xyz[0]"),
-    normalizeObjectNumber(assetScale.y, "asset_scale_xyz[1]"),
-    normalizeObjectNumber(assetScale.z, "asset_scale_xyz[2]"),
+    assertFiniteWorldSceneNumber(assetScale.x, "asset_scale_xyz[0]"),
+    assertFiniteWorldSceneNumber(assetScale.y, "asset_scale_xyz[1]"),
+    assertFiniteWorldSceneNumber(assetScale.z, "asset_scale_xyz[2]"),
   ];
   scale.forEach((component, index) => {
     if (component <= 0) {

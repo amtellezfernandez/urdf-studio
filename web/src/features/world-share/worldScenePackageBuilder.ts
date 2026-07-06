@@ -24,6 +24,7 @@ import {
   serializeWorldSceneObjects,
   toSerializableWorldObject,
 } from "@/features/world-share/worldSceneObjectSerialization";
+import { assertFiniteWorldSceneNumber } from "@/features/world-share/worldSceneNumber";
 
 export { computeWorldSnapshotDigest, stableStringify };
 export { serializeWorldSceneObjects, toSerializableWorldObject };
@@ -43,15 +44,8 @@ type BuildWorldScenePackageManifestParams = {
   provenance?: Record<string, unknown>;
 };
 
-const normalizeSnapshotNumber = (value: unknown, fieldLabel: string): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`${fieldLabel} must be a finite number.`);
-  }
-  return value;
-};
-
 const normalizeSnapshotInteger = (value: unknown, fieldLabel: string): number => {
-  const normalized = normalizeSnapshotNumber(value, fieldLabel);
+  const normalized = assertFiniteWorldSceneNumber(value, fieldLabel);
   if (!Number.isInteger(normalized)) {
     throw new Error(`${fieldLabel} must be an integer millisecond value.`);
   }
@@ -62,16 +56,16 @@ const cloneVector3 = (
   value: readonly [number, number, number],
   fieldLabel: string
 ): [number, number, number] => [
-  normalizeSnapshotNumber(value[0], `${fieldLabel}[0]`),
-  normalizeSnapshotNumber(value[1], `${fieldLabel}[1]`),
-  normalizeSnapshotNumber(value[2], `${fieldLabel}[2]`),
+  assertFiniteWorldSceneNumber(value[0], `${fieldLabel}[0]`),
+  assertFiniteWorldSceneNumber(value[1], `${fieldLabel}[1]`),
+  assertFiniteWorldSceneNumber(value[2], `${fieldLabel}[2]`),
 ];
 
 const cloneJointPositions = (jointPositions: Record<string, number>): Record<string, number> =>
   Object.fromEntries(
     Object.entries(jointPositions).map(([jointName, position]) => [
       jointName,
-      normalizeSnapshotNumber(position, `joint_positions.${jointName}`),
+      assertFiniteWorldSceneNumber(position, `joint_positions.${jointName}`),
     ])
   );
 
@@ -102,7 +96,7 @@ const cloneSnapshotValue = (value: unknown, fieldLabel: string): unknown => {
     return value;
   }
   if (typeof value === "number") {
-    return normalizeSnapshotNumber(value, fieldLabel);
+    return assertFiniteWorldSceneNumber(value, fieldLabel);
   }
   if (Array.isArray(value)) {
     return value.map((item, index) => cloneSnapshotValue(item, `${fieldLabel}[${index}]`));

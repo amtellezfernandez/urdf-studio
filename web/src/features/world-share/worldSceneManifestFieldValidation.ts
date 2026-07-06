@@ -16,9 +16,9 @@ import {
   WORLD_SCENE_PACKAGE_PATTERNS,
 } from "@/features/world-share/worldScenePackageParams";
 import {
+  isFiniteWorldSceneNumber,
   isNonEmptyString,
   isNullableString,
-  isNumber,
   isOneOf,
   isRecord,
   isString,
@@ -123,7 +123,10 @@ const validateSerializableWorldCamera = (value: unknown, cameraIndex: number): s
     errors.push(...validatePositiveNumber(intrinsics.fy, `${intrinsicsLabel}.fy`));
   }
   for (const fieldName of ["cx", "cy"] as const) {
-    if (intrinsics[fieldName] !== undefined && !isNumber(intrinsics[fieldName])) {
+    if (
+      intrinsics[fieldName] !== undefined &&
+      !isFiniteWorldSceneNumber(intrinsics[fieldName])
+    ) {
       errors.push(`${intrinsicsLabel}.${fieldName} must be a finite number`);
     }
   }
@@ -256,7 +259,7 @@ export const validateWorldJointPositions = (value: unknown): string[] => {
     return errors;
   }
   entries.forEach(([jointName, jointValue]) => {
-    if (!isNumber(jointValue)) {
+    if (!isFiniteWorldSceneNumber(jointValue)) {
       errors.push(`world_snapshot.joint_positions.${jointName} must be a finite number`);
     }
   });

@@ -1,19 +1,17 @@
 import { isRecord } from "@/shared/lib/records";
+import { isFiniteWorldSceneNumber } from "@/features/world-share/worldSceneNumber";
 
 const WORLD_SCENE_MANIFEST_VALIDATION_PARAMS = {
   vectorComponentCount: 3,
   vectorComponentLabels: ["x", "y", "z"],
 } as const;
 
-export { isRecord };
+export { isFiniteWorldSceneNumber, isRecord };
 
 export const isString = (value: unknown): value is string => typeof value === "string";
 
-export const isNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
 export const isIntegerNumber = (value: unknown): value is number =>
-  isNumber(value) && Number.isInteger(value);
+  isFiniteWorldSceneNumber(value) && Number.isInteger(value);
 
 export const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 
@@ -47,7 +45,7 @@ export const validateFiniteVector = (
   value.forEach((component, index) => {
     const axisLabel =
       WORLD_SCENE_MANIFEST_VALIDATION_PARAMS.vectorComponentLabels[index] ?? `${index}`;
-    if (!isNumber(component)) {
+    if (!isFiniteWorldSceneNumber(component)) {
       errors.push(`${fieldLabel}[${axisLabel}] must be a finite number`);
       return;
     }
@@ -73,7 +71,7 @@ export const validateAllowedFields = (
 };
 
 export const validatePositiveInteger = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNumber(value) || !Number.isInteger(value) || value < 1) {
+  if (!isFiniteWorldSceneNumber(value) || !Number.isInteger(value) || value < 1) {
     return [`${fieldLabel} must be a positive integer`];
   }
   return [];
@@ -94,14 +92,14 @@ export const validateMaxLength = (
   value.length > maxLength ? [`${fieldLabel} must contain at most ${maxLength} entries`] : [];
 
 export const validatePositiveNumber = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNumber(value) || value <= 0) {
+  if (!isFiniteWorldSceneNumber(value) || value <= 0) {
     return [`${fieldLabel} must be a finite number > 0`];
   }
   return [];
 };
 
 export const validateCameraFovDeg = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNumber(value) || value < 1 || value > 179) {
+  if (!isFiniteWorldSceneNumber(value) || value < 1 || value > 179) {
     return [`${fieldLabel} must be between 1 and 179 degrees`];
   }
   return [];
@@ -123,7 +121,7 @@ export const validateOptionalFiniteNumber = (
   options?: { minimum?: number; maximum?: number }
 ): string[] => {
   if (value === undefined || value === null) return [];
-  if (!isNumber(value)) return [`${fieldLabel} must be a finite number or null`];
+  if (!isFiniteWorldSceneNumber(value)) return [`${fieldLabel} must be a finite number or null`];
   if (options?.minimum !== undefined && value < options.minimum) {
     return [`${fieldLabel} must be >= ${options.minimum}`];
   }

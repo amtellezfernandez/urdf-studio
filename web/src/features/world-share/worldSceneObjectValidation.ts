@@ -17,9 +17,9 @@ import {
 } from "@/features/world-share/worldSceneManifestSchema";
 import {
   isBoolean,
+  isFiniteWorldSceneNumber,
   isNonEmptyString,
   isNullableString,
-  isNumber,
   isOneOf,
   isRecord,
   isString,
@@ -123,7 +123,7 @@ const validateWorldObjectMeshMetadata = (
         }
       }
       if (mesh.scale !== undefined) {
-        if (isNumber(mesh.scale)) {
+        if (isFiniteWorldSceneNumber(mesh.scale)) {
           if (mesh.scale <= 0) errors.push(`${objectLabel}.mesh.scale must be > 0`);
         } else {
           errors.push(
@@ -258,7 +258,7 @@ const validateWorldObjectPhysicsInertia = (value: unknown, fieldLabel: string): 
   const errors: string[] = [];
   errors.push(...validateAllowedFields(value, WORLD_OBJECT_INERTIA_FIELDS, fieldLabel));
   for (const fieldName of ["ixx", "iyy", "izz"] as const) {
-    if (!isNumber(value[fieldName])) {
+    if (!isFiniteWorldSceneNumber(value[fieldName])) {
       errors.push(`${fieldLabel}.${fieldName} must be a finite number >= 0`);
     } else if (value[fieldName] < 0) {
       errors.push(`${fieldLabel}.${fieldName} must be >= 0`);
@@ -386,16 +386,16 @@ const validateSerializableWorldObject = (value: unknown, objectIndex: number): s
   }
 
   if (ikTargetType === "orbit") {
-    if (!isNumber(value.orbit_radius) || value.orbit_radius <= 0) {
+    if (!isFiniteWorldSceneNumber(value.orbit_radius) || value.orbit_radius <= 0) {
       errors.push(`${objectLabel}.orbit_radius must be a finite number > 0`);
     }
-    if (!isNumber(value.orbit_inclination_deg)) {
+    if (!isFiniteWorldSceneNumber(value.orbit_inclination_deg)) {
       errors.push(`${objectLabel}.orbit_inclination_deg must be a finite number`);
     }
-    if (!isNumber(value.orbit_phase_deg)) {
+    if (!isFiniteWorldSceneNumber(value.orbit_phase_deg)) {
       errors.push(`${objectLabel}.orbit_phase_deg must be a finite number`);
     }
-    if (!isNumber(value.orbit_secondary_offset_deg)) {
+    if (!isFiniteWorldSceneNumber(value.orbit_secondary_offset_deg)) {
       errors.push(`${objectLabel}.orbit_secondary_offset_deg must be a finite number`);
     }
     if (
