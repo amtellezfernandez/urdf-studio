@@ -221,12 +221,16 @@ describe("useWorldSceneManager", () => {
     });
 
     let objectIds: string[] = [];
+    let envelopeObjectIds: string[] = [];
     await act(async () => {
       const manifest = await manager?.buildCurrentWorldScenePackageManifest();
       objectIds = manifest?.world_snapshot.objects.map((object) => object.id) ?? [];
+      const envelope = await manager?.buildCurrentWorldSceneRegistryEnvelope();
+      envelopeObjectIds = envelope?.world.objects.map((object) => object.id) ?? [];
     });
 
     expect(objectIds).toEqual(["live-crate"]);
+    expect(envelopeObjectIds).toEqual(["live-crate"]);
 
     await act(async () => {
       root.unmount();

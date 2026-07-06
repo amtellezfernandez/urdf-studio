@@ -383,7 +383,7 @@ export const useWorldSceneManager = ({
       onFiles: async ([file]) => {
         if (!file) return;
         try {
-          const currentWorldPackage = await buildCurrentWorldScenePackageManifest();
+          const currentWorldPackage = await buildCurrentWorldSceneRegistryEnvelope();
           const changeSet = JSON.parse(await file.text()) as unknown;
           const applied = await applyWorkspaceChangeSet(currentWorldPackage, changeSet);
           applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
@@ -397,7 +397,7 @@ export const useWorldSceneManager = ({
         }
       },
     });
-  }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest]);
+  }, [applyWorldSceneObjects, buildCurrentWorldSceneRegistryEnvelope]);
 
   const {
     handlePublishCurrentWorldScenePackage,
