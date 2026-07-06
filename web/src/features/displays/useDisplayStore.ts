@@ -5,6 +5,7 @@ import {
   readBrowserStorageItem,
   writeBrowserStorageItem,
 } from "@/shared/lib/browserStorage";
+import { isRecord } from "@/shared/lib/records";
 import type {
   DisplayInstance,
   DisplayKind,
@@ -45,9 +46,6 @@ const PROFILE_PRESETS: Record<ViewerProfile, Record<DisplayKind, boolean>> = {
     diagnostics_overlay: true,
   },
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const normalizeStoredState = (value: unknown): StoredDisplayState => {
   if (!isRecord(value)) return {};

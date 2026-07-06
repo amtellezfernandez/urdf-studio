@@ -3,6 +3,8 @@ import {
   DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
   toWorldLayoutFilename,
 } from "@/app/pages/index/indexPageHelpers";
+import { getFilenameFromPath } from "@/shared/lib/pathNames";
+import { isRecord, readRecordOrEmpty } from "@/shared/lib/records";
 import type { CreatedObject } from "@/features/objects";
 import type { Camera } from "@/shared/types/camera";
 import { WORLD_SCENE_PACKAGE_DEFAULT_VERSION } from "@/features/world-share/worldScenePackageParams";
@@ -85,9 +87,6 @@ type LoadWorldScenePackageFromImportParamsOptions = {
   loadPackageVersion?: WorldScenePackageVersionLoader;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isWorldSnapshotArtifact = (
   value: unknown
 ): value is { kind: string; digest_sha256: string } =>
@@ -95,13 +94,7 @@ const isWorldSnapshotArtifact = (
   typeof value.kind === "string" &&
   typeof value.digest_sha256 === "string";
 
-const readRecord = (value: unknown): Record<string, unknown> =>
-  isRecord(value) ? value : {};
-
-const artifactBasename = (uri: string) => {
-  const parts = uri.split(/[\\/]/);
-  return (parts[parts.length - 1] || uri).toLowerCase();
-};
+const artifactBasename = (uri: string) => getFilenameFromPath(uri, uri).toLowerCase();
 
 const rolloutArtifactBasenames = (
   campaign: WorldRolloutCampaignManifest,
@@ -197,19 +190,19 @@ export const buildWorldRolloutConfigFromDraft = (
     ? {
         ...defaultCheckerProfile,
         ...checkerProfileDraft,
-        params: readRecord(checkerProfileDraft.params),
+        params: readRecordOrEmpty(checkerProfileDraft.params),
         modules: Array.isArray(checkerProfileDraft.modules) ? checkerProfileDraft.modules : [],
         artifacts: Array.isArray(checkerProfileDraft.artifacts) ? checkerProfileDraft.artifacts : [],
       }
     : {
         ...defaultCheckerProfile,
-        params: readRecord(draft.checker_params),
+        params: readRecordOrEmpty(draft.checker_params),
       };
 
   return {
     checkerProfile: checkerProfile as WorldRolloutCheckerProfile,
-    rolloutParams: readRecord(draft.rollout_params),
-    runnerParams: readRecord(draft.runner_params),
+    rolloutParams: readRecordOrEmpty(draft.rollout_params),
+    runnerParams: readRecordOrEmpty(draft.runner_params),
   };
 };
 

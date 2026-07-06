@@ -1,3 +1,5 @@
+import { isRecord } from "@/shared/lib/records";
+
 const APPLY_WORLD_LAYOUT_MESSAGE_TYPE = "urdf-star:apply-world-layout-url";
 export const APPLY_WORLD_LAYOUT_RESULT_MESSAGE_TYPE = "urdf-star:world-layout-apply-result";
 
@@ -6,9 +8,6 @@ export type ApplyWorldLayoutMessage = {
   requestId?: string;
   worldLayoutUrl?: string;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 export const isApplyWorldLayoutMessage = (value: unknown): value is ApplyWorldLayoutMessage => {
   if (!isRecord(value)) return false;

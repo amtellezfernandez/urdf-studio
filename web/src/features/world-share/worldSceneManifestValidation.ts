@@ -1,10 +1,11 @@
+import { isRecord } from "@/shared/lib/records";
+
 const WORLD_SCENE_MANIFEST_VALIDATION_PARAMS = {
   vectorComponentCount: 3,
   vectorComponentLabels: ["x", "y", "z"],
 } as const;
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+export { isRecord };
 
 export const isString = (value: unknown): value is string => typeof value === "string";
 

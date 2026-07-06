@@ -2,6 +2,7 @@ import {
   readBrowserStorageItem,
   writeBrowserStorageItem,
 } from "@/shared/lib/browserStorage";
+import { isRecord } from "@/shared/lib/records";
 
 export type TrajectoryJointSpec = {
   jointName: string;
@@ -35,9 +36,6 @@ const clamp = (value: number, min: number, max: number) =>
 
 const computeQuinticEaseInOut = (t: number): number =>
   t * t * t * (t * (t * 6 - 15) + 10);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readFiniteNumber = (
   source: Record<string, unknown>,
