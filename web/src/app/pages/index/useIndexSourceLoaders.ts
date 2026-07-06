@@ -19,6 +19,7 @@ import type {
   UrdfFileInput,
 } from "@/features/urdf/loader/urdfLoaderTypes";
 import type { SourceEntryGitHubParams } from "@/app/pages/index/sourceEntryTypes";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { GitHubSource } from "@/shared/store/useGitHubSourceStore";
 
 type UseIndexSourceLoadersParams = {
@@ -96,7 +97,7 @@ export const useIndexSourceLoaders = ({
         await loadFilesFromFolderWithFreshCameras(fileList);
         toast.success(`Loaded ${candidatePath} from GitHub`);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load GitHub repository.";
+        const message = readUnknownErrorMessage(error, "Failed to load GitHub repository.");
         toast.error(message);
       }
     },
@@ -119,7 +120,7 @@ export const useIndexSourceLoaders = ({
         await loadFilesFromFolderWithFreshCameras([file]);
         toast.success("Loaded URDF from URL");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load URDF URL.";
+        const message = readUnknownErrorMessage(error, "Failed to load URDF URL.");
         toast.error(message);
       }
     },

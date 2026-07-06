@@ -2,6 +2,7 @@ import { useCallback, useState, type ChangeEvent, type DragEvent } from "react";
 import { toast } from "sonner";
 
 import { parseCameraConfig } from "@/features/camera";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { CameraConfig } from "@/shared/types/camera";
 import {
   addRecentValue,
@@ -65,8 +66,7 @@ export const useCameraConfigSourceController = ({
         );
         setCameraConfigUrl(normalizedUrl);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to import camera configuration.";
+        const message = readUnknownErrorMessage(error, "Failed to import camera configuration.");
         toast.error(message);
       } finally {
         setIsLoadingCameraConfig(false);
@@ -87,8 +87,7 @@ export const useCameraConfigSourceController = ({
           file.name
         );
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to import camera configuration.";
+        const message = readUnknownErrorMessage(error, "Failed to import camera configuration.");
         toast.error(message);
       } finally {
         setIsLoadingCameraConfig(false);

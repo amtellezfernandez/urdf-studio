@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { toast } from "sonner";
 
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   buildWorldLayoutFolderAssetMap,
   splitWorldLayoutFolderFiles,
@@ -62,7 +63,7 @@ export const useWorldLayoutSourceController = ({
         toast.success("Loaded world layout.");
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to import world layout.";
+        const message = readUnknownErrorMessage(error, "Failed to import world layout.");
         toast.error(message);
         return false;
       } finally {
@@ -96,7 +97,7 @@ export const useWorldLayoutSourceController = ({
         setLoadedWorldLayoutName(layoutFile.name);
         toast.success(`Loaded world layout from ${layoutFile.name}.`);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to import world layout.";
+        const message = readUnknownErrorMessage(error, "Failed to import world layout.");
         toast.error(message);
       } finally {
         setIsLoadingWorldLayout(false);
