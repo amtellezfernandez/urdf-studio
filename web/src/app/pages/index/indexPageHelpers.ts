@@ -1,6 +1,6 @@
 import { WORLD_SCENE_PACKAGE_DEFAULT_VERSION } from "@/features/world-share/worldScenePackageParams";
 import { INDEX_PAGE_HELPER_PARAMS } from "@/app/pages/index/indexPageHelperParams";
-import { getFilenameFromPath } from "@/shared/lib/pathNames";
+import { getFilenameFromPath, getPathSegments } from "@/shared/lib/pathNames";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 
 export const DEFAULT_WORLD_SCENE_PACKAGE_ID = INDEX_PAGE_HELPER_PARAMS.defaultWorldScenePackageId;
@@ -97,7 +97,7 @@ export const parseRobotNameFromUrdf = (urdfContent: string) => {
 export const resolveRemoteUrdfFileUrl = (rawUrl: string): string => {
   const parsed = new URL(rawUrl);
   const host = parsed.hostname.toLowerCase();
-  const pathParts = parsed.pathname.split("/").filter(Boolean);
+  const pathParts = getPathSegments(parsed.pathname);
 
   if (
     (host === "huggingface.co" || host === "www.huggingface.co" || host === "hf.co") &&

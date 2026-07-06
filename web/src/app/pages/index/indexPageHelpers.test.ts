@@ -3,6 +3,7 @@ import {
   createDefaultWorldPublishDraft,
   inferRemoteUrdfFileName,
   prepareWorldPublishManifestOverrides,
+  resolveRemoteUrdfFileUrl,
   toWorldPublishFailureMessage,
   toWorldPublishSuccessLabel,
   toWorldPublishTargetLabel,
@@ -93,5 +94,14 @@ describe("index page world publish helpers", () => {
     );
     expect(inferRemoteUrdfFileName("https://example.test/robots/")).toBe("robot.urdf");
     expect(inferRemoteUrdfFileName("not a url")).toBe("robot.urdf");
+  });
+
+  it("normalizes hosted URDF file links to direct downloadable URLs", () => {
+    expect(
+      resolveRemoteUrdfFileUrl("https://github.com/acme/robots/blob/main/urdf/robot.urdf")
+    ).toBe("https://raw.githubusercontent.com/acme/robots/main/urdf/robot.urdf");
+    expect(
+      resolveRemoteUrdfFileUrl("https://huggingface.co/acme/robot/blob/main/robot.urdf")
+    ).toBe("https://huggingface.co/acme/robot/resolve/main/robot.urdf");
   });
 });

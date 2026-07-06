@@ -16,6 +16,7 @@ import {
   buildMeshFolderAliasReferences,
   buildMeshReferenceCandidates,
 } from "@runtime-private/urdf/meshReferenceFallbacks";
+import { getPathSegments } from "@/shared/lib/pathNames";
 
 export * from "i-love-urdf/browser";
 
@@ -55,8 +56,8 @@ export const mergePackageRootsWithMeshFiles = (
 };
 
 const makeRelativePath = (fromDir: string, toPath: string): string => {
-  const fromParts = fromDir.split("/").filter(Boolean);
-  const toParts = toPath.split("/").filter(Boolean);
+  const fromParts = getPathSegments(fromDir);
+  const toParts = getPathSegments(toPath);
   let common = 0;
   while (
     common < fromParts.length &&

@@ -1,6 +1,7 @@
 import { WORKSPACE_TRANSFER_PARAMS } from "@/features/world-share/workspaceTransferParams";
 import { throwIfWorkspaceTransferAborted } from "@/features/world-share/workspaceTransferAbort";
 import { blobToBase64 } from "@/shared/lib/blobEncoding";
+import { getPathSegments } from "@/shared/lib/pathNames";
 
 export type WorkspaceTransferMeshAssetUpload = {
   path: string;
@@ -51,7 +52,7 @@ const normalizeUploadPath = (
   if (slashNormalized.startsWith("/")) {
     if (!allowRootRelativeAsset) return null;
     const rootRelative = slashNormalized.replace(/^\/+/, "");
-    const [firstSegment] = rootRelative.split("/");
+    const [firstSegment] = getPathSegments(rootRelative);
     if (
       !firstSegment ||
       HOST_ABSOLUTE_ROOT_SEGMENTS.has(firstSegment.toLowerCase())
@@ -63,7 +64,7 @@ const normalizeUploadPath = (
   const normalized = slashNormalized;
   if (normalized.startsWith("~")) return null;
   if (!normalized || normalized.includes("\0") || normalized.includes(":")) return null;
-  const parts = normalized.split("/").filter(Boolean);
+  const parts = getPathSegments(normalized);
   if (parts.length === 0 || parts.some((part) => part === "..")) return null;
   const portablePath = parts.filter((part) => part !== ".").join("/");
   return portablePath || null;

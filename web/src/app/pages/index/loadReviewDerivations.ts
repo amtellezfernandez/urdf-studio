@@ -33,7 +33,7 @@ export const buildMeshRootHints = (debugMeshInfo: readonly DebugMeshInfo[]): str
     let value = 0;
     if (path.includes("/meshes")) value += 2;
     if (path.includes("/assets")) value += 2;
-    const depthPenalty = path.split("/").filter(Boolean).length;
+    const depthPenalty = getPathSegments(path).length;
     return value * 100 - depthPenalty;
   };
 
