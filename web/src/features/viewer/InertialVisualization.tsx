@@ -24,25 +24,9 @@ import { createLinkObjectResolver } from "@/features/viewer/linkObjectResolver";
 import {
   INERTIA_BOX_OPACITY,
   INERTIA_CENTER_MARKER_BASE_SIZE_METERS,
-  INERTIA_CENTER_MARKER_COLOR,
-  INERTIA_CENTER_MARKER_OPACITY,
-  INERTIA_CENTER_OFFSET_LINE_RADIAL_SEGMENTS,
   INERTIA_CENTER_OFFSET_MIN_LENGTH_METERS,
-  INERTIA_DEEMPHASIZED_OUTLINE_COLOR,
-  INERTIA_DEEMPHASIZED_OUTLINE_OPACITY,
   INERTIA_GLOBAL_COM_SIZE_METERS,
   INERTIA_LINK_COM_SIZE_METERS,
-  INERTIA_REFERENCE_BOX_COLOR,
-  INERTIA_REFERENCE_BOX_OPACITY,
-  INERTIA_SHAPE_FILL_COLOR_HEALTHY,
-  INERTIA_SHAPE_FILL_COLOR_PROBLEMATIC,
-  INERTIA_SHAPE_FILL_COLOR_UNVERIFIED,
-  INERTIA_SHAPE_FILL_COLOR_WARNING,
-  INERTIA_VOLUME_EDGE_OPACITY,
-  INERTIA_VOLUME_EDGE_COLOR_HEALTHY,
-  INERTIA_VOLUME_EDGE_COLOR_PROBLEMATIC,
-  INERTIA_VOLUME_EDGE_COLOR_UNVERIFIED,
-  INERTIA_VOLUME_EDGE_COLOR_WARNING,
 } from "@/features/viewer/inertialVisualizationParams";
 import {
   buildLinkCollisionGeometryReferences,
@@ -54,6 +38,20 @@ import {
   buildInertiaVisualizationMetricGroups,
   buildInertiaVisualizationVisibleLinkIndices,
 } from "@/features/viewer/inertialVisualizationGroups";
+import {
+  createComLineMaterial,
+  createGlobalComGeometry,
+  createGlobalComMaterial,
+  createInertiaCenterMarkerGeometry,
+  createInertiaCenterMarkerMaterial,
+  createInertiaCrossGeometry,
+  createInertiaDeemphasizedOutlineMaterial,
+  createInertiaEdgeMaterialsByGroup,
+  createInertiaFillMaterialsByGroup,
+  createInertiaReferenceMaterial,
+  createLinkComGeometry,
+  createLinkComMaterial,
+} from "@/features/viewer/inertialVisualizationRenderResources";
 
 export type InertiaReliabilityEntry = {
   linkName: string;
@@ -91,33 +89,6 @@ type InertialVisualizationProps = {
 
 const COM_COLOR = 0xff6fae;
 
-const createCrossGeometry = (size: number) => {
-  const g = new THREE.BufferGeometry();
-  const s = size * 2;
-  const points = new Float32Array([
-    -s,
-    0,
-    0,
-    s,
-    0,
-    0,
-    0,
-    -s,
-    0,
-    0,
-    s,
-    0,
-    0,
-    0,
-    -s,
-    0,
-    0,
-    s,
-  ]);
-  g.setAttribute("position", new THREE.BufferAttribute(points, 3));
-  return g;
-};
-
 export const InertialVisualization = ({
   robot,
   linkDataByName,
@@ -138,6 +109,7 @@ export const InertialVisualization = ({
   onReliabilityChange,
 }: InertialVisualizationProps) => {
   void _jointValues;
+  void gpuMode;
   const resolveLinkObject = useMemo(
     () => createLinkObjectResolver(robot),
     [robot],
@@ -304,175 +276,53 @@ export const InertialVisualization = ({
   const unitScale = useRef(new THREE.Vector3(1, 1, 1));
 
   const crossGeometry = useMemo(
-    () => createCrossGeometry(globalSize * 0.72),
+    () => createInertiaCrossGeometry(globalSize),
     [globalSize],
   );
   const globalGeometry = useMemo(
-    // Use a diamond-like glyph instead of a sphere for clearer COM semantics.
-    () => new THREE.OctahedronGeometry(globalSize * 1.2, 0),
+    () => createGlobalComGeometry(globalSize),
     [globalSize],
   );
   const linkComGeometry = useMemo(
-    // A small octahedron reads as a marker glyph more clearly than a dot.
-    () => new THREE.OctahedronGeometry(linkSize * 1.2, 0),
+    () => createLinkComGeometry(linkSize),
     [linkSize],
   );
   const centerMarkerGeometry = useMemo(
-    () =>
-      new THREE.CylinderGeometry(
-        1,
-        1,
-        1,
-        INERTIA_CENTER_OFFSET_LINE_RADIAL_SEGMENTS,
-      ),
+    () => createInertiaCenterMarkerGeometry(),
     [],
   );
   const inertiaGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
   const lineMaterial = useMemo(
-    () =>
-      new THREE.LineBasicMaterial({
-        color: COM_COLOR,
-        transparent: true,
-        opacity: 0.95,
-        depthTest: false,
-        depthWrite: false,
-      }),
+    () => createComLineMaterial(COM_COLOR),
     [],
   );
 
   const globalMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: COM_COLOR,
-        transparent: true,
-        opacity: 0.95,
-        depthTest: false,
-        depthWrite: false,
-      }),
+    () => createGlobalComMaterial(COM_COLOR),
     [],
   );
   const linkMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: COM_COLOR,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.9,
-        depthTest: false,
-        depthWrite: false,
-      }),
+    () => createLinkComMaterial(COM_COLOR),
     [],
   );
-  const createInertiaMaterial = useMemo(
-    () => (color: number, opacity: number, wireframe: boolean) => {
-      void gpuMode;
-      return new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity,
-        wireframe,
-        depthTest: false,
-        depthWrite: false,
-        toneMapped: false,
-        polygonOffset: true,
-        polygonOffsetFactor: wireframe ? -3 : -1,
-        polygonOffsetUnits: wireframe ? -3 : -1,
-      });
-    },
-    [gpuMode],
-  );
   const inertiaFillMaterialsByGroup = useMemo(
-    () => ({
-      healthy: createInertiaMaterial(
-        INERTIA_SHAPE_FILL_COLOR_HEALTHY,
-        inertiaOpacity,
-        false,
-      ),
-      warning: createInertiaMaterial(
-        INERTIA_SHAPE_FILL_COLOR_WARNING,
-        inertiaOpacity,
-        false,
-      ),
-      problematic: createInertiaMaterial(
-        INERTIA_SHAPE_FILL_COLOR_PROBLEMATIC,
-        inertiaOpacity,
-        false,
-      ),
-      unverified: createInertiaMaterial(
-        INERTIA_SHAPE_FILL_COLOR_UNVERIFIED,
-        inertiaOpacity,
-        false,
-      ),
-    }),
-    [createInertiaMaterial, inertiaOpacity],
+    () => createInertiaFillMaterialsByGroup(inertiaOpacity),
+    [inertiaOpacity],
   );
   const inertiaEdgeMaterialsByGroup = useMemo(
-    () => ({
-      healthy: createInertiaMaterial(
-        INERTIA_VOLUME_EDGE_COLOR_HEALTHY,
-        INERTIA_VOLUME_EDGE_OPACITY,
-        true,
-      ),
-      warning: createInertiaMaterial(
-        INERTIA_VOLUME_EDGE_COLOR_WARNING,
-        INERTIA_VOLUME_EDGE_OPACITY,
-        true,
-      ),
-      problematic: createInertiaMaterial(
-        INERTIA_VOLUME_EDGE_COLOR_PROBLEMATIC,
-        INERTIA_VOLUME_EDGE_OPACITY,
-        true,
-      ),
-      unverified: createInertiaMaterial(
-        INERTIA_VOLUME_EDGE_COLOR_UNVERIFIED,
-        INERTIA_VOLUME_EDGE_OPACITY,
-        true,
-      ),
-    }),
-    [createInertiaMaterial],
+    () => createInertiaEdgeMaterialsByGroup(),
+    [],
   );
   const centerMarkerMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: INERTIA_CENTER_MARKER_COLOR,
-        transparent: true,
-        opacity: INERTIA_CENTER_MARKER_OPACITY,
-        depthTest: false,
-        depthWrite: false,
-        toneMapped: false,
-      }),
+    () => createInertiaCenterMarkerMaterial(),
     [],
   );
   const referenceMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: INERTIA_REFERENCE_BOX_COLOR,
-        transparent: true,
-        opacity: INERTIA_REFERENCE_BOX_OPACITY,
-        wireframe: true,
-        depthTest: true,
-        depthWrite: false,
-        toneMapped: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -2,
-        polygonOffsetUnits: -2,
-      }),
+    () => createInertiaReferenceMaterial(),
     [],
   );
   const deemphasizedOutlineMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: INERTIA_DEEMPHASIZED_OUTLINE_COLOR,
-        transparent: true,
-        opacity: INERTIA_DEEMPHASIZED_OUTLINE_OPACITY,
-        wireframe: true,
-        depthTest: false,
-        depthWrite: false,
-        toneMapped: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -4,
-        polygonOffsetUnits: -4,
-      }),
+    () => createInertiaDeemphasizedOutlineMaterial(),
     [],
   );
 
