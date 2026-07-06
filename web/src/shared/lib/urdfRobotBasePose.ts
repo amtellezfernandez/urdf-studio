@@ -1,23 +1,13 @@
 import type { URDFRobot } from "urdf-loader";
 
+import { isFiniteRobotBasePose } from "@/shared/lib/robotBasePose";
 import { URDF_ROBOT_BASE_POSE_PARAMS } from "@/shared/lib/urdfRobotBasePoseParams";
 import type { RobotBasePose } from "@/shared/types/feature";
 
 export const extractRobotBasePose = (robot: URDFRobot | null): RobotBasePose | null => {
   if (!robot) return null;
   const { position, quaternion } = robot;
-  if (
-    !Number.isFinite(position.x) ||
-    !Number.isFinite(position.y) ||
-    !Number.isFinite(position.z) ||
-    !Number.isFinite(quaternion.x) ||
-    !Number.isFinite(quaternion.y) ||
-    !Number.isFinite(quaternion.z) ||
-    !Number.isFinite(quaternion.w)
-  ) {
-    return null;
-  }
-  return {
+  const basePose: RobotBasePose = {
     position: {
       x: position.x,
       y: position.y,
@@ -30,24 +20,15 @@ export const extractRobotBasePose = (robot: URDFRobot | null): RobotBasePose | n
       w: quaternion.w,
     },
   };
+  return isFiniteRobotBasePose(basePose) ? basePose : null;
 };
 
 export const applyRobotBasePose = (
   robot: URDFRobot | null,
   basePose: RobotBasePose | null | undefined
 ) => {
-  if (!robot || !basePose) return false;
+  if (!robot || !isFiniteRobotBasePose(basePose)) return false;
   const { position, quaternion } = basePose;
-  const values = [
-    position.x,
-    position.y,
-    position.z,
-    quaternion.x,
-    quaternion.y,
-    quaternion.z,
-    quaternion.w,
-  ];
-  if (!values.every(Number.isFinite)) return false;
 
   let changed = false;
   const applyEpsilon = URDF_ROBOT_BASE_POSE_PARAMS.applyEpsilon;
