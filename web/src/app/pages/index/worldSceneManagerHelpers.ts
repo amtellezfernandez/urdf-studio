@@ -13,7 +13,7 @@ import {
   buildWorldRolloutConfigFromDraft,
   fetchWorldRolloutJob,
 } from "@/app/pages/index/worldSceneRuntime";
-import { getFilenameFromPath } from "@/app/pages/index/pathNames";
+import { getFilenameFromPath } from "@/shared/lib/pathNames";
 import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
 
 function downloadBlobDocument(blob: Blob, filename: string) {

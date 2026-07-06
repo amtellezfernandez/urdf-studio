@@ -5,6 +5,7 @@ import {
   extractPackageNameFromPackageXml,
   isXacroPath,
 } from "@/shared/lib/urdfCore";
+import { getPathSegments } from "@/shared/lib/pathNames";
 import {
   normalizeMeshPathForMatch,
   parseURDF,
@@ -14,7 +15,7 @@ import { getFileRelativePath } from "@/features/urdf/loader/urdfMeshIndex";
 export const getBasePathFromRelativePath = (relativePath: string): string => {
   const normalized = normalizeMeshPathForMatch(relativePath);
   if (!normalized) return "";
-  const parts = normalized.split("/").filter(Boolean);
+  const parts = getPathSegments(normalized);
   if (parts.length <= 1) return "";
   parts.pop();
   return parts.join("/");

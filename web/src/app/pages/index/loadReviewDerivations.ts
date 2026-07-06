@@ -1,4 +1,5 @@
 import { validateInertiaTensor } from "@/features/viewer/inertialMath";
+import { getPathSegments } from "@/shared/lib/pathNames";
 import { normalizeMeshPathForMatch, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
@@ -39,7 +40,7 @@ export const buildMeshRootHints = (debugMeshInfo: readonly DebugMeshInfo[]): str
   for (const info of debugMeshInfo) {
     const normalized = normalizeMeshPathForMatch(info.webkitRelativePath || "");
     if (!normalized) continue;
-    const parts = normalized.split("/").filter(Boolean);
+    const parts = getPathSegments(normalized);
     if (parts.length <= 1) continue;
     const dir = parts.slice(0, -1).join("/");
     if (dir) roots.add(dir);

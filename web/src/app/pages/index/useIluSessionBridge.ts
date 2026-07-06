@@ -16,7 +16,7 @@ import {
   shouldSyncAttachedIluSession,
   toStudioGitHubSource,
 } from "@/app/pages/index/iluSessionBridgeHelpers";
-import { getFilenameFromPath } from "@/app/pages/index/pathNames";
+import { getFilenameFromPath } from "@/shared/lib/pathNames";
 import {
   ILU_SESSION_POLL_INTERVAL_MS,
   ILU_SESSION_SAVE_DEBOUNCE_MS,

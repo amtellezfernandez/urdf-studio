@@ -10,7 +10,7 @@ import {
 } from "@/features/urdf/github/iluGitHubImport";
 import { normalizeMeshPathForMatch } from "@/shared/lib/urdfBrowser";
 import { THUMBNAIL_BOOTSTRAP_PARAMS } from "@/app/pages/index/thumbnailBootstrapParams";
-import { getFilenameFromPath } from "@/app/pages/index/pathNames";
+import { getFilenameFromPath } from "@/shared/lib/pathNames";
 
 type CandidateLike = {
   name: string;

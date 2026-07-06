@@ -1,6 +1,6 @@
 import type { GitHubSource } from "@/shared/store/useGitHubSourceStore";
 import type { IluSessionSnapshot } from "@/features/urdf/loader/iluSessionApi";
-import { getFilenameFromPath } from "@/app/pages/index/pathNames";
+import { getFilenameFromPath } from "@/shared/lib/pathNames";
 
 export const getIluSessionLoadTarget = (snapshot: IluSessionSnapshot) => {
   const loadedSource = snapshot.loadedSource;

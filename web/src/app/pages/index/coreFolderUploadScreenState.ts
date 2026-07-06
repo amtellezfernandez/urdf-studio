@@ -4,7 +4,7 @@ import {
   removeBrowserStorageItem,
   writeBrowserStorageItem,
 } from "@/shared/lib/browserStorage";
-import { getFilenameFromPath } from "@/app/pages/index/pathNames";
+import { getFilenameFromPath, getFirstPathSegment } from "@/shared/lib/pathNames";
 
 export const CORE_FOLDER_UPLOAD_SCREEN_PARAMS = {
   setupEntryWideContainerClass: "max-w-7xl space-y-6",
@@ -83,7 +83,7 @@ export const deriveSourceLabel = (value: string, fallback: string): string => {
 
 export const deriveLocalSourceLabel = (files: File[]): string => {
   const firstPath = files[0] ? getBrowserFileRelativePath(files[0]) : "";
-  const firstSegment = firstPath.split("/").filter(Boolean)[0];
+  const firstSegment = getFirstPathSegment(firstPath);
   if (firstSegment && firstSegment !== files[0]?.name) return firstSegment;
   if (files.length === 1 && files[0]) return files[0].name;
   return `${files.length} local files`;
