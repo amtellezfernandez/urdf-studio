@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import subprocess
 import threading
 import uuid
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,12 +27,10 @@ from backend.models.world_rollouts import (
     WorldRolloutPackageRef,
     WorldRolloutTraceRecord,
 )
-from backend.models.world_scene_package import WorldScenePackageManifest, WorldSceneRegistryEnvelope
+from backend.models.world_scene_package import WorldSceneRegistryEnvelope
 from backend.services.world_scene_package_digest import (
-    world_scene_package_digest,
-    world_scene_package_json_payload,
+    world_scene_registry_envelope_digest,
 )
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND,
     WORLD_ROLLOUT_DEFAULT_RUNNER_KIND,
@@ -329,9 +327,8 @@ class WorldRolloutService:
 
     def _build_campaign(self, request: WorldRolloutJobCreateRequest) -> WorldRolloutCampaignManifest:
         world_package = request.world_package
-        normalized_world_package = read_world_scene_package_manifest(world_package)
         campaign_id = request.campaign_id or f"{world_package.package_id}-{world_package.version}"
-        world_package_digest = world_scene_package_digest(normalized_world_package)
+        world_package_digest = world_scene_registry_envelope_digest(world_package)
         checker_profile_digest = _sha256_bytes(_model_json_bytes(request.checker_profile))
         return WorldRolloutCampaignManifest(
             campaign_id=campaign_id,
@@ -456,10 +453,8 @@ class WorldRolloutService:
     def _write_model_json(self, path: Path, payload: BaseModel) -> str:
         raw = _model_json_bytes(payload)
         path.write_bytes(raw)
-        if isinstance(payload, WorldScenePackageManifest):
-            return world_scene_package_digest(payload)
         if isinstance(payload, WorldSceneRegistryEnvelope):
-            return world_scene_package_digest(read_world_scene_package_manifest(payload))
+            return world_scene_registry_envelope_digest(payload)
         return _sha256_bytes(raw)
 
     def _read_text_file(self, path: Path, *, max_bytes: int, label: str) -> str:
@@ -501,8 +496,6 @@ class WorldRolloutService:
 
 
 def _model_json_bytes(payload: BaseModel) -> bytes:
-    if isinstance(payload, WorldScenePackageManifest):
-        return json.dumps(world_scene_package_json_payload(payload), indent=2).encode("utf-8")
     if isinstance(payload, WorldSceneRegistryEnvelope):
         return payload.model_dump_json(indent=2, exclude_none=True).encode("utf-8")
     return payload.model_dump_json(indent=2).encode("utf-8")

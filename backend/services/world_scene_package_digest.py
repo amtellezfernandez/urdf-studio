@@ -7,7 +7,11 @@ from collections.abc import Mapping
 from typing import cast
 
 from backend.models.json_payload import JsonObject, JsonValue
-from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.models.world_scene_package import (
+    WorldSceneDocument,
+    WorldScenePackageManifest,
+    WorldSceneRegistryEnvelope,
+)
 
 
 def _expand_exponent_notation(number_text: str) -> str:
@@ -116,9 +120,30 @@ def canonical_world_snapshot_json(manifest: WorldScenePackageManifest) -> str:
     return _canonical_json_dump(payload)
 
 
+def canonical_world_scene_document_json(world: WorldSceneDocument) -> str:
+    payload: JsonObject = {
+        "urdf_xml": world.urdf_xml or "<robot name='world'/>",
+        "joint_positions": world.joint_positions or {},
+        "cameras": world.cameras or [],
+        "objects": world.objects,
+        "scenario_time_ms": world.scenario_time_ms,
+        "scenario_duration_ms": world.scenario_duration_ms,
+    }
+    return _canonical_json_dump(payload)
+
+
 def computed_world_snapshot_digest(manifest: WorldScenePackageManifest) -> str:
     canonical_json = canonical_world_snapshot_json(manifest)
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def computed_world_scene_document_digest(world: WorldSceneDocument) -> str:
+    canonical_json = canonical_world_scene_document_json(world)
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def world_scene_registry_envelope_digest(envelope: WorldSceneRegistryEnvelope) -> str:
+    return computed_world_scene_document_digest(envelope.world)
 
 
 def declared_world_snapshot_digest(manifest: WorldScenePackageManifest) -> str | None:

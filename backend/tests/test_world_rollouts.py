@@ -20,8 +20,8 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
-from backend.services.world_scene_package_digest import world_scene_package_digest
+from backend.services.world_scene_package_compat import read_world_scene_registry_envelope
+from backend.services.world_scene_package_digest import world_scene_registry_envelope_digest
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_rollouts import (
     WorldRolloutCliConfig,
@@ -269,6 +269,10 @@ def test_rollout_job_requests_accept_thin_world_registry_envelopes(tmp_path) -> 
 
     assert job.campaign.world_package.package_id == "demo-world"
     assert job.campaign.world_package.version == "1.0.0"
+    assert (
+        job.campaign.world_package.digest_sha256
+        == world_scene_registry_envelope_digest(request.world_package)
+    )
 
 
 def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tmp_path) -> None:
@@ -303,12 +307,17 @@ def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tm
     written_world_package = WorldSceneRegistryEnvelope.model_validate_json(
         world_package_path.read_text(encoding="utf-8")
     )
-    normalized_written_world_package = read_world_scene_package_manifest(written_world_package)
-    assert _artifact_digest(completed, WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND) == world_scene_package_digest(
-        world_package
+    normalized_world_package = read_world_scene_registry_envelope(world_package)
+    assert _artifact_digest(
+        completed, WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND
+    ) == world_scene_registry_envelope_digest(normalized_world_package)
+    assert (
+        completed.campaign.world_package.digest_sha256
+        == world_scene_registry_envelope_digest(normalized_world_package)
     )
-    assert completed.campaign.world_package.digest_sha256 == world_scene_package_digest(world_package)
-    assert world_scene_package_digest(normalized_written_world_package) == world_scene_package_digest(world_package)
+    assert world_scene_registry_envelope_digest(
+        written_world_package
+    ) == world_scene_registry_envelope_digest(normalized_world_package)
     assert _artifact_digest(completed, WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND) == _digest_file(
         checker_profile_path
     )
