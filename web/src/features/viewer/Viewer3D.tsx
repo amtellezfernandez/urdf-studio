@@ -186,12 +186,12 @@ import {
   STUDIO_WHEEL_ROLE_DECAY,
   STUDIO_WHEEL_ROLE_EMA_ALPHA,
   STUDIO_WHEEL_ROLE_UI_REFRESH_MS,
+  buildStudioWheelRoleMarkers,
   buildStudioWheelRoleEntries,
   detectStudioWheelDriveModel,
   getPreferredStudioDriveWheels,
   getStudioWheelTravelForBodyMotion,
   resolveSafeMotionDimension,
-  resolveStudioWheelMarkerAnchorObject,
   type StudioWheelDriveModel,
   type StudioWheelRoleDisplayEntry,
   type StudioWheelRoleEntry,
@@ -1838,20 +1838,7 @@ export const Viewer3D = ({
   );
   const studioWheelRoleMarkers = useMemo<StudioWheelRoleMarker[]>(() => {
     if (!hasStudioRobot || !isWheelRolesOpen || !robot) return [];
-    return studioWheelRoleDisplayEntries
-      .map((entry) => {
-        const joint = robot.joints?.[entry.jointName];
-        if (!joint) return null;
-        return {
-          jointName: entry.jointName,
-          wheelNumber: entry.wheelNumber,
-          driveEnabled: entry.driveEnabled,
-          side: entry.side,
-          role: entry.role,
-          anchorObject: resolveStudioWheelMarkerAnchorObject(joint),
-        } satisfies StudioWheelRoleMarker;
-      })
-      .filter((entry): entry is StudioWheelRoleMarker => Boolean(entry));
+    return buildStudioWheelRoleMarkers(studioWheelRoleDisplayEntries, robot.joints);
   }, [hasStudioRobot, isWheelRolesOpen, robot, studioWheelRoleDisplayEntries]);
   const linkInertials = useMemo(
     () => (isAssemblyWorkspace ? [] : extractLinkInertials(urdfAnalysis, urdfContent ?? "")),

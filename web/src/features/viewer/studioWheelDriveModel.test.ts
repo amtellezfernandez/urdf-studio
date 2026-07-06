@@ -3,6 +3,7 @@ import * as THREE from "three";
 import type { URDFJoint } from "urdf-loader";
 
 import {
+  buildStudioWheelRoleMarkers,
   buildStudioWheelRoleEntries,
   getPreferredStudioDriveWheels,
   getStudioWheelTravelForBodyMotion,
@@ -118,5 +119,62 @@ describe("studioWheelDriveModel", () => {
         TRACK_WIDTH_METERS
       )
     ).toBeCloseTo(1.4, 8);
+  });
+
+  it("builds wheel role markers from display entries and joint children", () => {
+    const leftChild = new THREE.Group();
+    const leftJoint = { children: [leftChild] } as unknown as URDFJoint;
+    const rightJoint = new THREE.Group() as unknown as URDFJoint;
+
+    const markers = buildStudioWheelRoleMarkers(
+      [
+        {
+          jointName: "left_drive",
+          side: "left",
+          role: "drive",
+          activityMps: ACTIVE_ACTIVITY_MPS,
+          driveEnabled: true,
+          wheelNumber: 1,
+        },
+        {
+          jointName: "right_idle",
+          side: "right",
+          role: "unknown",
+          activityMps: LOW_ACTIVITY_MPS,
+          driveEnabled: false,
+          wheelNumber: 2,
+        },
+        {
+          jointName: "missing",
+          side: "unknown",
+          role: "unknown",
+          activityMps: 0,
+          driveEnabled: false,
+          wheelNumber: 3,
+        },
+      ],
+      {
+        left_drive: leftJoint,
+        right_idle: rightJoint,
+      }
+    );
+
+    expect(markers).toHaveLength(2);
+    expect(markers[0]).toMatchObject({
+      jointName: "left_drive",
+      wheelNumber: 1,
+      driveEnabled: true,
+      side: "left",
+      role: "drive",
+    });
+    expect(markers[0]?.anchorObject).toBe(leftChild);
+    expect(markers[1]).toMatchObject({
+      jointName: "right_idle",
+      wheelNumber: 2,
+      driveEnabled: false,
+      side: "right",
+      role: "unknown",
+    });
+    expect(markers[1]?.anchorObject).toBe(rightJoint);
   });
 });

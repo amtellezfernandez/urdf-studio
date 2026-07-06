@@ -541,5 +541,24 @@ export const getPreferredStudioDriveWheels = (
   return model.wheels.filter((wheel) => activeJointNameSet.has(wheel.jointName));
 };
 
-export const resolveStudioWheelMarkerAnchorObject = (joint: URDFJoint): THREE.Object3D =>
+const resolveStudioWheelMarkerAnchorObject = (joint: URDFJoint): THREE.Object3D =>
   resolveWheelJointChildObject(joint) ?? joint;
+
+export const buildStudioWheelRoleMarkers = (
+  displayEntries: readonly StudioWheelRoleDisplayEntry[],
+  jointsByName: Record<string, URDFJoint> | undefined
+): StudioWheelRoleMarker[] =>
+  displayEntries
+    .map((entry) => {
+      const joint = jointsByName?.[entry.jointName];
+      if (!joint) return null;
+      return {
+        jointName: entry.jointName,
+        wheelNumber: entry.wheelNumber,
+        driveEnabled: entry.driveEnabled,
+        side: entry.side,
+        role: entry.role,
+        anchorObject: resolveStudioWheelMarkerAnchorObject(joint),
+      } satisfies StudioWheelRoleMarker;
+    })
+    .filter((entry): entry is StudioWheelRoleMarker => Boolean(entry));
