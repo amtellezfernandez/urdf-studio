@@ -242,8 +242,9 @@ import {
   buildRobotMirrorSymmetryVisualizationScopeKey,
 } from "@/features/layout/page/simulationPrepViewerState";
 import {
-  buildViewerRenderPerformancePolicy,
-} from "@/features/viewer/viewerPerformancePolicy";
+  buildViewerChromePolicy,
+  buildViewerUiPolicy,
+} from "@/features/viewer/viewerUiPolicy";
 import {
   applyAssemblyWheelRollForWorldDelta,
   collectAssemblyMeshProxies,
@@ -2615,31 +2616,16 @@ export const Viewer3D = ({
   const setLiveRobotBasePose = useRobotPoseStore((state) => state.setPose);
   const clearLiveRobotBasePose = useRobotPoseStore((state) => state.clearPose);
   const viewerPolicy = useMemo(
-    () => {
-      const showSceneChrome = !thumbnailMode;
-      const showEditableChrome = showSceneChrome && !readOnlyMode;
-      const showStudioSceneChrome = showSceneChrome && workspaceModeUi.showStudioChrome;
-      const showStudioEditableSceneChrome = showStudioSceneChrome && !readOnlyMode;
-      const renderPerformancePolicy = buildViewerRenderPerformancePolicy({
+    () =>
+      buildViewerChromePolicy({
         requestedGpuMode: gpuMode,
         workspaceMode,
         thumbnailMode,
         readOnlyMode,
-        showStudioSceneChrome,
-      });
-
-      return {
         hasStudioRobot,
-        canUseReadOnlyRoverGuide: readOnlyMode && hasStudioRobot,
-        showSceneChrome,
-        showEditableChrome,
-        showStudioSceneChrome,
-        showStudioEditableSceneChrome,
-        showTopRightTools: showStudioSceneChrome && Boolean(urdfFile),
-        showHeader: showEditableChrome,
-        ...renderPerformancePolicy,
-      };
-    },
+        hasUrdfFile: Boolean(urdfFile),
+        showStudioChrome: workspaceModeUi.showStudioChrome,
+      }),
     [
       gpuMode,
       hasStudioRobot,
@@ -2658,40 +2644,20 @@ export const Viewer3D = ({
       inertialVisualization.scopedLinkNames !== null);
   const showWorldLayoutOverlays = !simulationPrepOverlayActive;
   const viewerUi = useMemo(
-    () => {
-      return {
-        showHeader: viewerPolicy.showHeader,
-        showJointTypesPanel:
-          viewerPolicy.showEditableChrome && Object.keys(jointLimits || {}).length > 0,
-        showEndEffectorSummary:
-          viewerPolicy.showStudioEditableSceneChrome &&
-          !isWheelRolesOpen &&
-          ikHandlesReady &&
-          ikEndEffectorLinks.length > 0,
-        showSceneChrome: viewerPolicy.showSceneChrome,
-        showStudioSceneChrome: viewerPolicy.showStudioSceneChrome,
-        showStudioEditableSceneChrome: viewerPolicy.showStudioEditableSceneChrome,
-        showIkHandles:
-          viewerPolicy.showStudioEditableSceneChrome &&
-          workspaceModeUi.showIkPanel &&
-          !simulationPrepPanelOpen &&
-          !ikDragSuppressed &&
-          ikHandlesReady &&
-          ikDragEnabled &&
-          Boolean(urdfContent) &&
-          ikEndEffectorLinks.length > 0,
-        showWheelRoleMarkers: viewerPolicy.showStudioEditableSceneChrome && isWheelRolesOpen,
-        showCreatedObjects: viewerPolicy.showStudioSceneChrome && showWorldLayoutOverlays,
-        showIkDialog: workspaceModeUi.showIkPanel,
-        showTopRightTools: viewerPolicy.showTopRightTools,
-        canvasDpr: viewerPolicy.canvasDpr,
-        enableCanvasAntialias: viewerPolicy.enableCanvasAntialias,
-        canvasPowerPreference: viewerPolicy.canvasPowerPreference,
-        enableShadows: viewerPolicy.enableShadows,
-        canPublishLiveRobotBasePose: viewerPolicy.canPublishLiveRobotBasePose,
-        canRunStudioWheelDrive: viewerPolicy.canRunStudioWheelDrive,
-      };
-    },
+    () =>
+      buildViewerUiPolicy({
+        viewerPolicy,
+        showIkPanel: workspaceModeUi.showIkPanel,
+        hasJointLimits: Object.keys(jointLimits || {}).length > 0,
+        isWheelRolesOpen,
+        ikHandlesReady,
+        ikEndEffectorLinkCount: ikEndEffectorLinks.length,
+        ikDragEnabled,
+        ikDragSuppressed,
+        simulationPrepPanelOpen,
+        hasUrdfContent: Boolean(urdfContent),
+        showWorldLayoutOverlays,
+      }),
     [
       ikDragEnabled,
       ikDragSuppressed,
