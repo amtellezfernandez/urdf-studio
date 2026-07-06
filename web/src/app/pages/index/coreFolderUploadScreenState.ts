@@ -1,4 +1,9 @@
 import { getBrowserFileRelativePath } from "@/shared/lib/browserFilePaths";
+import {
+  readBrowserStorageItem,
+  removeBrowserStorageItem,
+  writeBrowserStorageItem,
+} from "@/shared/lib/browserStorage";
 
 export const CORE_FOLDER_UPLOAD_SCREEN_PARAMS = {
   setupEntryWideContainerClass: "max-w-7xl space-y-6",
@@ -17,10 +22,9 @@ export const CORE_FOLDER_UPLOAD_SCREEN_PARAMS = {
 } as const;
 
 export const readStoredJsonArray = (storageKey: string): string[] => {
-  if (typeof window === "undefined") return [];
+  const value = readBrowserStorageItem(storageKey);
+  if (!value) return [];
   try {
-    const value = window.localStorage.getItem(storageKey);
-    if (!value) return [];
     const parsed = JSON.parse(value);
     return Array.isArray(parsed)
       ? parsed.filter((item): item is string => typeof item === "string")
@@ -31,22 +35,19 @@ export const readStoredJsonArray = (storageKey: string): string[] => {
 };
 
 const writeStoredJsonArray = (storageKey: string, values: string[]): void => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey, JSON.stringify(values));
+  writeBrowserStorageItem(storageKey, JSON.stringify(values));
 };
 
 export const readStoredString = (storageKey: string): string | null => {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(storageKey);
+  return readBrowserStorageItem(storageKey);
 };
 
 export const writeStoredString = (storageKey: string, value: string | null): void => {
-  if (typeof window === "undefined") return;
   if (value) {
-    window.localStorage.setItem(storageKey, value);
+    writeBrowserStorageItem(storageKey, value);
     return;
   }
-  window.localStorage.removeItem(storageKey);
+  removeBrowserStorageItem(storageKey);
 };
 
 export const addRecentValue = (storageKey: string, value: string, maxItems = 3): string[] => {

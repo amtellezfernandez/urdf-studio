@@ -1,7 +1,14 @@
 /** @vitest-environment jsdom */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { deriveLocalSourceLabel } from "@/app/pages/index/coreFolderUploadScreenState";
+import {
+  addRecentValue,
+  deriveLocalSourceLabel,
+  readStoredJsonArray,
+  readStoredString,
+  removeRecentValue,
+  writeStoredString,
+} from "@/app/pages/index/coreFolderUploadScreenState";
 
 const createFile = ({
   name,
@@ -42,5 +49,52 @@ describe("deriveLocalSourceLabel", () => {
     expect(deriveLocalSourceLabel([createFile({ name: "robot.urdf" })])).toBe(
       "robot.urdf"
     );
+  });
+});
+
+describe("core folder upload storage helpers", () => {
+  const storageKey = "urdfstudio:test-storage-helper";
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("reads only string values from stored JSON arrays", () => {
+    localStorage.setItem(storageKey, JSON.stringify(["one", 2, "two", null]));
+
+    expect(readStoredJsonArray(storageKey)).toEqual(["one", "two"]);
+  });
+
+  it("ignores malformed or missing stored JSON arrays", () => {
+    expect(readStoredJsonArray(storageKey)).toEqual([]);
+
+    localStorage.setItem(storageKey, "{not-json");
+
+    expect(readStoredJsonArray(storageKey)).toEqual([]);
+  });
+
+  it("adds recent values with trimming, deduplication, and max length", () => {
+    expect(addRecentValue(storageKey, " one ")).toEqual(["one"]);
+    expect(addRecentValue(storageKey, "two")).toEqual(["two", "one"]);
+    expect(addRecentValue(storageKey, "one", 2)).toEqual(["one", "two"]);
+    expect(addRecentValue(storageKey, "three", 2)).toEqual(["three", "one"]);
+    expect(addRecentValue(storageKey, "   ", 2)).toEqual(["three", "one"]);
+  });
+
+  it("removes recent values", () => {
+    localStorage.setItem(storageKey, JSON.stringify(["one", "two"]));
+
+    expect(removeRecentValue(storageKey, "one")).toEqual(["two"]);
+    expect(readStoredJsonArray(storageKey)).toEqual(["two"]);
+  });
+
+  it("writes and clears stored strings", () => {
+    writeStoredString(storageKey, "robot_pkg");
+
+    expect(readStoredString(storageKey)).toBe("robot_pkg");
+
+    writeStoredString(storageKey, null);
+
+    expect(readStoredString(storageKey)).toBeNull();
   });
 });
