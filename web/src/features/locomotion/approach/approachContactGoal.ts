@@ -12,6 +12,7 @@ import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import { ROVER_APPROACH_CONTACT_GOAL_PARAMS } from "./approachContactGoalParams";
 import {
   assessRoverApproachWorldSegmentClearance,
+  resolveRoverApproachExcludedObstacleIds,
   serializeWorldObjectObstacleSource,
   toRoverApproachWorldVector3Tuple,
   resolveRoverApproachWorldRoute,
@@ -456,9 +457,9 @@ const resolveContactGoalExcludedObstacleIds = ({
     robotFootprint,
     upAxisWorld,
   });
-  return [object.id, contactOriginObstacleId].filter((id): id is string =>
-    Boolean(id),
-  );
+  return resolveRoverApproachExcludedObstacleIds({
+    excludedObstacleIds: [object.id, contactOriginObstacleId],
+  });
 };
 
 const resolveNearestOtherPlanarDistanceSq = ({

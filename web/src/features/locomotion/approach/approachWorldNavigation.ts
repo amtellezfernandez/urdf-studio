@@ -194,13 +194,15 @@ const resolveRoverApproachPathClearanceM = ({
     ? ROVER_APPROACH_DETOUR_CONFIG.objectContactPathClearancePaddingM
     : ROVER_APPROACH_DETOUR_CONFIG.pathClearancePaddingM);
 
-const resolveExcludedObstacleIdSet = ({
+type ResolveRoverApproachExcludedObstacleIdsParams = {
+  excludedObstacleId?: string | null;
+  excludedObstacleIds?: readonly (string | null | undefined)[] | null;
+};
+
+export const resolveRoverApproachExcludedObstacleIds = ({
   excludedObstacleId,
   excludedObstacleIds,
-}: {
-  excludedObstacleId?: string | null;
-  excludedObstacleIds?: readonly string[] | null;
-}): Set<string> => {
+}: ResolveRoverApproachExcludedObstacleIdsParams): string[] => {
   const ids = new Set<string>();
   if (excludedObstacleId) {
     ids.add(excludedObstacleId);
@@ -210,8 +212,12 @@ const resolveExcludedObstacleIdSet = ({
       ids.add(id);
     }
   });
-  return ids;
+  return [...ids];
 };
+
+const resolveExcludedObstacleIdSet = (
+  params: ResolveRoverApproachExcludedObstacleIdsParams,
+): Set<string> => new Set(resolveRoverApproachExcludedObstacleIds(params));
 
 const filterObstaclesByExcludedIds = <T extends { id: string }>({
   obstacles,
@@ -545,12 +551,10 @@ export const resolveRoverApproachWorldRoute = ({
     upAxisWorld,
     roverBaseRadiusM,
     robotFootprint,
-    excludedObstacleIds: [
-      ...resolveExcludedObstacleIdSet({
-        excludedObstacleId,
-        excludedObstacleIds,
-      }),
-    ],
+    excludedObstacleIds: resolveRoverApproachExcludedObstacleIds({
+      excludedObstacleId,
+      excludedObstacleIds,
+    }),
     isObjectContactTarget,
   });
   const obstacles = filterObstaclesByExcludedIds({

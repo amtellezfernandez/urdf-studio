@@ -19,6 +19,7 @@ import {
   assessRoverApproachWorldSegmentClearance,
   buildRoverApproachWorldNavigationContext,
   buildRoverApproachWorldNavigationDiagnostics,
+  resolveRoverApproachExcludedObstacleIds,
   resolveRoverApproachWorldRoute,
   serializeWorldObjectObstacleSource,
   toRoverApproachWorldVector3Tuple,
@@ -213,6 +214,15 @@ describe("approachWorldNavigation", () => {
       routeSolveMs: 4,
       totalMs: 7,
     });
+  });
+
+  it("normalizes combined excluded obstacle ids", () => {
+    expect(
+      resolveRoverApproachExcludedObstacleIds({
+        excludedObstacleId: "target",
+        excludedObstacleIds: ["source", "target", null, undefined, ""],
+      })
+    ).toEqual(["target", "source"]);
   });
 
   it("reuses the cached scene and returns waypoint routing for blocked paths", () => {
