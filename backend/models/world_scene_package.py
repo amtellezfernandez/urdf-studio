@@ -127,33 +127,36 @@ class WorldSnapshot(BaseModel):
     def _validate_finite_payload_numbers(
         cls, value: list[WorldScenePayload]
     ) -> list[WorldScenePayload]:
-        _raise_for_non_finite_payload_numbers(value)
+        raise_for_non_finite_world_payload_numbers(value)
         return value
 
     @field_validator("cameras")
     @classmethod
     def _validate_camera_payloads(cls, value: list[WorldScenePayload]) -> list[WorldScenePayload]:
-        _raise_for_invalid_camera_payloads(value)
+        raise_for_invalid_world_scene_cameras(value)
         return value
 
     @field_validator("objects")
     @classmethod
     def _validate_object_payloads(cls, value: list[WorldScenePayload]) -> list[WorldScenePayload]:
-        _raise_for_invalid_object_payloads(value)
+        raise_for_invalid_world_scene_objects(value)
         return value
 
 
-def _raise_for_non_finite_payload_numbers(value: object, path: str = "") -> None:
+def raise_for_non_finite_world_payload_numbers(value: object, path: str = "") -> None:
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError(f"{path or 'payload'} must not contain non-finite numbers.")
     if isinstance(value, list):
         for index, item in enumerate(value):
-            _raise_for_non_finite_payload_numbers(item, f"{path}[{index}]" if path else f"[{index}]")
+            raise_for_non_finite_world_payload_numbers(
+                item,
+                f"{path}[{index}]" if path else f"[{index}]",
+            )
         return
     if isinstance(value, dict):
         for key, item in value.items():
             field_path = f"{path}.{key}" if path else str(key)
-            _raise_for_non_finite_payload_numbers(item, field_path)
+            raise_for_non_finite_world_payload_numbers(item, field_path)
 
 
 def _is_record(value: object) -> TypeGuard[WorldScenePayload]:
@@ -187,7 +190,7 @@ def _is_boolean(value: object) -> bool:
     return isinstance(value, bool)
 
 
-def _raise_for_invalid_camera_payloads(cameras: list[WorldScenePayload]) -> None:
+def raise_for_invalid_world_scene_cameras(cameras: list[WorldScenePayload]) -> None:
     for index, camera in enumerate(cameras):
         _raise_for_invalid_camera_payload(camera, index)
 
@@ -302,12 +305,25 @@ WORLD_OBJECT_CONSISTENCY_FIELDS = {
 WORLD_OBJECT_CONSISTENCY_STATUSES = {"valid", "warning", "missing", "unchecked"}
 
 
-def _raise_for_invalid_object_payloads(objects: list[WorldScenePayload]) -> None:
+def raise_for_invalid_world_scene_objects(
+    objects: list[WorldScenePayload],
+    *,
+    require_mesh_asset_ref: bool = True,
+) -> None:
     for index, world_object in enumerate(objects):
-        _raise_for_invalid_object_payload(world_object, index)
+        _raise_for_invalid_object_payload(
+            world_object,
+            index,
+            require_mesh_asset_ref=require_mesh_asset_ref,
+        )
 
 
-def _raise_for_invalid_object_payload(world_object: WorldScenePayload, index: int) -> None:
+def _raise_for_invalid_object_payload(
+    world_object: WorldScenePayload,
+    index: int,
+    *,
+    require_mesh_asset_ref: bool,
+) -> None:
     object_path = f"objects[{index}]"
     if not _is_record(world_object):
         raise ValueError(f"{object_path} must be an object.")
@@ -327,7 +343,11 @@ def _raise_for_invalid_object_payload(world_object: WorldScenePayload, index: in
         )
     _raise_for_invalid_object_optional_fields(world_object, object_path)
     _raise_for_invalid_object_simulation(world_object.get("simulation"), object_path)
-    _raise_for_invalid_object_mesh_metadata(world_object, object_path)
+    _raise_for_invalid_object_mesh_metadata(
+        world_object,
+        object_path,
+        require_mesh_asset_ref=require_mesh_asset_ref,
+    )
     _raise_for_invalid_object_appearance(world_object.get("appearance"), world_object, object_path)
     _raise_for_invalid_object_physics(world_object.get("physics"), object_path)
     _raise_for_invalid_object_consistency(world_object.get("consistency"), object_path)
@@ -392,7 +412,10 @@ def _raise_for_invalid_object_simulation(value: object, object_path: str) -> Non
 
 
 def _raise_for_invalid_object_mesh_metadata(
-    world_object: WorldScenePayload, object_path: str
+    world_object: WorldScenePayload,
+    object_path: str,
+    *,
+    require_mesh_asset_ref: bool,
 ) -> None:
     if "asset_ref" in world_object:
         _raise_for_portable_asset_ref(world_object.get("asset_ref"), f"{object_path}.asset_ref")
@@ -415,7 +438,11 @@ def _raise_for_invalid_object_mesh_metadata(
                 _raise_for_positive_vector3(scale, f"{object_path}.mesh.scale")
         if "scale_xyz" in mesh:
             _raise_for_positive_vector3(mesh.get("scale_xyz"), f"{object_path}.mesh.scale_xyz")
-    if world_object.get("type") == "mesh" and not _has_wsp_mesh_asset_ref(world_object):
+    if (
+        require_mesh_asset_ref
+        and world_object.get("type") == "mesh"
+        and not _has_wsp_mesh_asset_ref(world_object)
+    ):
         raise ValueError(f"{object_path}.mesh asset reference is required for mesh objects.")
 
 

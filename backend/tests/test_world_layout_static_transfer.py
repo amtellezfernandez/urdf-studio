@@ -24,6 +24,7 @@ from backend.services.world_layout_static_transfer import (
 )
 from backend.services.world_layout_transfer_report import build_primitive_check_report
 from backend.services.world_layout_transfer_types import LoadedPrimitive
+from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 
 def _layout_payload() -> dict:
@@ -383,6 +384,42 @@ def test_parse_static_world_layout_accepts_scene_first_world_envelope() -> None:
     assert len(layout.cameras) == 1
     assert layout.environment == {"frame_convention": "ros-rep-103"}
     assert layout.frame_convention == "ros-rep-103"
+
+
+def test_parse_static_world_layout_rejects_invalid_splat_without_collision_geometry() -> None:
+    payload = {
+        "world_layout": {
+            "name": "invalid-splat-layout",
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "mesh",
+                    "position_xyz": [0.0, 0.0, 0.0],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.2, 0.2],
+                    "color": "#22c55e",
+                    "appearance": {
+                        "representations": [
+                            {
+                                "id": "crate-splat",
+                                "kind": "splat",
+                                "asset_ref": "assets/crate.spz",
+                            }
+                        ]
+                    },
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        }
+    }
+
+    with pytest.raises(
+        WorldLayoutTransferError,
+        match="appearance splat representations require physics.collision_geometry",
+    ):
+        parse_static_world_layout_payload(payload)
 
 
 def test_build_primitives_warns_for_duplicate_object_ids_and_names() -> None:
