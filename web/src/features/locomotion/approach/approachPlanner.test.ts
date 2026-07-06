@@ -63,6 +63,9 @@ describe("planRoverApproach", () => {
   it("uses configured fallback stop distance when reach radius is missing", () => {
     const stopDistance = resolveRoverApproachStopDistance(null);
     expect(stopDistance).toBe(ROVER_APPROACH_CONFIG.fallbackStopDistanceM);
+    expect(resolveRoverApproachStopDistance(Number.POSITIVE_INFINITY)).toBe(
+      ROVER_APPROACH_CONFIG.fallbackStopDistanceM
+    );
   });
 
   it("keeps close-range stop distance near the tuned reach ratio", () => {
@@ -114,6 +117,23 @@ describe("planRoverApproach", () => {
     expect(plan.distanceToleranceM).toBeLessThanOrEqual(
       ROVER_APPROACH_CONFIG.objectContactDistanceToleranceM
     );
+  });
+
+  it("falls back for non-finite inputs while allowing zero tolerance overrides", () => {
+    const plan = planRoverApproach({
+      wheelDriveEnabled: false,
+      hasWheelDriveModel: true,
+      distanceToTargetM: Number.NaN,
+      forwardDotTarget: Number.POSITIVE_INFINITY,
+      armReachRadiusM: Number.NaN,
+      preferredStopDistanceM: Number.NaN,
+      preferredDistanceToleranceM: 0,
+    });
+
+    expect(plan.distanceToTargetM).toBe(0);
+    expect(plan.forwardDotTarget).toBe(1);
+    expect(plan.desiredStopDistanceM).toBe(ROVER_APPROACH_CONFIG.fallbackStopDistanceM);
+    expect(plan.distanceToleranceM).toBe(0);
   });
 
   it("still executes rover approach for orientation-only adjustments", () => {

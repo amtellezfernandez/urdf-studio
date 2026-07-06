@@ -1,4 +1,9 @@
-import { clampNumber } from "./approachMath";
+import {
+  clampNumber,
+  clampNumberToMin,
+  toFiniteNumberOrFallback,
+  toFiniteNumberOrNull,
+} from "@/shared/lib/numeric";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import type { RoverApproachPlan } from "./approachTypes";
 
@@ -12,19 +17,25 @@ type RoverApproachPlannerInput = {
   preferredDistanceToleranceM?: number | null;
 };
 
-const resolvePositiveFiniteOrNull = (value: number | null | undefined): number | null =>
-  Number.isFinite(value ?? NaN) && (value as number) >= 0 ? (value as number) : null;
+const resolveNonNegativeFiniteOrNull = (value: number | null | undefined): number | null => {
+  const finiteValue = toFiniteNumberOrNull(value);
+  return finiteValue !== null && finiteValue >= 0 ? finiteValue : null;
+};
+
+const resolvePositiveReachRadiusM = (armReachRadiusM: number | null): number | null => {
+  const reachRadiusM = toFiniteNumberOrNull(armReachRadiusM);
+  return reachRadiusM !== null && reachRadiusM > 0 ? reachRadiusM : null;
+};
 
 export const resolveRoverApproachStopDistance = (armReachRadiusM: number | null): number => {
-  if (!Number.isFinite(armReachRadiusM ?? NaN) || (armReachRadiusM ?? 0) <= 0) {
+  const reachRadiusM = resolvePositiveReachRadiusM(armReachRadiusM);
+  if (reachRadiusM === null) {
     return ROVER_APPROACH_CONFIG.fallbackStopDistanceM;
   }
-  const maxReachBoundedStopDistanceM = Math.max(
+  const maxReachBoundedStopDistanceM = clampNumber(
+    reachRadiusM - ROVER_APPROACH_CONFIG.reachGapTriggerM,
     0,
-    Math.min(
-      ROVER_APPROACH_CONFIG.maxStopDistanceM,
-      (armReachRadiusM as number) - ROVER_APPROACH_CONFIG.reachGapTriggerM
-    )
+    ROVER_APPROACH_CONFIG.maxStopDistanceM
   );
   if (maxReachBoundedStopDistanceM <= 0) {
     return 0;
@@ -34,7 +45,7 @@ export const resolveRoverApproachStopDistance = (armReachRadiusM: number | null)
     maxReachBoundedStopDistanceM
   );
   const nominalStopDistanceM =
-    (armReachRadiusM as number) * ROVER_APPROACH_CONFIG.stopDistanceReachRatio +
+    reachRadiusM * ROVER_APPROACH_CONFIG.stopDistanceReachRatio +
     ROVER_APPROACH_CONFIG.stopDistanceStandOffM;
   return clampNumber(
     nominalStopDistanceM,
@@ -52,19 +63,20 @@ export const planRoverApproach = ({
   preferredStopDistanceM,
   preferredDistanceToleranceM,
 }: RoverApproachPlannerInput): RoverApproachPlan => {
+  const reachRadiusM = resolvePositiveReachRadiusM(armReachRadiusM);
   const reachStopDistanceM = resolveRoverApproachStopDistance(armReachRadiusM);
-  const preferredStopDistance = resolvePositiveFiniteOrNull(preferredStopDistanceM);
+  const preferredStopDistance = resolveNonNegativeFiniteOrNull(preferredStopDistanceM);
   const desiredStopDistanceM =
     preferredStopDistance === null
       ? reachStopDistanceM
       : Math.min(reachStopDistanceM, preferredStopDistance);
-  const preferredDistanceTolerance = resolvePositiveFiniteOrNull(preferredDistanceToleranceM);
+  const preferredDistanceTolerance = resolveNonNegativeFiniteOrNull(preferredDistanceToleranceM);
   const distanceToleranceM =
     preferredDistanceTolerance === null
       ? ROVER_APPROACH_CONFIG.distanceToleranceM
       : Math.min(ROVER_APPROACH_CONFIG.distanceToleranceM, preferredDistanceTolerance);
-  const safeDistance = Number.isFinite(distanceToTargetM) ? Math.max(0, distanceToTargetM) : 0;
-  const safeDot = Number.isFinite(forwardDotTarget) ? forwardDotTarget : 1;
+  const safeDistance = clampNumberToMin(toFiniteNumberOrFallback(distanceToTargetM, 0), 0);
+  const safeDot = toFiniteNumberOrFallback(forwardDotTarget, 1);
 
   if (!wheelDriveEnabled) {
     return {
@@ -99,9 +111,8 @@ export const planRoverApproach = ({
     safeDistance > desiredStopDistanceM + distanceToleranceM;
   const isRearTarget = safeDot < ROVER_APPROACH_CONFIG.rearTargetDotThreshold;
   const isOutsideReach =
-    Number.isFinite(armReachRadiusM ?? NaN) &&
-    (armReachRadiusM as number) > 0 &&
-    safeDistance > (armReachRadiusM as number) - ROVER_APPROACH_CONFIG.reachGapTriggerM;
+    reachRadiusM !== null &&
+    safeDistance > reachRadiusM - ROVER_APPROACH_CONFIG.reachGapTriggerM;
 
   if (!requiresRotation && !requiresTranslation && !isRearTarget && !isOutsideReach) {
     return {
