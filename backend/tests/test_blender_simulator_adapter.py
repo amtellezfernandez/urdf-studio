@@ -30,6 +30,7 @@ from backend.services.simulator_adapters.blender_change_sets import (
     apply_blender_layout_change_set_with_summary,
     build_blender_change_set_source,
 )
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.simulator_adapters import blender_workspace as blender_workspace_module
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_FOCUS_SCRIPT_FILENAME,
@@ -583,6 +584,26 @@ def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> 
     assert updated_object["color"] == "#22c55e"
     assert all(math.isclose(value, 0.0, abs_tol=1e-9) for value in updated_object["rotation_rpy_rad"])
     assert updated.world_snapshot.cameras == world_package.world_snapshot.cameras
+
+
+def test_blender_change_set_accepts_thin_world_envelopes(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    world_envelope = world_scene_registry_envelope_json_payload(world_package)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[_crate_layout_change()],
+    )
+
+    source = build_blender_change_set_source(
+        world_envelope,
+        world_object_ids=("crate",),
+        camera_ids=("cam-1",),
+        frame_map="identity",
+    )
+    updated = apply_blender_layout_change_set(world_envelope, change_set)
+
+    assert source["frame_convention"] == "ros-rep-103"
+    assert updated.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
 
 
 def test_blender_change_set_applies_world_object_color(tmp_path: Path) -> None:

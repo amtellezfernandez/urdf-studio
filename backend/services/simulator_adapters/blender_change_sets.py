@@ -30,6 +30,7 @@ from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
     normalize_world_snapshot_artifact_digests,
 )
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_scene_package_params import MAX_OBJECTS_PER_WORLD
 
 BLENDER_CHANGE_SET_SCHEMA = "urdf-studio.blender-change-set.v1"
@@ -84,13 +85,14 @@ class BlenderChangeSetSource:
 
 
 def build_blender_change_set_source(
-    world_package: WorldScenePackageManifest,
+    world_package: object,
     *,
     world_object_ids: Sequence[str],
     camera_ids: Sequence[str],
     frame_map: str | None = None,
 ) -> JsonObject:
-    source = _blender_change_set_source_metadata(world_package)
+    normalized_world_package = read_world_scene_package_manifest(world_package)
+    source = _blender_change_set_source_metadata(normalized_world_package)
     if frame_map is not None:
         source["frame_map"] = frame_map
     source["world_object_ids"] = list(world_object_ids)
@@ -99,7 +101,7 @@ def build_blender_change_set_source(
 
 
 def apply_blender_layout_change_set(
-    world_package: WorldScenePackageManifest,
+    world_package: object,
     change_set: Mapping[str, object],
 ) -> WorldScenePackageManifest:
     return apply_blender_layout_change_set_with_summary(
@@ -109,9 +111,10 @@ def apply_blender_layout_change_set(
 
 
 def apply_blender_layout_change_set_with_summary(
-    world_package: WorldScenePackageManifest,
+    world_package: object,
     change_set: Mapping[str, object],
 ) -> BlenderLayoutChangeSetApplyResult:
+    normalized_world_package = read_world_scene_package_manifest(world_package)
     (
         source,
         object_updates,
@@ -120,8 +123,8 @@ def apply_blender_layout_change_set_with_summary(
         deleted_world_object_ids,
         deleted_camera_ids,
         review_only_count,
-    ) = _validate_blender_change_set(change_set, world_package)
-    updated = world_package.model_copy(deep=True)
+    ) = _validate_blender_change_set(change_set, normalized_world_package)
+    updated = normalized_world_package.model_copy(deep=True)
     package_object_ids = _world_package_object_ids(updated)
     missing_object_ids = sorted(set(object_updates) - package_object_ids)
     if missing_object_ids:
