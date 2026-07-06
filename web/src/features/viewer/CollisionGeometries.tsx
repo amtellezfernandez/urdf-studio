@@ -34,6 +34,11 @@ import {
   buildMeshCollisionPoseSet,
   shouldSkipPrimitiveCollisionWhenMeshOverlaps,
 } from "@/features/viewer/collisionEntryFiltering";
+import {
+  configureCollisionOverlayInstancedMesh,
+  configureCollisionOverlayMesh,
+  createCollisionOverlayMaterial,
+} from "@/features/viewer/collisionGeometryRenderHelpers";
 
 type CollisionInstance = {
   linkName: string;
@@ -43,12 +48,6 @@ type CollisionInstance = {
 type CollisionPrimitiveInstanceRef = MutableRefObject<CollisionInstance[]>;
 type CollisionProxyTarget = "simplified" | "merged";
 
-const COLLISION_OVERLAY_COLOR = 0x808080;
-const COLLISION_OVERLAY_OPACITY = 0.32;
-const COLLISION_OVERLAY_DEPTH_TEST = true;
-const COLLISION_OVERLAY_DEPTH_WRITE = false;
-const COLLISION_OVERLAY_POLYGON_OFFSET_FACTOR = -1;
-const COLLISION_OVERLAY_POLYGON_OFFSET_UNITS = -1;
 const UNIT_BOX_HALF_EXTENT = 0.5;
 const UNIT_BOX_CORNERS: readonly THREE.Vector3[] = [
   new THREE.Vector3(
@@ -209,32 +208,7 @@ export const CollisionGeometries = ({
   const sphereSegments = isLowGPU ? 12 : 24;
   const cylinderSegments = isLowGPU ? 12 : 24;
   const baseCollisionMaterial = useMemo(
-    () =>
-      isLowGPU
-        ? new THREE.MeshBasicMaterial({
-            color: COLLISION_OVERLAY_COLOR,
-            opacity: COLLISION_OVERLAY_OPACITY,
-            transparent: true,
-            side: THREE.DoubleSide,
-            depthWrite: COLLISION_OVERLAY_DEPTH_WRITE,
-            depthTest: COLLISION_OVERLAY_DEPTH_TEST,
-            polygonOffset: true,
-            polygonOffsetFactor: COLLISION_OVERLAY_POLYGON_OFFSET_FACTOR,
-            polygonOffsetUnits: COLLISION_OVERLAY_POLYGON_OFFSET_UNITS,
-          })
-        : new THREE.MeshStandardMaterial({
-            color: COLLISION_OVERLAY_COLOR,
-            opacity: COLLISION_OVERLAY_OPACITY,
-            transparent: true,
-            metalness: 0.1,
-            roughness: 0.9,
-            side: THREE.DoubleSide,
-            depthWrite: COLLISION_OVERLAY_DEPTH_WRITE,
-            depthTest: COLLISION_OVERLAY_DEPTH_TEST,
-            polygonOffset: true,
-            polygonOffsetFactor: COLLISION_OVERLAY_POLYGON_OFFSET_FACTOR,
-            polygonOffsetUnits: COLLISION_OVERLAY_POLYGON_OFFSET_UNITS,
-          }),
+    () => createCollisionOverlayMaterial(isLowGPU),
     [isLowGPU],
   );
   const boxGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
@@ -262,31 +236,16 @@ export const CollisionGeometries = ({
 
   useEffect(() => {
     if (boxMeshRef.current) {
-      boxMeshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      boxMeshRef.current.renderOrder = 999;
-      boxMeshRef.current.raycast = () => {};
-      boxMeshRef.current.userData.isCollisionGeom = true;
-      boxMeshRef.current.userData.isCollision = true;
+      configureCollisionOverlayInstancedMesh(boxMeshRef.current);
     }
     if (sphereMeshRef.current) {
-      sphereMeshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      sphereMeshRef.current.renderOrder = 999;
-      sphereMeshRef.current.raycast = () => {};
-      sphereMeshRef.current.userData.isCollisionGeom = true;
-      sphereMeshRef.current.userData.isCollision = true;
+      configureCollisionOverlayInstancedMesh(sphereMeshRef.current);
     }
     if (cylinderMeshRef.current) {
-      cylinderMeshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      cylinderMeshRef.current.renderOrder = 999;
-      cylinderMeshRef.current.raycast = () => {};
-      cylinderMeshRef.current.userData.isCollisionGeom = true;
-      cylinderMeshRef.current.userData.isCollision = true;
+      configureCollisionOverlayInstancedMesh(cylinderMeshRef.current);
     }
     if (mergedBoxMeshRef.current) {
-      mergedBoxMeshRef.current.renderOrder = 999;
-      mergedBoxMeshRef.current.raycast = () => {};
-      mergedBoxMeshRef.current.userData.isCollisionGeom = true;
-      mergedBoxMeshRef.current.userData.isCollision = true;
+      configureCollisionOverlayMesh(mergedBoxMeshRef.current);
       mergedBoxMeshRef.current.visible = false;
     }
   }, [boxCount, sphereCount, cylinderCount]);
@@ -347,24 +306,13 @@ export const CollisionGeometries = ({
       robotObject?.updateMatrixWorld(true);
 
       // Helper function to apply link transformation to mesh
-      const createCollisionMaterial = () => baseCollisionMaterial.clone();
-
-      const configureCollisionMesh = (mesh: THREE.Mesh) => {
-        mesh.castShadow = false;
-        mesh.receiveShadow = false;
-        mesh.renderOrder = 999;
-        mesh.raycast = () => {};
-        mesh.userData.isCollisionGeom = true;
-        mesh.userData.isCollision = true;
-      };
-
       const applyCollisionMaterial = (object: THREE.Object3D) => {
         object.traverse((child) => {
           if (!(child as THREE.Mesh).isMesh) return;
           const mesh = child as THREE.Mesh;
-          const material = createCollisionMaterial();
+          const material = baseCollisionMaterial.clone();
           mesh.material = material;
-          configureCollisionMesh(mesh);
+          configureCollisionOverlayMesh(mesh);
         });
       };
 
