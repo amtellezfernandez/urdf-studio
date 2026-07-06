@@ -34,6 +34,29 @@ describe("approachObstacleProjection", () => {
     expect(obstacles[0]?.rotationWorld?.z).toBeCloseTo(Math.PI / 4);
   });
 
+  it("returns obstacle vectors independent from the source object", () => {
+    const source = {
+      id: "source",
+      type: "cube" as const,
+      position: new THREE.Vector3(1, 2, 0),
+      rotation: new THREE.Euler(0, 0, Math.PI / 4),
+      size: new THREE.Vector3(0.4, 0.6, 0.8),
+    };
+    const obstacles = buildRoverApproachPlanarObstacles({
+      objects: [source],
+      upAxisWorld: WORLD_UP,
+    });
+    const obstacle = obstacles[0];
+
+    source.position.set(9, 9, 9);
+    source.rotation.z = 0;
+    source.size.set(9, 9, 9);
+
+    expect(obstacle?.centerWorld.equals(new THREE.Vector3(1, 2, 0))).toBe(true);
+    expect(obstacle?.rotationWorld?.z).toBeCloseTo(Math.PI / 4);
+    expect(obstacle?.sizeWorld?.equals(new THREE.Vector3(0.4, 0.6, 0.8))).toBe(true);
+  });
+
   it("normalizes invalid object vectors before projection", () => {
     const obstacles = buildRoverApproachPlanarObstacles({
       objects: [
