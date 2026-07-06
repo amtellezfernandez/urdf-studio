@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampNumber,
+  clampNumberToMin,
   clampNumberToOptionalBounds,
   toFiniteNumberOrFallback,
 } from "@/shared/lib/numeric";
@@ -10,6 +11,11 @@ describe("numeric", () => {
     expect(clampNumber(-1, 0, 10)).toBe(0);
     expect(clampNumber(11, 0, 10)).toBe(10);
     expect(clampNumber(5, 0, 10)).toBe(5);
+  });
+
+  it("clamps values to a minimum", () => {
+    expect(clampNumberToMin(0, 1)).toBe(1);
+    expect(clampNumberToMin(3, 1)).toBe(3);
   });
 
   it("clamps values with optional bounds", () => {

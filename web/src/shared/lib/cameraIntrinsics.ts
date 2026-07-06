@@ -1,6 +1,6 @@
 import type { PerspectiveCamera } from "three";
 import type { CameraDistortion, CameraIntrinsics } from "@/shared/types/camera";
-import { clampNumber, toFiniteNumberOrFallback } from "@/shared/lib/numeric";
+import { clampNumber, clampNumberToMin, toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 480;
@@ -13,7 +13,7 @@ const isFinitePositive = (value: number | undefined): value is number =>
 
 const clampDimension = (value: number | undefined, fallback: number) => {
   if (!Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.round(value as number));
+  return clampNumberToMin(Math.round(value as number), 1);
 };
 
 const clampFov = (value: number | undefined, fallback = DEFAULT_FOV_DEG) => {
@@ -36,14 +36,14 @@ const normalizeDistortion = (
 
 export const focalLengthPxFromVerticalFovDeg = (fovDeg: number, heightPx: number) => {
   const safeFov = clampFov(fovDeg);
-  const safeHeight = Math.max(1, heightPx);
+  const safeHeight = clampNumberToMin(heightPx, 1);
   const halfFovRad = (safeFov * Math.PI) / 360;
   return safeHeight / (2 * Math.tan(halfFovRad));
 };
 
 export const verticalFovDegFromFocalLengthPx = (fyPx: number, heightPx: number) => {
-  const safeFy = Math.max(1e-6, fyPx);
-  const safeHeight = Math.max(1, heightPx);
+  const safeFy = clampNumberToMin(fyPx, 1e-6);
+  const safeHeight = clampNumberToMin(heightPx, 1);
   const halfFovRad = Math.atan(safeHeight / (2 * safeFy));
   return clampFov((halfFovRad * 360) / Math.PI);
 };
@@ -157,8 +157,8 @@ export const applyIntrinsicsToPerspectiveCamera = (
   far: number
 ) => {
   const normalized = normalizeCameraIntrinsics(intrinsics);
-  const safeNear = Math.max(MIN_NEAR, near);
-  const safeFar = Math.max(safeNear + MIN_FAR_DELTA, far);
+  const safeNear = clampNumberToMin(near, MIN_NEAR);
+  const safeFar = clampNumberToMin(far, safeNear + MIN_FAR_DELTA);
 
   const fx = normalized.fx ?? focalLengthPxFromVerticalFovDeg(normalized.fov_deg, normalized.height);
   const fy = normalized.fy ?? fx * (normalized.height / normalized.width);

@@ -6,6 +6,9 @@ export type OptionalNumberBounds = {
 export const clampNumber = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
+export const clampNumberToMin = (value: number, min: number): number =>
+  Math.max(min, value);
+
 export const clampNumberToOptionalBounds = (
   value: number,
   { min, max }: OptionalNumberBounds
