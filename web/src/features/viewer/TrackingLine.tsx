@@ -5,14 +5,7 @@ import type { URDFRobot } from "urdf-loader";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 import { resolveTrackingReference } from "@/features/viewer/trackingTarget";
 import { getJointColor } from "@/features/urdf/utils/jointColors";
-
-const safeDecode = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
+import { safeDecode } from "@/features/viewer/uri";
 
 const namesMatch = (a: string | null | undefined, b: string | null | undefined) => {
   if (!a || !b) return false;

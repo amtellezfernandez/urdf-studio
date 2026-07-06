@@ -1,5 +1,6 @@
 import type { URDFRobot } from "urdf-loader";
 import { resolveJointScalarValue } from "@/features/viewer/viewer-helpers";
+import { safeDecode } from "@/features/viewer/uri";
 
 type ResolveApproachArmResetJointNamesArgs = {
   primaryIkEndEffectorLink: string | null | undefined;
@@ -17,12 +18,7 @@ export const resolveApproachArmResetJointNames = ({
   const eeLink = primaryIkEndEffectorLink?.trim() ?? "";
   if (!eeLink) return [];
 
-  let decodedEeLink = eeLink;
-  try {
-    decodedEeLink = decodeURIComponent(eeLink);
-  } catch {
-    decodedEeLink = eeLink;
-  }
+  const decodedEeLink = safeDecode(eeLink);
 
   const ownedArmJointNames =
     ikAllowedJointNamesByEe.get(eeLink) ?? ikAllowedJointNamesByEe.get(decodedEeLink) ?? [];

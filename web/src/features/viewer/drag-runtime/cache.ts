@@ -10,14 +10,9 @@ import {
   worldToLocalQuaternionInFrame,
 } from "@/shared/lib/spatialFrame";
 import type { DragRuntimeCache } from "./types";
+import { safeDecodeURIComponent } from "@/features/viewer/uri";
 
-export const safeDecodeURIComponent = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
+export { safeDecodeURIComponent };
 
 export const createEmptyDragRuntimeCache = (): DragRuntimeCache => ({
   chainJointNames: null,

@@ -1,7 +1,3 @@
-export const safeDecodeEndEffectorLink = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
+import { safeDecodeURIComponent } from "@/features/viewer/uri";
+
+export const safeDecodeEndEffectorLink = safeDecodeURIComponent;

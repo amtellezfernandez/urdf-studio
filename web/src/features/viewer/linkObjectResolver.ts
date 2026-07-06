@@ -1,13 +1,6 @@
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
-
-const safeDecodeURIComponent = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
+import { safeDecodeURIComponent } from "@/features/viewer/uri";
 
 const safeEncodeURI = (value: string): string => {
   try {

@@ -6,6 +6,7 @@ import {
   worldToLocalPositionInFrame,
   worldToLocalQuaternionInFrame,
 } from "@/shared/lib/spatialFrame";
+import { safeDecode } from "@/features/viewer/uri";
 
 const tempRobotBaseFrame = createIdentityRigidFrame();
 
@@ -20,13 +21,7 @@ export type IkTargetPose = {
   quaternion: [number, number, number, number];
 };
 
-export const safeDecode = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
+export { safeDecode };
 
 export const getDragModeDisplayName = (mode: DragMode) => {
   switch (mode) {
