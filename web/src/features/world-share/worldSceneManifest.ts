@@ -516,6 +516,13 @@ export const validateWorldSceneLayerSnapshot = (
   snapshot: ParsedWorldSceneLayerSnapshot
 ): string[] => {
   const errors: string[] = [];
+  errors.push(
+    ...validateMaxLength(
+      snapshot.objects,
+      "world layout objects",
+      WORLD_SCENE_PACKAGE_LIMITS.maxObjectsPerWorld
+    )
+  );
   errors.push(...validateSerializableWorldObjects(snapshot.objects));
   if (snapshot.urdf_xml !== undefined) {
     if (!snapshot.urdf_xml.trim()) {

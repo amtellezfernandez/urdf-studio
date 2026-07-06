@@ -500,7 +500,16 @@ def _read_world_scene_package_version_record(payload: object) -> WorldScenePacka
     if manifest_payload is None:
         return WorldScenePackageVersionRecord.model_validate(payload)
     envelope = read_world_scene_registry_envelope(manifest_payload)
-    manifest = read_world_scene_package_manifest(manifest_payload)
+    trust_level = payload.get("trust_level")
+    runtime_targets = payload.get("runtime_targets")
+    if trust_level is None or runtime_targets is None:
+        # Legacy records predate stored trust metadata; only these need the
+        # stricter manifest conversion to derive it.
+        manifest = read_world_scene_package_manifest(manifest_payload)
+        if trust_level is None:
+            trust_level = _resolve_trust_level(manifest)
+        if runtime_targets is None:
+            runtime_targets = _runtime_targets_summary(manifest)
     normalized_payload = {
         "package_id": payload.get("package_id", envelope.package_id),
         "version": payload.get("version", envelope.version),
@@ -509,8 +518,8 @@ def _read_world_scene_package_version_record(payload: object) -> WorldScenePacka
             world_scene_registry_envelope_digest(envelope),
         ),
         "published_at": payload.get("published_at"),
-        "trust_level": payload.get("trust_level", _resolve_trust_level(manifest)),
-        "runtime_targets": payload.get("runtime_targets", _runtime_targets_summary(manifest)),
+        "trust_level": trust_level,
+        "runtime_targets": runtime_targets,
         "manifest": envelope,
     }
     return WorldScenePackageVersionRecord.model_validate(normalized_payload)

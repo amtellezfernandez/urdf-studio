@@ -67,7 +67,6 @@ export type TopNavBarProps = {
   onValidateCurrentWorldScenePackage: () => void;
   onPublishCurrentWorldScenePackage: () => void;
   onPublishCurrentWorldScenePackageToHub?: () => void;
-  onImportWorldScenePackage: () => void;
   onExportWorldRolloutCampaign?: () => void;
   onRunLocalWorldRollout?: () => void;
   onImportWorldRolloutResults?: () => void;

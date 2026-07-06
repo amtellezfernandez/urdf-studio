@@ -31,6 +31,7 @@ Z_UP_FRAME_CONVENTIONS = frozenset(
 Y_UP_FRAME_CONVENTIONS = frozenset(
     {
         "studio-y-up",
+        "urdf-studio-y-up",
         "three-y-up",
         "threejs-y-up",
         "webgl-y-up",

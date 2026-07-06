@@ -3,6 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.simulator_runtime import (
+    MAX_SIMULATOR_PACKAGE_ROOTS,
+    MAX_SIMULATOR_MESH_ASSETS,
     SimulatorId,
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
@@ -117,8 +119,14 @@ class WorkspaceTransferTargetStatus(WorkspaceTransferCamelModel):
 class WorkspaceOpenRequest(BaseModel):
     world_package: WorldSceneRegistryEnvelope
     urdf_asset_path: str | None = Field(default=None, max_length=512)
-    mesh_assets: list[SimulatorMeshAssetUpload] = Field(default_factory=list)
-    package_roots: dict[str, list[str]] = Field(default_factory=dict)
+    mesh_assets: list[SimulatorMeshAssetUpload] = Field(
+        default_factory=list,
+        max_length=MAX_SIMULATOR_MESH_ASSETS,
+    )
+    package_roots: dict[str, list[str]] = Field(
+        default_factory=dict,
+        max_length=MAX_SIMULATOR_PACKAGE_ROOTS,
+    )
     ilu_session_id: str | None = Field(default=None, max_length=128)
     launch_id: str | None = Field(default=None, max_length=128)
 

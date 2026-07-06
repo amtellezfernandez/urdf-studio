@@ -496,7 +496,6 @@ const Index = () => {
     handleImportWorldLayoutFromUrl,
     handleImportSplatBackground,
     handleImportWorkspaceChangeSet,
-    handleImportWorldScenePackage,
     handleExportWorldRolloutCampaign,
     handleImportWorldRolloutResults,
     handleListWorldScenePackages,
@@ -1265,7 +1264,6 @@ const Index = () => {
     onPublishCurrentWorldScenePackageToHub: worldHubEnabled
       ? handlePublishCurrentWorldScenePackageToHub
       : undefined,
-    onImportWorldScenePackage: handleImportWorldScenePackage,
     onExportWorldRolloutCampaign: handleExportWorldRolloutCampaign,
     onRunLocalWorldRollout: handleRunLocalWorldRollout,
     onImportWorldRolloutResults: handleImportWorldRolloutResults,

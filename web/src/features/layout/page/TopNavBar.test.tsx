@@ -58,7 +58,6 @@ const createProps = (): TopNavBarProps => ({
   onValidateCurrentWorldScenePackage: vi.fn(),
   onPublishCurrentWorldScenePackage: vi.fn(),
   onPublishCurrentWorldScenePackageToHub: vi.fn(),
-  onImportWorldScenePackage: vi.fn(),
   onExportCurrentWorldSceneLayer: vi.fn(),
   onImportSceneLayerFromUrl: vi.fn(),
   onImportSplatBackground: vi.fn(),

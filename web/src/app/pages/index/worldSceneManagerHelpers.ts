@@ -34,6 +34,13 @@ export const toPortableSplatAssetName = (filename: string): string => {
   return sanitized || "splat-background.spz";
 };
 
+// A world layout's `name` is arbitrary document text; it feeds a File name that in turn
+// is matched against path-normalizing mesh resolution, so it must be a safe filename stem.
+export const sanitizeWorldLayoutFilenameStem = (name: string | undefined | null): string => {
+  const sanitized = (name ?? "").trim().replace(/[^\w.\- ]+/g, "_");
+  return sanitized || "world-layout";
+};
+
 export function buildImportedSplatBackgroundObject(file: File): Omit<CreatedObject, "id"> {
   const assetName = toPortableSplatAssetName(file.name);
   return {
@@ -227,7 +234,15 @@ const readObjectAssetScale = (
   object: SerializableWorldObject,
   representation?: SerializableWorldObjectAppearanceRepresentation
 ): Vector3 | undefined => {
-  const scale = object.asset_scale_xyz ?? representation?.scale_xyz;
+  const scale =
+    object.asset_scale_xyz ??
+    object.mesh_scale_xyz ??
+    object.scale_xyz ??
+    object.mesh?.scale_xyz ??
+    (typeof object.mesh?.scale === "number"
+      ? ([object.mesh.scale, object.mesh.scale, object.mesh.scale] as const)
+      : object.mesh?.scale) ??
+    representation?.scale_xyz;
   return scale ? new Vector3(scale[0], scale[1], scale[2]) : undefined;
 };
 

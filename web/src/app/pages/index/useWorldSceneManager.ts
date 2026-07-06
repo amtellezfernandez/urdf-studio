@@ -48,6 +48,7 @@ import {
   downloadTextDocument,
   openFileSelectionDialog,
   applyWorldSceneLayerObjectSourceOverride,
+  sanitizeWorldLayoutFilenameStem,
   toImportedCreatedObjects,
   toImportedWorldSceneCameras,
   SPLAT_BACKGROUND_IMPORT_ACCEPT,
@@ -108,7 +109,16 @@ export const useWorldSceneManager = ({
   const worldImportHandledRef = useRef(false);
   const worldLayoutImportHandledRef = useRef(false);
   const defaultWorldLayoutAppliedRef = useRef(false);
+  const localWorldLayoutObjectUrlsRef = useRef<string[]>([]);
   const objectsRef = useRef(objects);
+
+  useEffect(
+    () => () => {
+      localWorldLayoutObjectUrlsRef.current.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+      localWorldLayoutObjectUrlsRef.current = [];
+    },
+    []
+  );
 
   const [worldLayoutImportDialogOpen, setWorldLayoutImportDialogOpen] = useState(false);
   const [worldLayoutImportUrlDraft, setWorldLayoutImportUrlDraft] = useState("");
@@ -235,11 +245,6 @@ export const useWorldSceneManager = ({
     setWorldLayoutImportDialogOpen(true);
   }, []);
 
-  const handleImportWorldScenePackage = useCallback(() => {
-    setWorldLayoutImportUrlDraft("");
-    setWorldLayoutImportDialogOpen(true);
-  }, []);
-
   const handleOpenWorldHubBrowser = useCallback(() => {
     const target = WORLD_HUB_WEB_BASE_URL || "https://urdf-star.vercel.app/worlds";
     window.open(target, "_blank", "noopener,noreferrer");
@@ -278,7 +283,7 @@ export const useWorldSceneManager = ({
       if (worldLayout.urdf_xml) {
         updateUrdfFile(
           worldLayout.urdf_xml,
-          options.urdfFilename || `${worldLayout.name || "world-layout"}.urdf`
+          options.urdfFilename || `${sanitizeWorldLayoutFilenameStem(worldLayout.name)}.urdf`
         );
       }
       if (worldLayout.cameras !== undefined) {
@@ -318,6 +323,9 @@ export const useWorldSceneManager = ({
         const worldLayout = await parseWorldSceneLayerText(raw);
         const assetMapResult =
           assetFiles.length > 0 ? await buildWorldLayoutFolderAssetMap(assetFiles) : null;
+        if (assetMapResult) {
+          localWorldLayoutObjectUrlsRef.current.push(...assetMapResult.objectUrls);
+        }
         applyImportedWorldSceneLayer(worldLayout, {
           assetMap: assetMapResult?.assetMap,
         });
@@ -357,7 +365,21 @@ export const useWorldSceneManager = ({
           const currentWorldPackage = await buildCurrentWorldSceneRegistryEnvelope();
           const changeSet = JSON.parse(await file.text()) as unknown;
           const applied = await applyWorkspaceChangeSet(currentWorldPackage, changeSet);
-          applyImportedWorldSceneLayer(applied.world_package.world);
+          const previousWorld = currentWorldPackage.world;
+          const nextWorld = applied.world_package.world;
+          applyImportedWorldSceneLayer({
+            ...nextWorld,
+            urdf_xml: nextWorld.urdf_xml !== previousWorld.urdf_xml ? nextWorld.urdf_xml : undefined,
+            joint_positions:
+              JSON.stringify(nextWorld.joint_positions) !==
+              JSON.stringify(previousWorld.joint_positions)
+                ? nextWorld.joint_positions
+                : undefined,
+            cameras:
+              JSON.stringify(nextWorld.cameras) !== JSON.stringify(previousWorld.cameras)
+                ? nextWorld.cameras
+                : undefined,
+          });
           const reviewOnly =
             applied.reviewOnlyCount > 0 ? `, ${applied.reviewOnlyCount} review-only` : "";
           toast.success(
@@ -617,7 +639,6 @@ export const useWorldSceneManager = ({
     handleImportWorldLayoutFromLinkDialog,
     handleImportSplatBackground,
     handleImportWorldLayoutFromUrl,
-    handleImportWorldScenePackage,
     handleExportWorldRolloutCampaign,
     handleRunLocalWorldRollout,
     handleImportWorldRolloutResults,

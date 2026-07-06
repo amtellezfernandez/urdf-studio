@@ -399,8 +399,15 @@ def _read_object_asset_scale(
     index: int,
 ) -> tuple[float, float, float] | None:
     for key in WORLD_OBJECT_ASSET_SCALE_KEYS:
-        if key in value:
-            return _read_vector3(value.get(key), f"objects[{index}].{key}", positive=True)
+        if key not in value:
+            continue
+        raw_scale = value.get(key)
+        if isinstance(raw_scale, int | float) and not isinstance(raw_scale, bool):
+            scale = _read_finite_number(raw_scale, f"objects[{index}].{key}")
+            if scale <= 0.0:
+                raise WorldLayoutTransferError(f"objects[{index}].{key} must be > 0")
+            return (scale, scale, scale)
+        return _read_vector3(raw_scale, f"objects[{index}].{key}", positive=True)
     mesh = value.get("mesh")
     if _is_record(mesh):
         for key in ("scale_xyz", "scale"):

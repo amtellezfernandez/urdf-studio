@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SimulatorId,
@@ -20,6 +22,7 @@ from backend.models.workspace_transfer import (
     WorkspaceTransferTargetStatus,
 )
 from backend.services.simulator_adapters import (
+    SimulatorAdapterError,
     SimulatorCapabilityError,
     apply_simulator_workspace_change_set,
     get_simulator_adapter,
@@ -44,14 +47,17 @@ def _adapter_change_set_request(
 def _build_workspace_prepare_request(
     request: WorkspaceOpenRequest,
 ) -> SimulatorWorkspacePrepareRequest:
-    return SimulatorWorkspacePrepareRequest(
-        world_package=request.world_package,
-        urdf_asset_path=request.urdf_asset_path,
-        mesh_assets=request.mesh_assets,
-        package_roots=request.package_roots,
-        ilu_session_id=request.ilu_session_id,
-        launch_id=request.launch_id,
-    )
+    try:
+        return SimulatorWorkspacePrepareRequest(
+            world_package=request.world_package,
+            urdf_asset_path=request.urdf_asset_path,
+            mesh_assets=request.mesh_assets,
+            package_roots=request.package_roots,
+            ilu_session_id=request.ilu_session_id,
+            launch_id=request.launch_id,
+        )
+    except ValidationError as exc:
+        raise SimulatorAdapterError(str(exc), status_code=422) from exc
 
 
 def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspacePrepareRequest:

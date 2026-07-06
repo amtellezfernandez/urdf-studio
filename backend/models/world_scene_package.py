@@ -421,7 +421,11 @@ def _raise_for_invalid_object_mesh_metadata(
         _raise_for_portable_asset_ref(world_object.get("asset_ref"), f"{object_path}.asset_ref")
     for field_name in ("asset_scale_xyz", "mesh_scale_xyz", "scale_xyz"):
         if field_name in world_object:
-            _raise_for_positive_vector3(world_object.get(field_name), f"{object_path}.{field_name}")
+            scale = world_object.get(field_name)
+            if _is_finite_number(scale):
+                _raise_for_positive_number_field(scale, f"{object_path}.{field_name}")
+            else:
+                _raise_for_positive_vector3(scale, f"{object_path}.{field_name}")
     mesh = world_object.get("mesh")
     if mesh is not None and not _is_record(mesh):
         raise ValueError(f"{object_path}.mesh must be an object.")
