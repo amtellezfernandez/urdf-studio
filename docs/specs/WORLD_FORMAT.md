@@ -17,35 +17,68 @@ validates against that exact path; only the prose spec was renamed and consolida
 
 ## What a World is
 
-A World is one manifest describing a scene independent of any one robot or simulator: the robot's
-URDF, its joint positions, a list of cameras, and a list of scene objects in world coordinates.
-The format is the source of truth: users author, store, diff, and exchange Worlds; simulators are
-adapters that consume the World instead of becoming the place where the scene is defined.
-Two shapes exist, both validated by the same object rules described below:
+A World is one scene document describing the robot state and world state together:
 
-- `world-layout.json` — the lightweight shape (`{ world_layout: { name, objects, scenario_time_ms,
-  scenario_duration_ms }, environment }`), used for URL-based import and public example scenes
-  under `web/public/world-layouts/`.
-- `world-package.json` (`WorldScenePackageManifest`) — the fuller shape, adding
-  `schema_version`, `package_id`/`version`, `runtime_targets`, signed `artifacts`, and
-  `provenance`/`security`. Canonical schema: `docs/specs/WSP_manifest.schema.json`.
+- `objects` in world coordinates
+- optional `urdf_xml`
+- optional `joint_positions`
+- optional `cameras`
+- `scenario_time_ms` and `scenario_duration_ms`
+- optional `environment`
 
-A World can travel as a single file (paste a link, or drop one JSON) or as a **folder** — the
-manifest plus every asset it references sitting alongside it. Folder import resolves each
-reference by relative path against the folder's own contents; URL import resolves relative
-references against the manifest's own URL. Neither path requires a backend asset-upload step.
+The authored shape is the scene document itself:
 
-A `world-package.json`'s required top-level fields are `schema_version`, `package_id`, `version`,
-`title`, `created_at`, `runtime_targets`, `interface`, `artifacts`, `world_snapshot`, `provenance`,
-and `security`.
+```json
+{
+  "world_layout": {
+    "name": "desk-setup",
+    "objects": [],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0,
+    "urdf_xml": "<robot .../>",
+    "joint_positions": {},
+    "cameras": []
+  },
+  "environment": {
+    "frame_convention": "ros-rep-103"
+  }
+}
+```
 
-Within `world_snapshot`:
+The registry/export package is now a thin envelope around that same document:
 
-- `urdf_xml` stores the full URDF source.
-- `joint_positions` stores current joint positions in radians.
-- `cameras` stores camera attachment + intrinsic/extrinsic config.
+```json
+{
+  "package_id": "desk-setup",
+  "version": "0.1.0",
+  "provenance": {},
+  "artifacts": [],
+  "world": {
+    "name": "desk-setup",
+    "objects": [],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  }
+}
+```
+
+Compatibility note: readers still accept legacy `WorldScenePackageManifest` payloads
+(`schema_version`, `world_snapshot`, `interface`, `security`, `runtime_targets`, and so on), plus
+bare `world_snapshot` payloads. New authored content should prefer the scene document or the thin
+registry envelope above.
+
+A World can travel as a single file (paste a link, or drop one JSON) or as a folder: the JSON plus
+every asset it references sitting alongside it. Folder import resolves each reference by relative
+path against the folder's own contents; URL import resolves relative references against the
+document's own URL. Neither path requires a backend asset-upload step.
+
+Within the scene document:
+
+- `urdf_xml` stores the full URDF source when embedded.
+- `joint_positions` stores current joint positions in radians when embedded.
+- `cameras` stores camera attachment + intrinsic/extrinsic config when embedded.
 - `objects` stores scene objects in world coordinates (schema below).
-- `scenario_time_ms` and `scenario_duration_ms` store scenario clock state. Static scene packages
+- `scenario_time_ms` and `scenario_duration_ms` store scenario clock state. Static world documents
   use `scenario_duration_ms = 0` and must set `scenario_time_ms = 0`.
 
 ## What's accepted inside `objects[]`
@@ -137,9 +170,9 @@ the linked physics proxy. Current simulator transfer code follows that rule by r
 `physics.collision_geometry` first; if it is a primitive proxy, appearance asset refs are not passed
 to the simulator as geometry.
 
-The legacy `asset_ref`, `mesh`, and `simulation` fields remain accepted for v1.0 packages and
-existing world layouts. New package authors should prefer `appearance`, `physics`, and
-`consistency` when a world object must survive across renderers and physics engines.
+The legacy `asset_ref`, `mesh`, and `simulation` fields remain accepted for compatibility. New
+world authors should prefer `appearance`, `physics`, and `consistency` when a world object must
+survive across renderers and physics engines.
 
 **Portable-reference rule**: every asset reference — top-level `asset_ref`, and each of
 `mesh.asset_ref` / `mesh.path` / `mesh.uri` / `mesh.filename`,
@@ -181,25 +214,21 @@ Implementation: `web/src/features/viewer/components/MeshAssetBody.tsx` (viewer),
 `backend/services/simulator_adapters/{mujoco,genesis,pybullet}_scene.py` and
 `backend/services/simulator_adapters/blender_workspace.py` (simulator transfer).
 
-## Delivery: single file, multi-file, or folder
+## Delivery: file, folder, or link
 
-`CoreFolderUploadScreen.tsx`'s World panel accepts, in order of how much a scene actually needs:
+`CoreFolderUploadScreen.tsx`'s World panel accepts:
 
 1. **A link** — `https://.../world-layout.json`, fetched directly.
 2. **Local Files** — one or more files picked or dropped together (the JSON plus whichever assets
    it needs).
-3. **Local Folder** — a real folder picker (`webkitdirectory`), for scenes with enough assets that
-   selecting them individually would be tedious.
+3. **Local Folder** — a real folder picker (`webkitdirectory`) for the JSON plus its asset tree.
 
-All three converge on the same code path: `splitWorldLayoutFolderFiles` (in
-`web/src/app/pages/index/worldLayoutFolderImport.ts`) finds the layout JSON among whatever was
-selected, `buildWorldLayoutFolderAssetMap` indexes the rest into a relative-path → blob-URL map
-(reusing the same multi-key-variant indexing already used for robot mesh folders), and mesh
-references resolve against that map first, falling back to URL-relative resolution for the
-link-import path.
+All three converge on the same import path. The importer finds the world JSON among the selected
+files, indexes the remaining assets into a relative-path → blob URL map, and resolves mesh/splat
+refs against that map first, falling back to URL-relative resolution for link imports.
 
 A World also loads independent of a robot — `CoreFolderUploadScreen`'s "Load Setup" enables as
-soon as either a robot or a world layout is staged, not only a robot.
+soon as either a robot or a world is staged, not only a robot.
 
 ## The proposal: one input, every simulator
 

@@ -107,14 +107,19 @@ Useful SO-ARM100 direct links:
 - SO101 old calibration: `https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO101/so101_old_calib.urdf`
 - SO100: `https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO100/so100.urdf`
 
-### Import A World Layout
+### Import A World
 
-World layouts are object-only JSON snapshots. They preserve the currently loaded robot and camera state unless the import explicitly comes from the startup World panel.
+World documents are the authored scene format. They can contain world objects only, or the same
+objects plus embedded robot state (`urdf_xml`, `joint_positions`, `cameras`) and environment
+metadata.
 
 From the first screen:
 
 1. Use `World`.
-2. Paste a public JSON link.
+2. Choose one source:
+   - `From Link` for a public JSON link or GitHub `blob` link.
+   - `Local Files` for one JSON plus any referenced assets.
+   - `Local Folder` for a folder containing the JSON and its referenced assets.
 3. Load the workspace once the layout is staged.
 
 From the workspace:
@@ -123,13 +128,19 @@ From the workspace:
 2. Choose `From Link` for a public JSON link or GitHub `blob` link.
 3. `Default Layout` and `Demo Layout` are available from the same dialog when applicable.
 
-### Import Or Export A Scene Package
+Relative asset refs resolve against the loaded file set or the source URL. No asset upload step is
+required.
 
-Scene packages include robot XML, joint positions, cameras, and world objects in one JSON manifest.
+### Import Or Export A Registry Package
 
-- Export: `Scene` -> `Export Scene Package`.
+Registry packages wrap the same world document in a thin envelope with `package_id`, `version`,
+`provenance`, and `artifacts`. Use them when publishing, downloading a package file, or loading
+from the registry.
+
+- Export package file: `Scene` -> `Export Scene Package`.
 - Import local JSON: `Scene` -> `Import Scene Package` -> `From File`.
 - Browse registry packages: `Scene` -> `Browse Scene Packages`.
+- Export world document: `Scene` -> `Export World Layout`. You can include or omit robot state.
 
 ### Use The Built-In Sample
 
