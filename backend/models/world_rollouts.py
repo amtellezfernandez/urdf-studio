@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.models.json_payload import JsonObject
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_CAMPAIGN_SCHEMA_VERSION,
     WORLD_ROLLOUT_CHECKER_PROFILE_SCHEMA_VERSION,
@@ -162,6 +163,14 @@ class WorldRolloutJobCreateRequest(BaseModel):
     campaign_id: str | None = Field(default=None, min_length=1)
     rollout_params: WorldRolloutPayload = Field(default_factory=dict)
     runner_params: WorldRolloutPayload = Field(default_factory=dict)
+
+    @field_validator("world_package", mode="before")
+    @classmethod
+    def normalize_world_package(
+        cls,
+        value: object,
+    ) -> WorldScenePackageManifest:
+        return read_world_scene_package_manifest(value)
 
 
 class WorldRolloutJobResponse(BaseModel):

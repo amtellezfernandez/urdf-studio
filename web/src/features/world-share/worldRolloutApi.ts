@@ -1,6 +1,8 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
+import { toWorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageBuilder";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 import type {
   WorldRolloutImportRequest,
   WorldRolloutImportResponse,
@@ -12,15 +14,25 @@ const WORLD_ROLLOUT_API_OPTIONS = {
   requiredBackends: ["core-api"] as const,
 };
 
+const isWorldSceneRegistryEnvelope = (
+  value: WorldRolloutJobCreateRequest["world_package"]
+): value is WorldSceneRegistryEnvelope => "world" in value;
+
 export const createWorldRolloutJob = async (
   request: WorldRolloutJobCreateRequest
 ): Promise<WorldRolloutJobResponse> => {
+  const normalizedRequest = {
+    ...request,
+    world_package: isWorldSceneRegistryEnvelope(request.world_package)
+      ? request.world_package
+      : toWorldSceneRegistryEnvelope(request.world_package),
+  };
   const response = await guardedFetch(
     `${API_BASE_URL}/worlds/rollouts/jobs`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
+      body: JSON.stringify(normalizedRequest),
     },
     { ...WORLD_ROLLOUT_API_OPTIONS, context: "World rollout job" }
   );

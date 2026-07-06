@@ -81,6 +81,28 @@ def _build_world_package() -> WorldScenePackageManifest:
     )
 
 
+def _build_thin_world_package_payload() -> dict:
+    world_package = _build_world_package()
+    return {
+        "package_id": world_package.package_id,
+        "version": world_package.version,
+        "provenance": world_package.provenance,
+        "artifacts": [],
+        "world": {
+            "name": world_package.title,
+            "urdf_xml": world_package.world_snapshot.urdf_xml,
+            "joint_positions": world_package.world_snapshot.joint_positions,
+            "cameras": world_package.world_snapshot.cameras,
+            "objects": world_package.world_snapshot.objects,
+            "scenario_time_ms": world_package.world_snapshot.scenario_time_ms,
+            "scenario_duration_ms": world_package.world_snapshot.scenario_duration_ms,
+            "environment": {
+                "frame_convention": world_package.interface.frame_convention,
+            },
+        },
+    }
+
+
 def _build_profile() -> WorldRolloutCheckerProfile:
     return WorldRolloutCheckerProfile(
         profile_id="checker-profile",
@@ -232,6 +254,19 @@ def test_import_results_preserves_user_configured_profile_and_counts_decisions(t
     assert imported.decisions[0].metrics["latency_ms"] == TEST_DECISION_LATENCY_MS
     assert imported.decisions[0].metrics["margin_m"] == TEST_CLEARANCE_MARGIN_M
     assert imported.decisions[1].semantic_outputs["reason"] == "porch shape unknown"
+
+
+def test_rollout_job_requests_accept_thin_world_registry_envelopes(tmp_path) -> None:
+    service = _build_service(tmp_path)
+    request = WorldRolloutJobCreateRequest(
+        world_package=_build_thin_world_package_payload(),
+        checker_profile=_build_profile(),
+    )
+
+    job = service.create_job(request)
+
+    assert job.campaign.world_package.package_id == "demo-world"
+    assert job.campaign.world_package.version == "1.0.0"
 
 
 def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tmp_path) -> None:
