@@ -146,6 +146,37 @@ def world_scene_registry_envelope_digest(envelope: WorldSceneRegistryEnvelope) -
     return computed_world_scene_document_digest(envelope.world)
 
 
+def declared_world_scene_registry_envelope_digest(
+    envelope: WorldSceneRegistryEnvelope,
+) -> str | None:
+    digests = declared_world_scene_registry_envelope_digests(envelope)
+    return digests[0] if digests else None
+
+
+def declared_world_scene_registry_envelope_digests(
+    envelope: WorldSceneRegistryEnvelope,
+) -> tuple[str, ...]:
+    return tuple(
+        artifact.digest_sha256.lower()
+        for artifact in envelope.artifacts
+        if artifact.kind == "world_snapshot"
+    )
+
+
+def validate_world_scene_registry_envelope_artifact_digests(
+    envelope: WorldSceneRegistryEnvelope,
+) -> list[str]:
+    declared_digests = declared_world_scene_registry_envelope_digests(envelope)
+    if not declared_digests:
+        return []
+    actual_digest = world_scene_registry_envelope_digest(envelope)
+    return [
+        f"artifacts[world_snapshot:{index}].digest_sha256 does not match world_snapshot."
+        for index, digest in enumerate(declared_digests)
+        if digest != actual_digest
+    ]
+
+
 def declared_world_snapshot_digest(manifest: WorldScenePackageManifest) -> str | None:
     digests = declared_world_snapshot_digests(manifest)
     return digests[0] if digests else None

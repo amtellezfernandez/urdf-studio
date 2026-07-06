@@ -29,6 +29,8 @@ from backend.services.world_scene_package_params import (
 )
 from backend.services.world_scene_package_digest import (
     validate_world_snapshot_artifact_digests,
+    validate_world_scene_registry_envelope_artifact_digests,
+    world_scene_registry_envelope_digest,
     world_scene_package_digest,
 )
 from backend.services.world_scene_package_compat import (
@@ -78,39 +80,6 @@ def _canonical_world_scene_registry_envelope_json(
         sort_keys=True,
         separators=(",", ":"),
     )
-
-
-def _world_scene_registry_envelope_payload_from_manifest(
-    manifest: WorldScenePackageManifest,
-) -> dict[str, object]:
-    provenance = (
-        dict(manifest.provenance)
-        if isinstance(manifest.provenance, dict)
-        else {}
-    )
-    environment = provenance.get("environment")
-    environment_payload = dict(environment) if isinstance(environment, dict) else {}
-    environment_payload["frame_convention"] = manifest.interface.frame_convention
-    world_payload: dict[str, object] = {
-        "name": manifest.title,
-        "objects": manifest.world_snapshot.objects,
-        "scenario_time_ms": manifest.world_snapshot.scenario_time_ms,
-        "scenario_duration_ms": manifest.world_snapshot.scenario_duration_ms,
-        "urdf_xml": manifest.world_snapshot.urdf_xml,
-        "joint_positions": manifest.world_snapshot.joint_positions,
-        "cameras": manifest.world_snapshot.cameras,
-        "environment": environment_payload,
-    }
-    payload: dict[str, object] = {
-        "package_id": manifest.package_id,
-        "version": manifest.version,
-        "provenance": provenance,
-        "artifacts": manifest.model_dump(mode="json")["artifacts"],
-        "world": world_payload,
-    }
-    if manifest.description is not None:
-        payload["description"] = manifest.description
-    return payload
 
 
 def _normalize_optional_string(value: object) -> str | None:
@@ -184,6 +153,17 @@ def _matches_tags(entry: WorldScenePackageListEntry, tags: Sequence[str] | None)
     return requested.issubset(available)
 
 
+def _validate_world_timing(envelope: WorldSceneRegistryEnvelope) -> list[str]:
+    scenario_time_ms = envelope.world.scenario_time_ms
+    scenario_duration_ms = envelope.world.scenario_duration_ms
+
+    if scenario_duration_ms == 0 and scenario_time_ms != 0:
+        return ["scenario_time_ms must be 0 when scenario_duration_ms is 0."]
+    if scenario_time_ms > scenario_duration_ms:
+        return ["scenario_time_ms must be <= scenario_duration_ms."]
+    return []
+
+
 def _validate_world_snapshot_timing(manifest: WorldScenePackageManifest) -> list[str]:
     scenario_time_ms = manifest.world_snapshot.scenario_time_ms
     scenario_duration_ms = manifest.world_snapshot.scenario_duration_ms
@@ -193,6 +173,30 @@ def _validate_world_snapshot_timing(manifest: WorldScenePackageManifest) -> list
     if scenario_time_ms > scenario_duration_ms:
         return ["scenario_time_ms must be <= scenario_duration_ms."]
     return []
+
+
+def _validate_world_asset_refs(envelope: WorldSceneRegistryEnvelope) -> list[str]:
+    errors: list[str] = []
+    for index, world_object in enumerate(envelope.world.objects):
+        object_type = world_object.get("type")
+        asset_ref_entry = read_world_object_asset_ref(world_object)
+        content_asset_ref_entry = read_world_object_content_asset_ref(world_object)
+        if object_type == "mesh" and content_asset_ref_entry is None:
+            errors.append(
+                f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
+            )
+            if asset_ref_entry is None:
+                continue
+        if asset_ref_entry is None:
+            continue
+        try:
+            normalize_portable_world_asset_ref(asset_ref_entry.value)
+        except ValueError:
+            errors.append(
+                f"world_snapshot.objects[{index}].{asset_ref_entry.field_path} "
+                "must be a portable relative asset reference."
+            )
+    return errors
 
 
 def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> list[str]:
@@ -230,34 +234,46 @@ class WorldRegistryService:
         self._lock = Lock()
 
     def validate(self, payload: object) -> WorldScenePackageValidationResponse:
-        manifest = read_world_scene_package_manifest(payload)
-        if isinstance(payload, WorldScenePackageManifest) or not is_world_scene_registry_envelope_payload(
-            payload
-        ):
+        errors: list[str] = []
+        warnings: list[str] = []
+        try:
+            envelope = read_world_scene_registry_envelope(payload)
+        except (ValidationError, ValueError):
+            envelope = None
+
+        if envelope is not None:
+            envelope_bytes = len(_canonical_world_scene_registry_envelope_json(envelope).encode("utf-8"))
+            digest = world_scene_registry_envelope_digest(envelope)
+            if not envelope.artifacts:
+                warnings.append("No external artifacts declared. Package is embedded-only.")
+            errors.extend(validate_world_scene_registry_envelope_artifact_digests(envelope))
+            if envelope_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
+                errors.append(
+                    "World scene document exceeds the allowed serialized size: "
+                    f"{envelope_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
+                )
+            errors.extend(_validate_world_timing(envelope))
+            errors.extend(_validate_world_asset_refs(envelope))
+        else:
+            manifest = read_world_scene_package_manifest(payload)
+            digest = world_scene_package_digest(manifest)
+            if not manifest.artifacts:
+                warnings.append("No external artifacts declared. Package is embedded-only.")
+            errors.extend(validate_world_snapshot_artifact_digests(manifest))
             envelope_bytes = len(
                 json.dumps(
-                    _world_scene_registry_envelope_payload_from_manifest(manifest),
+                    manifest.model_dump(mode="json", exclude_none=True),
                     sort_keys=True,
                     separators=(",", ":"),
                 ).encode("utf-8")
             )
-        else:
-            envelope = read_world_scene_registry_envelope(payload)
-            envelope_bytes = len(_canonical_world_scene_registry_envelope_json(envelope).encode("utf-8"))
-        errors: list[str] = []
-        warnings: list[str] = []
-        digest = world_scene_package_digest(manifest)
-
-        if not manifest.artifacts:
-            warnings.append("No external artifacts declared. Package is embedded-only.")
-        errors.extend(validate_world_snapshot_artifact_digests(manifest))
-        if envelope_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
-            errors.append(
-                "World scene document exceeds the allowed serialized size: "
-                f"{envelope_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
-            )
-        errors.extend(_validate_world_snapshot_timing(manifest))
-        errors.extend(_validate_world_snapshot_asset_refs(manifest))
+            if envelope_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
+                errors.append(
+                    "World scene document exceeds the allowed serialized size: "
+                    f"{envelope_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
+                )
+            errors.extend(_validate_world_snapshot_timing(manifest))
+            errors.extend(_validate_world_snapshot_asset_refs(manifest))
         return WorldScenePackageValidationResponse(
             valid=not errors,
             digest_sha256=digest,
@@ -267,10 +283,15 @@ class WorldRegistryService:
 
     def publish(self, payload: object) -> WorldScenePackagePublishResponse:
         envelope = read_world_scene_registry_envelope(payload)
-        manifest = read_world_scene_package_manifest(payload)
         validation = self.validate(envelope)
         if not validation.valid:
             raise ValueError("; ".join(validation.errors))
+        manifest = (
+            read_world_scene_package_manifest(payload)
+            if isinstance(payload, WorldScenePackageManifest)
+            or not is_world_scene_registry_envelope_payload(payload)
+            else None
+        )
 
         with self._lock:
             state = self._load_locked()
@@ -285,8 +306,12 @@ class WorldRegistryService:
                 version=envelope.version,
                 digest_sha256=validation.digest_sha256,
                 published_at=published_at,
-                trust_level=_resolve_trust_level(manifest),
-                runtime_targets=_runtime_targets_summary(manifest),
+                trust_level=(
+                    _resolve_trust_level(manifest)
+                    if manifest is not None
+                    else WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY
+                ),
+                runtime_targets=_runtime_targets_summary(manifest) if manifest is not None else [],
                 manifest=envelope,
             )
             package_versions[envelope.version] = record
@@ -467,7 +492,10 @@ def _read_world_scene_package_version_record(payload: object) -> WorldScenePacka
     normalized_payload = {
         "package_id": payload.get("package_id", envelope.package_id),
         "version": payload.get("version", envelope.version),
-        "digest_sha256": payload.get("digest_sha256"),
+        "digest_sha256": payload.get(
+            "digest_sha256",
+            world_scene_registry_envelope_digest(envelope),
+        ),
         "published_at": payload.get("published_at"),
         "trust_level": payload.get("trust_level", _resolve_trust_level(manifest)),
         "runtime_targets": payload.get("runtime_targets", _runtime_targets_summary(manifest)),
