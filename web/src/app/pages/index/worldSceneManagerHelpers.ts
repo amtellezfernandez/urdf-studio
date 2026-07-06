@@ -13,6 +13,7 @@ import {
   buildWorldRolloutConfigFromDraft,
   fetchWorldRolloutJob,
 } from "@/app/pages/index/worldSceneRuntime";
+import { getFilenameFromPath } from "@/app/pages/index/pathNames";
 
 function downloadBlobDocument(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -94,7 +95,7 @@ const resolveMeshUriFromAssetMap = (
   for (const candidate of candidates) {
     if (assetMap[candidate]) return assetMap[candidate];
   }
-  const basename = normalized.split("/").pop();
+  const basename = getFilenameFromPath(normalized, "");
   return basename ? assetMap[basename] : undefined;
 };
 

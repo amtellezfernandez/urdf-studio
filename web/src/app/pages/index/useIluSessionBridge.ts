@@ -16,6 +16,7 @@ import {
   shouldSyncAttachedIluSession,
   toStudioGitHubSource,
 } from "@/app/pages/index/iluSessionBridgeHelpers";
+import { getFilenameFromPath } from "@/app/pages/index/pathNames";
 import {
   ILU_SESSION_POLL_INTERVAL_MS,
   ILU_SESSION_SAVE_DEBOUNCE_MS,
@@ -82,7 +83,7 @@ export const useIluSessionBridge = ({
       manifestFiles
         .filter((file) => !file.url.includes("/ilu-session/") || !file.url.includes("kind=working"))
         .map((file) => ({
-          name: file.path.split("/").filter(Boolean).pop() || "repo-file",
+          name: getFilenameFromPath(file.path, "repo-file"),
           path: file.path,
           type: "file" as const,
           download_url: file.url,

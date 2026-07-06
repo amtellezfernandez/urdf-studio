@@ -4,6 +4,7 @@ import {
   removeBrowserStorageItem,
   writeBrowserStorageItem,
 } from "@/shared/lib/browserStorage";
+import { getFilenameFromPath } from "@/app/pages/index/pathNames";
 
 export const CORE_FOLDER_UPLOAD_SCREEN_PARAMS = {
   setupEntryWideContainerClass: "max-w-7xl space-y-6",
@@ -72,10 +73,10 @@ export const deriveSourceLabel = (value: string, fallback: string): string => {
   if (!trimmed) return fallback;
   try {
     const parsed = new URL(trimmed);
-    const segment = parsed.pathname.split("/").filter(Boolean).pop();
+    const segment = getFilenameFromPath(parsed.pathname, "");
     return segment || parsed.hostname || fallback;
   } catch {
-    const segment = trimmed.split("/").filter(Boolean).pop();
+    const segment = getFilenameFromPath(trimmed, "");
     return segment || fallback;
   }
 };

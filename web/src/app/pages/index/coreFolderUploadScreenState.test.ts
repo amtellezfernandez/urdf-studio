@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addRecentValue,
   deriveLocalSourceLabel,
+  deriveSourceLabel,
   readStoredJsonArray,
   readStoredString,
   removeRecentValue,
@@ -49,6 +50,22 @@ describe("deriveLocalSourceLabel", () => {
     expect(deriveLocalSourceLabel([createFile({ name: "robot.urdf" })])).toBe(
       "robot.urdf"
     );
+  });
+});
+
+describe("deriveSourceLabel", () => {
+  it("uses URL path basenames before hostnames", () => {
+    expect(deriveSourceLabel("https://example.test/assets/robot.urdf", "fallback")).toBe(
+      "robot.urdf"
+    );
+    expect(deriveSourceLabel("https://example.test/", "fallback")).toBe("example.test");
+  });
+
+  it("uses path basenames for non-URL values", () => {
+    expect(deriveSourceLabel("workspace\\robots\\robot.xacro", "fallback")).toBe(
+      "robot.xacro"
+    );
+    expect(deriveSourceLabel("   ", "fallback")).toBe("fallback");
   });
 });
 

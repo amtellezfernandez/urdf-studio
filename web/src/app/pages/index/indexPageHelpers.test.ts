@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultWorldPublishDraft,
+  inferRemoteUrdfFileName,
   prepareWorldPublishManifestOverrides,
   toWorldPublishFailureMessage,
   toWorldPublishSuccessLabel,
@@ -84,5 +85,13 @@ describe("index page world publish helpers", () => {
     expect(toWorldPublishTargetLabel("hub")).toBe("URDF Star Hub");
     expect(toWorldPublishSuccessLabel("hub")).toBe("Published to URDF Star");
     expect(toWorldPublishFailureMessage("hub")).toBe("Failed to publish to URDF Star");
+  });
+
+  it("infers supported remote URDF file names", () => {
+    expect(inferRemoteUrdfFileName("https://example.test/robots/demo%20arm.urdf")).toBe(
+      "demo arm.urdf"
+    );
+    expect(inferRemoteUrdfFileName("https://example.test/robots/")).toBe("robot.urdf");
+    expect(inferRemoteUrdfFileName("not a url")).toBe("robot.urdf");
   });
 });

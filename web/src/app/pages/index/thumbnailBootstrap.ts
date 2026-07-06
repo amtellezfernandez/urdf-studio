@@ -10,6 +10,7 @@ import {
 } from "@/features/urdf/github/iluGitHubImport";
 import { normalizeMeshPathForMatch } from "@/shared/lib/urdfBrowser";
 import { THUMBNAIL_BOOTSTRAP_PARAMS } from "@/app/pages/index/thumbnailBootstrapParams";
+import { getFilenameFromPath } from "@/app/pages/index/pathNames";
 
 type CandidateLike = {
   name: string;
@@ -46,7 +47,7 @@ export const selectThumbnailCandidate = <T extends CandidateLike>(
   }
   return (
     candidates.find((item) => {
-      const fileName = item.path.split("/").pop() || item.path;
+      const fileName = getFilenameFromPath(item.path, item.path);
       return (
         item.path.toLowerCase().endsWith(normalizedTarget) ||
         item.name.toLowerCase() === normalizedTarget ||

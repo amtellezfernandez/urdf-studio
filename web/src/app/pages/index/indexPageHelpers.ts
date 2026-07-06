@@ -1,5 +1,6 @@
 import { WORLD_SCENE_PACKAGE_DEFAULT_VERSION } from "@/features/world-share/worldScenePackageParams";
 import { INDEX_PAGE_HELPER_PARAMS } from "@/app/pages/index/indexPageHelperParams";
+import { getFilenameFromPath } from "@/app/pages/index/pathNames";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 
 export const DEFAULT_WORLD_SCENE_PACKAGE_ID = INDEX_PAGE_HELPER_PARAMS.defaultWorldScenePackageId;
@@ -119,7 +120,7 @@ export const resolveRemoteUrdfFileUrl = (rawUrl: string): string => {
 export const inferRemoteUrdfFileName = (rawUrl: string): string => {
   try {
     const parsed = new URL(rawUrl);
-    const name = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
+    const name = decodeURIComponent(getFilenameFromPath(parsed.pathname, ""));
     if (/\.(urdf|xacro|xml)$/i.test(name)) {
       return name;
     }

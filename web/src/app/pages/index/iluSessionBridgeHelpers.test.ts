@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  getFilenameFromPath,
   getIluSessionLoadTarget,
   getIluSessionSourceKey,
   shouldApplyAttachedIluSessionUpdate,
@@ -26,12 +25,6 @@ const createSnapshot = (
 });
 
 describe("iluSessionBridgeHelpers", () => {
-  it("derives a filename from a path with fallback handling", () => {
-    expect(getFilenameFromPath("/tmp/robots/demo/robot.urdf")).toBe("robot.urdf");
-    expect(getFilenameFromPath("workspace\\robot.xacro")).toBe("robot.xacro");
-    expect(getFilenameFromPath("", "fallback.urdf")).toBe("fallback.urdf");
-  });
-
   it("prefers repository source paths when deriving the ILU load target", () => {
     const snapshot = createSnapshot({
       loadedSource: {

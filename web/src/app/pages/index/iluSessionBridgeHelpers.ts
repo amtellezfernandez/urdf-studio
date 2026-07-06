@@ -1,15 +1,6 @@
 import type { GitHubSource } from "@/shared/store/useGitHubSourceStore";
 import type { IluSessionSnapshot } from "@/features/urdf/loader/iluSessionApi";
-
-export const getFilenameFromPath = (
-  inputPath: string | null | undefined,
-  fallback = "robot.urdf"
-) => {
-  if (!inputPath) return fallback;
-  const normalized = inputPath.replace(/\\/g, "/").replace(/\/+$/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  return parts[parts.length - 1] || fallback;
-};
+import { getFilenameFromPath } from "@/app/pages/index/pathNames";
 
 export const getIluSessionLoadTarget = (snapshot: IluSessionSnapshot) => {
   const loadedSource = snapshot.loadedSource;
