@@ -1,3 +1,5 @@
+import { isFinitePositiveNumber } from "@/shared/lib/numeric";
+
 type LimitAttributeStatus = "set" | "missing" | "invalid" | "zero";
 
 export type LimitAttributeDebugState = {
@@ -10,7 +12,7 @@ export const parsePositiveScalar = (
   value: string | number | null | undefined
 ): number | null => {
   const parsedValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+  return isFinitePositiveNumber(parsedValue) ? parsedValue : null;
 };
 
 export const parseLimitAttributeDebugState = (
