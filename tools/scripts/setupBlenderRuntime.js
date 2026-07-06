@@ -21,6 +21,7 @@ import {
   buildSetupResult,
 } from './setupCommandResults.js';
 import { buildSimulatorCompatibilityInstallResult } from './setupSimulatorInstallCompatibility.js';
+import { readErrorLikeMessage } from './cliHelpers.js';
 
 export function getManagedBlenderRuntimeRoot(rootDir) {
   return join(rootDir, '.cache', 'blender-runtime');
@@ -279,7 +280,7 @@ export async function installBlenderRuntime(
     });
   } catch (error) {
     logWarning('✗ Failed to install Blender workspace runtime');
-    logInfo(error?.message || String(error));
+    logInfo(readErrorLikeMessage(error));
     logInfo(`Set ${BLENDER_PATH_ENV}=/path/to/blender if Blender is already installed.`);
     if (!isTruthyEnvValue(env[BLENDER_FORCE_INSTALL_ENV])) {
       logInfo(`Continuing without Blender. Set ${BLENDER_FORCE_INSTALL_ENV}=1 to install it during setup.`);

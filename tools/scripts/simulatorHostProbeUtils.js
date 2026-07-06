@@ -1,6 +1,8 @@
 import { readFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 
+import { readErrorLikeMessage } from './cliHelpers.js';
+
 export function asString(value) {
   return typeof value === 'string' ? value : '';
 }
@@ -37,7 +39,7 @@ export function runCommand(
       status: null,
       stdout: '',
       stderr: '',
-      error: error?.message || String(error),
+      error: readErrorLikeMessage(error),
     };
   }
 }

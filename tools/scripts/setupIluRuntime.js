@@ -1,4 +1,5 @@
 import { buildSetupResult } from './setupCommandResults.js';
+import { readErrorLikeMessage } from './cliHelpers.js';
 
 export function assertIluRuntimeContract(
   {
@@ -62,7 +63,7 @@ export async function verifyIluRuntimeContract({
     return buildSetupResult();
   } catch (error) {
     logWarning('✗ i-love-urdf runtime check failed');
-    logInfo(error?.message || String(error));
+    logInfo(readErrorLikeMessage(error));
     logInfo('Run npm install, then rerun npm run setup.');
     return buildSetupResult({ ok: false });
   }
