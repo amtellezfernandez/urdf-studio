@@ -1,14 +1,30 @@
 export type BrowserStorageKind = "local" | "session";
 
+const readStorageSafely = <TValue>(readValue: () => TValue, fallback: TValue): TValue => {
+  try {
+    return readValue();
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStorageSafely = (writeValue: () => void): void => {
+  try {
+    writeValue();
+  } catch {
+    // Browser storage is an optimization. The app must still run when it is
+    // blocked, full, or unavailable in private contexts.
+  }
+};
+
 export const resolveBrowserStorage = (
   kind: BrowserStorageKind,
 ): Storage | undefined => {
   if (typeof window === "undefined") return undefined;
-  try {
-    return kind === "local" ? window.localStorage : window.sessionStorage;
-  } catch {
-    return undefined;
-  }
+  return readStorageSafely(
+    () => (kind === "local" ? window.localStorage : window.sessionStorage),
+    undefined
+  );
 };
 
 export const readBrowserStorageItem = (
@@ -17,11 +33,7 @@ export const readBrowserStorageItem = (
 ): string | null => {
   const storage = resolveBrowserStorage(kind);
   if (!storage) return null;
-  try {
-    return storage.getItem(key);
-  } catch {
-    return null;
-  }
+  return readStorageSafely(() => storage.getItem(key), null);
 };
 
 export const writeBrowserStorageItem = (
@@ -31,12 +43,7 @@ export const writeBrowserStorageItem = (
 ): void => {
   const storage = resolveBrowserStorage(kind);
   if (!storage) return;
-  try {
-    storage.setItem(key, value);
-  } catch {
-    // Browser storage is an optimization. The app must still run when it is
-    // blocked, full, or unavailable in private contexts.
-  }
+  writeStorageSafely(() => storage.setItem(key, value));
 };
 
 export const removeBrowserStorageItem = (
@@ -45,9 +52,5 @@ export const removeBrowserStorageItem = (
 ): void => {
   const storage = resolveBrowserStorage(kind);
   if (!storage) return;
-  try {
-    storage.removeItem(key);
-  } catch {
-    // Ignore storage cleanup failures for the same reason as writes.
-  }
+  writeStorageSafely(() => storage.removeItem(key));
 };
