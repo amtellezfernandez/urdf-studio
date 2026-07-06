@@ -14,6 +14,7 @@ from backend.core.settings import settings
 from backend.models.world_scene_package import (
     WorldRegistryCapabilitiesResponse,
     WorldScenePackageListEntry,
+    WorldSceneRegistryEnvelope,
     WorldScenePackageManifest,
     WorldScenePackagePublishResponse,
     WorldScenePackageValidationResponse,
@@ -25,13 +26,15 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
     WORLD_SCENE_PACKAGE_TRUST_SIGNED_METADATA,
-    WORLD_SCENE_PACKAGE_SCHEMA_VERSIONS,
 )
 from backend.services.world_scene_package_digest import (
-    canonical_world_scene_package_json,
     validate_world_snapshot_artifact_digests,
-    world_scene_package_json_payload,
     world_scene_package_digest,
+)
+from backend.services.world_scene_package_compat import (
+    is_world_scene_registry_envelope_payload,
+    read_world_scene_package_manifest,
+    read_world_scene_registry_envelope,
 )
 from backend.services.world_asset_refs import (
     has_world_object_content_asset_ref,
@@ -67,6 +70,49 @@ def _runtime_targets_summary(manifest: WorldScenePackageManifest) -> list[str]:
     return [f"{target.name}:{target.mode}" for target in manifest.runtime_targets]
 
 
+def _canonical_world_scene_registry_envelope_json(
+    envelope: WorldSceneRegistryEnvelope,
+) -> str:
+    return json.dumps(
+        envelope.model_dump(mode="json", exclude_none=True),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _world_scene_registry_envelope_payload_from_manifest(
+    manifest: WorldScenePackageManifest,
+) -> dict[str, object]:
+    provenance = (
+        dict(manifest.provenance)
+        if isinstance(manifest.provenance, dict)
+        else {}
+    )
+    environment = provenance.get("environment")
+    environment_payload = dict(environment) if isinstance(environment, dict) else {}
+    environment_payload["frame_convention"] = manifest.interface.frame_convention
+    world_payload: dict[str, object] = {
+        "name": manifest.title,
+        "objects": manifest.world_snapshot.objects,
+        "scenario_time_ms": manifest.world_snapshot.scenario_time_ms,
+        "scenario_duration_ms": manifest.world_snapshot.scenario_duration_ms,
+        "urdf_xml": manifest.world_snapshot.urdf_xml,
+        "joint_positions": manifest.world_snapshot.joint_positions,
+        "cameras": manifest.world_snapshot.cameras,
+        "environment": environment_payload,
+    }
+    payload: dict[str, object] = {
+        "package_id": manifest.package_id,
+        "version": manifest.version,
+        "provenance": provenance,
+        "artifacts": manifest.model_dump(mode="json")["artifacts"],
+        "world": world_payload,
+    }
+    if manifest.description is not None:
+        payload["description"] = manifest.description
+    return payload
+
+
 def _normalize_optional_string(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -74,12 +120,12 @@ def _normalize_optional_string(value: object) -> str | None:
     return normalized or None
 
 
-def _extract_owner(manifest: WorldScenePackageManifest) -> str | None:
-    return _normalize_optional_string(manifest.provenance.get("owner"))
+def _extract_owner(envelope: WorldSceneRegistryEnvelope) -> str | None:
+    return _normalize_optional_string(envelope.provenance.get("owner"))
 
 
-def _extract_tags(manifest: WorldScenePackageManifest) -> list[str]:
-    raw_tags = manifest.provenance.get("tags")
+def _extract_tags(envelope: WorldSceneRegistryEnvelope) -> list[str]:
+    raw_tags = envelope.provenance.get("tags")
     if not isinstance(raw_tags, list):
         return []
     tags: list[str] = []
@@ -90,12 +136,17 @@ def _extract_tags(manifest: WorldScenePackageManifest) -> list[str]:
     return sorted(list(dict.fromkeys(tags)))
 
 
-def _extract_preview_image_url(manifest: WorldScenePackageManifest) -> str | None:
-    return _normalize_optional_string(manifest.provenance.get("preview_image_url"))
+def _extract_preview_image_url(envelope: WorldSceneRegistryEnvelope) -> str | None:
+    return _normalize_optional_string(envelope.provenance.get("preview_image_url"))
 
 
-def _extract_source_registry(manifest: WorldScenePackageManifest) -> str | None:
-    return _normalize_optional_string(manifest.provenance.get("source_registry"))
+def _extract_source_registry(envelope: WorldSceneRegistryEnvelope) -> str | None:
+    return _normalize_optional_string(envelope.provenance.get("source_registry"))
+
+
+def _record_title(record: WorldScenePackageVersionRecord) -> str:
+    title = _normalize_optional_string(record.manifest.world.name)
+    return title or record.package_id
 
 
 def _matches_query(entry: WorldScenePackageListEntry, query: str | None) -> bool:
@@ -178,29 +229,32 @@ class WorldRegistryService:
         self._path = Path(registry_path)
         self._lock = Lock()
 
-    def validate(self, manifest: WorldScenePackageManifest) -> WorldScenePackageValidationResponse:
+    def validate(self, payload: object) -> WorldScenePackageValidationResponse:
+        manifest = read_world_scene_package_manifest(payload)
+        if isinstance(payload, WorldScenePackageManifest) or not is_world_scene_registry_envelope_payload(
+            payload
+        ):
+            envelope_bytes = len(
+                json.dumps(
+                    _world_scene_registry_envelope_payload_from_manifest(manifest),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            )
+        else:
+            envelope = read_world_scene_registry_envelope(payload)
+            envelope_bytes = len(_canonical_world_scene_registry_envelope_json(envelope).encode("utf-8"))
         errors: list[str] = []
         warnings: list[str] = []
         digest = world_scene_package_digest(manifest)
 
-        if manifest.schema_version not in WORLD_SCENE_PACKAGE_SCHEMA_VERSIONS:
-            errors.append(
-                "Unsupported schema_version. "
-                f"Expected one of {', '.join(WORLD_SCENE_PACKAGE_SCHEMA_VERSIONS)}, "
-                f"received {manifest.schema_version}."
-            )
-        if not manifest.runtime_targets:
-            warnings.append("No runtime_targets declared. Cross-runtime compatibility cannot be inferred.")
         if not manifest.artifacts:
             warnings.append("No external artifacts declared. Package is embedded-only.")
-        if not manifest.security.signature_ref:
-            warnings.append("No signature_ref present. Package remains metadata-only.")
         errors.extend(validate_world_snapshot_artifact_digests(manifest))
-        manifest_bytes = len(canonical_world_scene_package_json(manifest).encode("utf-8"))
-        if manifest_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
+        if envelope_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
             errors.append(
-                "World scene package manifest exceeds the allowed serialized size: "
-                f"{manifest_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
+                "World scene document exceeds the allowed serialized size: "
+                f"{envelope_bytes} > {MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES} bytes."
             )
         errors.extend(_validate_world_snapshot_timing(manifest))
         errors.extend(_validate_world_snapshot_asset_refs(manifest))
@@ -211,31 +265,35 @@ class WorldRegistryService:
             errors=errors,
         )
 
-    def publish(self, manifest: WorldScenePackageManifest) -> WorldScenePackagePublishResponse:
-        validation = self.validate(manifest)
+    def publish(self, payload: object) -> WorldScenePackagePublishResponse:
+        envelope = read_world_scene_registry_envelope(payload)
+        manifest = read_world_scene_package_manifest(payload)
+        validation = self.validate(envelope)
         if not validation.valid:
             raise ValueError("; ".join(validation.errors))
 
         with self._lock:
             state = self._load_locked()
-            package_versions = state.packages.setdefault(manifest.package_id, {})
-            if manifest.version in package_versions:
+            package_versions = state.packages.setdefault(envelope.package_id, {})
+            if envelope.version in package_versions:
                 raise FileExistsError(
-                    f"Package {manifest.package_id} version {manifest.version} already exists."
+                    f"Package {envelope.package_id} version {envelope.version} already exists."
                 )
             published_at = _now_utc()
             record = WorldScenePackageVersionRecord(
-                package_id=manifest.package_id,
-                version=manifest.version,
+                package_id=envelope.package_id,
+                version=envelope.version,
                 digest_sha256=validation.digest_sha256,
                 published_at=published_at,
-                manifest=manifest,
+                trust_level=_resolve_trust_level(manifest),
+                runtime_targets=_runtime_targets_summary(manifest),
+                manifest=envelope,
             )
-            package_versions[manifest.version] = record
+            package_versions[envelope.version] = record
             self._save_locked(state)
             return WorldScenePackagePublishResponse(
-                package_id=manifest.package_id,
-                version=manifest.version,
+                package_id=envelope.package_id,
+                version=envelope.version,
                 digest_sha256=validation.digest_sha256,
                 created=True,
             )
@@ -262,14 +320,14 @@ class WorldRegistryService:
                         latest_version=latest_record.version,
                         latest_digest_sha256=latest_record.digest_sha256,
                         updated_at=latest_record.published_at,
-                        title=latest_record.manifest.title,
+                        title=_record_title(latest_record),
                         description=latest_record.manifest.description,
                         owner=_extract_owner(latest_record.manifest),
                         tags=_extract_tags(latest_record.manifest),
                         preview_image_url=_extract_preview_image_url(latest_record.manifest),
                         source_registry=_extract_source_registry(latest_record.manifest),
-                        trust_level=_resolve_trust_level(latest_record.manifest),
-                        runtime_targets=_runtime_targets_summary(latest_record.manifest),
+                        trust_level=latest_record.trust_level,
+                        runtime_targets=latest_record.runtime_targets,
                     )
                 )
             entries.sort(key=lambda entry: entry.updated_at, reverse=True)
@@ -361,10 +419,8 @@ class WorldRegistryService:
             package_versions: dict[str, WorldScenePackageVersionRecord] = {}
             for version, version_payload in version_payloads.items():
                 try:
-                    package_versions[version] = WorldScenePackageVersionRecord.model_validate(
-                        version_payload
-                    )
-                except ValidationError as exc:
+                    package_versions[version] = _read_world_scene_package_version_record(version_payload)
+                except (ValidationError, ValueError) as exc:
                     logger.warning(
                         "Skipping invalid package version %s@%s in %s: %s",
                         package_id,
@@ -397,9 +453,27 @@ class WorldRegistryService:
 def _world_scene_package_version_record_json_payload(
     record: WorldScenePackageVersionRecord,
 ) -> dict:
-    payload = record.model_dump(mode="json")
-    payload["manifest"] = world_scene_package_json_payload(record.manifest)
-    return payload
+    return record.model_dump(mode="json", exclude_none=True)
+
+
+def _read_world_scene_package_version_record(payload: object) -> WorldScenePackageVersionRecord:
+    if not isinstance(payload, dict):
+        raise ValueError("World scene package version record must be an object.")
+    manifest_payload = payload.get("manifest")
+    if manifest_payload is None:
+        return WorldScenePackageVersionRecord.model_validate(payload)
+    envelope = read_world_scene_registry_envelope(manifest_payload)
+    manifest = read_world_scene_package_manifest(manifest_payload)
+    normalized_payload = {
+        "package_id": payload.get("package_id", envelope.package_id),
+        "version": payload.get("version", envelope.version),
+        "digest_sha256": payload.get("digest_sha256"),
+        "published_at": payload.get("published_at"),
+        "trust_level": payload.get("trust_level", _resolve_trust_level(manifest)),
+        "runtime_targets": payload.get("runtime_targets", _runtime_targets_summary(manifest)),
+        "manifest": envelope,
+    }
+    return WorldScenePackageVersionRecord.model_validate(normalized_payload)
 
 
 world_registry_service = WorldRegistryService(settings.world_registry_path)

@@ -19,7 +19,6 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
 )
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
 from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.world_registry import WorldRegistryService
 
@@ -78,7 +77,7 @@ def test_publish_list_and_get_version_roundtrip() -> None:
         version = service.get_version("demo-world", "1.0.0")
         assert version.package_id == "demo-world"
         assert version.version == "1.0.0"
-        assert version.manifest.world_snapshot.joint_positions["joint_1"] == TEST_WORLD_JOINT_VALUE_RAD
+        assert version.manifest.world.joint_positions["joint_1"] == TEST_WORLD_JOINT_VALUE_RAD
 
 
 def test_publish_writes_schema_compatible_manifest_payload() -> None:
@@ -92,9 +91,12 @@ def test_publish_writes_schema_compatible_manifest_payload() -> None:
         service.publish(manifest)
         payload = json.loads(open(registry_path, encoding="utf-8").read())
 
-        stored_manifest = payload["packages"]["demo-world"]["1.0.0"]["manifest"]
+        stored_record = payload["packages"]["demo-world"]["1.0.0"]
+        stored_manifest = stored_record["manifest"]
         assert "description" not in stored_manifest
-        assert stored_manifest["runtime_targets"] == [{"name": "blender", "mode": "python"}]
+        assert stored_record["runtime_targets"] == ["blender:python"]
+        assert "runtime_targets" not in stored_manifest
+        assert stored_manifest["world"]["name"] == manifest.title
 
 
 def test_duplicate_version_is_rejected() -> None:
@@ -200,32 +202,30 @@ def test_publish_accepts_thin_world_registry_envelope() -> None:
     with TemporaryDirectory() as temp_dir:
         registry_path = f"{temp_dir}/world-registry.json"
         service = WorldRegistryService(registry_path)
-        manifest = read_world_scene_package_manifest(
-            {
-                "package_id": "scene-first-world",
-                "version": "2.0.0",
-                "provenance": {
-                    "owner": "scene-team",
-                    "tags": ["Scene", "Thin"],
-                },
-                "artifacts": [],
-                "world": {
-                    "name": "Scene First World",
-                    "urdf_xml": "<robot name='demo'/>",
-                    "joint_positions": {"joint_1": TEST_WORLD_JOINT_VALUE_RAD},
-                    "cameras": [],
-                    "objects": [],
-                    "scenario_time_ms": 0,
-                    "scenario_duration_ms": 0,
-                    "environment": {
-                        "frame_convention": "ros-rep-103",
-                    },
+        envelope = {
+            "package_id": "scene-first-world",
+            "version": "2.0.0",
+            "provenance": {
+                "owner": "scene-team",
+                "tags": ["Scene", "Thin"],
+            },
+            "artifacts": [],
+            "world": {
+                "name": "Scene First World",
+                "urdf_xml": "<robot name='demo'/>",
+                "joint_positions": {"joint_1": TEST_WORLD_JOINT_VALUE_RAD},
+                "cameras": [],
+                "objects": [],
+                "scenario_time_ms": 0,
+                "scenario_duration_ms": 0,
+                "environment": {
+                    "frame_convention": "ros-rep-103",
                 },
             }
-        )
+        }
 
-        validation = service.validate(manifest)
-        publish_result = service.publish(manifest)
+        validation = service.validate(envelope)
+        publish_result = service.publish(envelope)
         packages = service.list_packages()
 
         assert validation.valid is True
@@ -252,6 +252,27 @@ def test_world_scene_registry_envelope_payload_omits_legacy_package_fields() -> 
     assert "runtime_targets" not in payload
     assert "interface" not in payload
     assert "security" not in payload
+
+
+def test_load_preserves_legacy_registry_metadata_while_normalizing_manifest_shape() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = build_manifest("legacy-world", "1.0.0")
+        manifest.security = WorldSecuritySpec(
+            signature_ref="sigstore://legacy-world@1.0.0",
+            attestation_refs=[],
+            sbom_ref=None,
+        )
+        service.publish(manifest)
+
+        reloaded_service = WorldRegistryService(registry_path)
+        version = reloaded_service.get_version("legacy-world", "1.0.0")
+        packages = reloaded_service.list_packages()
+
+        assert version.manifest.world.name == manifest.title
+        assert packages[0].trust_level == "signed_metadata"
+        assert packages[0].runtime_targets == ["worldd:native"]
 
 
 def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:
@@ -447,6 +468,6 @@ def test_validate_rejects_oversized_manifest() -> None:
 
         assert validation.valid is False
         assert any(
-            "manifest exceeds the allowed serialized size" in error
+            "document exceeds the allowed serialized size" in error
             for error in validation.errors
         )

@@ -241,6 +241,54 @@ def _blender_change_set_payload(
     }
 
 
+def test_world_registry_publish_and_get_version_roundtrip_thin_envelopes() -> None:
+    payload = _thin_world_package_payload()
+    payload["package_id"] = "demo_world_registry_api"
+    payload["version"] = "1.0.1"
+    with _patch_security_settings():
+        publish_response = asyncio.run(
+            _request_json(
+                "POST",
+                "/worlds/packages",
+                headers=_operator_headers(),
+                json=payload,
+            )
+        )
+
+        assert publish_response.status_code == 200
+        assert publish_response.json()["package_id"] == payload["package_id"]
+
+        version_response = asyncio.run(
+            _request_json(
+                "GET",
+                f"/worlds/packages/{payload['package_id']}/versions/{payload['version']}",
+                headers=_operator_headers(),
+            )
+        )
+
+        assert version_response.status_code == 200
+        version_payload = version_response.json()
+        assert version_payload["manifest"]["package_id"] == payload["package_id"]
+        assert version_payload["manifest"]["world"]["name"] == "Demo World"
+        assert "runtime_targets" not in version_payload["manifest"]
+        assert "security" not in version_payload["manifest"]
+
+
+def test_world_registry_validate_accepts_legacy_manifest_payloads() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/worlds/packages/validate",
+                headers=_operator_headers(),
+                json=_world_package_payload(),
+            )
+        )
+
+        assert response.status_code == 200
+        assert response.json()["valid"] is True
+
+
 def _blender_camera_change_payload(stable_id: str) -> dict:
     quat_xyzw = world_camera_to_opengl_camera_rotation().as_quat()
     return {

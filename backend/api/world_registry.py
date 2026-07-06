@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import ValidationError
 
 from backend.core.simulator_security import require_simulator_operator_access_async
@@ -14,8 +14,7 @@ from backend.models.world_scene_package import (
 )
 from backend.services.world_registry import world_registry_service
 from backend.services.world_scene_package_compat import (
-    read_world_scene_package_manifest,
-    world_scene_registry_envelope_from_manifest,
+    read_world_scene_registry_envelope,
 )
 
 router = APIRouter(prefix="/worlds/packages", tags=["world-packages"])
@@ -23,11 +22,11 @@ router = APIRouter(prefix="/worlds/packages", tags=["world-packages"])
 
 @router.post("/validate", response_model=WorldScenePackageValidationResponse)
 async def validate_world_scene_package(
-    payload: object,
+    payload: object = Body(...),
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldScenePackageValidationResponse:
     try:
-        manifest = read_world_scene_package_manifest(payload)
+        manifest = read_world_scene_registry_envelope(payload)
     except (ValidationError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return world_registry_service.validate(manifest)
@@ -35,11 +34,11 @@ async def validate_world_scene_package(
 
 @router.post("", response_model=WorldScenePackagePublishResponse)
 async def publish_world_scene_package(
-    payload: object,
+    payload: object = Body(...),
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldScenePackagePublishResponse:
     try:
-        manifest = read_world_scene_package_manifest(payload)
+        manifest = read_world_scene_registry_envelope(payload)
         return world_registry_service.publish(manifest)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -79,12 +78,8 @@ async def get_world_scene_package_version(
 ) -> WorldScenePackageVersionDocumentRecord:
     try:
         record = world_registry_service.get_version(package_id, version)
-        return WorldScenePackageVersionDocumentRecord(
-            package_id=record.package_id,
-            version=record.version,
-            digest_sha256=record.digest_sha256,
-            published_at=record.published_at,
-            manifest=world_scene_registry_envelope_from_manifest(record.manifest),
+        return WorldScenePackageVersionDocumentRecord.model_validate(
+            record.model_dump(exclude_none=True)
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -824,7 +824,13 @@ class WorldScenePackageVersionRecord(BaseModel):
     version: str
     digest_sha256: str
     published_at: datetime
-    manifest: WorldScenePackageManifest
+    trust_level: Literal[
+        WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
+        WORLD_SCENE_PACKAGE_TRUST_SIGNED_METADATA,
+        WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
+    ] = WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY
+    runtime_targets: list[str] = Field(default_factory=list)
+    manifest: WorldSceneRegistryEnvelope
 
 
 class WorldScenePackageVersionDocumentRecord(BaseModel):
