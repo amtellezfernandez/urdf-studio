@@ -177,6 +177,53 @@ def validate_world_scene_registry_envelope_artifact_digests(
     ]
 
 
+def require_world_scene_registry_envelope_artifact_digests(
+    envelope: WorldSceneRegistryEnvelope,
+    *,
+    context: str,
+) -> None:
+    errors = validate_world_scene_registry_envelope_artifact_digests(envelope)
+    if errors:
+        raise ValueError(f"{context}: {'; '.join(errors)}")
+
+
+def normalize_and_require_world_scene_registry_envelope_artifact_digests(
+    envelope: WorldSceneRegistryEnvelope,
+    *,
+    context: str,
+) -> WorldSceneRegistryEnvelope:
+    normalized = normalize_world_scene_registry_envelope_artifact_digests(envelope)
+    require_world_scene_registry_envelope_artifact_digests(normalized, context=context)
+    return normalized
+
+
+def normalize_world_scene_registry_envelope_artifact_digests(
+    envelope: WorldSceneRegistryEnvelope,
+) -> WorldSceneRegistryEnvelope:
+    actual_digest = world_scene_registry_envelope_digest(envelope)
+    updated_artifacts = []
+    snapshot_artifact_seen = False
+    changed = False
+
+    for artifact in envelope.artifacts:
+        if artifact.kind != "world_snapshot":
+            updated_artifacts.append(artifact)
+            continue
+        if snapshot_artifact_seen:
+            changed = True
+            continue
+        snapshot_artifact_seen = True
+        if artifact.digest_sha256.lower() == actual_digest:
+            updated_artifacts.append(artifact)
+            continue
+        updated_artifacts.append(artifact.model_copy(update={"digest_sha256": actual_digest}))
+        changed = True
+
+    if not changed:
+        return envelope
+    return envelope.model_copy(update={"artifacts": updated_artifacts}, deep=True)
+
+
 def declared_world_snapshot_digest(manifest: WorldScenePackageManifest) -> str | None:
     digests = declared_world_snapshot_digests(manifest)
     return digests[0] if digests else None

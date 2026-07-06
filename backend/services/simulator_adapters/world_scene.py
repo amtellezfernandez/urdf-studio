@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import NotRequired, TypeAlias, TypedDict, cast
 
 from backend.models.json_payload import JsonValue
-from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.models.world_scene_package import WorldSceneRegistryEnvelope
 from backend.services.simulator_adapters.camera_transfer import (
     SimCameraSpec,
     build_sim_camera_specs,
@@ -18,10 +18,9 @@ from backend.services.world_layout_static_transfer import (
     parse_static_world_layout_payload,
     resolve_world_layout_frame_map,
 )
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
-from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
+from backend.services.world_scene_package_compat import read_world_scene_registry_envelope
 from backend.services.world_scene_package_digest import (
-    normalize_and_require_world_snapshot_artifact_digests,
+    normalize_and_require_world_scene_registry_envelope_artifact_digests,
 )
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
@@ -99,7 +98,7 @@ class SimulatorValidationReport(TypedDict):
 
 @dataclass(frozen=True)
 class PreparedWorldScene:
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     layout: StaticWorldLayout
     frame_map: ConcreteWorldLayoutFrameMap
     primitives: tuple[SimPrimitive, ...]
@@ -115,7 +114,7 @@ class SimulatorRobotSpec:
 
 @dataclass(frozen=True)
 class SimulatorSceneSpec:
-    world_package: WorldScenePackageManifest
+    world_package: WorldSceneRegistryEnvelope
     layout: StaticWorldLayout
     requested_frame_map: WorldLayoutFrameMap
     frame_map: ConcreteWorldLayoutFrameMap
@@ -183,15 +182,15 @@ def write_simulator_validation_report(
     return report
 
 
-def load_world_package(path: Path) -> WorldScenePackageManifest:
+def load_world_package(path: Path) -> WorldSceneRegistryEnvelope:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as exc:
         raise ValueError(f"Failed to read world package: {path}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid world package JSON in {path}: {exc}") from exc
-    world_package = read_world_scene_package_manifest(payload)
-    return normalize_and_require_world_snapshot_artifact_digests(
+    world_package = read_world_scene_registry_envelope(payload)
+    return normalize_and_require_world_scene_registry_envelope_artifact_digests(
         world_package,
         context=f"World package artifact digest invalid in {path}",
     )
@@ -204,9 +203,7 @@ def prepare_world_scene(
     include_hidden: bool,
 ) -> PreparedWorldScene:
     world_package = load_world_package(world_package_path)
-    layout = parse_static_world_layout_payload(
-        world_scene_registry_envelope_json_payload(world_package)
-    )
+    layout = parse_static_world_layout_payload(world_package.model_dump(mode="json", exclude_none=True))
     resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     primitives, warnings = build_sim_primitives(
         layout,
@@ -235,7 +232,7 @@ def prepare_simulator_scene(
         include_hidden=include_hidden,
     )
     cameras, camera_warnings = build_sim_camera_specs(
-        prepared_world.world_package,
+        prepared_world.world_package.world,
         robot_urdf_path=robot_urdf_path,
     )
     return SimulatorSceneSpec(
@@ -246,7 +243,7 @@ def prepare_simulator_scene(
         robot=_simulator_robot_spec(
             world_package_path=world_package_path,
             robot_urdf_path=robot_urdf_path,
-            joint_positions=prepared_world.world_package.world_snapshot.joint_positions,
+            joint_positions=prepared_world.world_package.world.joint_positions or {},
         ),
         primitives=prepared_world.primitives,
         cameras=cameras,

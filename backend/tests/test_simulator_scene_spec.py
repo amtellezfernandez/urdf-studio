@@ -12,8 +12,8 @@ from backend.services.simulator_adapters.world_scene import (
     write_simulator_validation_report,
 )
 from backend.services.world_scene_package_digest import (
-    computed_world_snapshot_digest,
-    declared_world_snapshot_digests,
+    declared_world_scene_registry_envelope_digests,
+    world_scene_registry_envelope_digest,
 )
 from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
@@ -172,8 +172,8 @@ def test_prepare_simulator_scene_repairs_stale_world_snapshot_artifact_digest(
         include_hidden=False,
     )
 
-    assert declared_world_snapshot_digests(scene.world_package) == (
-        computed_world_snapshot_digest(scene.world_package),
+    assert declared_world_scene_registry_envelope_digests(scene.world_package) == (
+        world_scene_registry_envelope_digest(scene.world_package),
     )
 
 
@@ -222,6 +222,6 @@ def test_load_world_package_accepts_thin_world_registry_envelope(tmp_path: Path)
     world_package = load_world_package(world_package_path)
 
     assert world_package.package_id == "scene-first-world"
-    assert world_package.title == "Scene First World"
-    assert world_package.world_snapshot.joint_positions == {"joint_1": 0.25}
-    assert world_package.interface.frame_convention == "ros-rep-103"
+    assert world_package.world.name == "Scene First World"
+    assert world_package.world.joint_positions == {"joint_1": 0.25}
+    assert world_package.world.environment == {"frame_convention": "ros-rep-103"}

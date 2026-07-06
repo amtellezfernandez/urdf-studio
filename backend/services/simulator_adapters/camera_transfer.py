@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from backend.models.world_scene_package import WorldScenePackageManifest, WorldScenePayload
+from backend.models.world_scene_package import (
+    WorldSceneDocument,
+    WorldScenePackageManifest,
+    WorldScenePayload,
+    WorldSceneRegistryEnvelope,
+)
 from backend.services.simulator_adapters.camera_conventions import (
     OPENGL_CAMERA_FORWARD_LOCAL_XYZ,
     OPENGL_CAMERA_UP_LOCAL_XYZ,
@@ -98,12 +103,20 @@ class SimCameraSpec:
 
 
 def build_sim_camera_specs(
-    world_package: WorldScenePackageManifest,
+    world: WorldSceneDocument | WorldScenePackageManifest | WorldSceneRegistryEnvelope,
     *,
     robot_urdf_path: Path,
     strict: bool = True,
 ) -> tuple[tuple[SimCameraSpec, ...], tuple[str, ...]]:
-    cameras = world_package.world_snapshot.cameras
+    if isinstance(world, WorldSceneDocument):
+        cameras = world.cameras or []
+        joint_positions = world.joint_positions or {}
+    elif isinstance(world, WorldSceneRegistryEnvelope):
+        cameras = world.world.cameras or []
+        joint_positions = world.world.joint_positions or {}
+    else:
+        cameras = world.world_snapshot.cameras
+        joint_positions = world.world_snapshot.joint_positions
     if not cameras:
         return (), ()
 
@@ -111,7 +124,7 @@ def build_sim_camera_specs(
         robot = _load_robot_for_camera_transfer(robot_urdf_path)
         _apply_camera_transfer_joint_positions(
             robot,
-            world_package.world_snapshot.joint_positions,
+            joint_positions,
         )
     except (ValueError, KeyError) as exc:
         warnings = (f"Camera transfer could not load robot URDF: {exc}",)
