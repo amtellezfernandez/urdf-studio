@@ -246,10 +246,11 @@ import {
   buildViewerUiPolicy,
 } from "@/features/viewer/viewerUiPolicy";
 import {
+  applyAssemblyPlacementPose,
   applyAssemblyWheelRollForWorldDelta,
-  collectAssemblyMeshProxies,
-  detectAssemblyWheelProfile,
+  createAssemblyPlacementRobotEntry,
   resolveAssemblyForwardWorld,
+  resolveAssemblySecondaryLayoutRadius,
 } from "@/features/viewer/viewerAssemblyRobotHelpers";
 import {
   areSortedStringListsEqual,
@@ -696,18 +697,15 @@ const URDFModel = ({
           // Calculate bounding box for camera positioning only
           const box = new THREE.Box3().setFromObject(robot);
           const center = box.getCenter(new THREE.Vector3());
-          const primarySize = box.getSize(new THREE.Vector3());
-          const primaryHalfExtentX = Math.max(primarySize.x * 0.5, 0.09);
-          const primaryHalfExtentZ = Math.max(primarySize.z * 0.5, 0.09);
-          const primaryRadius = Math.max(primaryHalfExtentX, primaryHalfExtentZ);
-          const primaryMeshProxies = collectAssemblyMeshProxies(robot);
-          const primaryWheelProfile = detectAssemblyWheelProfile(robot);
-          const assemblySpacing = 0.45;
           const primaryModelId =
             (isAssemblyWorkspace ? assemblyPrimaryModel?.id : null) ||
             (robot.userData.assemblyModelId as string | undefined) ||
             "__primary__";
           robot.userData.assemblyModelId = primaryModelId;
+          const primaryEntry = createAssemblyPlacementRobotEntry({
+            id: primaryModelId,
+            robot,
+          });
 
           // Store robot center for camera positioning (don't move the robot itself)
           robot.userData.boundingBoxCenter = center.clone();
@@ -730,66 +728,32 @@ const URDFModel = ({
             ? assemblyStoredPosesSnapshot[primaryModelId]
             : undefined;
           if (primaryStoredPose) {
-            robot.position.set(primaryStoredPose.x, primaryStoredPose.y, primaryStoredPose.z);
-            robot.rotation.y = primaryStoredPose.yaw;
+            applyAssemblyPlacementPose(robot, primaryStoredPose);
           }
-          const assemblyRobots: AssemblyPlacementRobot[] = [
-            {
-              id: primaryModelId,
-              robot,
-              radius: primaryRadius,
-              halfExtentX: primaryHalfExtentX,
-              halfExtentZ: primaryHalfExtentZ,
-              meshProxies: primaryMeshProxies,
-              wheelProfile: primaryWheelProfile,
-            },
-          ];
+          const assemblyRobots: AssemblyPlacementRobot[] = [primaryEntry];
 
-          const secondaryFootprints = assemblySecondaryRobots.map((secondaryRobot) => {
-            const secondaryBox = new THREE.Box3().setFromObject(secondaryRobot);
-            const secondarySize = secondaryBox.getSize(new THREE.Vector3());
-            const halfExtentX = Math.max(secondarySize.x * 0.5, 0.09);
-            const halfExtentZ = Math.max(secondarySize.z * 0.5, 0.09);
+          const secondaryEntries = assemblySecondaryRobots.map((secondaryRobot) => {
             const modelId = (secondaryRobot.userData.assemblyModelId as string) || "";
-            return {
+            return createAssemblyPlacementRobotEntry({
               id: modelId,
               robot: secondaryRobot,
-              radius: Math.max(halfExtentX, halfExtentZ),
-              halfExtentX,
-              halfExtentZ,
-              meshProxies: collectAssemblyMeshProxies(secondaryRobot),
-              wheelProfile: detectAssemblyWheelProfile(secondaryRobot),
-            };
+            });
           });
 
-          if (secondaryFootprints.length > 0) {
-            const maxSecondaryRadius = secondaryFootprints.reduce(
-              (maxRadius, item) => Math.max(maxRadius, item.radius),
-              0.25
-            );
-            const count = secondaryFootprints.length;
-            const minRadiusForPrimaryClearance =
-              primaryRadius + maxSecondaryRadius + assemblySpacing;
-            const minArcLengthPerRobot = maxSecondaryRadius * 2 + assemblySpacing;
-            const minRadiusForPeerSpacing = (minArcLengthPerRobot * count) / (2 * Math.PI);
-            const layoutRadius = Math.max(minRadiusForPrimaryClearance, minRadiusForPeerSpacing);
+          if (secondaryEntries.length > 0) {
+            const layoutRadius = resolveAssemblySecondaryLayoutRadius({
+              primaryRadius: primaryEntry.radius,
+              secondaryEntries,
+            });
+            const count = secondaryEntries.length;
 
-            secondaryFootprints.forEach((entry, index) => {
-              const {
-                robot: secondaryRobot,
-                id: modelId,
-                radius,
-                halfExtentX,
-                halfExtentZ,
-                meshProxies,
-                wheelProfile,
-              } = entry;
+            secondaryEntries.forEach((entry, index) => {
+              const { robot: secondaryRobot, id: modelId } = entry;
               const storedPose = isAssemblyWorkspace
                 ? assemblyStoredPosesSnapshot[modelId]
                 : undefined;
               if (storedPose) {
-                secondaryRobot.position.set(storedPose.x, storedPose.y, storedPose.z);
-                secondaryRobot.rotation.y = storedPose.yaw;
+                applyAssemblyPlacementPose(secondaryRobot, storedPose);
               } else {
                 const angle = (2 * Math.PI * index) / count;
                 const x = Math.cos(angle) * layoutRadius;
@@ -804,15 +768,7 @@ const URDFModel = ({
               if (transformContract.strictParity) {
                 applyUrdfVisualMaterials(secondaryRobot);
               }
-              assemblyRobots.push({
-                id: modelId,
-                robot: secondaryRobot,
-                radius,
-                halfExtentX,
-                halfExtentZ,
-                meshProxies,
-                wheelProfile,
-              });
+              assemblyRobots.push(entry);
             });
           }
           assemblyRobotsRef.current = assemblyRobots;

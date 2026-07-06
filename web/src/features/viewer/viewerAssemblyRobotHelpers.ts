@@ -24,7 +24,19 @@ import { isStudioWheelLikeLabel } from "@/features/viewer/studioWheelDriveHeuris
 import { WHEEL_PLAYBACK_MOTION_PARAMS } from "@/features/viewer/playback/wheelPlaybackMotionParams";
 import { isFinitePositiveMotionDimension } from "@/features/viewer/viewer3dHelpers";
 
-export const collectAssemblyMeshProxies = (robot: URDFRobot): AssemblyMeshProxy[] => {
+const ASSEMBLY_ROBOT_HELPER_PARAMS = {
+  minHalfExtentM: 0.09,
+  secondaryLayoutSpacingM: 0.45,
+} as const;
+
+export type AssemblyPlacementPose = {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+};
+
+const collectAssemblyMeshProxies = (robot: URDFRobot): AssemblyMeshProxy[] => {
   const proxies: AssemblyMeshProxy[] = [];
   robot.traverse((node) => {
     const mesh = node as THREE.Mesh;
@@ -43,7 +55,36 @@ export const collectAssemblyMeshProxies = (robot: URDFRobot): AssemblyMeshProxy[
   return proxies;
 };
 
-export const detectAssemblyWheelProfile = (
+export const applyAssemblyPlacementPose = (
+  robot: URDFRobot,
+  pose: AssemblyPlacementPose
+): void => {
+  robot.position.set(pose.x, pose.y, pose.z);
+  robot.rotation.y = pose.yaw;
+};
+
+export const resolveAssemblySecondaryLayoutRadius = ({
+  primaryRadius,
+  secondaryEntries,
+  spacing = ASSEMBLY_ROBOT_HELPER_PARAMS.secondaryLayoutSpacingM,
+}: {
+  primaryRadius: number;
+  secondaryEntries: readonly Pick<AssemblyPlacementRobot, "radius">[];
+  spacing?: number;
+}): number => {
+  if (secondaryEntries.length === 0) return 0;
+  const maxSecondaryRadius = secondaryEntries.reduce(
+    (maxRadius, item) => Math.max(maxRadius, item.radius),
+    0.25
+  );
+  const count = secondaryEntries.length;
+  const minRadiusForPrimaryClearance = primaryRadius + maxSecondaryRadius + spacing;
+  const minArcLengthPerRobot = maxSecondaryRadius * 2 + spacing;
+  const minRadiusForPeerSpacing = (minArcLengthPerRobot * count) / (2 * Math.PI);
+  return Math.max(minRadiusForPrimaryClearance, minRadiusForPeerSpacing);
+};
+
+const detectAssemblyWheelProfile = (
   robot: URDFRobot
 ): AssemblyWheelProfile | null => {
   const joints = Object.entries(robot.joints ?? {});
@@ -117,6 +158,35 @@ export const detectAssemblyWheelProfile = (
   return {
     forwardLocal,
     wheels: wheelCandidates,
+  };
+};
+
+export const createAssemblyPlacementRobotEntry = ({
+  id,
+  robot,
+}: {
+  id: string;
+  robot: URDFRobot;
+}): AssemblyPlacementRobot => {
+  const box = new THREE.Box3().setFromObject(robot);
+  const size = box.getSize(new THREE.Vector3());
+  const halfExtentX = Math.max(
+    size.x * 0.5,
+    ASSEMBLY_ROBOT_HELPER_PARAMS.minHalfExtentM
+  );
+  const halfExtentZ = Math.max(
+    size.z * 0.5,
+    ASSEMBLY_ROBOT_HELPER_PARAMS.minHalfExtentM
+  );
+
+  return {
+    id,
+    robot,
+    radius: Math.max(halfExtentX, halfExtentZ),
+    halfExtentX,
+    halfExtentZ,
+    meshProxies: collectAssemblyMeshProxies(robot),
+    wheelProfile: detectAssemblyWheelProfile(robot),
   };
 };
 
