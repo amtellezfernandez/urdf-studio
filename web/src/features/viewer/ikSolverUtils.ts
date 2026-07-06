@@ -162,3 +162,48 @@ export const resolveApproachAxisForEe = (
   }
   return best;
 };
+
+export const resolveIkRearTransitWorldTarget = ({
+  baseWorldPosition,
+  effectorWorldPosition,
+  targetWorldPosition,
+}: {
+  baseWorldPosition: THREE.Vector3;
+  effectorWorldPosition: THREE.Vector3;
+  targetWorldPosition: THREE.Vector3;
+}): [number, number, number] => {
+  const radial = new THREE.Vector3(
+    targetWorldPosition.x - baseWorldPosition.x,
+    targetWorldPosition.y - baseWorldPosition.y,
+    0
+  );
+  if (radial.lengthSq() < 1e-10) {
+    radial.set(
+      effectorWorldPosition.x - baseWorldPosition.x,
+      effectorWorldPosition.y - baseWorldPosition.y,
+      0
+    );
+  }
+  if (radial.lengthSq() < 1e-10) {
+    radial.set(1, 0, 0);
+  }
+  radial.normalize();
+
+  const baseToTarget = Math.hypot(
+    targetWorldPosition.x - baseWorldPosition.x,
+    targetWorldPosition.y - baseWorldPosition.y
+  );
+  const transitRadius = Math.min(0.3, Math.max(0.12, baseToTarget * 0.42));
+  const transitHeight =
+    Math.max(
+      effectorWorldPosition.z,
+      targetWorldPosition.z,
+      baseWorldPosition.z + 0.12
+    ) + Math.min(0.14, Math.max(0.06, baseToTarget * 0.18));
+
+  return [
+    baseWorldPosition.x + radial.x * transitRadius,
+    baseWorldPosition.y + radial.y * transitRadius,
+    transitHeight,
+  ];
+};

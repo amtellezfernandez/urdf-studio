@@ -68,6 +68,7 @@ import {
   normalizeIkObjectPreSolveResult,
   resolveApproachAxisForEe,
   resolveEffectorWorldPose,
+  resolveIkRearTransitWorldTarget,
   resolveOrientationMode,
   safeDecodeEndEffectorLink,
   type IkAppliedMetadata,
@@ -673,139 +674,119 @@ export const useIkSolver = ({
         try {
           let primarySeedValues = jointValues;
 
-        if (isRearTarget) {
-          const baseWorldPos = new THREE.Vector3();
-          if (typeof robot.getWorldPosition === "function") {
-            robot.getWorldPosition(baseWorldPos);
-          } else {
-            baseWorldPos.copy(robot.position);
+          if (isRearTarget) {
+            const baseWorldPos = new THREE.Vector3();
+            if (typeof robot.getWorldPosition === "function") {
+              robot.getWorldPosition(baseWorldPos);
+            } else {
+              baseWorldPos.copy(robot.position);
+            }
+            const transitWorldTarget = resolveIkRearTransitWorldTarget({
+              baseWorldPosition: baseWorldPos,
+              effectorWorldPosition: effPos,
+              targetWorldPosition: targetWorldVec,
+            });
+            const normalizedTransitTarget = normalizeIkTargetPoseForRobotBase(robot, {
+              position: transitWorldTarget,
+              quaternion: targetQuaternion,
+            });
+            const transitQuat = new THREE.Quaternion(
+              normalizedTransitTarget.quaternion[1],
+              normalizedTransitTarget.quaternion[2],
+              normalizedTransitTarget.quaternion[3],
+              normalizedTransitTarget.quaternion[0]
+            );
+            const transitOrientationPayload = buildIkOrientationPayload(transitQuat);
+            const transitSolve = await solveIk({
+              apiBaseUrl,
+              urdf: urdfContent,
+              jointValues: primarySeedValues,
+              targetLink: endEffectorLink,
+              targetPosition: normalizedTransitTarget.position,
+              orientation: transitOrientationPayload ?? null,
+              orientationMode: "optional",
+              timeoutMs: Math.min(requestTimeoutMs, 260),
+              solverChain: [selectedSolverId],
+            });
+            if (isStaleSolve()) {
+              return;
+            }
+            if (!isIkFailure(transitSolve) && transitSolve.result?.solution) {
+              primarySeedValues = transitSolve.result.solution;
+            }
           }
-          const radial = new THREE.Vector3(
-            targetWorldVec.x - baseWorldPos.x,
-            targetWorldVec.y - baseWorldPos.y,
-            0
-          );
-          if (radial.lengthSq() < 1e-10) {
-            radial.set(effPos.x - baseWorldPos.x, effPos.y - baseWorldPos.y, 0);
-          }
-          if (radial.lengthSq() < 1e-10) {
-            radial.set(1, 0, 0);
-          }
-          radial.normalize();
-          const baseToTarget = Math.hypot(
-            targetWorldVec.x - baseWorldPos.x,
-            targetWorldVec.y - baseWorldPos.y
-          );
-          const transitRadius = Math.min(0.3, Math.max(0.12, baseToTarget * 0.42));
-          const transitHeight =
-            Math.max(effPos.z, targetWorldVec.z, baseWorldPos.z + 0.12) +
-            Math.min(0.14, Math.max(0.06, baseToTarget * 0.18));
-          const transitWorldTarget: [number, number, number] = [
-            baseWorldPos.x + radial.x * transitRadius,
-            baseWorldPos.y + radial.y * transitRadius,
-            transitHeight,
-          ];
-          const normalizedTransitTarget = normalizeIkTargetPoseForRobotBase(robot, {
-            position: transitWorldTarget,
-            quaternion: targetQuaternion,
-          });
-          const transitQuat = new THREE.Quaternion(
-            normalizedTransitTarget.quaternion[1],
-            normalizedTransitTarget.quaternion[2],
-            normalizedTransitTarget.quaternion[3],
-            normalizedTransitTarget.quaternion[0]
-          );
-          const transitOrientationPayload = buildIkOrientationPayload(transitQuat);
-          const transitSolve = await solveIk({
+
+          const primarySolve = await solveIk({
             apiBaseUrl,
             urdf: urdfContent,
             jointValues: primarySeedValues,
             targetLink: endEffectorLink,
-            targetPosition: normalizedTransitTarget.position,
-            orientation: transitOrientationPayload ?? null,
-            orientationMode: "optional",
-            timeoutMs: Math.min(requestTimeoutMs, 260),
+            targetPosition: normalizedTarget.position,
+            orientation: orientationPayload ?? null,
+            orientationMode,
+            timeoutMs: requestTimeoutMs,
             solverChain: [selectedSolverId],
           });
           if (isStaleSolve()) {
             return;
           }
-          if (!isIkFailure(transitSolve) && transitSolve.result?.solution) {
-            primarySeedValues = transitSolve.result.solution;
+
+          if (isIkFailure(primarySolve)) {
+            const message = primarySolve.error || "IK solve failed";
+            setIkError(message);
+            toast.error(message);
+            setIkResult(null);
+            return;
           }
-        }
 
-        const primarySolve = await solveIk({
-          apiBaseUrl,
-          urdf: urdfContent,
-          jointValues: primarySeedValues,
-          targetLink: endEffectorLink,
-          targetPosition: normalizedTarget.position,
-          orientation: orientationPayload ?? null,
-          orientationMode,
-          timeoutMs: requestTimeoutMs,
-          solverChain: [selectedSolverId],
-        });
-        if (isStaleSolve()) {
-          return;
-        }
+          if (!primarySolve.result?.solution) {
+            const message = "IK solve returned no solution";
+            setIkError(message);
+            toast.error(message);
+            setIkResult(null);
+            return;
+          }
 
-        if (isIkFailure(primarySolve)) {
-          const message = primarySolve.error || "IK solve failed";
-          setIkError(message);
-          toast.error(message);
-          setIkResult(null);
-          return;
-        }
+          let resolvedResult = primarySolve.result;
+          let resolvedRisk = scoreSolutionPostureRisk(resolvedResult.solution, jointValues);
+          if (!isOrbitTarget && selectedSolverId !== "ik-js" && resolvedRisk > 0.24) {
+            const fallbackSolve = await solveIk({
+              apiBaseUrl,
+              urdf: urdfContent,
+              jointValues: resolvedResult.solution,
+              targetLink: endEffectorLink,
+              targetPosition: normalizedTarget.position,
+              orientation: orientationPayload ?? null,
+              orientationMode,
+              timeoutMs: Math.min(requestTimeoutMs, 260),
+              solverChain: ["ik-js"],
+            });
+            if (isStaleSolve()) {
+              return;
+            }
+            if (!isIkFailure(fallbackSolve) && fallbackSolve.result?.solution) {
+              const fallbackRisk = scoreSolutionPostureRisk(
+                fallbackSolve.result.solution,
+                jointValues
+              );
+              const primaryCost = resolvedResult.diagnostics?.cost;
+              const fallbackCost = fallbackSolve.result.diagnostics?.cost;
+              const fallbackReachComparable =
+                !Number.isFinite(primaryCost ?? NaN) ||
+                !Number.isFinite(fallbackCost ?? NaN) ||
+                (fallbackCost as number) <= (primaryCost as number) * 1.35 + 0.01;
+              if (fallbackReachComparable && fallbackRisk + 0.05 < resolvedRisk) {
+                resolvedResult = fallbackSolve.result;
+                resolvedRisk = fallbackRisk;
+              }
+            }
+          }
 
-        if (!primarySolve.result?.solution) {
-          const message = "IK solve returned no solution";
-          setIkError(message);
-          toast.error(message);
-          setIkResult(null);
-          return;
-        }
-
-        let resolvedResult = primarySolve.result;
-        let resolvedRisk = scoreSolutionPostureRisk(resolvedResult.solution, jointValues);
-        if (!isOrbitTarget && selectedSolverId !== "ik-js" && resolvedRisk > 0.24) {
-          const fallbackSolve = await solveIk({
-            apiBaseUrl,
-            urdf: urdfContent,
-            jointValues: resolvedResult.solution,
-            targetLink: endEffectorLink,
-            targetPosition: normalizedTarget.position,
-            orientation: orientationPayload ?? null,
-            orientationMode,
-            timeoutMs: Math.min(requestTimeoutMs, 260),
-            solverChain: ["ik-js"],
-          });
           if (isStaleSolve()) {
             return;
           }
-          if (!isIkFailure(fallbackSolve) && fallbackSolve.result?.solution) {
-            const fallbackRisk = scoreSolutionPostureRisk(
-              fallbackSolve.result.solution,
-              jointValues
-            );
-            const primaryCost = resolvedResult.diagnostics?.cost;
-            const fallbackCost = fallbackSolve.result.diagnostics?.cost;
-            const fallbackReachComparable =
-              !Number.isFinite(primaryCost ?? NaN) ||
-              !Number.isFinite(fallbackCost ?? NaN) ||
-              (fallbackCost as number) <= (primaryCost as number) * 1.35 + 0.01;
-            if (fallbackReachComparable && fallbackRisk + 0.05 < resolvedRisk) {
-              resolvedResult = fallbackSolve.result;
-              resolvedRisk = fallbackRisk;
-            }
-          }
-        }
-
-        if (isStaleSolve()) {
-          return;
-        }
-        setIkError(null);
-        setIkResult(resolvedResult);
+          setIkError(null);
+          setIkResult(resolvedResult);
         } catch (err) {
           if (isStaleSolve()) {
             return;
