@@ -1,3 +1,5 @@
+import { clampNumberToMin } from "@/shared/lib/numeric";
+
 type CacheEntry<V> = {
   value: V;
 };
@@ -65,7 +67,7 @@ export const hashArrayBuffer = (buffer: ArrayBuffer) => {
   if (length === 0) return "0";
 
   const sampleSize = Math.min(2048, length);
-  const step = Math.max(1, Math.floor(length / sampleSize));
+  const step = clampNumberToMin(Math.floor(length / sampleSize), 1);
   let hash = 2166136261;
 
   for (let i = 0; i < length; i += step) {

@@ -1,3 +1,5 @@
+import { clampNumberToMin } from "@/shared/lib/numeric";
+
 type WorkerTaskOptions<TRequest, TResponse> = {
   transfer?: Transferable[];
   signal?: AbortSignal;
@@ -34,7 +36,7 @@ export const createWorkerTaskBroker = <
   let nextId = 0;
   const queue: Array<BrokerTask<TRequest, TResponse>> = [];
   const inFlight = new Map<number, BrokerTask<TRequest, TResponse>>();
-  const maxConcurrent = Math.max(1, options.concurrency ?? 1);
+  const maxConcurrent = clampNumberToMin(options.concurrency ?? 1, 1);
 
   const resolveWithFallback = (task: BrokerTask<TRequest, TResponse>) => {
     if (!task.options.fallback) {
