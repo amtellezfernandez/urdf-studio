@@ -18,6 +18,7 @@ describe("normalizeSignedAngleRad", () => {
   it("wraps angles to the signed pi range", () => {
     expect(normalizeSignedAngleRad(Math.PI * 1.5)).toBeCloseTo(-Math.PI * 0.5);
     expect(normalizeSignedAngleRad(-Math.PI * 1.5)).toBeCloseTo(Math.PI * 0.5);
+    expect(normalizeSignedAngleRad(Math.PI * 8 + 0.25)).toBeCloseTo(0.25);
   });
 
   it("returns zero for non-finite angles", () => {

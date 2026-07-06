@@ -1,19 +1,23 @@
+import {
+  clampNumber as clampNumericValue,
+  toFiniteNumberOrFallback,
+} from "@/shared/lib/numeric";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 
-export const clampNumber = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
+const TWO_PI = Math.PI * 2;
+
+export const clampNumber = clampNumericValue;
 
 export const normalizeSignedAngleRad = (angleRad: number): number => {
-  if (!Number.isFinite(angleRad)) return 0;
-  let angle = angleRad;
-  while (angle > Math.PI) angle -= Math.PI * 2;
-  while (angle < -Math.PI) angle += Math.PI * 2;
+  let angle = toFiniteNumberOrFallback(angleRad, 0) % TWO_PI;
+  if (angle > Math.PI) angle -= TWO_PI;
+  if (angle < -Math.PI) angle += TWO_PI;
   return angle;
 };
 
 export const clampRoverApproachDtSec = (dtSec: number): number =>
   clampNumber(
-    Number.isFinite(dtSec) && dtSec > 0 ? dtSec : ROVER_APPROACH_CONFIG.minDtSec,
+    toFiniteNumberOrFallback(dtSec, ROVER_APPROACH_CONFIG.minDtSec),
     ROVER_APPROACH_CONFIG.minDtSec,
     ROVER_APPROACH_CONFIG.maxDtSec
   );
