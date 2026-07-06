@@ -5,7 +5,7 @@ import type { URDFRobot } from "urdf-loader";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
-import { getJointLimits, type JointLimits } from "@/shared/lib/urdfBrowser";
+import type { JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import {
   buildIkOrientationPayload,
@@ -55,6 +55,10 @@ import {
   shouldRememberBlockedTargetAfterPreSolve,
 } from "@/features/viewer/ikObjectSolvePreSolvePolicy";
 import { doesViewerDragModeUseIkHandles } from "@/features/viewer/viewerDragModePolicy";
+import {
+  clampIkSolutionToJointLimits,
+  scoreIkSolutionPostureRisk,
+} from "@/features/viewer/ikJointSolution";
 import {
   IK_APPLY_INPUT_SOURCE,
   IK_DRAG_INPUT_SOURCE,
@@ -152,22 +156,11 @@ export const useIkSolver = ({
         suppressToast?: boolean;
       }
     ) => {
-      if (!jointLimits || Object.keys(jointLimits).length === 0) {
-        return { solution, clampedJoints: [] as string[] };
-      }
-      const clamped: Record<string, number> = { ...solution };
-      const clampedJoints: string[] = [];
-      Object.entries(solution).forEach(([jointName, value]) => {
-        if (!Number.isFinite(value)) return;
-        const limits = getJointLimits(jointLimits, jointName);
-        if (!Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) {
-          return;
-        }
-        if (value < limits.lower || value > limits.upper) {
-          clamped[jointName] = Math.min(limits.upper, Math.max(limits.lower, value));
-          clampedJoints.push(jointName);
-        }
+      const clampedResult = clampIkSolutionToJointLimits({
+        solution,
+        jointLimits,
       });
+      const { clampedJoints } = clampedResult;
 
       if (clampedJoints.length > 0 && !options?.suppressToast) {
         const now = Date.now();
@@ -181,7 +174,7 @@ export const useIkSolver = ({
         }
       }
 
-      return { solution: clamped, clampedJoints };
+      return clampedResult;
     },
     [jointLimits]
   );
@@ -190,44 +183,11 @@ export const useIkSolver = ({
       solution: Record<string, number>,
       referenceValues?: Record<string, number>
     ) => {
-      if (!jointLimits || Object.keys(jointLimits).length === 0) {
-        return 0;
-      }
-      let edgePenalty = 0;
-      let foldPenalty = 0;
-      let deltaPenalty = 0;
-      let samples = 0;
-
-      Object.entries(solution).forEach(([jointName, value]) => {
-        if (!Number.isFinite(value)) return;
-        const limits = getJointLimits(jointLimits, jointName);
-        if (!Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) {
-          return;
-        }
-        const span = limits.upper - limits.lower;
-        if (!Number.isFinite(span) || span <= 1e-6) return;
-
-        const center = (limits.lower + limits.upper) * 0.5;
-        const halfRange = span * 0.5;
-        const centerNorm = Math.abs(value - center) / Math.max(halfRange, 1e-6);
-        const edgeNorm = Math.max(0, (centerNorm - 0.72) / 0.28);
-        edgePenalty += edgeNorm * edgeNorm;
-        foldPenalty += centerNorm * centerNorm * centerNorm * centerNorm;
-
-        const refValue = referenceValues?.[jointName];
-        if (Number.isFinite(refValue)) {
-          const deltaNorm = Math.abs(value - (refValue as number)) / Math.max(span, 1e-6);
-          deltaPenalty += deltaNorm * deltaNorm;
-        }
-        samples += 1;
+      return scoreIkSolutionPostureRisk({
+        solution,
+        jointLimits,
+        referenceValues,
       });
-
-      const denom = Math.max(1, samples);
-      return (
-        (edgePenalty / denom) * 8 +
-        (foldPenalty / denom) * 3 +
-        (deltaPenalty / denom) * 0.35
-      );
     },
     [jointLimits]
   );
