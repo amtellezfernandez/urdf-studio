@@ -62,7 +62,7 @@ export type WorkspaceTransferTargetListResponse = {
 
 export type WorkspaceChangeSetApplyResponse = {
   targetId: WorkspaceTransferTargetId;
-  world_package: WorldScenePackageManifest;
+  world_package: WorldSceneRegistryEnvelope;
   appliedChangeCount: number;
   reviewOnlyCount: number;
 };

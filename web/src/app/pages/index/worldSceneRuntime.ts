@@ -548,9 +548,9 @@ export const fetchWorldScenePackageVersion = async (
 ): Promise<WorldScenePackageVersionRecord> => {
   const { getWorldScenePackageVersion } = await loadWorldScenePackageApiModule();
   const record = await getWorldScenePackageVersion(packageId, version);
+  await readWorldSceneManifestPayload(record.manifest);
   return {
     ...record,
-    manifest: await readWorldSceneManifestPayload(record.manifest),
   };
 };
 

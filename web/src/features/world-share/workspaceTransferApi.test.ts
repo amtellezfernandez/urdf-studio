@@ -55,6 +55,25 @@ const createWorldPackage = (): WorldScenePackageManifest => ({
   },
 });
 
+const createWorldEnvelope = (): WorldSceneRegistryEnvelope => ({
+  package_id: "demo_world",
+  version: "1.0.0",
+  provenance: {},
+  artifacts: [],
+  world: {
+    name: "Demo World",
+    urdf_xml: "<robot name=\"demo\"><link name=\"base\"/></robot>",
+    joint_positions: {},
+    cameras: [],
+    objects: [],
+    scenario_time_ms: 0,
+    scenario_duration_ms: 0,
+    environment: {
+      frame_convention: "ros-rep-103",
+    },
+  },
+});
+
 describe("workspaceTransferApi", () => {
   beforeEach(() => {
     guardedFetchMock.mockReset();
@@ -352,7 +371,7 @@ describe("workspaceTransferApi", () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          world_package: createWorldPackage(),
+          world_package: createWorldEnvelope(),
           targetId: "blender",
           appliedChangeCount: 1,
           reviewOnlyCount: 0,
@@ -388,7 +407,7 @@ describe("workspaceTransferApi", () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          world_package: createWorldPackage(),
+          world_package: createWorldEnvelope(),
           targetId: "blender",
           appliedChangeCount: 1,
           reviewOnlyCount: 0,

@@ -6,8 +6,9 @@ import { requireFeatureGate } from "@/shared/lib/backendGuard";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type {
   WorldScenePackageListEntry,
-  WorldScenePackageManifest,
   WorldScenePackageVersionRecord,
+  WorldSceneRegistryEnvelope,
+  WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import { toWorldRegistryRecordKey } from "@/app/pages/index/indexPageHelpers";
 import {
@@ -16,7 +17,9 @@ import {
 } from "@/app/pages/index/worldSceneRuntime";
 
 type UseWorldRegistryControllerParams = {
-  applyWorldScenePackage: (manifest: WorldScenePackageManifest) => void;
+  applyWorldScenePackage: (
+    manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
+  ) => void;
 };
 
 export type UseWorldRegistryControllerResult = {

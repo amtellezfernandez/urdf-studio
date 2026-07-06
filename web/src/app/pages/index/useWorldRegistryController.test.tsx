@@ -7,10 +7,9 @@ import {
   useWorldRegistryController,
   type UseWorldRegistryControllerResult,
 } from "@/app/pages/index/useWorldRegistryController";
-import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
 import type {
   WorldScenePackageListEntry,
-  WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
 
@@ -43,7 +42,7 @@ vi.mock("sonner", () => ({
 }));
 
 type RenderedHarness = {
-  appliedManifests: WorldScenePackageManifest[];
+  appliedManifests: WorldSceneRegistryEnvelope[];
   getHook: () => UseWorldRegistryControllerResult;
   unmount: () => Promise<void>;
 };
@@ -67,39 +66,26 @@ const createRegistryEntry = (): WorldScenePackageListEntry => ({
   updated_at: "2026-07-04T00:00:00Z",
 });
 
-const createManifest = (): WorldScenePackageManifest => ({
-  artifacts: [],
-  created_at: "2026-07-04T00:00:00Z",
-  interface: {
-    action_semantics: "none",
-    frame_convention: "urdf",
-    observation_modalities: [],
-    timestep_ms: 0,
-  },
-  package_id: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.packageId,
-  provenance: {},
-  runtime_targets: [],
-  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
-  security: {
-    attestation_refs: [],
-    sbom_ref: null,
-    signature_ref: null,
-  },
-  title: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.title,
-  version: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.version,
-  world_snapshot: {
-    cameras: [],
-    joint_positions: {},
-    objects: [],
-    scenario_duration_ms: 0,
-    scenario_time_ms: 0,
-    urdf_xml: "<robot name=\"demo\" />",
-  },
-});
-
 const createVersionRecord = (): WorldScenePackageVersionRecord => ({
   digest_sha256: "digest",
-  manifest: createManifest(),
+  manifest: {
+    package_id: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.packageId,
+    version: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.version,
+    provenance: {},
+    artifacts: [],
+    world: {
+      name: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.title,
+      urdf_xml: "<robot name=\"demo\" />",
+      joint_positions: {},
+      cameras: [],
+      objects: [],
+      scenario_time_ms: 0,
+      scenario_duration_ms: 0,
+      environment: {
+        frame_convention: "urdf",
+      },
+    },
+  },
   package_id: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.packageId,
   published_at: "2026-07-04T00:00:00Z",
   version: WORLD_REGISTRY_CONTROLLER_TEST_FIXTURES.version,
@@ -113,14 +99,16 @@ const flushAsyncWork = async () => {
 
 const renderWorldRegistryControllerHook = async (): Promise<RenderedHarness> => {
   let hookValue: UseWorldRegistryControllerResult | null = null;
-  const appliedManifests: WorldScenePackageManifest[] = [];
+  const appliedManifests: WorldSceneRegistryEnvelope[] = [];
   const container = document.createElement("div");
   const root: Root = createRoot(container);
 
   const Harness = () => {
     hookValue = useWorldRegistryController({
       applyWorldScenePackage: (manifest) => {
-        appliedManifests.push(manifest);
+        if ("world" in manifest) {
+          appliedManifests.push(manifest);
+        }
       },
     });
     return null;
@@ -189,7 +177,7 @@ describe("useWorldRegistryController", () => {
     });
 
     expect(fetchWorldScenePackageVersionMock).toHaveBeenCalledOnce();
-    expect(harness.appliedManifests).toEqual([createManifest(), createManifest()]);
+    expect(harness.appliedManifests).toEqual([createVersionRecord().manifest, createVersionRecord().manifest]);
     expect(harness.getHook().worldRegistryOpen).toBe(false);
 
     await harness.unmount();

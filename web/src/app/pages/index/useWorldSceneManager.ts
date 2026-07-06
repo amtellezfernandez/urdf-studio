@@ -295,8 +295,10 @@ export const useWorldSceneManager = ({
   );
 
   const applyImportedWorldScenePackage = useCallback(
-    (manifest: WorldScenePackageManifest) => {
-      applyImportedWorldSceneLayer(worldSceneManifestToLayerSnapshot(manifest), undefined, {
+    (manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope) => {
+      const worldLayout =
+        "world" in manifest ? manifest.world : worldSceneManifestToLayerSnapshot(manifest);
+      applyImportedWorldSceneLayer(worldLayout, undefined, {
         urdfFilename: `${manifest.package_id}-${manifest.version}.urdf`,
       });
       toast.success(`Loaded world package ${manifest.package_id}@${manifest.version}`);
@@ -356,7 +358,7 @@ export const useWorldSceneManager = ({
           const currentWorldPackage = await buildCurrentWorldSceneRegistryEnvelope();
           const changeSet = JSON.parse(await file.text()) as unknown;
           const applied = await applyWorkspaceChangeSet(currentWorldPackage, changeSet);
-          applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
+          applyImportedWorldSceneLayer(applied.world_package.world);
           const reviewOnly =
             applied.reviewOnlyCount > 0 ? `, ${applied.reviewOnlyCount} review-only` : "";
           toast.success(
@@ -367,7 +369,7 @@ export const useWorldSceneManager = ({
         }
       },
     });
-  }, [applyWorldSceneObjects, buildCurrentWorldSceneRegistryEnvelope]);
+  }, [applyImportedWorldSceneLayer, buildCurrentWorldSceneRegistryEnvelope]);
 
   const {
     handlePublishCurrentWorldScenePackage,
