@@ -29,7 +29,6 @@ import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
   buildWorldScenePackageManifestFromState,
   createWorldSceneLayerExportDocument,
-  downloadWorldScenePackageManifest,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneLayerText,
   readWorldSceneLayerFromUrl,
@@ -173,16 +172,6 @@ export const useWorldSceneManager = ({
       }
     } catch (error) {
       toast.error(readUnknownErrorMessage(error, "Failed to validate world package"));
-    }
-  }, [buildCurrentWorldScenePackageManifest]);
-
-  const handleExportCurrentWorldScenePackage = useCallback(async () => {
-    try {
-      const manifest = await buildCurrentWorldScenePackageManifest();
-      await downloadWorldScenePackageManifest(manifest, downloadJsonDocument);
-      toast.success("World package exported");
-    } catch (error) {
-      toast.error(readUnknownErrorMessage(error, "Failed to export world package"));
     }
   }, [buildCurrentWorldScenePackageManifest]);
 
@@ -556,7 +545,6 @@ export const useWorldSceneManager = ({
   return {
     buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
-    handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromFileDialog,

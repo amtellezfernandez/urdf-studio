@@ -488,7 +488,6 @@ const Index = () => {
   const {
     buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
-    handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromFileDialog,
@@ -1264,7 +1263,6 @@ const Index = () => {
     onPublishCurrentWorldScenePackageToHub: worldHubEnabled
       ? handlePublishCurrentWorldScenePackageToHub
       : undefined,
-    onExportCurrentWorldScenePackage: handleExportCurrentWorldScenePackage,
     onImportWorldScenePackage: handleImportWorldScenePackage,
     onExportWorldRolloutCampaign: handleExportWorldRolloutCampaign,
     onRunLocalWorldRollout: handleRunLocalWorldRollout,
