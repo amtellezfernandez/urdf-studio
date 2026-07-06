@@ -121,6 +121,33 @@ const resolveMeshUri = (
   }
 };
 
+const cloneSerializableValue = <TValue,>(value: TValue): TValue => {
+  if (typeof structuredClone === "function") return structuredClone(value) as TValue;
+  return JSON.parse(JSON.stringify(value)) as TValue;
+};
+
+const toImportedWorldMetadata = (
+  object: WorldScenePackageManifest["world_snapshot"]["objects"][number]
+): CreatedObject["worldMetadata"] => {
+  const worldMetadata: CreatedObject["worldMetadata"] = {};
+  if (object.appearance !== undefined) {
+    worldMetadata.appearance = cloneSerializableValue(object.appearance);
+  }
+  if (object.consistency !== undefined) {
+    worldMetadata.consistency = cloneSerializableValue(object.consistency);
+  }
+  if (object.mesh !== undefined) {
+    worldMetadata.mesh = cloneSerializableValue(object.mesh);
+  }
+  if (object.physics !== undefined) {
+    worldMetadata.physics = cloneSerializableValue(object.physics);
+  }
+  if (object.simulation !== undefined) {
+    worldMetadata.simulation = cloneSerializableValue(object.simulation);
+  }
+  return Object.keys(worldMetadata).length > 0 ? worldMetadata : undefined;
+};
+
 function toImportedObjectParams(
   object: WorldScenePackageManifest["world_snapshot"]["objects"][number],
   meshUriContext: MeshUriResolutionContext = {}
@@ -157,6 +184,7 @@ function toImportedObjectParams(
     meshUri: resolveMeshUri(object.mesh?.uri, meshUriContext),
     isHidden: object.is_hidden === true,
     source: object.source ?? "user",
+    worldMetadata: toImportedWorldMetadata(object),
     trackedJointName: object.tracked_joint_name ?? null,
     isIkTarget: object.is_ik_target !== false,
     ikTargetType,

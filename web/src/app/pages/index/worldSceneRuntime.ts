@@ -511,7 +511,9 @@ const readWorldScenePackageFromImportUrl = async (
   importUrl: string,
   fetchImplementation: typeof fetch
 ) => {
-  const response = await fetchImplementation(importUrl, {
+  const { normalizeWorldLayoutImportUrl } = await loadWorldSceneImportUrlModule();
+  const normalizedUrl = normalizeWorldLayoutImportUrl(importUrl);
+  const response = await fetchImplementation(normalizedUrl, {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {

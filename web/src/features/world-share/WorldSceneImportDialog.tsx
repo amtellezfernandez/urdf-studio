@@ -1,3 +1,5 @@
+import { Link2, Upload } from "lucide-react";
+
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -15,6 +17,7 @@ type WorldSceneImportDialogProps = {
   onOpenChange: (open: boolean) => void;
   worldLayoutUrl: string;
   onWorldLayoutUrlChange: (value: string) => void;
+  onImportFromFile?: () => void;
   onImportFromLink: () => void;
   onImportDefaultWorld?: () => void;
   onImportDemoWorld?: () => void;
@@ -26,6 +29,7 @@ export const WorldSceneImportDialog = ({
   onOpenChange,
   worldLayoutUrl,
   onWorldLayoutUrlChange,
+  onImportFromFile,
   onImportFromLink,
   onImportDefaultWorld,
   onImportDemoWorld,
@@ -36,7 +40,7 @@ export const WorldSceneImportDialog = ({
       <DialogHeader>
         <DialogTitle className="text-[#f0f0f0]">Import World Layout</DialogTitle>
         <DialogDescription className="text-[#a8a8a8]">
-          Choose one import source: default layout, demo layout, or a custom JSON link.
+          Choose one import source: local JSON/assets, default layout, demo layout, or a custom JSON link.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -62,6 +66,18 @@ export const WorldSceneImportDialog = ({
           </p>
         </div>
         <DialogFooter className="gap-2">
+          {onImportFromFile ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onImportFromFile}
+              disabled={isSubmitting}
+              className="border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              From File
+            </Button>
+          ) : null}
           {onImportDefaultWorld ? (
             <Button
               type="button"
@@ -89,6 +105,7 @@ export const WorldSceneImportDialog = ({
             disabled={isSubmitting || worldLayoutUrl.trim().length === 0}
             className="bg-[#3d3d3d] text-white hover:bg-[#4a4a4a]"
           >
+            <Link2 className="mr-2 h-4 w-4" />
             {isSubmitting ? "Importing..." : "From Link"}
           </Button>
         </DialogFooter>

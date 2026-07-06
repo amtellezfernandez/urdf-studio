@@ -1164,9 +1164,7 @@ export const validateWorldSceneLayerSnapshot = (
   return errors;
 };
 
-export const parseStaticWorldSceneLayerSnapshot = (
-  payload: unknown
-): { snapshot: StaticWorldSceneLayerSnapshot | null; errors: string[] } => {
+export const parseStaticWorldSceneLayerSnapshot = (payload: unknown): { snapshot: StaticWorldSceneLayerSnapshot | null; errors: string[] } => {
   const parsedSnapshot = readWorldSceneLayerFromUnknown(payload);
   if (!parsedSnapshot) {
     return {

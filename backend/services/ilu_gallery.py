@@ -826,10 +826,11 @@ def _build_repo_robot_index(repo_entry: dict) -> dict[str, dict]:
         if not isinstance(robot, dict):
             continue
         file_base = _normalize_optional_text(robot.get("fileBase"))
-        file_path = _normalize_repo_or_path(_normalize_optional_text(robot.get("file")))
+        file_path = _normalize_repo_path(_normalize_optional_text(robot.get("file")))
         robot_name = _normalize_optional_text(robot.get("name"))
         if not file_base or not file_path:
             continue
+        file_path_key = _normalize_repo_or_path(file_path)
         robot_record = {
             "fileBase": file_base,
             "file": file_path,
@@ -842,8 +843,8 @@ def _build_repo_robot_index(repo_entry: dict) -> dict[str, dict]:
             "legCount": _normalize_optional_int(robot.get("legCount")),
             "wheelCount": _normalize_optional_int(robot.get("wheelCount")),
         }
-        direct_matches[file_path] = robot_record
-        basename = file_path.split("/")[-1]
+        direct_matches[file_path_key] = robot_record
+        basename = file_path_key.split("/")[-1]
         stem = _strip_robot_source_extension(basename).lower()
         basename_matches.setdefault(basename, robot_record)
         stem_matches.setdefault(stem, robot_record)
@@ -940,7 +941,7 @@ def _build_gallery_candidate_path(repo_entry: dict, robot_entry: dict) -> str:
     if robot_path:
         return robot_path
     repo_path = _normalize_repo_path(str(repo_entry.get("path") or "")) or ""
-    robot_file = _normalize_repo_or_path(str(robot_entry.get("file") or "")) or ""
+    robot_file = _normalize_repo_path(str(robot_entry.get("file") or "")) or ""
     if repo_path and robot_file:
         return f"{repo_path}/{robot_file}".strip("/")
     return robot_file
@@ -953,8 +954,9 @@ def _matches_requested_urdf_path(source: IluGallerySource, candidate_path: str, 
     if not target:
         return True
     source_file = _normalize_repo_or_path(str(robot_entry.get("file") or "")) or ""
-    basename = candidate_path.split("/")[-1] if candidate_path else ""
-    return target in {candidate_path, source_file, basename}
+    candidate_path_key = _normalize_repo_or_path(candidate_path)
+    basename = candidate_path_key.split("/")[-1] if candidate_path_key else ""
+    return target in {candidate_path_key, source_file, basename}
 
 
 def _resolve_catalog_candidate(
@@ -974,7 +976,7 @@ def _resolve_catalog_candidate(
         or live_candidate_lookup.get(source_stem)
     )
     resolved_path = (
-        _normalize_repo_or_path(str(live_candidate.get("path") or ""))
+        _normalize_repo_path(str(live_candidate.get("path") or ""))
         if isinstance(live_candidate, dict)
         else ""
     ) or catalog_candidate_path
@@ -1148,7 +1150,7 @@ def _build_gallery_manifest_from_inspection(source: IluGallerySource, output_roo
                     "unresolvedMeshReferenceCount": 0,
                 }
             )
-            candidate_path = _normalize_repo_or_path(_normalize_optional_text(candidate.get("path"))) or catalog_candidate_path
+            candidate_path = _normalize_repo_path(_normalize_optional_text(candidate.get("path"))) or catalog_candidate_path
             preview_entry = (
                 catalog.preview_entries.get(
                     f"{repo_key}::{_normalize_optional_text(raw_robot.get('fileBase'))}"
@@ -2287,8 +2289,12 @@ def _map_gallery_items(job_id: str, source: IluGallerySource, manifest: dict) ->
         )
 
     if source.urdf_path:
-        normalized_target = source.urdf_path.strip("/")
-        items = [item for item in items if item.urdf_path == normalized_target]
+        normalized_target = _normalize_repo_or_path(source.urdf_path)
+        items = [
+            item
+            for item in items
+            if _normalize_repo_or_path(item.urdf_path or "") == normalized_target
+        ]
     return items, output_root
 
 
@@ -2313,7 +2319,7 @@ def get_gallery_repo_preview(
     for raw_candidate in raw_candidates:
         if not isinstance(raw_candidate, dict):
             continue
-        candidate_path = _normalize_repo_or_path(_normalize_optional_text(raw_candidate.get("path")))
+        candidate_path = _normalize_repo_path(_normalize_optional_text(raw_candidate.get("path")))
         if not candidate_path:
             continue
         repo_entry, preview_entry, robot_entry = _resolve_gallery_preview_entry(catalog, source, candidate_path)

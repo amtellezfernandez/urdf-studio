@@ -250,6 +250,111 @@ describe("buildWorldScenePackageManifest", () => {
     );
   });
 
+  it("preserves imported world layout metadata when serializing world objects", () => {
+    const serializable = toSerializableWorldObject({
+      ...TEST_MESH_OBJECT,
+      assetRef: undefined,
+      assetScale: undefined,
+      worldMetadata: {
+        mesh: {
+          path: "assets/crate.glb",
+          scale_xyz: [1, 1.2, 1.4],
+        },
+        physics: {
+          fixed: false,
+          collision: true,
+          mass_kg: 1.5,
+          friction: 0.8,
+          restitution: 0.1,
+          semantic_role: "fixture",
+          collision_geometry: {
+            id: "crate-proxy",
+            kind: "box",
+            size_xyz: [0.2, 0.3, 0.4],
+          },
+          inertia: {
+            ixx: 0.01,
+            iyy: 0.02,
+            izz: 0.03,
+          },
+        },
+        appearance: {
+          representations: [
+            {
+              id: "crate-mesh",
+              kind: "mesh",
+              asset_ref: "assets/crate.glb",
+              scale_xyz: [1, 1, 1],
+            },
+          ],
+        },
+        consistency: {
+          appearance_ref: "crate-mesh",
+          physics_ref: "crate-proxy",
+          method: "bbox-fit",
+          status: "valid",
+          metrics: { coverage: 0.95 },
+        },
+        simulation: {
+          fixed: true,
+          collision: true,
+          mass_kg: 1.2,
+        },
+      },
+    });
+
+    expect(serializable).toEqual(
+      expect.objectContaining({
+        mesh: {
+          path: "assets/crate.glb",
+          scale_xyz: [1, 1.2, 1.4],
+        },
+        physics: {
+          fixed: false,
+          collision: true,
+          mass_kg: 1.5,
+          friction: 0.8,
+          restitution: 0.1,
+          semantic_role: "fixture",
+          collision_geometry: {
+            id: "crate-proxy",
+            kind: "box",
+            size_xyz: [0.2, 0.3, 0.4],
+          },
+          inertia: {
+            ixx: 0.01,
+            iyy: 0.02,
+            izz: 0.03,
+          },
+        },
+        appearance: {
+          representations: [
+            {
+              id: "crate-mesh",
+              kind: "mesh",
+              asset_ref: "assets/crate.glb",
+              scale_xyz: [1, 1, 1],
+            },
+          ],
+        },
+        consistency: {
+          appearance_ref: "crate-mesh",
+          physics_ref: "crate-proxy",
+          method: "bbox-fit",
+          status: "valid",
+          metrics: { coverage: 0.95 },
+        },
+        simulation: {
+          fixed: true,
+          collision: true,
+          mass_kg: 1.2,
+        },
+      })
+    );
+    expect(serializable.asset_ref).toBeUndefined();
+    expect(serializable.asset_scale_xyz).toBeUndefined();
+  });
+
   it("does not export browser-resolved mesh URLs as portable mesh URIs", () => {
     const serializable = toSerializableWorldObject({
       ...TEST_MESH_OBJECT,

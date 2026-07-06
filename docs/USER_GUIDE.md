@@ -62,7 +62,7 @@ If this works, the viewer, joint state pipeline, camera panel, simulator prepara
 
 ### Top Bar
 
-- `File`, `Utils`, `Worlds`, `View`, and `Create`: main action menus.
+- `File`, `Utils`, `Scene`, `View`, and `Create`: main action menus.
 - `Simulation Prep`: inspect and open the current robot-world scene in validated transfer targets.
 - Camera controls: inspect and manage scene cameras.
 - Share/action icons: session and collaboration controls.
@@ -94,9 +94,74 @@ If this works, the viewer, joint state pipeline, camera panel, simulator prepara
 
 1. Start the app with `npm run start`.
 2. In the first screen, use `Robot`.
-3. Drop or browse for a URDF/Xacro folder, zip, or individual files.
+3. Choose one source:
+   - Local files, folder, or zip containing a URDF/Xacro and meshes.
+   - A GitHub repository URL plus an optional URDF/Xacro path.
+   - A direct URDF/Xacro URL, including GitHub `blob` links.
 4. Include meshes (`.stl`, `.glb`, `.gltf`, `.obj`, `.dae`) when the URDF references them.
 5. Confirm the robot appears in the viewer and the joints list populates.
+
+Useful SO-ARM100 direct links:
+
+- SO101 new calibration: `https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO101/so101_new_calib.urdf`
+- SO101 old calibration: `https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO101/so101_old_calib.urdf`
+- SO100: `https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO100/so100.urdf`
+
+### Import A World Layout
+
+World layouts are object-only JSON snapshots. They preserve the currently loaded robot and camera state unless the import explicitly comes from the startup World panel.
+
+From the first screen:
+
+1. Use `World`.
+2. Paste a public JSON link, or choose local files/folder containing the layout JSON plus referenced mesh, splat, or texture assets.
+3. Load the workspace once the layout is staged.
+
+From the workspace:
+
+1. Use `Scene` -> `Import Layout JSON`.
+2. Choose `From File` for a local layout JSON and its assets.
+3. Choose `From Link` for a public JSON link or GitHub `blob` link.
+4. `Default Layout` and `Demo Layout` are available from the same dialog when applicable.
+
+Mesh world objects may include physical properties. Keep visual asset details in `mesh`,
+`asset_ref`, or `appearance`; put collider, mass, friction, restitution, and fixed/collision flags
+under `physics`. The older `simulation` object is still accepted for compatibility, but new layouts
+should prefer `physics`.
+
+```json
+{
+  "id": "crate",
+  "name": "Crate",
+  "type": "mesh",
+  "position_xyz": [0, 0, 0],
+  "size_xyz": [0.4, 0.4, 0.4],
+  "color": "#888888",
+  "mesh": { "uri": "assets/crate.glb", "scale": 1 },
+  "physics": {
+    "collision_geometry": {
+      "kind": "box",
+      "size_xyz": [0.4, 0.4, 0.4]
+    },
+    "fixed": true,
+    "collision": true,
+    "mass_kg": 1,
+    "friction": 0.8,
+    "restitution": 0.1
+  }
+}
+```
+
+### Import Or Export A Scene Package
+
+Scene packages include robot XML, joint positions, cameras, and world objects in one JSON manifest.
+
+- Export: `Scene` -> `Export Scene Package`.
+- Import local JSON: `Scene` -> `Import Scene Package` -> `From File`.
+- Import web JSON: `Scene` -> `Import Scene Package` -> paste the package URL -> `From Link`.
+- Browse registry packages: `Scene` -> `Browse Scene Packages`.
+
+GitHub `blob` links are accepted for scene package and layout imports and are converted to raw JSON URLs automatically.
 
 ### Use The Built-In Sample
 
@@ -113,7 +178,7 @@ Use `File` -> `Export` to write URDF, Xacro, MJCF, USD, meshes, and camera confi
 1. Open `Simulation Prep` and click `Blender`.
 2. In Blender, use the locked robot visual reference and edit world object transforms and dimensions.
 3. Run the generated `export_blender_changes.py` script from that Blender session.
-4. Back in Studio, use `Worlds` -> `Import Workspace Changes` and select `blender-change-set.json`.
+4. Back in Studio, use `Scene` -> `Import Workspace Changes` and select `blender-change-set.json`.
 
 Studio writes `robot-reference.glb` for Blender-native robot visuals and `robot-reference.usda` for interchange metadata. Studio applies validated world object transforms, dimensions, display colors, camera poses, camera FOV, new Blender objects, and deleted source objects/cameras from the same source scene. New Blender mesh objects import as Studio mesh world objects when they carry a portable relative `asset_ref`; otherwise they import as colored cube world objects. Robot kinematics, inertials, collisions, transmissions, material-domain edits, and mesh-domain edits stay under Studio review.
 

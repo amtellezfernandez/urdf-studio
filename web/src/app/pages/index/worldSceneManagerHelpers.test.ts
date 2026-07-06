@@ -64,6 +64,71 @@ describe("world scene manager helper conversions", () => {
     expect(importedObject?.rotation?.z).toBe(0.6);
   });
 
+  it("preserves imported world object mesh, physics, and consistency metadata", () => {
+    const physics = {
+      fixed: false,
+      collision: true,
+      mass_kg: 1.5,
+      friction: 0.8,
+      restitution: 0.1,
+      semantic_role: "fixture",
+      collision_geometry: {
+        id: "crate-proxy",
+        kind: "box" as const,
+        size_xyz: [0.2, 0.3, 0.4] as [number, number, number],
+      },
+      inertia: {
+        ixx: 0.01,
+        iyy: 0.02,
+        izz: 0.03,
+      },
+    };
+    const appearance = {
+      representations: [
+        {
+          id: "crate-mesh",
+          kind: "mesh" as const,
+          asset_ref: "assets/crate.glb",
+          scale_xyz: [1, 1, 1] as [number, number, number],
+        },
+      ],
+    };
+    const consistency = {
+      appearance_ref: "crate-mesh",
+      physics_ref: "crate-proxy",
+      method: "bbox-fit",
+      status: "valid" as const,
+      metrics: { coverage: 0.95 },
+    };
+    const simulation = {
+      fixed: true,
+      collision: true,
+      mass_kg: 1.2,
+    };
+    const mesh = {
+      path: "assets/crate.glb",
+      scale_xyz: [1, 1.2, 1.4] as [number, number, number],
+    };
+
+    const [importedObject] = toImportedCreatedObjects([
+      createSerializableWorldObject({
+        mesh,
+        appearance,
+        physics,
+        consistency,
+        simulation,
+      }),
+    ]);
+
+    expect(importedObject?.worldMetadata).toEqual({
+      mesh,
+      appearance,
+      physics,
+      consistency,
+      simulation,
+    });
+  });
+
   it("resolves relative mesh URIs against the imported layout URL", () => {
     const [importedObject] = toImportedCreatedObjects(
       [

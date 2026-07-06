@@ -231,6 +231,16 @@ const toSerializableAssetScale = (
   return scale;
 };
 
+const cloneWorldObjectMetadata = (
+  metadata: CreatedObject["worldMetadata"]
+): CreatedObject["worldMetadata"] => {
+  if (!metadata) return undefined;
+  if (typeof structuredClone === "function") {
+    return structuredClone(metadata) as CreatedObject["worldMetadata"];
+  }
+  return JSON.parse(JSON.stringify(metadata)) as CreatedObject["worldMetadata"];
+};
+
 export const refreshWorldScenePackageSnapshotDigest = async (
   manifest: WorldScenePackageManifest
 ): Promise<WorldScenePackageManifest> => {
@@ -271,6 +281,7 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
         ]
       : [geometry.size.x, geometry.size.y, geometry.size.z];
   const serializable: SerializableWorldObject = {
+    ...(cloneWorldObjectMetadata(object.worldMetadata) ?? {}),
     id: object.id,
     name: object.id,
     type: object.type,

@@ -25,6 +25,10 @@ import {
 } from "@/app/pages/index/indexPageHelpers";
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
+  buildWorldLayoutFolderAssetMap,
+  splitWorldLayoutFolderFiles,
+} from "@/app/pages/index/worldLayoutFolderImport";
+import {
   buildWorldScenePackageManifestFromState,
   createWorldSceneLayerExportDocument,
   downloadWorldScenePackageManifest,
@@ -46,6 +50,9 @@ import {
 import { useWorldPublishController } from "@/app/pages/index/useWorldPublishController";
 import { useWorldRegistryController } from "@/app/pages/index/useWorldRegistryController";
 import { useWorldRolloutController } from "@/app/pages/index/useWorldRolloutController";
+
+const WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT =
+  ".json,application/json,.stl,.dae,.obj,.glb,.gltf,.mtl,.ply,.splat,.png,.jpg,.jpeg";
 
 type UseWorldSceneManagerParams = {
   addCamera: (camera: Omit<Camera, "id">) => void;
@@ -98,15 +105,32 @@ export const useWorldSceneManager = ({
   const worldImportHandledRef = useRef(false);
   const worldLayoutImportHandledRef = useRef(false);
   const defaultWorldLayoutAppliedRef = useRef(false);
+  const localWorldLayoutObjectUrlsRef = useRef<string[]>([]);
   const objectsRef = useRef(objects);
 
   const [worldLayoutImportDialogOpen, setWorldLayoutImportDialogOpen] = useState(false);
   const [worldLayoutImportUrlDraft, setWorldLayoutImportUrlDraft] = useState("");
   const [isImportingWorldLayout, setIsImportingWorldLayout] = useState(false);
+  const [worldScenePackageImportDialogOpen, setWorldScenePackageImportDialogOpen] =
+    useState(false);
+  const [worldScenePackageImportUrlDraft, setWorldScenePackageImportUrlDraft] =
+    useState("");
+  const [isImportingWorldScenePackage, setIsImportingWorldScenePackage] = useState(false);
   const [activeWorldSnapshotRef, setActiveWorldSnapshotRef] = useState<{
     package_id: string;
     version: string;
   } | null>(null);
+
+  const revokeLocalWorldLayoutObjectUrls = useCallback(() => {
+    localWorldLayoutObjectUrlsRef.current.forEach((objectUrl) => {
+      URL.revokeObjectURL(objectUrl);
+    });
+    localWorldLayoutObjectUrlsRef.current = [];
+  }, []);
+
+  useEffect(() => () => {
+    revokeLocalWorldLayoutObjectUrls();
+  }, [revokeLocalWorldLayoutObjectUrls]);
 
   const buildCurrentWorldScenePackageManifest = useCallback(
     async (
@@ -270,20 +294,53 @@ export const useWorldSceneManager = ({
   );
 
   const handleImportWorldScenePackage = useCallback(() => {
+    setWorldScenePackageImportUrlDraft("");
+    setWorldScenePackageImportDialogOpen(true);
+  }, []);
+
+  const handleImportWorldScenePackageFromFileDialog = useCallback(() => {
     openFileSelectionDialog({
       accept: WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
       onFiles: async ([file]) => {
         if (!file) return;
+        setIsImportingWorldScenePackage(true);
         try {
           const raw = await file.text();
           const manifest = await parseWorldSceneManifestText(raw);
           applyImportedWorldScenePackage(manifest);
+          setWorldScenePackageImportDialogOpen(false);
+          setWorldScenePackageImportUrlDraft("");
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "Failed to import world package");
+        } finally {
+          setIsImportingWorldScenePackage(false);
         }
       },
     });
   }, [applyImportedWorldScenePackage]);
+
+  const handleImportWorldScenePackageFromLinkDialog = useCallback(async () => {
+    const importUrl = worldScenePackageImportUrlDraft.trim();
+    if (!importUrl) {
+      toast.error("Scene package URL is required");
+      return;
+    }
+    setIsImportingWorldScenePackage(true);
+    try {
+      const manifest = await loadWorldScenePackageFromImportParams({
+        importUrl,
+        packageId: "",
+        version: "",
+      });
+      applyImportedWorldScenePackage(manifest);
+      setWorldScenePackageImportDialogOpen(false);
+      setWorldScenePackageImportUrlDraft("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to import world package");
+    } finally {
+      setIsImportingWorldScenePackage(false);
+    }
+  }, [applyImportedWorldScenePackage, worldScenePackageImportUrlDraft]);
 
   const handleImportWorkspaceChangeSet = useCallback(() => {
     openFileSelectionDialog({
@@ -393,6 +450,39 @@ export const useWorldSceneManager = ({
       setIsImportingWorldLayout(false);
     }
   }, [importWorldLayoutFromUrl, worldLayoutImportUrlDraft]);
+
+  const handleImportWorldLayoutFromFileDialog = useCallback(() => {
+    openFileSelectionDialog({
+      accept: WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT,
+      multiple: true,
+      onFiles: async (files) => {
+        const { assetFiles, layoutFile } = splitWorldLayoutFolderFiles(files);
+        if (!layoutFile) {
+          toast.error("Select a world layout JSON file.");
+          return;
+        }
+        const layoutObjectUrl = URL.createObjectURL(layoutFile);
+        const nextObjectUrls = [layoutObjectUrl];
+        setIsImportingWorldLayout(true);
+        try {
+          const assetMapResult = await buildWorldLayoutFolderAssetMap(assetFiles);
+          nextObjectUrls.push(...assetMapResult.objectUrls);
+          await importWorldLayoutFromUrl(layoutObjectUrl, `World layout import file ${layoutFile.name}`, {
+            meshUriAssetMap: assetMapResult.assetMap,
+          });
+          revokeLocalWorldLayoutObjectUrls();
+          localWorldLayoutObjectUrlsRef.current = nextObjectUrls;
+          setWorldLayoutImportDialogOpen(false);
+          setWorldLayoutImportUrlDraft("");
+        } catch (error) {
+          nextObjectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+          toast.error(error instanceof Error ? error.message : "Failed to import world layout");
+        } finally {
+          setIsImportingWorldLayout(false);
+        }
+      },
+    });
+  }, [importWorldLayoutFromUrl, revokeLocalWorldLayoutObjectUrls]);
 
   const handleImportDefaultWorldLayoutFromDialog = useCallback(async () => {
     setIsImportingWorldLayout(true);
@@ -534,10 +624,13 @@ export const useWorldSceneManager = ({
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
+    handleImportWorldLayoutFromFileDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromLinkDialog,
     handleImportWorldLayoutFromUrl,
     handleImportWorldScenePackage,
+    handleImportWorldScenePackageFromFileDialog,
+    handleImportWorldScenePackageFromLinkDialog,
     handleExportWorldRolloutCampaign,
     handleRunLocalWorldRollout,
     handleImportWorldRolloutResults,
@@ -553,8 +646,11 @@ export const useWorldSceneManager = ({
     handleSubmitWorldPublishDialog,
     handleValidateCurrentWorldScenePackage,
     isImportingWorldLayout,
+    isImportingWorldScenePackage,
     isPublishingWorldPackage,
     refreshWorldRegistry,
+    setWorldScenePackageImportDialogOpen,
+    setWorldScenePackageImportUrlDraft,
     setWorldLayoutImportDialogOpen,
     setWorldLayoutImportUrlDraft,
     setIsImportingWorldLayout,
@@ -563,6 +659,8 @@ export const useWorldSceneManager = ({
     setWorldRegistryFilterText,
     setWorldRegistryOpen,
     publishTargetLabel,
+    worldScenePackageImportDialogOpen,
+    worldScenePackageImportUrlDraft,
     worldLayoutImportDialogOpen,
     worldLayoutImportUrlDraft,
     worldPublishDialogOpen,

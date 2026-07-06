@@ -167,6 +167,31 @@ describe("worldSceneRuntime world package import", () => {
     expect(manifest.package_id).toBe("demo-scene");
   });
 
+  it("normalizes GitHub blob URLs for world package imports", async () => {
+    const manifestPayload = createManifestPayload();
+    const fetchImplementation: typeof fetch = async (input) => {
+      expect(input).toBe(
+        "https://raw.githubusercontent.com/acme/worlds/main/packages/demo.world.json"
+      );
+      return {
+        ok: true,
+        status: 200,
+        json: async () => manifestPayload,
+      } as Response;
+    };
+
+    const manifest = await loadWorldScenePackageFromImportParams(
+      {
+        importUrl: "https://github.com/acme/worlds/blob/main/packages/demo.world.json",
+        packageId: "",
+        version: "",
+      },
+      { fetchImplementation }
+    );
+
+    expect(manifest.package_id).toBe("demo-scene");
+  });
+
   it("loads world packages from registry package ids and versions", async () => {
     const manifestPayload = createManifestPayload();
     const manifest = await loadWorldScenePackageFromImportParams(

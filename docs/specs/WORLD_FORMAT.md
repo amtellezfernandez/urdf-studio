@@ -116,6 +116,10 @@ Field notes:
 | `physics.collision_geometry` | object | Simulator layer. Adapters must use this when present instead of guessing physics from appearance. |
 | `consistency` | object | Link between the visual representation and the simulator geometry, including the method/status of the fit. |
 
+For mesh objects, `mesh` is visual asset metadata only: asset path and scale. Do not put mass,
+friction, restitution, inertia, or collision flags inside `mesh`; put them under `physics` instead.
+Legacy layouts may use `simulation` for compatibility, but `physics` is the preferred input shape.
+
 ## Appearance/physics split
 
 The format supports splats and meshes without pretending they are the same thing. A Gaussian splat

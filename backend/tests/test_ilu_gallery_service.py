@@ -3013,7 +3013,7 @@ def test_build_gallery_manifest_from_inspection_enriches_catalog_media(
             },
             "candidates": [
                 {
-                    "path": "robots/so100.urdf",
+                    "path": "Simulation/SO100/so100.urdf",
                     "inspectionMode": "urdf",
                     "hasRenderableGeometry": True,
                     "unresolvedMeshReferenceCount": 0,
@@ -3024,7 +3024,7 @@ def test_build_gallery_manifest_from_inspection_enriches_catalog_media(
 
     assert manifest["items"] == [
         {
-            "candidatePath": "robots/so100.urdf",
+            "candidatePath": "Simulation/SO100/so100.urdf",
             "status": "image ready, video ready | urdf, renderable",
             "thumbnailPath": "",
             "thumbnailUrl": "https://cdn.jsdelivr.net/gh/urdf-studio/urdf-robot-gallery@main/docs/thumbnails/therobotstudio/so-arm100/so100--vyv9ty.png",
@@ -3034,7 +3034,7 @@ def test_build_gallery_manifest_from_inspection_enriches_catalog_media(
             "galleryFileBase": "so100--vyv9ty",
             "galleryRobotName": "SO-ARM100",
             "sourceFile": "so100.urdf",
-            "sourcePath": "robots/so100.urdf",
+            "sourcePath": "Simulation/SO100/so100.urdf",
             "galleryPngPath": "thumbnails/therobotstudio/so-arm100/so100--vyv9ty.png",
             "galleryWebmPath": "previews/therobotstudio/so-arm100/so100--vyv9ty.webm",
             "attentionNotes": [],

@@ -8,6 +8,12 @@ import {
 } from "./worldObjectGeometry";
 import { WORLD_OBJECT_STORE_PARAMS } from "./worldObjectStoreParams";
 import type { WorldObjectSource } from "@/shared/types/worldObject";
+import type { SerializableWorldObject } from "@/features/world-share/worldScenePackageTypes";
+
+export type CreatedObjectWorldMetadata = Pick<
+  SerializableWorldObject,
+  "appearance" | "consistency" | "mesh" | "physics" | "simulation"
+>;
 
 export interface CreatedObject {
   id: string;
@@ -22,6 +28,7 @@ export interface CreatedObject {
   meshUri?: string;
   isHidden?: boolean;
   source?: WorldObjectSource;
+  worldMetadata?: CreatedObjectWorldMetadata;
   trackedJointName: string | null;
   isIkTarget: boolean;
   ikTargetType?: "punctual" | "orbit";
@@ -119,12 +126,23 @@ type ObjectStoreInternalState = {
 type ObjectStoreState = ObjectStore & ObjectStoreInternalState;
 type ObjectStoreStatePatch = Partial<ObjectStoreState> | ObjectStoreState;
 
+const cloneCreatedObjectWorldMetadata = (
+  metadata: CreatedObjectWorldMetadata | undefined,
+): CreatedObjectWorldMetadata | undefined => {
+  if (!metadata) return undefined;
+  if (typeof structuredClone === "function") {
+    return structuredClone(metadata) as CreatedObjectWorldMetadata;
+  }
+  return JSON.parse(JSON.stringify(metadata)) as CreatedObjectWorldMetadata;
+};
+
 const cloneCreatedObject = (object: CreatedObject): CreatedObject => ({
   ...object,
   position: object.position.clone(),
   rotation: normalizeWorldObjectRotationEuler(object.rotation),
   size: object.size.clone(),
   assetScale: object.assetScale?.clone(),
+  worldMetadata: cloneCreatedObjectWorldMetadata(object.worldMetadata),
 });
 
 const cloneSnapshot = (snapshot: ObjectSnapshot): ObjectSnapshot => ({
@@ -175,6 +193,8 @@ const snapshotsEqual = (
       leftObject.meshUri === rightObject.meshUri &&
       leftObject.isHidden === rightObject.isHidden &&
       leftObject.source === rightObject.source &&
+      JSON.stringify(leftObject.worldMetadata) ===
+        JSON.stringify(rightObject.worldMetadata) &&
       leftObject.trackedJointName === rightObject.trackedJointName &&
       leftObject.isIkTarget === rightObject.isIkTarget &&
       leftObject.ikTargetType === rightObject.ikTargetType &&
@@ -239,6 +259,7 @@ const normalizeCreatedObject = (
   assetRef: object.assetRef,
   assetScale: object.assetScale?.clone(),
   meshUri: object.meshUri,
+  worldMetadata: cloneCreatedObjectWorldMetadata(object.worldMetadata),
 });
 
 const updateObjectById = (
