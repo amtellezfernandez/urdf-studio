@@ -9,6 +9,7 @@ import {
 import { solveWithIkfast } from "./ikfastSolver";
 import { solveWithIkJs } from "./ikJsSolver";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { requestIkRemoteSolve } from "./ikRemoteSolve";
 import type {
   IkOrientationPayload,
@@ -83,7 +84,7 @@ const solveWithBackend = async (
     return {
       requestId: "local",
       ok: false,
-      error: error instanceof Error ? error.message : "IK solve failed",
+      error: readUnknownErrorMessage(error, "IK solve failed"),
       status: "solver_error",
     };
   } finally {

@@ -1,6 +1,7 @@
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import type { IkSolvePayload, IkSolveResponse, IkSolveStrategy } from "./types";
 import { IK_RUNTIME_CONFIG } from "@/shared/config/runtime";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type IkfastModuleConfig = {
   moduleUrl?: string;
@@ -179,7 +180,7 @@ export const solveWithIkfast = async (
     }
     return { ok: true, result: normalized };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "IKFast solve failed";
+    const message = readUnknownErrorMessage(error, "IKFast solve failed");
     const status = message.includes("timed out") ? "timeout" : "solver_error";
     return { ok: false, error: message, status };
   }

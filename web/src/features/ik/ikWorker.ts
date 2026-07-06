@@ -1,4 +1,5 @@
 import { isMetricsEnabled } from "@/shared/lib/metrics";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { buildIkStrategies, type OrientationMode } from "./registry";
 import type { IkSolveRequest, IkSolveResponse, IkSolveStrategy } from "./types";
 import { solveWithIkfast } from "./ikfastSolver";
@@ -71,7 +72,7 @@ const solveWithBackend = async (
     status = "solver_error";
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "IK solve failed",
+      error: readUnknownErrorMessage(error, "IK solve failed"),
       status,
     };
   } finally {
