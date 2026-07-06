@@ -71,6 +71,11 @@ third_party/unitree_ros/
 third_party/viewport/
 third_party/weightslab/
 
+# Local/generated Hong Kong port scene assets
+web/public/world-layouts/hk-cargo-port/
+web/public/world-layouts/hk-cargo-port.world-layout.json
+web/public/world-layouts/hk-cargo-port-splat-only.world-layout.json
+
 # OS metadata
 .DS_Store
 **/.DS_Store
