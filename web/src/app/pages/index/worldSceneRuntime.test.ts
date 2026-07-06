@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildWorldSceneDocumentFromState,
+  validateWorldScenePackageLocally,
   buildWorldRolloutConfigFromDraft,
   createWorldSceneLayerExportDocument,
   createWorldRolloutCheckerProfile,
@@ -163,6 +164,31 @@ describe("worldSceneRuntime world package import", () => {
         })
       )
     ).rejects.toThrow("world_snapshot.scenario_time_ms must be an integer");
+  });
+
+  it("validates thin world registry envelopes locally", async () => {
+    const validation = await validateWorldScenePackageLocally({
+      package_id: "demo-scene",
+      version: "0.1.0",
+      description: "Demo Scene",
+      provenance: {},
+      artifacts: [],
+      world: {
+        name: "Demo Scene",
+        urdf_xml: "<robot name='demo'/>",
+        joint_positions: {},
+        cameras: [],
+        objects: createManifestPayload().world_snapshot.objects,
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+        environment: {
+          frame_convention: "ros-rep-103",
+        },
+      },
+    });
+
+    expect(validation.combinedErrors).toEqual([]);
+    expect(validation.modeLabel).toBe("static world layout");
   });
 
   it("loads world packages from import URLs", async () => {

@@ -423,24 +423,31 @@ export const resolveWorldRolloutImportPayload = (
 };
 
 export const validateWorldScenePackageLocally = async (
-  manifest: WorldScenePackageManifest
+  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
 ) => {
   const [
-    { validateLocalWorldSceneManifest },
+    { readWorldSceneManifestFromUnknown, validateLocalWorldSceneManifest },
     { computeWorldSnapshotDigest },
   ] = await Promise.all([
     loadWorldSceneManifestModule(),
     loadWorldScenePackageBuilderModule(),
   ]);
-  const localErrors = validateLocalWorldSceneManifest(manifest);
+  const parsedManifest = readWorldSceneManifestFromUnknown(manifest);
+  if (!parsedManifest) {
+    return {
+      combinedErrors: ["World package payload is not a valid world scene document or registry envelope."],
+      modeLabel: "world layout",
+    };
+  }
+  const localErrors = validateLocalWorldSceneManifest(parsedManifest);
   const artifactErrors: string[] = [];
-  const worldSnapshotArtifacts = Array.isArray(manifest.artifacts)
-    ? manifest.artifacts.filter(
+  const worldSnapshotArtifacts = Array.isArray(parsedManifest.artifacts)
+    ? parsedManifest.artifacts.filter(
         (artifact) => isWorldSnapshotArtifact(artifact) && artifact.kind === "world_snapshot"
       )
     : [];
-  if (Array.isArray(manifest.artifacts)) {
-    manifest.artifacts.forEach((artifact, index) => {
+  if (Array.isArray(parsedManifest.artifacts)) {
+    parsedManifest.artifacts.forEach((artifact, index) => {
       if (
         typeof artifact === "object" &&
         artifact !== null &&
@@ -455,7 +462,7 @@ export const validateWorldScenePackageLocally = async (
     });
   }
   if (worldSnapshotArtifacts.length > 0 && localErrors.length === 0) {
-    const actualDigest = await computeWorldSnapshotDigest(manifest.world_snapshot);
+    const actualDigest = await computeWorldSnapshotDigest(parsedManifest.world_snapshot);
     worldSnapshotArtifacts.forEach((artifact, index) => {
       if (artifact.digest_sha256.toLowerCase() !== actualDigest) {
         artifactErrors.push(
@@ -468,7 +475,7 @@ export const validateWorldScenePackageLocally = async (
     ...localErrors,
     ...artifactErrors,
   ]);
-  const isStaticScene = manifest.world_snapshot.scenario_duration_ms === 0;
+  const isStaticScene = parsedManifest.world_snapshot.scenario_duration_ms === 0;
   return {
     combinedErrors,
     modeLabel: isStaticScene ? "static world layout" : "timed world layout",
@@ -476,7 +483,7 @@ export const validateWorldScenePackageLocally = async (
 };
 
 export const validateWorldScenePackageRemotely = async (
-  manifest: WorldScenePackageManifest
+  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
 ): Promise<WorldScenePackageValidationResponse> => {
   const { validateWorldScenePackageManifest } =
     await loadWorldScenePackageApiModule();

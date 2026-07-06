@@ -177,7 +177,7 @@ export const useWorldSceneManager = ({
 
   const handleValidateCurrentWorldScenePackage = useCallback(async () => {
     try {
-      const manifest = await buildCurrentWorldScenePackageManifest();
+      const manifest = await buildCurrentWorldSceneRegistryEnvelope();
       const { combinedErrors, modeLabel } = await validateWorldScenePackageLocally(manifest);
       if (combinedErrors.length > 0) {
         toast.error(`World package invalid: ${combinedErrors.join("; ")}`);
@@ -209,7 +209,7 @@ export const useWorldSceneManager = ({
     } catch (error) {
       toast.error(readUnknownErrorMessage(error, "Failed to validate world package"));
     }
-  }, [buildCurrentWorldScenePackageManifest]);
+  }, [buildCurrentWorldSceneRegistryEnvelope]);
 
   const handleExportCurrentWorldSceneLayer = useCallback(async () => {
     try {
