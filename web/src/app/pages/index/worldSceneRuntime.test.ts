@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWorldRolloutConfigFromDraft,
+  createWorldSceneLayerExportDocument,
   createWorldRolloutCheckerProfile,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
@@ -303,13 +304,15 @@ describe("worldSceneRuntime world layout import", () => {
 
       expect(importedWorldLayout.embeddedCameras).toBe(2);
       expect(importedWorldLayout.worldLayout.objects).toHaveLength(1);
+      expect(importedWorldLayout.worldLayout.cameras).toHaveLength(2);
+      expect(importedWorldLayout.worldLayout.urdf_xml).toBe("<robot name='demo'/>");
       expect(importedWorldLayout.baseUrl).toBe("https://cdn.example.test/worlds/layout.json");
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  it("reports zero embedded cameras for plain world layout payloads", async () => {
+  it("reports embedded cameras for extended world layout payloads", async () => {
     const manifestPayload = createManifestPayload();
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -319,9 +322,30 @@ describe("worldSceneRuntime world layout import", () => {
         json: async () => ({
           world_layout: {
             name: "Desk setup",
+            urdf_xml: manifestPayload.world_snapshot.urdf_xml,
+            joint_positions: { shoulder: 0.5 },
+            cameras: [
+              {
+                id: "overview-camera",
+                name: "Overview Camera",
+                parent_joint: "base",
+                pose: {
+                  xyz: [1, 2, 3],
+                  rpy: [0, 0, 0],
+                },
+                intrinsics: {
+                  width: 1280,
+                  height: 720,
+                  fov_deg: 60,
+                },
+              },
+            ],
             objects: manifestPayload.world_snapshot.objects,
             scenario_time_ms: 0,
             scenario_duration_ms: 0,
+          },
+          environment: {
+            frame_convention: "ros-rep-103",
           },
         }),
       }) as Response) as typeof fetch;
@@ -332,11 +356,56 @@ describe("worldSceneRuntime world layout import", () => {
         "World layout import"
       );
 
-      expect(importedWorldLayout.embeddedCameras).toBe(0);
+      expect(importedWorldLayout.embeddedCameras).toBe(1);
       expect(importedWorldLayout.worldLayout.name).toBe("Desk setup");
+      expect(importedWorldLayout.worldLayout.joint_positions).toEqual({ shoulder: 0.5 });
+      expect(importedWorldLayout.worldLayout.environment).toEqual({
+        frame_convention: "ros-rep-103",
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it("exports a world layout document with optional robot state and environment", async () => {
+    const manifestPayload = createManifestPayload({
+      joint_positions: { shoulder: 0.5 },
+      cameras: [
+        {
+          id: "overview-camera",
+          name: "Overview Camera",
+          parent_joint: "base",
+          pose: {
+            xyz: [1, 2, 3],
+            rpy: [0, 0, 0],
+          },
+          intrinsics: {
+            width: 1280,
+            height: 720,
+            fov_deg: 60,
+          },
+        },
+      ],
+    });
+
+    const { payload } = await createWorldSceneLayerExportDocument("Desk setup", manifestPayload, {
+      includeRobotState: true,
+    });
+
+    expect(payload).toEqual({
+      world_layout: {
+        name: "Desk setup",
+        urdf_xml: manifestPayload.world_snapshot.urdf_xml,
+        joint_positions: { shoulder: 0.5 },
+        cameras: manifestPayload.world_snapshot.cameras,
+        objects: manifestPayload.world_snapshot.objects,
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+      },
+      environment: {
+        frame_convention: "ros-rep-103",
+      },
+    });
   });
 });
 

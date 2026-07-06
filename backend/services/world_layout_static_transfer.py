@@ -13,6 +13,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from backend.models.json_payload import JsonObject
+from backend.models.world_scene_package import WorldSnapshot
 from backend.services.world_layout_transfer_constants import (
     COLOR_TOLERANCE,
     POSITION_TOLERANCE_M,
@@ -126,6 +127,7 @@ class _WorldLayoutSnapshotEnvelope:
     snapshot: WorldLayoutPayloadRecord
     name: str
     source_kind: _WorldLayoutSourceKind
+    environment: WorldLayoutPayloadRecord | None
     frame_convention: str | None
     frame_map_hint: ConcreteWorldLayoutFrameMap | None
 
@@ -480,6 +482,7 @@ def _read_snapshot_from_payload(
             snapshot=snapshot,
             name=name,
             source_kind="world_layout",
+            environment=payload.get("environment") if _is_record(payload.get("environment")) else None,
             frame_convention=_read_frame_convention(payload, snapshot),
             frame_map_hint=_read_frame_map_hint(payload),
         )
@@ -491,10 +494,39 @@ def _read_snapshot_from_payload(
             snapshot=snapshot,
             name=name,
             source_kind="world_snapshot",
+            environment=payload.get("environment") if _is_record(payload.get("environment")) else None,
             frame_convention=_read_frame_convention(payload, snapshot),
             frame_map_hint=_read_frame_map_hint(payload),
         )
     raise WorldLayoutTransferError("Payload must contain world_layout, world_snapshot, or manifest")
+
+
+def _read_optional_snapshot_state(
+    snapshot: WorldLayoutPayloadRecord,
+) -> tuple[str | None, dict[str, float] | None, tuple[JsonObject, ...]]:
+    has_embedded_state = any(
+        key in snapshot for key in ("urdf_xml", "joint_positions", "cameras")
+    )
+    if not has_embedded_state:
+        return None, None, ()
+    try:
+        validated = WorldSnapshot.model_validate(
+            {
+                "urdf_xml": snapshot.get("urdf_xml", "<robot name='world_layout'/>"),
+                "joint_positions": snapshot.get("joint_positions", {}),
+                "cameras": snapshot.get("cameras", []),
+                "objects": snapshot.get("objects", []),
+                "scenario_time_ms": snapshot.get("scenario_time_ms"),
+                "scenario_duration_ms": snapshot.get("scenario_duration_ms"),
+            }
+        )
+    except (TypeError, ValueError) as exc:
+        raise WorldLayoutTransferError(f"Invalid embedded world state: {exc}") from exc
+    return (
+        validated.urdf_xml if "urdf_xml" in snapshot else None,
+        validated.joint_positions if "joint_positions" in snapshot else None,
+        tuple(validated.cameras) if "cameras" in snapshot else (),
+    )
 
 
 def parse_static_world_layout_payload(payload: object) -> StaticWorldLayout:
@@ -503,6 +535,7 @@ def parse_static_world_layout_payload(payload: object) -> StaticWorldLayout:
     if not isinstance(raw_objects, list):
         raise WorldLayoutTransferError("World layout objects must be an array")
     scenario_time_ms, scenario_duration_ms = _read_static_timing(envelope.snapshot)
+    urdf_xml, joint_positions, cameras = _read_optional_snapshot_state(envelope.snapshot)
     objects = tuple(
         _read_world_object(raw_object, index)
         for index, raw_object in enumerate(raw_objects)
@@ -513,6 +546,10 @@ def parse_static_world_layout_payload(payload: object) -> StaticWorldLayout:
         scenario_time_ms=scenario_time_ms,
         scenario_duration_ms=scenario_duration_ms,
         source_kind=envelope.source_kind,
+        urdf_xml=urdf_xml,
+        joint_positions=joint_positions,
+        cameras=cameras,
+        environment=envelope.environment,
         frame_convention=envelope.frame_convention,
         frame_map_hint=envelope.frame_map_hint,
     )

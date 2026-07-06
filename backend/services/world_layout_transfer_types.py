@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from backend.models.json_payload import JsonObject
+
 StaticTransferValidationBackend = Literal["mujoco", "genesis"]
 ConcreteWorldLayoutFrameMap = Literal["identity", "studio-y-up-to-z-up"]
 WorldLayoutFrameMap = Literal["auto", "identity", "studio-y-up-to-z-up"]
@@ -39,6 +41,10 @@ class StaticWorldLayout:
     scenario_time_ms: int
     scenario_duration_ms: int
     source_kind: str
+    urdf_xml: str | None = None
+    joint_positions: dict[str, float] | None = None
+    cameras: tuple[JsonObject, ...] = ()
+    environment: JsonObject | None = None
     frame_convention: str | None = None
     frame_map_hint: ConcreteWorldLayoutFrameMap | None = None
 

@@ -32,13 +32,16 @@ import {
   validateMaxLength,
 } from "@/features/world-share/worldSceneManifestValidation";
 
-type WorldSceneLayerEnvironment = Record<string, unknown> | null;
+export type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
 type ParsedWorldSceneLayerSnapshot = {
   name?: string;
   objects: unknown[];
   scenario_time_ms: number;
   scenario_duration_ms: number;
+  urdf_xml?: string;
+  joint_positions?: Record<string, number>;
+  cameras?: WorldScenePackageManifest["world_snapshot"]["cameras"];
   environment: WorldSceneLayerEnvironment;
 };
 
@@ -48,6 +51,9 @@ export type StaticWorldSceneLayerSnapshot = {
   objects: SerializableWorldObject[];
   scenario_time_ms: typeof STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS;
   scenario_duration_ms: typeof STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS;
+  urdf_xml?: string;
+  joint_positions?: Record<string, number>;
+  cameras?: WorldScenePackageManifest["world_snapshot"]["cameras"];
   environment: WorldSceneLayerEnvironment;
 };
 
@@ -61,6 +67,9 @@ const toStaticWorldSceneLayerSnapshot = (
   objects: snapshot.objects as SerializableWorldObject[],
   scenario_time_ms: STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS,
   scenario_duration_ms: STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS,
+  urdf_xml: snapshot.urdf_xml,
+  joint_positions: snapshot.joint_positions,
+  cameras: snapshot.cameras,
   environment: snapshot.environment,
 });
 
@@ -244,25 +253,54 @@ const toParsedWorldSceneLayerSnapshot = (
   ) {
     return null;
   }
+  if (value.urdf_xml !== undefined && !isString(value.urdf_xml)) {
+    return null;
+  }
+  if (value.joint_positions !== undefined && !isRecord(value.joint_positions)) {
+    return null;
+  }
+  if (value.cameras !== undefined && !Array.isArray(value.cameras)) {
+    return null;
+  }
   return {
     name: isString(value.name) ? value.name : undefined,
     objects: value.objects,
     scenario_time_ms: value.scenario_time_ms,
     scenario_duration_ms: value.scenario_duration_ms,
+    urdf_xml: isString(value.urdf_xml) ? value.urdf_xml : undefined,
+    joint_positions:
+      value.joint_positions !== undefined
+        ? (value.joint_positions as Record<string, number>)
+        : undefined,
+    cameras:
+      value.cameras !== undefined
+        ? (value.cameras as WorldScenePackageManifest["world_snapshot"]["cameras"])
+        : undefined,
     environment,
   };
 };
 
-const worldSceneManifestToLayerSnapshot = (
+const manifestEnvironment = (
+  manifest: WorldScenePackageManifest
+): WorldSceneLayerEnvironment => {
+  const environment = isRecord(manifest.provenance?.environment)
+    ? { ...(manifest.provenance.environment as Record<string, unknown>) }
+    : {};
+  environment.frame_convention = manifest.interface.frame_convention;
+  return Object.keys(environment).length > 0 ? environment : null;
+};
+
+export const worldSceneManifestToLayerSnapshot = (
   manifest: WorldScenePackageManifest
 ): ParsedWorldSceneLayerSnapshot => ({
   name: manifest.title,
   objects: manifest.world_snapshot.objects,
   scenario_time_ms: manifest.world_snapshot.scenario_time_ms,
   scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
-  environment: isRecord(manifest.provenance?.environment)
-    ? (manifest.provenance.environment as Record<string, unknown>)
-    : null,
+  urdf_xml: manifest.world_snapshot.urdf_xml,
+  joint_positions: manifest.world_snapshot.joint_positions,
+  cameras: manifest.world_snapshot.cameras,
+  environment: manifestEnvironment(manifest),
 });
 
 export const readWorldSceneLayerFromUnknown = (
@@ -307,6 +345,38 @@ export const validateWorldSceneLayerSnapshot = (
 ): string[] => {
   const errors: string[] = [];
   errors.push(...validateSerializableWorldObjects(snapshot.objects));
+  if (snapshot.urdf_xml !== undefined) {
+    if (!snapshot.urdf_xml.trim()) {
+      errors.push("world layout urdf_xml must be a non-empty string");
+    } else if (
+      snapshot.urdf_xml.length > WORLD_SCENE_PACKAGE_LIMITS.maxWorldSnapshotUrdfChars
+    ) {
+      errors.push(
+        `world layout urdf_xml must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxWorldSnapshotUrdfChars} characters`
+      );
+    }
+  }
+  if (snapshot.joint_positions !== undefined) {
+    errors.push(
+      ...validateWorldJointPositions(snapshot.joint_positions).map((error) =>
+        error.replace("world_snapshot.joint_positions", "world layout joint_positions")
+      )
+    );
+  }
+  if (snapshot.cameras !== undefined) {
+    errors.push(
+      ...validateMaxLength(
+        snapshot.cameras,
+        "world layout cameras",
+        WORLD_SCENE_PACKAGE_LIMITS.maxCamerasPerWorld
+      )
+    );
+    errors.push(
+      ...validateSerializableWorldCameras(snapshot.cameras).map((error) =>
+        error.replace(/^world snapshot cameras/, "world layout cameras")
+      )
+    );
+  }
   const timingErrors: string[] = [];
   if (!isIntegerNumber(snapshot.scenario_time_ms)) {
     timingErrors.push("world layout scenario_time_ms must be an integer");
@@ -356,6 +426,9 @@ export const parseStaticWorldSceneLayerSnapshot = (payload: unknown): { snapshot
 export const createStaticWorldSceneLayerSnapshot = (params: {
   name?: string;
   objects: SerializableWorldObject[];
+  urdf_xml?: string;
+  joint_positions?: Record<string, number>;
+  cameras?: WorldScenePackageManifest["world_snapshot"]["cameras"];
   environment?: WorldSceneLayerEnvironment;
 }): StaticWorldSceneLayerSnapshot => ({
   kind: STATIC_WORLD_LAYOUT_KIND,
@@ -363,5 +436,8 @@ export const createStaticWorldSceneLayerSnapshot = (params: {
   objects: params.objects,
   scenario_time_ms: STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS,
   scenario_duration_ms: STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS,
+  urdf_xml: params.urdf_xml,
+  joint_positions: params.joint_positions,
+  cameras: params.cameras,
   environment: params.environment ?? null,
 });

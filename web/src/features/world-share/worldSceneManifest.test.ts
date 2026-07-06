@@ -731,6 +731,9 @@ describe("worldSceneManifest static scene validation", () => {
 
     expect(parsed?.name).toBe("Desk WSP");
     expect(parsed?.objects).toHaveLength(1);
+    expect(parsed?.urdf_xml).toBe("<robot name='demo'/>");
+    expect(parsed?.cameras).toEqual([]);
+    expect(parsed?.environment).toEqual({ frame_convention: "ros-rep-103" });
   });
 
   it("does not read world layout fields from invalid WSP envelopes", () => {
@@ -756,6 +759,28 @@ describe("worldSceneManifest static scene validation", () => {
     });
 
     expect(parsed?.objects).toHaveLength(1);
+  });
+
+  it("keeps extended world_layout payload robot state and environment", () => {
+    const parsed = readWorldSceneLayerFromUnknown({
+      world_layout: {
+        name: "Desk setup",
+        urdf_xml: "<robot name='demo'/>",
+        joint_positions: { shoulder: 0.5 },
+        cameras: [createWorldCamera()],
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+      },
+      environment: {
+        frame_convention: "ros-rep-103",
+      },
+    });
+
+    expect(parsed?.urdf_xml).toBe("<robot name='demo'/>");
+    expect(parsed?.joint_positions).toEqual({ shoulder: 0.5 });
+    expect(parsed?.cameras).toHaveLength(1);
+    expect(parsed?.environment).toEqual({ frame_convention: "ros-rep-103" });
   });
 
   it("rejects non-static world layout snapshots for now", () => {
@@ -814,6 +839,33 @@ describe("worldSceneManifest static scene validation", () => {
     if (!parsed) return;
     expect(validateWorldSceneLayerSnapshot(parsed)).toContain(
       "world layout objects[0].position_xyz[y] must be a finite number"
+    );
+    expect(parseStaticWorldSceneLayerSnapshot(payload).snapshot).toBeNull();
+  });
+
+  it("rejects malformed extended world layout robot state before application", () => {
+    const payload = {
+      world_layout: {
+        name: "Broken robot state",
+        urdf_xml: "",
+        joint_positions: { shoulder: "bad" },
+        cameras: [{ ...createWorldCamera(), intrinsics: { width: 640, height: 480 } }],
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+      },
+    };
+    const parsed = readWorldSceneLayerFromUnknown(payload);
+    expect(parsed).not.toBeNull();
+    if (!parsed) return;
+    expect(validateWorldSceneLayerSnapshot(parsed)).toContain(
+      "world layout urdf_xml must be a non-empty string"
+    );
+    expect(validateWorldSceneLayerSnapshot(parsed)).toContain(
+      "world layout joint_positions.shoulder must be a finite number"
+    );
+    expect(validateWorldSceneLayerSnapshot(parsed)).toContain(
+      "world layout cameras[0].intrinsics must include fov_deg, fx, or fy"
     );
     expect(parseStaticWorldSceneLayerSnapshot(payload).snapshot).toBeNull();
   });

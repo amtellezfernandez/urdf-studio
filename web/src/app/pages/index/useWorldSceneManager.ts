@@ -206,13 +206,23 @@ export const useWorldSceneManager = ({
         toast.error("World layout name is required");
         return;
       }
-      const { filename, payload } = await createWorldSceneLayerExportDocument(worldLayoutName, objects);
+      const manifest = await buildCurrentWorldScenePackageManifest({
+        title: worldLayoutName,
+      });
+      const includeRobotState = window.confirm(
+        "Include robot state, joint positions, and cameras in the world layout export?"
+      );
+      const { filename, payload } = await createWorldSceneLayerExportDocument(
+        worldLayoutName,
+        manifest,
+        { includeRobotState }
+      );
       downloadJsonDocument(payload, filename);
       toast.success(`World layout exported: ${worldLayoutName}`);
     } catch (error) {
       toast.error(readUnknownErrorMessage(error, "Failed to export world layout"));
     }
-  }, [objects]);
+  }, [buildCurrentWorldScenePackageManifest]);
 
   const handleImportWorldLayoutFromUrl = useCallback(() => {
     setWorldLayoutImportUrlDraft("");

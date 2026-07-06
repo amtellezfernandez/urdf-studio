@@ -348,19 +348,20 @@ export const validateWorldScenePackageLocally = async (
   manifest: WorldScenePackageManifest
 ) => {
   const [
-    { validateLocalWorldSceneManifest, validateWorldSceneLayerSnapshot },
+    {
+      validateLocalWorldSceneManifest,
+      validateWorldSceneLayerSnapshot,
+      worldSceneManifestToLayerSnapshot,
+    },
     { computeWorldSnapshotDigest },
   ] = await Promise.all([
     loadWorldSceneManifestModule(),
     loadWorldScenePackageBuilderModule(),
   ]);
   const localErrors = validateLocalWorldSceneManifest(manifest);
-  const layerErrors = validateWorldSceneLayerSnapshot({
-    objects: manifest.world_snapshot.objects,
-    scenario_time_ms: manifest.world_snapshot.scenario_time_ms,
-    scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
-    environment: null,
-  });
+  const layerErrors = validateWorldSceneLayerSnapshot(
+    worldSceneManifestToLayerSnapshot(manifest)
+  );
   const artifactErrors: string[] = [];
   const worldSnapshotArtifacts = Array.isArray(manifest.artifacts)
     ? manifest.artifacts.filter(
@@ -410,19 +411,24 @@ export const validateWorldScenePackageRemotely = async (
 
 export const createWorldSceneLayerExportDocument = async (
   worldLayoutName: string,
-  objects: CreatedObject[]
+  manifest: WorldScenePackageManifest,
+  options: {
+    includeRobotState?: boolean;
+  } = {}
 ) => {
   const [
-    { serializeWorldSceneObjects },
-    { createStaticWorldSceneLayerSnapshot, validateWorldSceneLayerSnapshot },
+    { createStaticWorldSceneLayerSnapshot, validateWorldSceneLayerSnapshot, worldSceneManifestToLayerSnapshot },
   ] = await Promise.all([
-    loadWorldScenePackageBuilderModule(),
     loadWorldSceneManifestModule(),
   ]);
+  const layerSnapshot = worldSceneManifestToLayerSnapshot(manifest);
   const worldLayout: WorldSceneLayerSnapshot = createStaticWorldSceneLayerSnapshot({
     name: worldLayoutName,
-    objects: serializeWorldSceneObjects(objects),
-    environment: null,
+    objects: manifest.world_snapshot.objects,
+    urdf_xml: options.includeRobotState ? manifest.world_snapshot.urdf_xml : undefined,
+    joint_positions: options.includeRobotState ? manifest.world_snapshot.joint_positions : undefined,
+    cameras: options.includeRobotState ? manifest.world_snapshot.cameras : undefined,
+    environment: layerSnapshot.environment,
   });
   const validationErrors = validateWorldSceneLayerSnapshot(worldLayout);
   if (validationErrors.length > 0) {
@@ -436,7 +442,13 @@ export const createWorldSceneLayerExportDocument = async (
         objects: worldLayout.objects,
         scenario_time_ms: worldLayout.scenario_time_ms,
         scenario_duration_ms: worldLayout.scenario_duration_ms,
+        ...(worldLayout.urdf_xml !== undefined ? { urdf_xml: worldLayout.urdf_xml } : {}),
+        ...(worldLayout.joint_positions !== undefined
+          ? { joint_positions: worldLayout.joint_positions }
+          : {}),
+        ...(worldLayout.cameras !== undefined ? { cameras: worldLayout.cameras } : {}),
       },
+      environment: worldLayout.environment,
     },
   };
 };
@@ -538,13 +550,6 @@ export const loadWorldScenePackageFromImportParams = async (
   throw new Error("Import link did not contain a valid world package manifest.");
 };
 
-const countEmbeddedWorldSnapshotCameras = (worldLayoutPayload: unknown): number => {
-  if (!isRecord(worldLayoutPayload)) return 0;
-  const worldSnapshot = worldLayoutPayload.world_snapshot;
-  if (!isRecord(worldSnapshot)) return 0;
-  return Array.isArray(worldSnapshot.cameras) ? worldSnapshot.cameras.length : 0;
-};
-
 export const readWorldSceneLayerFromUrl = async (
   worldLayoutUrl: string,
   contextLabel: string
@@ -576,7 +581,7 @@ export const readWorldSceneLayerFromUrl = async (
 
   return {
     worldLayout,
-    embeddedCameras: countEmbeddedWorldSnapshotCameras(payload),
+    embeddedCameras: worldLayout.cameras?.length ?? 0,
     baseUrl: response.url || normalizedUrl,
   };
 };
