@@ -19,6 +19,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.world_scene_package_digest import world_scene_package_digest
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_rollouts import (
     WorldRolloutCliConfig,
@@ -234,6 +235,7 @@ def test_import_results_preserves_user_configured_profile_and_counts_decisions(t
 
 
 def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tmp_path) -> None:
+    world_package = _build_world_package()
     service = WorldRolloutService(
         cli_config=WorldRolloutCliConfig(
             executable_path=_build_cli_script(tmp_path),
@@ -245,7 +247,7 @@ def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tm
     )
     job = service.create_job(
         WorldRolloutJobCreateRequest(
-            world_package=_build_world_package(),
+            world_package=world_package,
             checker_profile=_build_profile(),
         )
     )
@@ -261,10 +263,10 @@ def test_cli_job_writes_self_contained_sidecars_and_verifies_output_artifacts(tm
     assert completed.output_manifest_path == str(
         job_dir / WORLD_ROLLOUT_OUTPUT_DIRNAME / WORLD_ROLLOUT_OUTPUT_CAMPAIGN_FILENAME
     )
-    assert _artifact_digest(completed, WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND) == _digest_file(
-        world_package_path
+    assert _artifact_digest(completed, WORLD_ROLLOUT_WORLD_PACKAGE_ARTIFACT_KIND) == world_scene_package_digest(
+        world_package
     )
-    assert completed.campaign.world_package.digest_sha256 == _digest_file(world_package_path)
+    assert completed.campaign.world_package.digest_sha256 == world_scene_package_digest(world_package)
     assert _artifact_digest(completed, WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND) == _digest_file(
         checker_profile_path
     )

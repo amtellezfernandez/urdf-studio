@@ -108,8 +108,7 @@ def world_scene_package_json_payload(manifest: WorldScenePackageManifest) -> Jso
 
 
 def world_scene_package_digest(manifest: WorldScenePackageManifest) -> str:
-    canonical_json = canonical_world_scene_package_json(manifest)
-    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    return computed_world_snapshot_digest(manifest)
 
 
 def canonical_world_snapshot_json(manifest: WorldScenePackageManifest) -> str:

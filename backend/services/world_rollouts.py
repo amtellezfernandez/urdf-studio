@@ -27,6 +27,7 @@ from backend.models.world_rollouts import (
     WorldRolloutTraceRecord,
 )
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.world_scene_package_digest import world_scene_package_digest
 from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_CHECKER_PROFILE_ARTIFACT_KIND,
     WORLD_ROLLOUT_DEFAULT_RUNNER_KIND,
@@ -324,7 +325,7 @@ class WorldRolloutService:
     def _build_campaign(self, request: WorldRolloutJobCreateRequest) -> WorldRolloutCampaignManifest:
         world_package = request.world_package
         campaign_id = request.campaign_id or f"{world_package.package_id}-{world_package.version}"
-        world_package_digest = _sha256_bytes(_model_json_bytes(world_package))
+        world_package_digest = world_scene_package_digest(world_package)
         checker_profile_digest = _sha256_bytes(_model_json_bytes(request.checker_profile))
         return WorldRolloutCampaignManifest(
             campaign_id=campaign_id,
@@ -449,6 +450,8 @@ class WorldRolloutService:
     def _write_model_json(self, path: Path, payload: BaseModel) -> str:
         raw = _model_json_bytes(payload)
         path.write_bytes(raw)
+        if isinstance(payload, WorldScenePackageManifest):
+            return world_scene_package_digest(payload)
         return _sha256_bytes(raw)
 
     def _read_text_file(self, path: Path, *, max_bytes: int, label: str) -> str:

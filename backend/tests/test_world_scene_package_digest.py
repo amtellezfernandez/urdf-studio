@@ -16,6 +16,7 @@ from backend.services.world_scene_package_digest import (
     declared_world_snapshot_digests,
     normalize_and_require_world_snapshot_artifact_digests,
     normalize_world_snapshot_artifact_digests,
+    world_scene_package_digest,
     world_scene_package_json_payload,
 )
 
@@ -69,6 +70,41 @@ def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> N
     )
 
     assert computed_world_snapshot_digest(manifest) == TEST_WORLD_SNAPSHOT_DIGEST
+
+
+def test_world_scene_package_digest_ignores_created_at_and_matches_snapshot_identity() -> None:
+    manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[],
+        world_snapshot=WorldSnapshot(
+            urdf_xml="<robot name='demo'/>",
+            joint_positions={"joint_1": 0.5},
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+        provenance={},
+        security={"attestation_refs": []},
+    )
+    updated_manifest = manifest.model_copy(
+        update={"created_at": datetime(2027, 1, 1, tzinfo=timezone.utc)},
+        deep=True,
+    )
+
+    assert world_scene_package_digest(manifest) == computed_world_snapshot_digest(manifest)
+    assert world_scene_package_digest(updated_manifest) == world_scene_package_digest(manifest)
 
 
 def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
