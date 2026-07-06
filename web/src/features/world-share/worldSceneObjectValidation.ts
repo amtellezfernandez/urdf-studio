@@ -160,6 +160,9 @@ const validateWorldObjectMeshMetadata = (
   if (value.type === "mesh" && readWorldObjectMeshAssetRef(value) === null) {
     errors.push(`${objectLabel}.mesh asset reference is required for mesh objects`);
   }
+  if (value.type === "splat" && readWorldObjectMeshAssetRef(value) === null) {
+    errors.push(`${objectLabel}.splat asset reference is required for splat objects`);
+  }
   return errors;
 };
 

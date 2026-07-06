@@ -422,6 +422,59 @@ def test_parse_static_world_layout_rejects_invalid_splat_without_collision_geome
         parse_static_world_layout_payload(payload)
 
 
+def test_splat_object_without_collision_geometry_is_skipped_for_transfer() -> None:
+    payload = _layout_payload()
+    payload["world_layout"]["objects"].append(
+        {
+            "id": "port-splat",
+            "name": "Port splat",
+            "type": "splat",
+            "position_xyz": [0.0, 0.0, 0.0],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [1.0, 1.0, 1.0],
+            "color": "#94a3b8",
+            "asset_ref": "assets/port.spz",
+        }
+    )
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout)
+
+    assert all(primitive.source_id != "port-splat" for primitive in primitives)
+    assert any("Skipped splat object without collision geometry" in warning for warning in warnings)
+    assert static_transfer_module.count_transferable_world_objects(layout) == len(primitives)
+
+
+def test_splat_object_with_collision_geometry_transfers_as_proxy_primitive() -> None:
+    payload = _layout_payload()
+    payload["world_layout"]["objects"].append(
+        {
+            "id": "port-splat",
+            "name": "Port splat",
+            "type": "splat",
+            "position_xyz": [0.0, 0.0, 0.5],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [1.0, 1.0, 1.0],
+            "color": "#94a3b8",
+            "asset_ref": "assets/port.spz",
+            "physics": {
+                "collision_geometry": {
+                    "kind": "box",
+                    "size_xyz": [2.0, 2.0, 1.0],
+                }
+            },
+        }
+    )
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, _warnings = build_sim_primitives(layout)
+
+    proxy = next(primitive for primitive in primitives if primitive.source_id == "port-splat")
+    assert proxy.sim_type == "box"
+    assert proxy.size_xyz == (2.0, 2.0, 1.0)
+    assert static_transfer_module.count_transferable_world_objects(layout) == len(primitives)
+
+
 def test_build_primitives_warns_for_duplicate_object_ids_and_names() -> None:
     payload = {
         "world_layout": {

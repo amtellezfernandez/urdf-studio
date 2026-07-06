@@ -88,7 +88,7 @@ Every object in the scene — a prop, a target, a mesh, a collider — is one en
 ```
 id, name, type, position_xyz, size_xyz, color        # required
 rotation_rpy_rad                                     # when orientation matters
-type: "cube" | "sphere" | "cylinder" | "point" | "mesh"
+type: "cube" | "sphere" | "cylinder" | "point" | "mesh" | "splat"
 
 # v1.0 compatibility fields, present when type is "mesh" or otherwise asset-backed
 asset_ref, asset_scale_xyz
@@ -170,6 +170,11 @@ the linked physics proxy. Current simulator transfer code follows that rule by r
 `physics.collision_geometry` first; if it is a primitive proxy, appearance asset refs are not passed
 to the simulator as geometry.
 
+Top-level `type: "splat"` objects are the exception: they are appearance-only *background* objects
+(e.g. a scanned environment splat) and require an asset reference but no physics layer. Simulator
+transfer skips them with a warning unless `physics.collision_geometry` is present, in which case
+they transfer as the proxy primitive like any other object.
+
 The legacy `asset_ref`, `mesh`, and `simulation` fields remain accepted for compatibility. New
 world authors should prefer `appearance`, `physics`, and `consistency` when a world object must
 survive across renderers and physics engines.
@@ -202,13 +207,13 @@ is packaged for a target, not that the target can load or render that extension.
 | `.dae` | no | no | no | unverified | yes |
 | `.ply` | yes | no | no | unverified | yes |
 | `.usd` / `.usda` / `.usdc` | no | no | no | no | yes |
-| `.spz` (Gaussian splat) | deferred | no, appearance only | no, appearance only | no, appearance only | no |
+| `.spz` / `.splat` / `.ksplat` (Gaussian splat) | yes | no, appearance only | no, appearance only | no, appearance only | no |
 
-Splat rendering (`@sparkjsdev/spark`) requires bumping `three` to `^0.180.0`. That version change
-is a separate, deliberate decision — not bundled into the World format itself. Splats are valid
-`appearance` assets, not physics geometry; they require a linked `physics.collision_geometry`
-proxy before the object is portable to simulators. Entries marked `unverified` must be validated
-against the target runtime before they are treated as release support.
+Splat rendering uses `@sparkjsdev/spark` 2.1 (with LOD) on `three` `^0.180.0`. Splats are valid
+`appearance` assets, not physics geometry; aside from appearance-only background splat objects,
+they require a linked `physics.collision_geometry` proxy before the object is portable to
+simulators. Entries marked `unverified` must be validated against the target runtime before they
+are treated as release support.
 
 Implementation: `web/src/features/viewer/components/MeshAssetBody.tsx` (viewer),
 `backend/services/simulator_adapters/{mujoco,genesis,pybullet}_scene.py` and
@@ -273,6 +278,7 @@ from nothing:
 
 ## Status
 
-6 of 11 simulator targets implemented. Splat asset support deferred pending a three.js version
-decision. No planned simulator (Isaac Sim included) has adapter work scoped yet — that's the next
-step if this is worth pursuing project-wide.
+6 of 11 simulator targets implemented. Splat rendering shipped on three 0.180 + Spark 2.1
+(viewer only; simulators receive collision proxies or skip appearance-only splats). No planned
+simulator (Isaac Sim included) has adapter work scoped yet — that's the next step if this is worth
+pursuing project-wide.

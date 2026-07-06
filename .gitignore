@@ -79,3 +79,6 @@ web/public/world-layouts/hk-cargo-port-splat-only.world-layout.json
 # OS metadata
 .DS_Store
 **/.DS_Store
+
+# Local world registry state (written by backend/services/world_registry.py)
+.urdf-studio-world-registry.json
