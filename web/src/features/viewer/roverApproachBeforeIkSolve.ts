@@ -46,7 +46,6 @@ import {
   resolveAppliedRoverApproachMotion,
   resolveRoverApproachFinalLegTarget,
   resolveRoverApproachFrame,
-  resolveRoverApproachFootprintSupportRadiusM,
   resolveRoverApproachLockedGoalState,
   resolveRoverApproachNavigationDisplayStatus,
   resolveRoverApproachObjectContactGoalAsync,
@@ -77,12 +76,13 @@ import {
 } from "@/features/viewer/roverApproachRouteState";
 import {
   formatRoverApproachRuntimeCollisionDiagnostic,
-  resolveRoverApproachCollisionPathClearanceM,
   resolveRoverApproachRuntimeCollisionAppliedMotionFraction,
   resolveRoverApproachRuntimeCollisionAssessment,
   shouldFallbackToTurnInPlaceAfterRuntimeCollision,
   shouldTreatRuntimeCollisionAsReachedTarget,
 } from "@/features/viewer/roverApproachRuntimeCollision";
+import { resolveRoverApproachCollisionPathClearanceM } from "@/features/viewer/roverApproachCollisionClearance";
+import { resolveRoverApproachRetreatWaypoint } from "@/features/viewer/roverApproachRetreatWaypoint";
 
 export {
   resolveLockedRoverApproachRoutePreviewPoints,
@@ -95,12 +95,13 @@ export {
 } from "@/features/viewer/roverApproachRouteState";
 export {
   formatRoverApproachRuntimeCollisionDiagnostic,
-  resolveRoverApproachCollisionPathClearanceM,
   resolveRoverApproachRuntimeCollisionAppliedMotionFraction,
   resolveRoverApproachRuntimeCollisionAssessment,
   shouldFallbackToTurnInPlaceAfterRuntimeCollision,
   shouldTreatRuntimeCollisionAsReachedTarget,
 } from "@/features/viewer/roverApproachRuntimeCollision";
+export { resolveRoverApproachCollisionPathClearanceM } from "@/features/viewer/roverApproachCollisionClearance";
+export { resolveRoverApproachRetreatWaypoint } from "@/features/viewer/roverApproachRetreatWaypoint";
 
 const resolveActiveRoverApproachLegTarget = ({
   activeWaypointLeg,
@@ -383,119 +384,6 @@ const waitForApproachArmResetAfterLocomotion = async ({
     armResetFrameTimeMs = await nextAnimationFrameTimeMs();
   }
   return null;
-};
-
-const resolvePlanarDirectionOrFallback = ({
-  directionWorld,
-  upAxisWorld,
-  fallbackWorld,
-}: {
-  directionWorld: THREE.Vector3;
-  upAxisWorld: THREE.Vector3;
-  fallbackWorld: THREE.Vector3;
-}): THREE.Vector3 => {
-  const planarDirectionWorld = directionWorld
-    .clone()
-    .addScaledVector(upAxisWorld, -directionWorld.dot(upAxisWorld));
-  if (
-    planarDirectionWorld.lengthSq() <=
-    ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS.retreatDirectionLengthEpsilonSq
-  ) {
-    return fallbackWorld.clone();
-  }
-  return planarDirectionWorld.normalize();
-};
-
-export const resolveRoverApproachRetreatWaypoint = ({
-  basePositionWorld,
-  targetObjectId,
-  worldObjects,
-  upAxisWorld,
-  forwardWorld,
-  roverBaseRadiusM,
-  robotFootprint,
-}: {
-  basePositionWorld: THREE.Vector3;
-  targetObjectId: string;
-  worldObjects: readonly CreatedObject[];
-  upAxisWorld: THREE.Vector3;
-  forwardWorld: THREE.Vector3;
-  roverBaseRadiusM: number;
-  robotFootprint?: RoverApproachRobotFootprint;
-}): RoverApproachRetreatWaypoint | null => {
-  const fallbackRetreatDirectionWorld = resolvePlanarDirectionOrFallback({
-    directionWorld: forwardWorld.clone().multiplyScalar(-1),
-    upAxisWorld,
-    fallbackWorld: new THREE.Vector3(1, 0, 0),
-  });
-  let bestRetreatWaypoint: RoverApproachRetreatWaypoint | null = null;
-
-  for (const worldObject of worldObjects) {
-    if (worldObject.id === targetObjectId || worldObject.isHidden === true) {
-      continue;
-    }
-    const objectGeometry = resolveWorldObjectGeometry(worldObject);
-    const baseOffsetWorld = basePositionWorld.clone().sub(objectGeometry.position);
-    const retreatDirectionWorld = resolvePlanarDirectionOrFallback({
-      directionWorld: baseOffsetWorld,
-      upAxisWorld,
-      fallbackWorld: fallbackRetreatDirectionWorld,
-    });
-    const baseOffsetPlanarWorld = baseOffsetWorld
-      .clone()
-      .addScaledVector(upAxisWorld, -baseOffsetWorld.dot(upAxisWorld));
-    const resolvedTargetDirectionPlanarWorld =
-      baseOffsetPlanarWorld.lengthSq() <=
-      ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS.retreatDirectionLengthEpsilonSq
-        ? retreatDirectionWorld
-        : baseOffsetPlanarWorld;
-    const approachDistance = resolveRoverPlanarObjectApproachDistance({
-      object: {
-        type: resolveApproachObjectPrimitiveType(worldObject.type),
-        size: objectGeometry.size,
-        rotation: worldObject.rotation,
-      },
-      targetDirectionPlanarWorld: resolvedTargetDirectionPlanarWorld,
-    });
-    const robotSupportRadiusM = Math.max(
-      roverBaseRadiusM,
-      resolveRoverApproachFootprintSupportRadiusM({
-        robotFootprint,
-        forwardWorld,
-        upAxisWorld,
-        targetDirectionWorld: retreatDirectionWorld,
-      })
-    );
-    const requiredClearanceM =
-      approachDistance.supportRadiusM +
-      robotSupportRadiusM +
-      resolveRoverApproachCollisionPathClearanceM({ useCase: "retreat-overlap" });
-    const overlapDepthM =
-      requiredClearanceM - resolvedTargetDirectionPlanarWorld.length();
-    if (
-      overlapDepthM <=
-      ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS.retreatOverlapEpsilonM
-    ) {
-      continue;
-    }
-    const retreatDistanceM =
-      overlapDepthM + ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS.retreatExtraDistanceM;
-    const retreatWaypoint: RoverApproachRetreatWaypoint = {
-      waypointWorld: basePositionWorld
-        .clone()
-        .addScaledVector(retreatDirectionWorld, retreatDistanceM),
-      excludedObstacleId: worldObject.id,
-      retreatDistanceM,
-    };
-    if (
-      bestRetreatWaypoint === null ||
-      retreatWaypoint.retreatDistanceM > bestRetreatWaypoint.retreatDistanceM
-    ) {
-      bestRetreatWaypoint = retreatWaypoint;
-    }
-  }
-
-  return bestRetreatWaypoint;
 };
 
 export const resolveLockedRoverApproachTimeoutBudgetMs = ({

@@ -9,16 +9,8 @@ import {
   type RoverApproachStepPhase,
 } from "@/features/locomotion/approach";
 import { ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS } from "@/features/viewer/roverApproachBeforeIkSolveParams";
+import { resolveRoverApproachCollisionPathClearanceM } from "@/features/viewer/roverApproachCollisionClearance";
 import type { RoverApproachWaypointLeg } from "@/features/viewer/roverApproachRouteState";
-
-export const resolveRoverApproachCollisionPathClearanceM = ({
-  useCase,
-}: {
-  useCase: "retreat-overlap" | "runtime-stop";
-}): number =>
-  useCase === "runtime-stop"
-    ? ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS.runtimeCollisionStopClearanceM
-    : ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS.retreatCollisionPathClearanceM;
 
 const resolveRoverApproachRuntimeCollisionSampleCount = ({
   linearTravelM,
