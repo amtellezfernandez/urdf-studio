@@ -210,6 +210,7 @@ import {
 } from "@/features/locomotion/approach";
 import { isWheelLocomotionAllowed } from "@/features/viewer/wheelLocomotionGate";
 import { resolveApproachArmResetJointNames } from "@/features/viewer/approachArmReset";
+import { clampIkSolutionToJointLimits } from "@/features/viewer/ikJointSolution";
 import {
   resolveIkMotionSafetyAccelerationLimit,
   resolveIkMotionSafetyVelocityLimit,
@@ -2131,25 +2132,11 @@ export const Viewer3D = ({
   );
 
   const clampIkSolutionForApply = useCallback(
-    (solution: Record<string, number>) => {
-      if (!jointLimits || Object.keys(jointLimits).length === 0) {
-        return { solution, clampedJoints: [] as string[] };
-      }
-      const clamped: Record<string, number> = { ...solution };
-      const clampedJoints: string[] = [];
-      Object.entries(solution).forEach(([jointName, value]) => {
-        if (!Number.isFinite(value)) return;
-        const limits = getJointLimits(jointLimits, jointName);
-        if (!Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) {
-          return;
-        }
-        if (value < limits.lower || value > limits.upper) {
-          clamped[jointName] = Math.min(limits.upper, Math.max(limits.lower, value));
-          clampedJoints.push(jointName);
-        }
-      });
-      return { solution: clamped, clampedJoints };
-    },
+    (solution: Record<string, number>) =>
+      clampIkSolutionToJointLimits({
+        solution,
+        jointLimits,
+      }),
     [jointLimits]
   );
   const cancelIkApplyAnimation = useCallback(() => {
