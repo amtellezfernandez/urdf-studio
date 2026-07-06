@@ -190,16 +190,6 @@ export const buildWorldSceneDocumentFromState = async ({
   });
 };
 
-export const downloadWorldScenePackageManifest = async (
-  manifest: WorldScenePackageManifest,
-  downloadJsonDocument: (payload: unknown, filename: string) => void
-) => {
-  const { toWorldScenePackageDownloadName, toWorldSceneRegistryEnvelope } =
-    await loadWorldScenePackageBuilderModule();
-  const filename = toWorldScenePackageDownloadName(manifest.package_id, manifest.version);
-  downloadJsonDocument(toWorldSceneRegistryEnvelope(manifest), filename);
-};
-
 export const createWorldRolloutCheckerProfile = ({
   resolvedRobotName,
   params,
@@ -513,16 +503,6 @@ const assertImportableWorldScenePackage = async (
     throw new Error(`${invalidShapeMessage}: ${combinedErrors.join("; ")}`);
   }
   return manifest;
-};
-
-export const parseWorldSceneManifestText = async (raw: string) => {
-  const { readWorldSceneManifestFromUnknown } =
-    await loadWorldSceneManifestModule();
-  const manifest = readWorldSceneManifestFromUnknown(JSON.parse(raw));
-  if (!manifest) {
-    throw new Error("Invalid world package: unsupported manifest shape");
-  }
-  return assertImportableWorldScenePackage(manifest, "Invalid world package");
 };
 
 export const parseWorldSceneLayerText = async (raw: string) => {

@@ -4,10 +4,8 @@ import {
   buildWorldRolloutConfigFromDraft,
   createWorldSceneLayerExportDocument,
   createWorldRolloutCheckerProfile,
-  downloadWorldScenePackageManifest,
   loadWorldScenePackageFromImportParams,
   parseWorldSceneLayerText,
-  parseWorldSceneManifestText,
   readWorldSceneLayerFromUrl,
   readWorldSceneManifestPayload,
   resolveWorldRolloutImportPayload,
@@ -69,36 +67,32 @@ const createManifestPayload = (
 
 describe("worldSceneRuntime world package import", () => {
   it("accepts static world packages from text", async () => {
-    const manifest = await parseWorldSceneManifestText(
-      JSON.stringify(createManifestPayload())
-    );
+    const manifest = await readWorldSceneManifestPayload(createManifestPayload());
     expect(manifest.package_id).toBe("demo-scene");
     expect(manifest.world_snapshot.objects[0]?.rotation_rpy_rad).toEqual([0.1, 0.2, 0.3]);
   });
 
   it("accepts thin world registry envelopes from text", async () => {
-    const manifest = await parseWorldSceneManifestText(
-      JSON.stringify({
-        package_id: "demo-scene",
-        version: "0.1.0",
-        provenance: {
-          owner: "scene-team",
+    const manifest = await readWorldSceneManifestPayload({
+      package_id: "demo-scene",
+      version: "0.1.0",
+      provenance: {
+        owner: "scene-team",
+      },
+      artifacts: [],
+      world: {
+        name: "Demo Scene",
+        urdf_xml: "<robot name='demo'/>",
+        joint_positions: {},
+        cameras: [],
+        objects: createManifestPayload().world_snapshot.objects,
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+        environment: {
+          frame_convention: "ros-rep-103",
         },
-        artifacts: [],
-        world: {
-          name: "Demo Scene",
-          urdf_xml: "<robot name='demo'/>",
-          joint_positions: {},
-          cameras: [],
-          objects: createManifestPayload().world_snapshot.objects,
-          scenario_time_ms: 0,
-          scenario_duration_ms: 0,
-          environment: {
-            frame_convention: "ros-rep-103",
-          },
-        },
-      })
-    );
+      },
+    });
     expect(manifest.package_id).toBe("demo-scene");
     expect(manifest.title).toBe("Demo Scene");
     expect(manifest.interface.frame_convention).toBe("ros-rep-103");
@@ -114,7 +108,7 @@ describe("worldSceneRuntime world package import", () => {
       },
     ];
 
-    const manifest = await parseWorldSceneManifestText(JSON.stringify(payload));
+    const manifest = await readWorldSceneManifestPayload(payload);
 
     expect(manifest.artifacts[0]?.kind).toBe("world_snapshot");
   });
@@ -129,20 +123,18 @@ describe("worldSceneRuntime world package import", () => {
       },
     ];
 
-    await expect(parseWorldSceneManifestText(JSON.stringify(payload))).rejects.toThrow(
+    await expect(readWorldSceneManifestPayload(payload)).rejects.toThrow(
       "artifacts[world_snapshot:0].digest_sha256 does not match world_snapshot"
     );
   });
 
   it("rejects timed world packages from text", async () => {
     await expect(
-      parseWorldSceneManifestText(
-        JSON.stringify(
-          createManifestPayload({
-            scenario_time_ms: 100,
-            scenario_duration_ms: 1000,
-          })
-        )
+      readWorldSceneManifestPayload(
+        createManifestPayload({
+          scenario_time_ms: 100,
+          scenario_duration_ms: 1000,
+        })
       )
     ).rejects.toThrow(
       "Invalid world package: Non-static world layouts are not supported yet. scenario_time_ms and scenario_duration_ms must both be 0."
@@ -164,13 +156,11 @@ describe("worldSceneRuntime world package import", () => {
 
   it("rejects fractional world package timing with validation detail", async () => {
     await expect(
-      parseWorldSceneManifestText(
-        JSON.stringify(
-          createManifestPayload({
-            scenario_time_ms: 0.5,
-            scenario_duration_ms: 1.5,
-          })
-        )
+      readWorldSceneManifestPayload(
+        createManifestPayload({
+          scenario_time_ms: 0.5,
+          scenario_duration_ms: 1.5,
+        })
       )
     ).rejects.toThrow("world_snapshot.scenario_time_ms must be an integer");
   });
@@ -319,37 +309,6 @@ describe("worldSceneRuntime world package import", () => {
         version: "",
       })
     ).rejects.toThrow("Import link did not contain a valid world package manifest.");
-  });
-
-  it("downloads world packages as thin registry envelopes", async () => {
-    const manifestPayload = createManifestPayload();
-    const downloadJsonDocument = vi.fn();
-
-    await downloadWorldScenePackageManifest(manifestPayload, downloadJsonDocument);
-
-    expect(downloadJsonDocument).toHaveBeenCalledOnce();
-    const [payload, filename] = downloadJsonDocument.mock.calls[0] ?? [];
-    expect(filename).toBe("demo-scene-0.1.0.world-package.json");
-    expect(payload).toMatchObject({
-      package_id: "demo-scene",
-      version: "0.1.0",
-      provenance: {},
-      world: {
-        name: "Demo Scene",
-        urdf_xml: manifestPayload.world_snapshot.urdf_xml,
-        joint_positions: manifestPayload.world_snapshot.joint_positions,
-        objects: manifestPayload.world_snapshot.objects,
-        scenario_time_ms: 0,
-        scenario_duration_ms: 0,
-        environment: {
-          frame_convention: "ros-rep-103",
-        },
-      },
-    });
-    expect(payload).not.toHaveProperty("created_at");
-    expect(payload).not.toHaveProperty("runtime_targets");
-    expect(payload).not.toHaveProperty("interface");
-    expect(payload).not.toHaveProperty("security");
   });
 });
 
