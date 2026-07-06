@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/shared/lib/utils";
 import { ChevronUp, ChevronDown } from "lucide-react";
+import { clampNumberToOptionalBounds } from "@/shared/lib/numeric";
 
 interface NumberInputProps extends Omit<React.ComponentProps<"input">, "type" | "onChange"> {
   value?: number;
@@ -51,10 +52,8 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         return;
       }
       const numValue = parseFloat(localValue);
-      if (!isNaN(numValue)) {
-        let clampedValue = numValue;
-        if (min !== undefined) clampedValue = Math.max(min, clampedValue);
-        if (max !== undefined) clampedValue = Math.min(max, clampedValue);
+      if (!Number.isNaN(numValue)) {
+        const clampedValue = clampNumberToOptionalBounds(numValue, { min, max });
         onValueChange(clampedValue);
         setLocalValue(String(clampedValue));
       } else {
@@ -74,10 +73,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       if (disabled) return;
       const baseValue =
         value === undefined || Number.isNaN(value) ? 0 : value;
-      const newValue = baseValue + step;
-      let clampedValue = newValue;
-      if (min !== undefined) clampedValue = Math.max(min, clampedValue);
-      if (max !== undefined) clampedValue = Math.min(max, clampedValue);
+      const clampedValue = clampNumberToOptionalBounds(baseValue + step, { min, max });
       onValueChange(clampedValue);
     };
 
@@ -85,10 +81,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       if (disabled) return;
       const baseValue =
         value === undefined || Number.isNaN(value) ? 0 : value;
-      const newValue = baseValue - step;
-      let clampedValue = newValue;
-      if (min !== undefined) clampedValue = Math.max(min, clampedValue);
-      if (max !== undefined) clampedValue = Math.min(max, clampedValue);
+      const clampedValue = clampNumberToOptionalBounds(baseValue - step, { min, max });
       onValueChange(clampedValue);
     };
 

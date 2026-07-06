@@ -1,5 +1,6 @@
 import * as React from "react";
 import { hexToRgba } from "@/shared/lib/color";
+import { clampNumber } from "@/shared/lib/numeric";
 import { cn } from "@/shared/lib/utils";
 import jointColors from "@/shared/joint_colors.json";
 
@@ -37,7 +38,7 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
     }, [value, isDragging]);
 
     const percentage = ((localValue - min) / (max - min)) * 100;
-    const clampedPercentage = Math.max(0, Math.min(100, percentage));
+    const clampedPercentage = clampNumber(percentage, 0, 100);
 
     // Get color for joint type (memoized)
     const jointColor = React.useMemo(() => {
@@ -74,10 +75,10 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
       
       const rect = sliderRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const percentage = clampNumber((x / rect.width) * 100, 0, 100);
       const newValue = min + (percentage / 100) * (max - min);
       const steppedValue = Math.round(newValue / step) * step;
-      const clampedValue = Math.max(min, Math.min(max, steppedValue));
+      const clampedValue = clampNumber(steppedValue, min, max);
       
       // Update local value immediately for instant visual feedback (smooth UI)
       setLocalValue(clampedValue);
