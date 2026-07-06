@@ -17,7 +17,6 @@ import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
 import {
   localDirectionFromWorld,
-  normalizeDirection,
   projectDirectionOntoPlane,
   resolveForwardWorldFromWheelAxes,
   worldDirectionFromLocal,
@@ -198,7 +197,6 @@ import {
   getPreferredStudioDriveWheels,
   getStudioWheelTravelForBodyMotion,
   resolveFallbackWheelRadiusMeters,
-  resolveProjectedRobotSpanMeters,
   resolveSafeMotionDimension,
   resolveStudioWheelMarkerAnchorObject,
   resolveWheelCenterWorldFromJointGeometry,
@@ -211,11 +209,9 @@ import {
 import {
   ROVER_APPROACH_CONFIG,
   ROVER_APPROACH_DETOUR_CONFIG,
-  ROVER_APPROACH_NAVIGATION_CONFIG,
   computeSignedPlanarYawErrorRad,
   resolveRoverApproachFootprintSupportRadiusM,
   serializeWorldObjectObstacleSource,
-  type RoverApproachRobotFootprint,
 } from "@/features/locomotion/approach";
 import { isWheelLocomotionAllowed } from "@/features/viewer/wheelLocomotionGate";
 import { resolveApproachArmResetJointNames } from "@/features/viewer/approachArmReset";
@@ -256,6 +252,13 @@ import {
 import {
   buildViewerRenderPerformancePolicy,
 } from "@/features/viewer/viewerPerformancePolicy";
+import {
+  areSortedStringListsEqual,
+  hexToThreeJsHex,
+  isEditableKeyboardTarget,
+  isFinitePositiveMotionDimension,
+  resolveRoverApproachRobotFootprint,
+} from "@/features/viewer/viewer3dHelpers";
 export interface Viewer3DProps {
   workspaceMode?: WorkspaceMode;
   assemblyPrimaryModel?: { id: string; name: string };
@@ -272,8 +275,8 @@ export interface Viewer3DProps {
   jointAxes?: JointAxisMap;
   onJointSelect?: (jointName: string | null) => void;
   onLinkSelect?: (linkName: string | null) => void;
-   onJointHover?: (jointName: string | null) => void;
-   onLinkHover?: (linkName: string | null) => void;
+  onJointHover?: (jointName: string | null) => void;
+  onLinkHover?: (linkName: string | null) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onObjectSelect?: (objectId: string, object: CreatedObject) => void;
   onRobotJointsLoaded?: (
@@ -315,19 +318,6 @@ export interface Viewer3DProps {
 
 const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
 const IK_APPLY_INPUT_SOURCE = "ik_apply";
-
-const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  const tagName = target.tagName.toLowerCase();
-  return (
-    tagName === "input" ||
-    tagName === "textarea" ||
-    tagName === "select" ||
-    target.isContentEditable
-  );
-};
 
 const URDFModel = ({
   file,
@@ -1893,52 +1883,6 @@ const URDFModel = ({
     </group>
   );
 };
-
-// Helper function to convert hex color string to Three.js hex number
-const hexToThreeJsHex = (hex: string): number => {
-  // Remove # if present
-  const cleanHex = hex.replace("#", "");
-  return parseInt(cleanHex, 16);
-};
-
-const isFinitePositiveMotionDimension = (value: number | null | undefined): value is number =>
-  typeof value === "number" && Number.isFinite(value) && value > Number.EPSILON;
-
-const resolveRoverApproachRobotFootprint = ({
-  robot,
-  wheelModel,
-  upAxisWorld,
-  forwardWorld,
-}: {
-  robot: URDFRobot;
-  wheelModel: StudioWheelDriveModel;
-  upAxisWorld: THREE.Vector3;
-  forwardWorld: THREE.Vector3;
-}): RoverApproachRobotFootprint => {
-  const safeTrackWidthM = resolveSafeMotionDimension(wheelModel.trackWidth);
-  const lateralWorld = new THREE.Vector3().crossVectors(upAxisWorld, forwardWorld);
-  const normalizedLateralWorld = normalizeDirection(
-    lateralWorld,
-    new THREE.Vector3(0, 1, 0)
-  );
-  const projectedLengthM =
-    resolveProjectedRobotSpanMeters(robot, forwardWorld) ??
-    safeTrackWidthM *
-      ROVER_APPROACH_NAVIGATION_CONFIG.robotFootprintLengthFallbackTrackWidthRatio;
-  const projectedWidthM = Math.max(
-    safeTrackWidthM,
-    resolveProjectedRobotSpanMeters(robot, normalizedLateralWorld) ?? 0
-  );
-  return {
-    halfLengthM: projectedLengthM * 0.5,
-    halfWidthM: projectedWidthM * 0.5,
-  };
-};
-
-const areSortedStringListsEqual = (
-  lhs: readonly string[],
-  rhs: readonly string[]
-): boolean => lhs.length === rhs.length && lhs.every((value, index) => value === rhs[index]);
 
 const transformContract = getTransformContract();
 assertTransformContract(transformContract);
