@@ -20,6 +20,7 @@ import type { UrdfViewMode } from "@/shared/types/feature";
 import type { InertialRepairMode } from "@/features/urdf/inertia/inertialSynthesis";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 import { generatePhysicsDraftViaBackend } from "@/features/urdf/inertia/robotMasteringApi";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type UseSimulationPrepPhysicsActionsOptions = {
   externalActionInFlight: boolean;
@@ -225,7 +226,7 @@ export const useSimulationPrepPhysicsActions = ({
         });
         toast.success(`Generated inertial draft for ${synthesizedNames.join(", ")}.`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to generate an inertial draft.");
+        toast.error(readUnknownErrorMessage(error, "Failed to generate an inertial draft."));
       }
     },
     [generateAndStagePhysicsDraft]
@@ -302,7 +303,7 @@ export const useSimulationPrepPhysicsActions = ({
         );
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : buildUnknownPhysicsActionErrorMessage(request.key)
+          readUnknownErrorMessage(error, buildUnknownPhysicsActionErrorMessage(request.key))
         );
       }
     },

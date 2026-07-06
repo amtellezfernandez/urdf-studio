@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { loadThumbnailGitHubRobot } from "@/app/pages/index/thumbnailBootstrap";
 import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderState";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type ThumbnailBootstrapParams = {
   hasLoadedFiles: boolean;
@@ -52,7 +53,7 @@ export const useThumbnailBootstrap = ({
 
     let cancelled = false;
     const reportThumbnailError = (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = readUnknownErrorMessage(error, String(error));
       console.error("[thumbnail] Failed to load robot:", error);
       if (!cancelled) {
         setLoadError(message);

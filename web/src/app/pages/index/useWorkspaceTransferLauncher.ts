@@ -15,6 +15,7 @@ import {
 } from "@/features/world-share/workspaceTransferAbort";
 import type { WorkspaceTransferTargetId } from "@/features/world-share/workspaceTransferParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { WORKSPACE_TRANSFER_LAUNCHER_PARAMS } from "@/app/pages/index/workspaceTransferLauncherParams";
 import {
   assertWorkspacePackageCarriesSceneObjects,
@@ -118,7 +119,7 @@ export const useWorkspaceTransferLauncher = ({
       .catch((error) => {
         if (cancelled) return;
         setTargetDescriptors([]);
-        toast.error(error instanceof Error ? error.message : "Workspace targets unavailable.");
+        toast.error(readUnknownErrorMessage(error, "Workspace targets unavailable."));
       });
     return () => {
       cancelled = true;
@@ -144,7 +145,7 @@ export const useWorkspaceTransferLauncher = ({
             {
               targetId: descriptor.targetId,
               available: false,
-              status: error instanceof Error ? error.message : "target status unavailable",
+              status: readUnknownErrorMessage(error, "target status unavailable"),
               dependencies: [],
             },
           ] as const;
@@ -242,7 +243,7 @@ export const useWorkspaceTransferLauncher = ({
         if (controller.signal.aborted || isWorkspaceTransferAbortError(error)) {
           return;
         }
-        toast.error(error instanceof Error ? error.message : `Failed to open ${descriptor.label}`);
+        toast.error(readUnknownErrorMessage(error, `Failed to open ${descriptor.label}`));
       } finally {
         if (activeLaunchRef.current?.controller === controller) {
           activeLaunchRef.current = null;

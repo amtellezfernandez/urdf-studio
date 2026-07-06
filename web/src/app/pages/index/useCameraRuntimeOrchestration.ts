@@ -8,6 +8,7 @@ import {
 import { toast } from "sonner";
 import * as THREE from "three";
 import { useCameraAutoGeneration } from "@/features/camera";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { WORLD_SCENARIO_DEFAULT_SEED, WORLD_SCENARIO_SOURCES } from "@/features/world/worldScenarioParams";
 import { buildWorldScenarioTimeline } from "@/features/world/worldScenarioEngine";
@@ -319,7 +320,7 @@ export const useCameraRuntimeOrchestration = ({
       setWorldLayoutImportDialogOpen(false);
       setWorldLayoutImportUrlDraft("");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to import demo world layout");
+      toast.error(readUnknownErrorMessage(error, "Failed to import demo world layout"));
     } finally {
       setIsImportingWorldLayout(false);
     }

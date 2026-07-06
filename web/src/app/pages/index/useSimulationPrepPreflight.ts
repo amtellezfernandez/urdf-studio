@@ -15,6 +15,7 @@ import {
   generatePhysicsPreflightViaBackend,
 } from "@/features/urdf/inertia/robotMasteringApi";
 import { ROBOT_MASTERING_PREFLIGHT_DEBOUNCE_MS } from "@/features/urdf/inertia/robotMasteringApiParams";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type SimulationPrepPreflightLoadOptions = {
   force?: boolean;
@@ -63,7 +64,7 @@ export type UseSimulationPrepPreflightResult = {
 };
 
 const defaultErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Failed to load backend physics audit.";
+  readUnknownErrorMessage(error, "Failed to load backend physics audit.");
 
 export const useSimulationPrepPreflight = ({
   autoLoad = true,

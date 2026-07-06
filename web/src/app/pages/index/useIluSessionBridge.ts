@@ -9,6 +9,7 @@ import {
   type IluSessionSnapshot,
 } from "@/features/urdf/loader/iluSessionApi";
 import type { GitHubSource } from "@/shared/store/useGitHubSourceStore";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   getIluSessionLoadTarget,
   getIluSessionSourceKey,
@@ -230,8 +231,7 @@ export const useIluSessionBridge = ({
         if (cancelled) {
           return;
         }
-        const detail =
-          error instanceof Error ? error.message : "Failed to attach the ilu session.";
+        const detail = readUnknownErrorMessage(error, "Failed to attach the ilu session.");
         toast.error(detail);
       } finally {
         if (!cancelled) {
@@ -270,8 +270,10 @@ export const useIluSessionBridge = ({
         .catch((error: unknown) => {
           console.warn("Failed to sync attached ilu session", error);
           if (!hasShownIluSessionSaveFailureRef.current) {
-            const detail =
-              error instanceof Error ? error.message : "Failed to sync the attached ilu session.";
+            const detail = readUnknownErrorMessage(
+              error,
+              "Failed to sync the attached ilu session."
+            );
             toast.error(detail);
             hasShownIluSessionSaveFailureRef.current = true;
           }

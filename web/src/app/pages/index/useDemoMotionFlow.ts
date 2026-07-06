@@ -3,6 +3,7 @@ import { toast } from "sonner";
 
 import { DEMO_AUTOLOAD, DEMO_LOCAL_MANIFEST_URL, DEMO_MANIFEST_URL, DEMO_MODE } from "@/shared/config/demo";
 import { getBrowserFileRelativePath } from "@/shared/lib/browserFilePaths";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   loadDemoFileListFromManifestUrls,
   loadDemoFileListProgressivelyFromManifestUrls,
@@ -158,8 +159,7 @@ export const useDemoMotionFlow = ({
           });
         })
         .catch((error) => {
-          const message =
-            error instanceof Error ? error.message : "Failed to finish loading demo assets";
+          const message = readUnknownErrorMessage(error, "Failed to finish loading demo assets");
           toast.error(message);
         });
       return;
@@ -264,7 +264,7 @@ export const useDemoMotionFlow = ({
     if (!hasLoadedFiles) {
       setPendingDemoMotion(true);
       loadDemoBootstrapRobot().catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to load demo robot";
+        const message = readUnknownErrorMessage(error, "Failed to load demo robot");
         toast.error(message);
       });
       return;
@@ -293,7 +293,7 @@ export const useDemoMotionFlow = ({
     if (!DEMO_MODE || !DEMO_AUTOLOAD || demoAutoLoadedRef.current || hasLoadedFiles) return;
     demoAutoLoadedRef.current = true;
     loadDemoBootstrapRobot().catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to load demo robot";
+      const message = readUnknownErrorMessage(error, "Failed to load demo robot");
       toast.error(message);
     });
   }, [hasLoadedFiles, loadDemoBootstrapRobot]);

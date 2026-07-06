@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { describeCollaborationLinkAccess } from "@/features/collaboration/collaborationTransport";
 import type { CollaborationLinkAccess } from "@/features/collaboration/collaborationTypes";
 import type { CollaborationInviteAction } from "@/features/layout/page/top-nav/types";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type CollaborationToastId = ReturnType<typeof toast.loading>;
 
@@ -91,7 +92,7 @@ export const useCollaborationInviteActions = ({
           toast.success(successMessage, { id: toastId });
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : errorMessage, {
+        toast.error(readUnknownErrorMessage(error, errorMessage), {
           id: toastId,
         });
       } finally {

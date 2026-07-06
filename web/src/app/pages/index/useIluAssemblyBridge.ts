@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { loadDemoFileListFromManifestUrl } from "@/app/pages/index/demoBootstrap";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   fetchIluAssemblyManifest,
   getIluAssemblyManifestUrl,
@@ -117,8 +118,7 @@ export const useIluAssemblyBridge = ({
         if (cancelled) {
           return;
         }
-        const detail =
-          error instanceof Error ? error.message : "Failed to attach the ilu assembly.";
+        const detail = readUnknownErrorMessage(error, "Failed to attach the ilu assembly.");
         toast.error(detail);
       } finally {
         if (!cancelled) {

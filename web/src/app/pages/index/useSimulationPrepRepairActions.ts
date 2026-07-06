@@ -34,6 +34,7 @@ import {
   REPEATED_INERTIA_MANUAL_FIX_LOW_CONFIDENCE_ERROR,
   REPEATED_INERTIA_MANUAL_FIX_POSTWRITE_MISMATCH_ERROR,
 } from "@/features/urdf/inertia/repeatedInertiaManualFix";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { MeshFiles } from "@/shared/types/feature";
 
@@ -235,7 +236,7 @@ export const useSimulationPrepRepairActions = ({
           },
         }));
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to fix the repeated mesh group.");
+        toast.error(readUnknownErrorMessage(error, "Failed to fix the repeated mesh group."));
       } finally {
         setRepeatedInertiaGroupAction(null);
       }
@@ -308,9 +309,7 @@ export const useSimulationPrepRepairActions = ({
           successMessage: result.summary,
         });
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to auto-align the symmetry branch."
-        );
+        toast.error(readUnknownErrorMessage(error, "Failed to auto-align the symmetry branch."));
       } finally {
         setRepeatedInertiaSymmetryActingChainKey(null);
         setRepeatedInertiaSymmetryActingProgress(null);
@@ -390,8 +389,10 @@ export const useSimulationPrepRepairActions = ({
           successMessage: result.summary,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to auto-align the mirror selection.";
+        const message = readUnknownErrorMessage(
+          error,
+          "Failed to auto-align the mirror selection."
+        );
         setRobotMirrorOutcome({
           tone: "warning",
           message,

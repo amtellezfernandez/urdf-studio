@@ -18,6 +18,7 @@ import { applySubstitutionSubtree } from "@/features/assembly/substitution/subst
 import type { AssemblySubstitutionSession } from "@/features/assembly/workspace/assemblyWorkspaceTypes";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
 import type { WorkspaceMode } from "@/features/workspace/types";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { MeshFiles } from "@/shared/types/feature";
 
 type LoadUrdfText = (content: string, options?: LoadUrdfTextOptions) => void;
@@ -94,7 +95,7 @@ export const useAssemblyActions = ({
         `Exported assembly URDF (${models.length} robot${models.length > 1 ? "s" : ""})`
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export assembly URDF");
+      toast.error(readUnknownErrorMessage(error, "Failed to export assembly URDF"));
     }
   }, [
     activeUrdfPath,
@@ -160,7 +161,7 @@ export const useAssemblyActions = ({
           `Replaced ${hostRootLink} on ${substitutionSession.hostRobotName} with ${replacementRootLink} from ${substitutionSession.replacementRobotName}.`
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to apply substitution.");
+        toast.error(readUnknownErrorMessage(error, "Failed to apply substitution."));
       }
     },
     [
