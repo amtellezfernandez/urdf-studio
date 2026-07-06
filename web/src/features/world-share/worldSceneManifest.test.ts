@@ -11,11 +11,16 @@ import {
   createStaticWorldSceneLayerSnapshot,
   isWorldSceneManifest,
   parseStaticWorldSceneLayerSnapshot,
+  readWorldSceneRegistryEnvelopeFromUnknown,
   readWorldSceneLayerFromUnknown,
+  validateLocalWorldSceneRegistryEnvelope,
   validateLocalWorldSceneManifest,
   validateWorldSceneLayerSnapshot,
 } from "@/features/world-share/worldSceneManifest";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
+} from "@/features/world-share/worldScenePackageTypes";
 
 const createWorldLayoutObject = () => ({
   id: "desk-cube",
@@ -102,6 +107,49 @@ describe("worldSceneManifest static scene validation", () => {
     const errors = validateLocalWorldSceneManifest(createManifest());
     expect(errors).toEqual([]);
     expect(isWorldSceneManifest(createManifest())).toBe(true);
+  });
+
+  it("normalizes legacy manifests to thin world registry envelopes", () => {
+    const envelope = readWorldSceneRegistryEnvelopeFromUnknown(createManifest());
+
+    expect(envelope).toEqual({
+      package_id: "demo-scene",
+      version: "0.1.0",
+      provenance: {},
+      artifacts: [],
+      world: {
+        name: "Demo Scene",
+        urdf_xml: "<robot name='demo'/>",
+        joint_positions: {},
+        cameras: [],
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+        environment: {
+          frame_convention: "ros-rep-103",
+        },
+      },
+    } satisfies WorldSceneRegistryEnvelope);
+  });
+
+  it("validates thin world registry envelopes without manifest-only fields", () => {
+    const errors = validateLocalWorldSceneRegistryEnvelope({
+      package_id: "demo-scene",
+      version: "0.1.0",
+      provenance: {},
+      artifacts: [],
+      world: {
+        name: "Demo Scene",
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+        environment: {
+          frame_convention: "ros-rep-103",
+        },
+      },
+    });
+
+    expect(errors).toEqual([]);
   });
 
   it("rejects static scene snapshots when time is not zero", () => {

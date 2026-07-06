@@ -12,7 +12,10 @@ import {
   resolveWorldRolloutImportPayload,
 } from "@/app/pages/index/worldSceneRuntime";
 import { computeWorldSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
+} from "@/features/world-share/worldScenePackageTypes";
 
 const TEST_ROLLOUT_FIXTURE = {
   batchSize: 4,
@@ -70,7 +73,7 @@ describe("worldSceneRuntime world package import", () => {
   it("accepts static world packages from text", async () => {
     const manifest = await readWorldSceneManifestPayload(createManifestPayload());
     expect(manifest.package_id).toBe("demo-scene");
-    expect(manifest.world_snapshot.objects[0]?.rotation_rpy_rad).toEqual([0.1, 0.2, 0.3]);
+    expect(manifest.world.objects[0]?.rotation_rpy_rad).toEqual([0.1, 0.2, 0.3]);
   });
 
   it("accepts thin world registry envelopes from text", async () => {
@@ -95,8 +98,8 @@ describe("worldSceneRuntime world package import", () => {
       },
     });
     expect(manifest.package_id).toBe("demo-scene");
-    expect(manifest.title).toBe("Demo Scene");
-    expect(manifest.interface.frame_convention).toBe("ros-rep-103");
+    expect(manifest.world.name).toBe("Demo Scene");
+    expect(manifest.world.environment?.frame_convention).toBe("ros-rep-103");
   });
 
   it("accepts static world packages with matching world snapshot digest artifacts", async () => {
@@ -163,7 +166,7 @@ describe("worldSceneRuntime world package import", () => {
           scenario_duration_ms: 1.5,
         })
       )
-    ).rejects.toThrow("world_snapshot.scenario_time_ms must be an integer");
+    ).rejects.toThrow("world.scenario_time_ms must be an integer");
   });
 
   it("validates thin world registry envelopes locally", async () => {
@@ -263,7 +266,24 @@ describe("worldSceneRuntime world package import", () => {
       }
     );
 
-    expect(manifest).toStrictEqual(manifestPayload);
+    expect(manifest).toEqual({
+      package_id: manifestPayload.package_id,
+      version: manifestPayload.version,
+      provenance: manifestPayload.provenance,
+      artifacts: manifestPayload.artifacts,
+      world: {
+        name: manifestPayload.title,
+        urdf_xml: manifestPayload.world_snapshot.urdf_xml,
+        joint_positions: manifestPayload.world_snapshot.joint_positions,
+        cameras: manifestPayload.world_snapshot.cameras,
+        objects: manifestPayload.world_snapshot.objects,
+        scenario_time_ms: manifestPayload.world_snapshot.scenario_time_ms,
+        scenario_duration_ms: manifestPayload.world_snapshot.scenario_duration_ms,
+        environment: {
+          frame_convention: manifestPayload.interface.frame_convention,
+        },
+      },
+    } satisfies WorldSceneRegistryEnvelope);
   });
 
   it("loads thin world envelopes from registry package ids and versions", async () => {
@@ -303,8 +323,8 @@ describe("worldSceneRuntime world package import", () => {
     );
 
     expect(manifest.package_id).toBe("demo-scene");
-    expect(manifest.title).toBe("Demo Scene");
-    expect(manifest.interface.frame_convention).toBe("ros-rep-103");
+    expect(manifest.world.name).toBe("Demo Scene");
+    expect(manifest.world.environment?.frame_convention).toBe("ros-rep-103");
   });
 
   it("reports unavailable import URL responses", async () => {

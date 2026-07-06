@@ -377,28 +377,28 @@ export const validateWorldScenePackageLocally = async (
   manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
 ) => {
   const [
-    { readWorldSceneManifestFromUnknown, validateLocalWorldSceneManifest },
+    { readWorldSceneRegistryEnvelopeFromUnknown, validateLocalWorldSceneRegistryEnvelope },
     { computeWorldSnapshotDigest },
   ] = await Promise.all([
     loadWorldSceneManifestModule(),
     loadWorldScenePackageBuilderModule(),
   ]);
-  const parsedManifest = readWorldSceneManifestFromUnknown(manifest);
-  if (!parsedManifest) {
+  const parsedEnvelope = readWorldSceneRegistryEnvelopeFromUnknown(manifest);
+  if (!parsedEnvelope) {
     return {
       combinedErrors: ["World package payload is not a valid world scene document or registry envelope."],
       modeLabel: "world layout",
     };
   }
-  const localErrors = validateLocalWorldSceneManifest(parsedManifest);
+  const localErrors = validateLocalWorldSceneRegistryEnvelope(parsedEnvelope);
   const artifactErrors: string[] = [];
-  const worldSnapshotArtifacts = Array.isArray(parsedManifest.artifacts)
-    ? parsedManifest.artifacts.filter(
+  const worldSnapshotArtifacts = Array.isArray(parsedEnvelope.artifacts)
+    ? parsedEnvelope.artifacts.filter(
         (artifact) => isWorldSnapshotArtifact(artifact) && artifact.kind === "world_snapshot"
       )
     : [];
-  if (Array.isArray(parsedManifest.artifacts)) {
-    parsedManifest.artifacts.forEach((artifact, index) => {
+  if (Array.isArray(parsedEnvelope.artifacts)) {
+    parsedEnvelope.artifacts.forEach((artifact, index) => {
       if (
         typeof artifact === "object" &&
         artifact !== null &&
@@ -413,7 +413,14 @@ export const validateWorldScenePackageLocally = async (
     });
   }
   if (worldSnapshotArtifacts.length > 0 && localErrors.length === 0) {
-    const actualDigest = await computeWorldSnapshotDigest(parsedManifest.world_snapshot);
+    const actualDigest = await computeWorldSnapshotDigest({
+      urdf_xml: parsedEnvelope.world.urdf_xml ?? "<robot name='world'/>",
+      joint_positions: parsedEnvelope.world.joint_positions ?? {},
+      cameras: parsedEnvelope.world.cameras ?? [],
+      objects: parsedEnvelope.world.objects,
+      scenario_time_ms: parsedEnvelope.world.scenario_time_ms,
+      scenario_duration_ms: parsedEnvelope.world.scenario_duration_ms,
+    });
     worldSnapshotArtifacts.forEach((artifact, index) => {
       if (artifact.digest_sha256.toLowerCase() !== actualDigest) {
         artifactErrors.push(
@@ -426,7 +433,7 @@ export const validateWorldScenePackageLocally = async (
     ...localErrors,
     ...artifactErrors,
   ]);
-  const isStaticScene = parsedManifest.world_snapshot.scenario_duration_ms === 0;
+  const isStaticScene = parsedEnvelope.world.scenario_duration_ms === 0;
   return {
     combinedErrors,
     modeLabel: isStaticScene ? "static world layout" : "timed world layout",
@@ -495,9 +502,9 @@ export const publishWorldScenePackage = async (
 };
 
 const assertImportableWorldScenePackage = async (
-  manifest: WorldScenePackageManifest,
+  manifest: WorldSceneRegistryEnvelope,
   invalidShapeMessage: string
-) => {
+): Promise<WorldSceneRegistryEnvelope> => {
   const { combinedErrors } = await validateWorldScenePackageLocally(manifest);
   if (combinedErrors.length > 0) {
     throw new Error(`${invalidShapeMessage}: ${combinedErrors.join("; ")}`);
@@ -525,10 +532,12 @@ export const readWorldSceneLayerPayload = async (payload: unknown) => {
   return snapshot;
 };
 
-export const readWorldSceneManifestPayload = async (payload: unknown) => {
-  const { readWorldSceneManifestFromUnknown } =
+export const readWorldSceneManifestPayload = async (
+  payload: unknown
+): Promise<WorldSceneRegistryEnvelope> => {
+  const { readWorldSceneRegistryEnvelopeFromUnknown } =
     await loadWorldSceneManifestModule();
-  const manifest = readWorldSceneManifestFromUnknown(payload);
+  const manifest = readWorldSceneRegistryEnvelopeFromUnknown(payload);
   if (!manifest) {
     throw new Error("Import link did not contain a valid world package manifest.");
   }
@@ -548,16 +557,17 @@ export const fetchWorldScenePackageVersion = async (
 ): Promise<WorldScenePackageVersionRecord> => {
   const { getWorldScenePackageVersion } = await loadWorldScenePackageApiModule();
   const record = await getWorldScenePackageVersion(packageId, version);
-  await readWorldSceneManifestPayload(record.manifest);
+  const manifest = await readWorldSceneManifestPayload(record.manifest);
   return {
     ...record,
+    manifest,
   };
 };
 
 const readWorldScenePackageFromImportUrl = async (
   importUrl: string,
   fetchImplementation: typeof fetch
-) => {
+) : Promise<WorldSceneRegistryEnvelope> => {
   const { normalizeWorldLayoutImportUrl } = await loadWorldSceneImportUrlModule();
   const normalizedUrl = normalizeWorldLayoutImportUrl(importUrl);
   const response = await fetchImplementation(normalizedUrl, {
@@ -572,7 +582,7 @@ const readWorldScenePackageFromImportUrl = async (
 export const loadWorldScenePackageFromImportParams = async (
   importParams: WorldScenePackageImportParams,
   options: LoadWorldScenePackageFromImportParamsOptions = {}
-): Promise<WorldScenePackageManifest> => {
+): Promise<WorldSceneRegistryEnvelope> => {
   const importUrl = importParams.importUrl.trim();
   if (importUrl) {
     return readWorldScenePackageFromImportUrl(

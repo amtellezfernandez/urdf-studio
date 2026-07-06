@@ -1,6 +1,7 @@
 import type {
   SerializableWorldObject,
   WorldSceneDocument,
+  WorldSceneRegistryEnvelope,
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import {
@@ -193,6 +194,66 @@ const readWorldSceneRegistryEnvelopeCandidate = (
   };
 };
 
+const manifestToWorldSceneRegistryEnvelope = (
+  manifest: WorldScenePackageManifest
+): WorldSceneRegistryEnvelope => ({
+  package_id: manifest.package_id,
+  version: manifest.version,
+  ...(manifest.description?.trim() ? { description: manifest.description.trim() } : {}),
+  provenance: isRecord(manifest.provenance) ? { ...manifest.provenance } : {},
+  artifacts: Array.isArray(manifest.artifacts) ? [...manifest.artifacts] : [],
+  world: worldSceneManifestToLayerSnapshot(manifest),
+});
+
+const readValidWorldSceneRegistryEnvelopeCandidate = (
+  payload: unknown
+): WorldSceneRegistryEnvelope | null => {
+  if (!isRecord(payload)) return null;
+  if (!isString(payload.package_id) || !payload.package_id.trim()) return null;
+  if (!isString(payload.version) || !payload.version.trim()) return null;
+  if (!isRecord(payload.world)) return null;
+
+  const environment = isRecord(payload.environment)
+    ? payload.environment
+    : isRecord(payload.world.environment)
+      ? payload.world.environment
+      : null;
+  const world = toWorldSceneDocumentCandidate(payload.world, environment);
+  if (!world) return null;
+
+  return {
+    package_id: payload.package_id.trim(),
+    version: payload.version.trim(),
+    ...(isString(payload.description) && payload.description.trim()
+      ? { description: payload.description.trim() }
+      : {}),
+    provenance: isRecord(payload.provenance) ? { ...payload.provenance } : {},
+    artifacts: Array.isArray(payload.artifacts)
+      ? [...(payload.artifacts as WorldSceneRegistryEnvelope["artifacts"])]
+      : [],
+    world,
+  };
+};
+
+export const readWorldSceneRegistryEnvelopeFromUnknown = (
+  payload: unknown
+): WorldSceneRegistryEnvelope | null => {
+  const envelope = readValidWorldSceneRegistryEnvelopeCandidate(payload);
+  if (envelope) return envelope;
+
+  const manifest = readWorldSceneManifestCandidate(payload);
+  if (manifest) return manifestToWorldSceneRegistryEnvelope(manifest);
+
+  if (isRecord(payload)) {
+    const nestedEnvelope = readValidWorldSceneRegistryEnvelopeCandidate(payload.manifest);
+    if (nestedEnvelope) return nestedEnvelope;
+    const nestedManifest = readWorldSceneManifestCandidate(payload.manifest);
+    if (nestedManifest) return manifestToWorldSceneRegistryEnvelope(nestedManifest);
+  }
+
+  return null;
+};
+
 export const readWorldSceneManifestFromUnknown = (
   payload: unknown
 ): WorldScenePackageManifest | null => {
@@ -204,6 +265,41 @@ export const readWorldSceneManifestFromUnknown = (
     return readWorldSceneManifestCandidate(payload.manifest);
   }
   return null;
+};
+
+const toWorldDocumentValidationMessage = (error: string): string =>
+  error
+    .replace(/^world layout cameras/, "world.cameras")
+    .replace(/^world layout urdf_xml/, "world.urdf_xml")
+    .replace(/^world layout joint_positions/, "world.joint_positions")
+    .replace(/^world layout scenario_time_ms/, "world.scenario_time_ms")
+    .replace(/^world layout scenario_duration_ms/, "world.scenario_duration_ms");
+
+export const validateLocalWorldSceneRegistryEnvelope = (
+  envelope: WorldSceneRegistryEnvelope
+): string[] => {
+  const errors: string[] = [];
+  if (!isString(envelope.package_id) || !envelope.package_id.trim()) {
+    errors.push("package_id is required");
+  }
+  if (!isString(envelope.version) || !envelope.version.trim()) {
+    errors.push("version is required");
+  }
+  if (envelope.description !== undefined && !isString(envelope.description)) {
+    errors.push("description must be a string");
+  }
+  if (!isRecord(envelope.provenance)) {
+    errors.push("provenance must be an object");
+  }
+  errors.push(...validateWorldArtifacts(envelope.artifacts));
+  if (!isRecord(envelope.world)) {
+    errors.push("world must be an object");
+    return errors;
+  }
+  errors.push(
+    ...validateWorldSceneLayerSnapshot(envelope.world).map(toWorldDocumentValidationMessage)
+  );
+  return errors;
 };
 
 export const validateLocalWorldSceneManifest = (
