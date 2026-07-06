@@ -19,10 +19,7 @@ import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
-import {
-  useIkParamsStore,
-  type IkOrientationSetting,
-} from "@/features/ik/useIkParamsStore";
+import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 import type { OrientationMode } from "@/features/ik/registry";
 import type { MotionKernel } from "@/features/viewer/motion-kernel";
 import {
@@ -58,36 +55,25 @@ import {
   shouldRememberBlockedTargetAfterPreSolve,
 } from "@/features/viewer/ikObjectSolvePreSolvePolicy";
 import { doesViewerDragModeUseIkHandles } from "@/features/viewer/viewerDragModePolicy";
+import {
+  IK_APPLY_INPUT_SOURCE,
+  IK_DRAG_INPUT_SOURCE,
+  deriveComAlignedQuaternion,
+  normalizeIkObjectPreSolveResult,
+  resolveApproachAxisForEe,
+  resolveEffectorWorldPose,
+  resolveOrientationMode,
+  safeDecodeEndEffectorLink,
+  type IkAppliedMetadata,
+  type IkObjectPreSolveContext,
+  type IkObjectPreSolveResult,
+} from "@/features/viewer/ikSolverUtils";
 
-const IK_APPLY_INPUT_SOURCE = "ik_apply";
-const IK_DRAG_INPUT_SOURCE = "ik_drag";
-
-export type IkAppliedMetadata = {
-  inputSource: typeof IK_APPLY_INPUT_SOURCE | typeof IK_DRAG_INPUT_SOURCE;
-};
-
-export type IkObjectPreSolveProgress = {
-  phase?: "idle" | "rotate" | "translate" | "done";
-  distanceToTargetM?: number | null;
-  yawErrorDeg?: number | null;
-};
-
-export type IkObjectPreSolveResult = {
-  status: "completed" | "skipped" | "timeout" | "cancelled" | "failed";
-  reason?: string;
-  durationMs?: number;
-  finalDistanceToTargetM?: number | null;
-  finalYawErrorDeg?: number | null;
-};
-
-export type IkObjectPreSolveContext = {
-  object: CreatedObject;
-  targetPositionWorld: [number, number, number];
-  isOrbitTarget: boolean;
-  targetKind?: "object-center" | "surface-point";
-  isStaleSolve: () => boolean;
-  reportProgress: (progress: IkObjectPreSolveProgress) => void;
-};
+export type {
+  IkAppliedMetadata,
+  IkObjectPreSolveContext,
+  IkObjectPreSolveResult,
+} from "@/features/viewer/ikSolverUtils";
 
 type UseIkSolverParams = {
   apiBaseUrl: string;
@@ -107,57 +93,6 @@ type UseIkSolverParams = {
     context: IkObjectPreSolveContext
   ) => Promise<IkObjectPreSolveResult | void> | IkObjectPreSolveResult | void;
 };
-
-const safeDecodeEndEffectorLink = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
-const resolveEffectorWorldPose = (
-  robot: URDFRobot,
-  endEffectorLink: string
-): { position: THREE.Vector3; quaternion: THREE.Quaternion } => {
-  const robotAny = robot as URDFRobot & {
-    links?: Record<string, THREE.Object3D>;
-    getObjectByName?: (name: string) => THREE.Object3D | undefined;
-  };
-  const effObj =
-    robotAny.links?.[endEffectorLink] ??
-    robotAny.getObjectByName?.(endEffectorLink) ??
-    robotAny.getObjectByName?.(safeDecodeEndEffectorLink(endEffectorLink));
-  const position = new THREE.Vector3();
-  const quaternion = new THREE.Quaternion();
-  if (!effObj) {
-    quaternion.set(0, 0, 0, 1);
-    return { position, quaternion };
-  }
-  effObj.updateMatrixWorld(true);
-  const tmpScale = new THREE.Vector3();
-  effObj.matrixWorld.decompose(position, quaternion, tmpScale);
-  return { position, quaternion };
-};
-
-const isIkObjectPreSolveResult = (
-  value: unknown
-): value is IkObjectPreSolveResult =>
-  Boolean(
-    value &&
-      typeof value === "object" &&
-      "status" in (value as Record<string, unknown>)
-  );
-
-const normalizeIkObjectPreSolveResult = (
-  value: IkObjectPreSolveResult | void
-): IkObjectPreSolveResult =>
-  isIkObjectPreSolveResult(value)
-    ? value
-    : {
-        status: "skipped",
-        reason: "not-required",
-      };
 
 export const useIkSolver = ({
   apiBaseUrl,
@@ -210,86 +145,6 @@ export const useIkSolver = ({
   // collaborative session) never corrupt each other's smooth state.
   const dragSmoothedJointsRef = useRef<Map<string, Record<string, number>>>(new Map());
 
-  const resolveOrientationMode = (
-    setting: IkOrientationSetting,
-    fallback: OrientationMode
-  ): OrientationMode => (setting === "auto" ? fallback : setting);
-  const deriveComAlignedQuaternion = useCallback(
-    (
-      effWorldPos: THREE.Vector3,
-      effWorldQuat: THREE.Quaternion,
-      targetWorldPos: THREE.Vector3,
-      preferredAxisLocal?: [number, number, number]
-    ) => {
-      const toTarget = targetWorldPos.clone().sub(effWorldPos);
-      if (toTarget.lengthSq() < 1e-10) {
-        return effWorldQuat.clone();
-      }
-      toTarget.normalize();
-
-      const bestAxis = preferredAxisLocal
-        ? new THREE.Vector3(
-            preferredAxisLocal[0],
-            preferredAxisLocal[1],
-            preferredAxisLocal[2]
-          )
-        : new THREE.Vector3(1, 0, 0);
-      const currentApproach = bestAxis.applyQuaternion(effWorldQuat).normalize();
-      const bestDot = currentApproach.dot(toTarget);
-      if (!Number.isFinite(bestDot)) {
-        return effWorldQuat.clone();
-      }
-
-      if (bestDot >= 0.9995) {
-        return effWorldQuat.clone();
-      }
-
-      const alignRotation = new THREE.Quaternion().setFromUnitVectors(
-        currentApproach,
-        toTarget
-      );
-      return alignRotation.multiply(effWorldQuat).normalize();
-    },
-    []
-  );
-  const resolveApproachAxisForEe = useCallback(
-    (
-      effWorldPos: THREE.Vector3,
-      effWorldQuat: THREE.Quaternion,
-      targetWorldPos: THREE.Vector3
-    ): [number, number, number] => {
-      const toTarget = targetWorldPos.clone().sub(effWorldPos);
-      if (toTarget.lengthSq() < 1e-10) {
-        return [1, 0, 0];
-      }
-      toTarget.normalize();
-
-      const axisCandidates: Array<[number, number, number]> = [
-        [1, 0, 0],
-        [-1, 0, 0],
-        [0, 1, 0],
-        [0, -1, 0],
-        [0, 0, 1],
-        [0, 0, -1],
-      ];
-      let best = axisCandidates[0];
-      let bestDot = -Infinity;
-      const axisWorld = new THREE.Vector3();
-      for (const axis of axisCandidates) {
-        axisWorld
-          .set(axis[0], axis[1], axis[2])
-          .applyQuaternion(effWorldQuat)
-          .normalize();
-        const dot = axisWorld.dot(toTarget);
-        if (dot > bestDot) {
-          bestDot = dot;
-          best = axis;
-        }
-      }
-      return best;
-    },
-    []
-  );
   const clampSolutionToLimits = useCallback(
     (
       solution: Record<string, number>,
@@ -1018,8 +873,6 @@ export const useIkSolver = ({
       enableIk,
       isFollowingOrbit,
       orbitDefaults,
-      deriveComAlignedQuaternion,
-      resolveApproachAxisForEe,
       onBeforeObjectIkSolve,
       requestTimeoutMs,
       robot,

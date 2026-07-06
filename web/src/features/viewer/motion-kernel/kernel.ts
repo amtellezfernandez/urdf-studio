@@ -6,17 +6,10 @@ import type {
   MotionKernelRejectedTarget,
   MotionPartitions,
 } from "./types";
+import { safeDecodeEndEffectorLink } from "@/features/viewer/ikEndEffectorLink";
 
 const sortByPriority = (commands: MotionControllerCommand[]): MotionControllerCommand[] =>
   [...commands].sort((lhs, rhs) => lhs.priority - rhs.priority);
-
-const safeDecodeEndEffectorLink = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
 
 const resolveEndEffectorCandidates = (endEffectorLink: string): string[] => {
   const normalized = endEffectorLink.trim();

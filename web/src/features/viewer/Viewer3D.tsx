@@ -88,6 +88,7 @@ import {
   type IkObjectPreSolveContext,
   type IkObjectPreSolveResult,
 } from "@/features/viewer/useIkSolver";
+import { IK_APPLY_INPUT_SOURCE } from "@/features/viewer/ikSolverUtils";
 import { useUrdfAnimation } from "@/features/viewer/useUrdfAnimation";
 import { useOrbitControlsBindings } from "@/features/viewer/useOrbitControlsBindings";
 import { usePlaybackHandlers } from "@/features/viewer/usePlaybackHandlers";
@@ -312,7 +313,6 @@ export interface Viewer3DProps {
 }
 
 const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
-const IK_APPLY_INPUT_SOURCE = "ik_apply";
 
 const URDFModel = ({
   file,
