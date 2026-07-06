@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { WorldObjectPrimitiveType } from "@/features/objects";
+import { clampNumber } from "./approachMath";
 import { ROVER_APPROACH_OBJECT_DISTANCE_PARAMS } from "./approachObjectDistanceParams";
 
 export type ApproachObjectPrimitiveType = Exclude<WorldObjectPrimitiveType, "mesh">;
@@ -34,8 +35,6 @@ type ResolveRoverPlanarObjectApproachDistanceParams = {
 export const resolveApproachObjectPrimitiveType = (
   type: WorldObjectPrimitiveType
 ): ApproachObjectPrimitiveType => (type === "mesh" ? "cube" : type);
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const resolveMaxObjectDimensionM = (object: ApproachObjectGeometry): number =>
   Math.max(0, object.size.x, object.size.y, object.size.z);
@@ -127,7 +126,7 @@ export const resolveRoverPlanarObjectApproachDistance = ({
         : object.type === "cylinder"
           ? resolveCylinderSupportRadiusM(object, normalizedDirection)
           : resolveCubeSupportRadiusM(object, normalizedDirection);
-  const clampedSupportRadiusM = clamp(supportRadiusM, 0, centerDistanceM);
+  const clampedSupportRadiusM = clampNumber(supportRadiusM, 0, centerDistanceM);
   return {
     centerDistanceM,
     supportRadiusM: clampedSupportRadiusM,

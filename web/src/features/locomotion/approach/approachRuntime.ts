@@ -5,6 +5,7 @@ import type {
   RoverApproachStepPhase,
   RoverApproachStepResult,
 } from "./approachTypes";
+export { clampRoverApproachDtSec } from "./approachMath";
 
 export type RoverApproachRuntimePhase = "rotate" | "translate";
 export type RoverApproachSpeedState = {
@@ -70,9 +71,6 @@ export const moveRoverApproachValueToward = (
   if (target < current) return Math.max(target, current - maxDelta);
   return target;
 };
-
-export const clampRoverApproachDtSec = (dtSec: number): number =>
-  Math.min(ROVER_APPROACH_CONFIG.maxDtSec, Math.max(ROVER_APPROACH_CONFIG.minDtSec, dtSec));
 
 type ResolveRoverApproachFrameParams = {
   phase: RoverApproachRuntimePhase;

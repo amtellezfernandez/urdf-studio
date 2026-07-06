@@ -1,4 +1,9 @@
 import * as THREE from "three";
+import {
+  clampNumber,
+  clampRoverApproachDtSec,
+  normalizeSignedAngleRad,
+} from "./approachMath";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import type { RoverApproachPlan, RoverApproachStepResult } from "./approachTypes";
 
@@ -9,22 +14,7 @@ type RoverApproachStepInput = {
   dtSec: number;
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const STOPPING_SPEED_FACTOR = 2;
-
-const clampDt = (dtSec: number): number =>
-  clamp(
-    Number.isFinite(dtSec) && dtSec > 0 ? dtSec : ROVER_APPROACH_CONFIG.minDtSec,
-    ROVER_APPROACH_CONFIG.minDtSec,
-    ROVER_APPROACH_CONFIG.maxDtSec
-  );
-
-const normalizeSignedAngle = (angleRad: number): number => {
-  let angle = angleRad;
-  while (angle > Math.PI) angle -= Math.PI * 2;
-  while (angle < -Math.PI) angle += Math.PI * 2;
-  return angle;
-};
 
 const resolveYawSlowdownScale = (yawAbsRad: number): number => {
   if (yawAbsRad <= 0) return 1;
@@ -57,20 +47,20 @@ export const computeSignedPlanarYawErrorRad = (
   const forward = forwardWorld.clone().normalize();
   const toTarget = toTargetWorld.clone().normalize();
   const up = upAxisWorld.clone().normalize();
-  const dot = clamp(forward.dot(toTarget), -1, 1);
+  const dot = clampNumber(forward.dot(toTarget), -1, 1);
   const unsigned = Math.acos(dot);
   const cross = new THREE.Vector3().crossVectors(forward, toTarget);
   const sign = Math.sign(cross.dot(up));
-  return normalizeSignedAngle(unsigned * (sign === 0 ? 1 : sign));
+  return normalizeSignedAngleRad(unsigned * (sign === 0 ? 1 : sign));
 };
 
 export const computeRoverApproachRotateTravelRad = (
   yawErrorRad: number,
   dtSec: number
 ): number => {
-  const clampedDt = clampDt(dtSec);
-  const yawError = Number.isFinite(yawErrorRad) ? normalizeSignedAngle(yawErrorRad) : 0;
-  const rotationSpeed = clamp(
+  const clampedDt = clampRoverApproachDtSec(dtSec);
+  const yawError = Number.isFinite(yawErrorRad) ? normalizeSignedAngleRad(yawErrorRad) : 0;
+  const rotationSpeed = clampNumber(
     yawError * ROVER_APPROACH_CONFIG.rotationGain,
     -ROVER_APPROACH_CONFIG.maxAngularSpeedRadps,
     ROVER_APPROACH_CONFIG.maxAngularSpeedRadps
@@ -93,9 +83,9 @@ export const computeRoverApproachStep = ({
     };
   }
 
-  const clampedDt = clampDt(dtSec);
+  const clampedDt = clampRoverApproachDtSec(dtSec);
   const safeDistance = Number.isFinite(distanceToTargetM) ? Math.max(0, distanceToTargetM) : 0;
-  const yawError = Number.isFinite(yawErrorRad) ? normalizeSignedAngle(yawErrorRad) : 0;
+  const yawError = Number.isFinite(yawErrorRad) ? normalizeSignedAngleRad(yawErrorRad) : 0;
   const yawAbs = Math.abs(yawError);
   const distanceToleranceM =
     Number.isFinite(plan.distanceToleranceM) && plan.distanceToleranceM >= 0
@@ -114,7 +104,7 @@ export const computeRoverApproachStep = ({
     };
   }
 
-  const rotationSpeed = clamp(
+  const rotationSpeed = clampNumber(
     yawError * ROVER_APPROACH_CONFIG.rotationGain,
     -ROVER_APPROACH_CONFIG.maxAngularSpeedRadps,
     ROVER_APPROACH_CONFIG.maxAngularSpeedRadps
@@ -148,7 +138,7 @@ export const computeRoverApproachStep = ({
   }
 
   const linearSpeed = Math.min(
-    clamp(
+    clampNumber(
       distanceError * ROVER_APPROACH_CONFIG.translationGain,
       0,
       ROVER_APPROACH_CONFIG.maxLinearSpeedMps
@@ -156,7 +146,7 @@ export const computeRoverApproachStep = ({
     resolveStoppingLimitedLinearSpeed(distanceError)
   ) * (!plan.allowTranslationYawAssist ? 1 : resolveYawSlowdownScale(yawAbs));
   const linearTravelM = Math.min(linearSpeed * clampedDt, distanceError);
-  const yawAssistSpeed = clamp(
+  const yawAssistSpeed = clampNumber(
     rotationSpeed,
     -ROVER_APPROACH_CONFIG.yawTranslateAngularSpeedMaxRadps,
     ROVER_APPROACH_CONFIG.yawTranslateAngularSpeedMaxRadps

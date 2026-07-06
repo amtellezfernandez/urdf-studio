@@ -1,3 +1,4 @@
+import { clampNumber } from "./approachMath";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import type { RoverApproachPlan } from "./approachTypes";
 
@@ -11,7 +12,6 @@ type RoverApproachPlannerInput = {
   preferredDistanceToleranceM?: number | null;
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const resolvePositiveFiniteOrNull = (value: number | null | undefined): number | null =>
   Number.isFinite(value ?? NaN) && (value as number) >= 0 ? (value as number) : null;
 
@@ -36,7 +36,7 @@ export const resolveRoverApproachStopDistance = (armReachRadiusM: number | null)
   const nominalStopDistanceM =
     (armReachRadiusM as number) * ROVER_APPROACH_CONFIG.stopDistanceReachRatio +
     ROVER_APPROACH_CONFIG.stopDistanceStandOffM;
-  return clamp(
+  return clampNumber(
     nominalStopDistanceM,
     minBoundedStopDistanceM,
     maxReachBoundedStopDistanceM
