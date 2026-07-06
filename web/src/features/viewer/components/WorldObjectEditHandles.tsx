@@ -18,12 +18,28 @@ import {
   snapVector3,
 } from "@/features/objects/worldObjectEditMath";
 import { useObjectStore } from "@/features/objects/useObjectStore";
+import {
+  buildScreenPlane,
+  formatAxisCoordinate,
+  formatAxisMeasurement,
+  formatDegrees,
+  formatVectorMeasurement,
+  normalizeAngleDeltaRad,
+  resolveAxisPlaneAngleRad,
+  resolveEyeVector,
+  resolveHandleLabel,
+  resolveHandleMaterialOpacity,
+  resolveHandleOpacity,
+  resolveResizeFaceHighlightArgs,
+  resolveWorldToScreenPoint,
+  type WorldObjectEditAxis,
+} from "@/features/viewer/components/worldObjectEditHandleHelpers";
 
 type DragState =
   | {
       kind: "move-axis";
       startPosition: THREE.Vector3;
-      axis: "x" | "y" | "z";
+      axis: WorldObjectEditAxis;
       axisVector: THREE.Vector3;
       screenAxisDirection: THREE.Vector2;
       pixelsPerUnit: number;
@@ -36,7 +52,7 @@ type DragState =
       startPoint: THREE.Vector3;
       startPosition: THREE.Vector3;
       startSize: THREE.Vector3;
-      axis: "x" | "y" | "z";
+      axis: WorldObjectEditAxis;
       direction: -1 | 1;
     }
   | {
@@ -62,7 +78,7 @@ type DragState =
       plane: THREE.Plane;
       startRotation: THREE.Euler;
       startAngleRad: number;
-      axis: "x" | "y" | "z";
+      axis: WorldObjectEditAxis;
       axisVector: THREE.Vector3;
     };
 
@@ -80,110 +96,11 @@ type DragPreviewState = {
   snapEnabled: boolean;
 };
 
-const formatMeters = (value: number): string =>
-  `${value >= 0 ? "+" : ""}${value.toFixed(WORLD_OBJECT_EDIT_PARAMS.guideMeasurementDecimals)}m`;
-
-const formatDegrees = (valueRad: number): string =>
-  `${valueRad >= 0 ? "+" : ""}${THREE.MathUtils.radToDeg(valueRad).toFixed(1)}deg`;
-
-const formatAxisMeasurement = (axis: "x" | "y" | "z", value: number): string =>
-  `${axis.toUpperCase()} ${formatMeters(value)}`;
-
-const formatAxisCoordinate = (axis: "x" | "y" | "z", value: number): string =>
-  `${axis.toUpperCase()} ${value.toFixed(WORLD_OBJECT_EDIT_PARAMS.guideMeasurementDecimals)}`;
-
-const formatVectorMeasurement = (
-  value: THREE.Vector3,
-  axes: ReadonlyArray<"x" | "y" | "z">
-): string => axes.map((axis) => formatAxisMeasurement(axis, value[axis])).join(" • ");
-
 const OVERLAY_LABEL_CLASS =
   "pointer-events-none rounded border border-border/70 bg-background/95 px-1 py-[1px] font-mono text-[8.5px] font-semibold leading-none text-foreground shadow-sm";
 
 const OVERLAY_META_CLASS =
   "pointer-events-none rounded border border-border/60 bg-background/92 px-1 py-[1px] font-mono text-[8px] leading-none text-foreground/90 shadow-sm";
-
-const resolveHandleLabel = (handleId: string): string => {
-  if (handleId.startsWith("move-")) {
-    return handleId.replace("move-", "").toUpperCase();
-  }
-  if (handleId.startsWith("face-")) {
-    const [, axis, direction] = handleId.split("-");
-    return `${axis.toUpperCase()}${direction === "1" ? "+" : "-"}`;
-  }
-  if (handleId.startsWith("corner-")) {
-    return "XYZ";
-  }
-  if (handleId === "resize-uniform") {
-    return "XYZ";
-  }
-  if (handleId.startsWith("rotate-")) {
-    return handleId.replace("rotate-", "").toUpperCase();
-  }
-  return handleId;
-};
-
-const resolveHandleOpacity = ({
-  activeHandleId,
-  hoveredHandleId,
-  handleId,
-}: {
-  activeHandleId: string | null;
-  hoveredHandleId: string | null;
-  handleId: string;
-}) => {
-  if (!activeHandleId && !hoveredHandleId) {
-    return 1;
-  }
-  return activeHandleId === handleId || hoveredHandleId === handleId
-    ? 1
-    : WORLD_OBJECT_EDIT_PARAMS.inactiveHandleOpacity;
-};
-
-const resolveHandleMaterialOpacity = ({
-  activeHandleId,
-  hoveredHandleId,
-  handleId,
-  baseOpacity = 1,
-}: {
-  activeHandleId: string | null;
-  hoveredHandleId: string | null;
-  handleId: string;
-  baseOpacity?: number;
-}) => {
-  if (activeHandleId === handleId) {
-    return baseOpacity * WORLD_OBJECT_EDIT_PARAMS.activeHandleMaterialOpacity;
-  }
-  if (hoveredHandleId === handleId) {
-    return baseOpacity * WORLD_OBJECT_EDIT_PARAMS.hoveredHandleMaterialOpacity;
-  }
-  if (!activeHandleId && !hoveredHandleId) {
-    return baseOpacity;
-  }
-  return baseOpacity * WORLD_OBJECT_EDIT_PARAMS.inactiveHandleOpacity;
-};
-
-const buildScreenPlane = (
-  camera: THREE.Camera,
-  point: THREE.Vector3
-): THREE.Plane => {
-  const planeNormal = new THREE.Vector3();
-  camera.getWorldDirection(planeNormal);
-  return new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, point);
-};
-
-const resolveWorldToScreenPoint = (
-  worldPoint: THREE.Vector3,
-  camera: THREE.Camera,
-  viewportWidth: number,
-  viewportHeight: number
-): THREE.Vector2 => {
-  const projected = worldPoint.clone().project(camera);
-  return new THREE.Vector2(
-    ((projected.x + 1) * 0.5) * viewportWidth,
-    ((1 - projected.y) * 0.5) * viewportHeight
-  );
-};
 
 const MOVE_AXES = [
   { axis: "x" as const, vector: new THREE.Vector3(1, 0, 0) },
@@ -227,76 +144,11 @@ const RESIZE_FACE_BOX_ARGS = {
   ] as const,
 } as const;
 
-const resolveResizeFaceHighlightArgs = (
-  size: THREE.Vector3,
-  axis: "x" | "y" | "z"
-): [number, number, number] => {
-  if (axis === "x") {
-    return [
-      WORLD_OBJECT_EDIT_PARAMS.resizeFaceHighlightThicknessM,
-      size.y,
-      size.z,
-    ];
-  }
-  if (axis === "y") {
-    return [
-      size.x,
-      WORLD_OBJECT_EDIT_PARAMS.resizeFaceHighlightThicknessM,
-      size.z,
-    ];
-  }
-  return [
-    size.x,
-    size.y,
-    WORLD_OBJECT_EDIT_PARAMS.resizeFaceHighlightThicknessM,
-  ];
-};
-
-const resolveEyeVector = (
-  camera: THREE.Camera,
-  worldPosition: THREE.Vector3
-): THREE.Vector3 => {
-  if (camera instanceof THREE.OrthographicCamera) {
-    return camera.getWorldDirection(new THREE.Vector3()).negate();
-  }
-  return camera.position.clone().sub(worldPosition).normalize();
-};
-
 const AXIS_VECTORS = {
   x: new THREE.Vector3(1, 0, 0),
   y: new THREE.Vector3(0, 1, 0),
   z: new THREE.Vector3(0, 0, 1),
 } as const;
-
-const normalizeAngleDeltaRad = (value: number): number => {
-  let normalized = value;
-  while (normalized > Math.PI) {
-    normalized -= Math.PI * 2;
-  }
-  while (normalized < -Math.PI) {
-    normalized += Math.PI * 2;
-  }
-  return normalized;
-};
-
-const resolveAxisPlaneAngleRad = ({
-  point,
-  center,
-  axisVector,
-}: {
-  point: THREE.Vector3;
-  center: THREE.Vector3;
-  axisVector: THREE.Vector3;
-}): number => {
-  const planeVector = point.clone().sub(center);
-  const referenceVector =
-    Math.abs(axisVector.z) < 0.9
-      ? new THREE.Vector3(0, 0, 1)
-      : new THREE.Vector3(0, 1, 0);
-  const basisU = referenceVector.clone().cross(axisVector).normalize();
-  const basisV = axisVector.clone().cross(basisU).normalize();
-  return Math.atan2(planeVector.dot(basisV), planeVector.dot(basisU));
-};
 
 export const WorldObjectEditHandles = ({
   object,
