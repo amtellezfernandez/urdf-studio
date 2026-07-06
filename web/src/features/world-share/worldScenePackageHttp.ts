@@ -7,6 +7,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
   WorldScenePackageValidationResponse,
+  WorldScenePackageVersionRecordPayload,
   WorldScenePackageVersionRecord,
   WorldRegistryCapabilitiesResponse,
 } from "@/features/world-share/worldScenePackageTypes";
@@ -87,7 +88,7 @@ export const createWorldScenePackageClient = (
       return requestJson<WorldScenePackageListEntry[]>(queryString);
     },
     getPackageVersion: (packageId: string, version: string) =>
-      requestJson<WorldScenePackageVersionRecord>(
+      requestJson<WorldScenePackageVersionRecordPayload>(
         `/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(version)}`
       ),
     getCapabilities: () => requestJson<WorldRegistryCapabilitiesResponse>("/capabilities"),

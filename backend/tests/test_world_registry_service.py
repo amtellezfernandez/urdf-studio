@@ -20,6 +20,7 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
 )
 from backend.services.world_scene_package_compat import read_world_scene_package_manifest
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.world_registry import WorldRegistryService
 
 
@@ -233,6 +234,24 @@ def test_publish_accepts_thin_world_registry_envelope() -> None:
         assert packages[0].title == "Scene First World"
         assert packages[0].owner == "scene-team"
         assert packages[0].tags == ["scene", "thin"]
+
+
+def test_world_scene_registry_envelope_payload_omits_legacy_package_fields() -> None:
+    manifest = build_manifest("scene-first-world", "2.0.0")
+    manifest.provenance = {"environment": {"preset": "default"}}
+
+    payload = world_scene_registry_envelope_json_payload(manifest)
+
+    assert payload["package_id"] == "scene-first-world"
+    assert payload["world"]["name"] == manifest.title
+    assert payload["world"]["environment"] == {
+        "preset": "default",
+        "frame_convention": manifest.interface.frame_convention,
+    }
+    assert "created_at" not in payload
+    assert "runtime_targets" not in payload
+    assert "interface" not in payload
+    assert "security" not in payload
 
 
 def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:

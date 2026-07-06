@@ -200,6 +200,14 @@ export type WorldScenePackageVersionRecord = {
   manifest: WorldScenePackageManifest;
 };
 
+export type WorldScenePackageVersionRecordPayload = {
+  package_id: string;
+  version: string;
+  digest_sha256: string;
+  published_at: string;
+  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope;
+};
+
 export type WorldRegistryBackendStatus = {
   backend_id: string;
   label: string;

@@ -9,10 +9,14 @@ from backend.models.world_scene_package import (
     WorldScenePackageListEntry,
     WorldScenePackagePublishResponse,
     WorldScenePackageValidationResponse,
+    WorldScenePackageVersionDocumentRecord,
     WorldScenePackageVersionRecord,
 )
 from backend.services.world_registry import world_registry_service
-from backend.services.world_scene_package_compat import read_world_scene_package_manifest
+from backend.services.world_scene_package_compat import (
+    read_world_scene_package_manifest,
+    world_scene_registry_envelope_json_payload,
+)
 
 router = APIRouter(prefix="/worlds/packages", tags=["world-packages"])
 
@@ -66,15 +70,22 @@ async def list_world_scene_packages(
 
 @router.get(
     "/{package_id}/versions/{version}",
-    response_model=WorldScenePackageVersionRecord,
+    response_model=WorldScenePackageVersionDocumentRecord,
 )
 async def get_world_scene_package_version(
     package_id: str,
     version: str,
     _access: None = Depends(require_simulator_operator_access_async),
-) -> WorldScenePackageVersionRecord:
+) -> WorldScenePackageVersionDocumentRecord:
     try:
-        return world_registry_service.get_version(package_id, version)
+        record = world_registry_service.get_version(package_id, version)
+        return WorldScenePackageVersionDocumentRecord(
+            package_id=record.package_id,
+            version=record.version,
+            digest_sha256=record.digest_sha256,
+            published_at=record.published_at,
+            manifest=world_scene_registry_envelope_json_payload(record.manifest),
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

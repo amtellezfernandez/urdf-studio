@@ -245,7 +245,48 @@ describe("worldSceneRuntime world package import", () => {
       }
     );
 
-    expect(manifest).toBe(manifestPayload);
+    expect(manifest).toStrictEqual(manifestPayload);
+  });
+
+  it("loads thin world envelopes from registry package ids and versions", async () => {
+    const manifestPayload = createManifestPayload();
+    const manifest = await loadWorldScenePackageFromImportParams(
+      {
+        importUrl: "",
+        packageId: " demo-scene ",
+        version: " 0.1.0 ",
+      },
+      {
+        loadPackageVersion: async (packageId, version) => ({
+          package_id: packageId,
+          version,
+          digest_sha256: "a".repeat(64),
+          published_at: new Date().toISOString(),
+          manifest: {
+            package_id: packageId,
+            version,
+            provenance: {},
+            artifacts: [],
+            world: {
+              name: manifestPayload.title,
+              urdf_xml: manifestPayload.world_snapshot.urdf_xml,
+              joint_positions: manifestPayload.world_snapshot.joint_positions,
+              cameras: manifestPayload.world_snapshot.cameras,
+              objects: manifestPayload.world_snapshot.objects,
+              scenario_time_ms: 0,
+              scenario_duration_ms: 0,
+              environment: {
+                frame_convention: "ros-rep-103",
+              },
+            },
+          },
+        }),
+      }
+    );
+
+    expect(manifest.package_id).toBe("demo-scene");
+    expect(manifest.title).toBe("Demo Scene");
+    expect(manifest.interface.frame_convention).toBe("ros-rep-103");
   });
 
   it("reports unavailable import URL responses", async () => {

@@ -11,6 +11,7 @@ from backend.models.world_scene_package import (
     WorldSecuritySpec,
     WorldSnapshot,
 )
+from backend.models.json_payload import JsonObject
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1_1
 
 _DEFAULT_CREATED_AT = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -164,3 +165,34 @@ def read_world_scene_package_manifest(payload: object) -> WorldScenePackageManif
     if is_world_scene_registry_envelope_payload(payload):
         return manifest_from_world_scene_registry_envelope(payload)
     return WorldScenePackageManifest.model_validate(payload)
+
+
+def world_scene_registry_envelope_json_payload(
+    manifest: WorldScenePackageManifest,
+) -> JsonObject:
+    environment = _read_environment(
+        {"environment": manifest.provenance.get("environment")},
+        {},
+    )
+    world: JsonObject = {
+        "name": manifest.title,
+        "objects": manifest.world_snapshot.objects,
+        "scenario_time_ms": manifest.world_snapshot.scenario_time_ms,
+        "scenario_duration_ms": manifest.world_snapshot.scenario_duration_ms,
+        "urdf_xml": manifest.world_snapshot.urdf_xml,
+        "joint_positions": manifest.world_snapshot.joint_positions,
+        "cameras": manifest.world_snapshot.cameras,
+    }
+    if environment is not None:
+        environment_payload = dict(environment)
+        environment_payload["frame_convention"] = manifest.interface.frame_convention
+        world["environment"] = environment_payload
+    else:
+        world["environment"] = {"frame_convention": manifest.interface.frame_convention}
+    return {
+        "package_id": manifest.package_id,
+        "version": manifest.version,
+        "provenance": manifest.provenance,
+        "artifacts": manifest.model_dump(mode="json")["artifacts"],
+        "world": world,
+    }

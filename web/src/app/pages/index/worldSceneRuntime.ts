@@ -14,6 +14,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
   WorldScenePackageValidationResponse,
+  WorldScenePackageVersionRecordPayload,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
 import {
@@ -80,7 +81,7 @@ type WorldScenePackageImportParams = {
 type WorldScenePackageVersionLoader = (
   packageId: string,
   version: string
-) => Promise<WorldScenePackageVersionRecord>;
+) => Promise<WorldScenePackageVersionRecordPayload>;
 
 type LoadWorldScenePackageFromImportParamsOptions = {
   fetchImplementation?: typeof fetch;
@@ -524,7 +525,11 @@ export const fetchWorldScenePackageVersion = async (
   version: string
 ): Promise<WorldScenePackageVersionRecord> => {
   const { getWorldScenePackageVersion } = await loadWorldScenePackageApiModule();
-  return getWorldScenePackageVersion(packageId, version);
+  const record = await getWorldScenePackageVersion(packageId, version);
+  return {
+    ...record,
+    manifest: await readWorldSceneManifestPayload(record.manifest),
+  };
 };
 
 const readWorldScenePackageFromImportUrl = async (
@@ -559,7 +564,7 @@ export const loadWorldScenePackageFromImportParams = async (
   if (packageId && version) {
     const loadPackageVersion = options.loadPackageVersion ?? fetchWorldScenePackageVersion;
     const versionRecord = await loadPackageVersion(packageId, version);
-    return versionRecord.manifest;
+    return readWorldSceneManifestPayload(versionRecord.manifest);
   }
 
   throw new Error("Import link did not contain a valid world package manifest.");

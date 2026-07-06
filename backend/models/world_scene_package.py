@@ -696,6 +696,14 @@ class WorldScenePackageVersionRecord(BaseModel):
     manifest: WorldScenePackageManifest
 
 
+class WorldScenePackageVersionDocumentRecord(BaseModel):
+    package_id: str
+    version: str
+    digest_sha256: str
+    published_at: datetime
+    manifest: JsonObject
+
+
 class WorldRegistryBackendStatus(BaseModel):
     backend_id: str
     label: str
