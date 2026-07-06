@@ -1,4 +1,5 @@
 import type { URDFRobot } from "urdf-loader";
+import { isFiniteNumber } from "@/shared/lib/numeric";
 
 type JointValueMap = Record<string, number>;
 
@@ -23,7 +24,7 @@ const jointNameLookupCache = new WeakMap<URDFRobot, JointNameLookup>();
 const buildNumericJointValues = (values: JointValueMap) => {
   const result: JointValueMap = {};
   for (const [name, value] of Object.entries(values)) {
-    if (typeof value === "number" && Number.isFinite(value)) {
+    if (isFiniteNumber(value)) {
       result[name] = value;
     }
   }

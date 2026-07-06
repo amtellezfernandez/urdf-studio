@@ -1,5 +1,5 @@
 import type { RobotBasePose } from "@/shared/types/feature";
-import { clampNumber } from "@/shared/lib/numeric";
+import { clampNumber, isFiniteNumber } from "@/shared/lib/numeric";
 
 const QUATERNION_NORMALIZE_EPSILON = 1e-12;
 const QUATERNION_LERP_THRESHOLD = 0.9995;
@@ -8,7 +8,7 @@ const clampQuaternionDot = (value: number) => clampNumber(value, -1, 1);
 
 const normalizeQuaternion = (quaternion: RobotBasePose["quaternion"]) => {
   const magnitude = Math.hypot(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-  if (!Number.isFinite(magnitude) || magnitude <= QUATERNION_NORMALIZE_EPSILON) {
+  if (!isFiniteNumber(magnitude) || magnitude <= QUATERNION_NORMALIZE_EPSILON) {
     return { x: 0, y: 0, z: 0, w: 1 };
   }
   return {
@@ -23,7 +23,7 @@ const quaternionDot = (lhs: RobotBasePose["quaternion"], rhs: RobotBasePose["qua
   lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 
 const clampLerpAlpha = (alpha: number) => {
-  if (!Number.isFinite(alpha)) return 0;
+  if (!isFiniteNumber(alpha)) return 0;
   return clampNumber(alpha, 0, 1);
 };
 
@@ -53,13 +53,13 @@ export const isFiniteRobotBasePose = (
   const position = pose.position;
   const quaternion = pose.quaternion;
   return (
-    Number.isFinite(position.x) &&
-    Number.isFinite(position.y) &&
-    Number.isFinite(position.z) &&
-    Number.isFinite(quaternion.x) &&
-    Number.isFinite(quaternion.y) &&
-    Number.isFinite(quaternion.z) &&
-    Number.isFinite(quaternion.w)
+    isFiniteNumber(position.x) &&
+    isFiniteNumber(position.y) &&
+    isFiniteNumber(position.z) &&
+    isFiniteNumber(quaternion.x) &&
+    isFiniteNumber(quaternion.y) &&
+    isFiniteNumber(quaternion.z) &&
+    isFiniteNumber(quaternion.w)
   );
 };
 

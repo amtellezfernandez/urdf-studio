@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { isFiniteNumber } from "@/shared/lib/numeric";
 
 const AXIS_FRAME_EPSILON = 1e-10;
 
@@ -25,9 +26,9 @@ export const normalizeDirection = (
 ): THREE.Vector3 => {
   const normalizedCandidate = candidate.clone();
   if (
-    !Number.isFinite(normalizedCandidate.x) ||
-    !Number.isFinite(normalizedCandidate.y) ||
-    !Number.isFinite(normalizedCandidate.z) ||
+    !isFiniteNumber(normalizedCandidate.x) ||
+    !isFiniteNumber(normalizedCandidate.y) ||
+    !isFiniteNumber(normalizedCandidate.z) ||
     normalizedCandidate.lengthSq() < AXIS_FRAME_EPSILON
   ) {
     return fallback.clone().normalize();

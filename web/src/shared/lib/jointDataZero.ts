@@ -1,7 +1,6 @@
-type JointValues = Record<string, number>;
+import { isFiniteNumber } from "@/shared/lib/numeric";
 
-const hasFiniteJointValue = (values: Readonly<JointValues>, jointName: string): boolean =>
-  Number.isFinite(values[jointName]);
+type JointValues = Record<string, number>;
 
 const mapJointDataZeroOffset = ({
   jointValues,
@@ -14,17 +13,18 @@ const mapJointDataZeroOffset = ({
 }): JointValues =>
   Object.fromEntries(
     Object.entries(jointValues).map(([jointName, value]) => {
-      if (!Number.isFinite(value) || !hasFiniteJointValue(dataZeroJointValues, jointName)) {
+      const dataZeroValue = dataZeroJointValues[jointName];
+      if (!isFiniteNumber(value) || !isFiniteNumber(dataZeroValue)) {
         return [jointName, value];
       }
-      return [jointName, value + direction * (dataZeroJointValues[jointName] as number)];
+      return [jointName, value + direction * dataZeroValue];
     }),
   );
 
 const hasJointDataZeroValues = (
   dataZeroJointValues: Readonly<JointValues>,
 ): boolean =>
-  Object.values(dataZeroJointValues).some((value) => Number.isFinite(value));
+  Object.values(dataZeroJointValues).some(isFiniteNumber);
 
 const offsetJointDataZeroValues = ({
   jointValues,
