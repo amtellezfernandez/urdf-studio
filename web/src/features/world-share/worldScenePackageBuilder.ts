@@ -14,6 +14,7 @@ import {
 import type {
   SerializableWorldObject,
   WorldArtifactRef,
+  WorldSceneDocument,
   WorldSceneRegistryEnvelope,
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
@@ -181,26 +182,32 @@ const worldSceneRegistryEnvironment = (
   return Object.keys(environment).length > 0 ? environment : null;
 };
 
+export const toWorldSceneDocument = (
+  manifest: WorldScenePackageManifest
+): WorldSceneDocument => {
+  const worldSnapshot = cloneWorldSnapshot(manifest.world_snapshot);
+  const environment = worldSceneRegistryEnvironment(manifest);
+  return {
+    name: manifest.title,
+    objects: worldSnapshot.objects,
+    scenario_time_ms: worldSnapshot.scenario_time_ms,
+    scenario_duration_ms: worldSnapshot.scenario_duration_ms,
+    urdf_xml: worldSnapshot.urdf_xml,
+    joint_positions: worldSnapshot.joint_positions,
+    cameras: worldSnapshot.cameras,
+    ...(environment ? { environment } : {}),
+  };
+};
+
 export const toWorldSceneRegistryEnvelope = (
   manifest: WorldScenePackageManifest
 ): WorldSceneRegistryEnvelope => {
-  const worldSnapshot = cloneWorldSnapshot(manifest.world_snapshot);
-  const environment = worldSceneRegistryEnvironment(manifest);
   return {
     package_id: manifest.package_id,
     version: manifest.version,
     provenance: { ...manifest.provenance },
     artifacts: manifest.artifacts.map((artifact) => ({ ...artifact })),
-    world: {
-      name: manifest.title,
-      objects: worldSnapshot.objects,
-      scenario_time_ms: worldSnapshot.scenario_time_ms,
-      scenario_duration_ms: worldSnapshot.scenario_duration_ms,
-      urdf_xml: worldSnapshot.urdf_xml,
-      joint_positions: worldSnapshot.joint_positions,
-      cameras: worldSnapshot.cameras,
-      ...(environment ? { environment } : {}),
-    },
+    world: toWorldSceneDocument(manifest),
   };
 };
 

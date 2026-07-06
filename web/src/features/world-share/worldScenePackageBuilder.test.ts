@@ -6,6 +6,7 @@ import {
   computeWorldSnapshotDigest,
   refreshWorldScenePackageSnapshotDigest,
   stableStringify,
+  toWorldSceneDocument,
   toWorldSceneRegistryEnvelope,
   toSerializableWorldObject,
   toWorldSceneLayerDownloadName,
@@ -246,6 +247,38 @@ describe("buildWorldScenePackageManifest", () => {
     expect(envelope).not.toHaveProperty("runtime_targets");
     expect(envelope).not.toHaveProperty("interface");
     expect(envelope).not.toHaveProperty("security");
+  });
+
+  it("converts package manifests to authored world documents", async () => {
+    const manifest = await buildWorldScenePackageManifest({
+      packageId: "Demo World",
+      version: "1.0.0",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [TEST_CAMERA],
+      objects: [TEST_OBJECT],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+      provenance: {
+        environment: {
+          preset: "default",
+        },
+      },
+    });
+
+    expect(toWorldSceneDocument(manifest)).toEqual({
+      name: manifest.title,
+      urdf_xml: manifest.world_snapshot.urdf_xml,
+      joint_positions: manifest.world_snapshot.joint_positions,
+      cameras: manifest.world_snapshot.cameras,
+      objects: manifest.world_snapshot.objects,
+      scenario_time_ms: manifest.world_snapshot.scenario_time_ms,
+      scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
+      environment: {
+        preset: "default",
+        frame_convention: "ros-rep-103",
+      },
+    });
   });
 
   it("serializes rotation for non-point primitives and normalizes primitive size semantics", async () => {

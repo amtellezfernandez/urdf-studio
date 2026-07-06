@@ -144,7 +144,7 @@ export type WorldScenePackageManifest = {
   security: WorldSecuritySpec;
 };
 
-export type WorldSceneRegistryEnvelopeWorld = {
+export type WorldSceneDocument = {
   name?: string;
   objects: SerializableWorldObject[];
   scenario_time_ms: number;
@@ -155,12 +155,17 @@ export type WorldSceneRegistryEnvelopeWorld = {
   environment?: Record<string, unknown> | null;
 };
 
+export type WorldSceneDocumentEnvelope = {
+  world_layout: Omit<WorldSceneDocument, "environment">;
+  environment?: Record<string, unknown> | null;
+};
+
 export type WorldSceneRegistryEnvelope = {
   package_id: string;
   version: string;
   provenance: Record<string, unknown>;
   artifacts: WorldArtifactRef[];
-  world: WorldSceneRegistryEnvelopeWorld;
+  world: WorldSceneDocument;
 };
 
 export type WorldScenePackageValidationResponse = {

@@ -425,18 +425,20 @@ export const createWorldSceneLayerExportDocument = async (
   } = {}
 ) => {
   const [
-    { createStaticWorldSceneLayerSnapshot, validateWorldSceneLayerSnapshot, worldSceneManifestToLayerSnapshot },
+    { createStaticWorldSceneLayerSnapshot, validateWorldSceneLayerSnapshot },
+    { toWorldSceneDocument },
   ] = await Promise.all([
     loadWorldSceneManifestModule(),
+    loadWorldScenePackageBuilderModule(),
   ]);
-  const layerSnapshot = worldSceneManifestToLayerSnapshot(manifest);
+  const worldDocument = toWorldSceneDocument(manifest);
   const worldLayout: WorldSceneLayerSnapshot = createStaticWorldSceneLayerSnapshot({
     name: worldLayoutName,
     objects: manifest.world_snapshot.objects,
     urdf_xml: options.includeRobotState ? manifest.world_snapshot.urdf_xml : undefined,
     joint_positions: options.includeRobotState ? manifest.world_snapshot.joint_positions : undefined,
     cameras: options.includeRobotState ? manifest.world_snapshot.cameras : undefined,
-    environment: layerSnapshot.environment,
+    environment: worldDocument.environment ?? null,
   });
   const validationErrors = validateWorldSceneLayerSnapshot(worldLayout);
   if (validationErrors.length > 0) {
@@ -456,7 +458,7 @@ export const createWorldSceneLayerExportDocument = async (
           : {}),
         ...(worldLayout.cameras !== undefined ? { cameras: worldLayout.cameras } : {}),
       },
-      environment: worldLayout.environment,
+      ...(worldLayout.environment ? { environment: worldLayout.environment } : {}),
     },
   };
 };
