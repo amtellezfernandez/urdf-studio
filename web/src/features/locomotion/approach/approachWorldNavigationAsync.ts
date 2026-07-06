@@ -2,6 +2,7 @@ import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
 import { nowMs } from "@/shared/lib/time";
 import { recordRoverApproachNavigationDiagnostics } from "./approachWorldNavigationDebug";
 import {
+  buildRoverApproachWorldNavigationDiagnostics,
   countIncludedObstacles,
   deserializeRoverApproachWorldRouteResult,
   resolveRoverApproachWorldRouteFromRequest,
@@ -92,12 +93,8 @@ const buildFallbackDiagnostics = ({
   fallbackResult: RoverApproachWorldRouteResult;
   elapsedMs: number;
 }) =>
-  ({
-    routeMode: fallbackResult.mode,
-    plannerStage: fallbackResult.plannerSummary.plannerStage,
-    blockedReason: fallbackResult.plannerSummary.blockedReason,
-    waypointCount: fallbackResult.waypointWorlds.length,
-    usedDetourFallback: fallbackResult.usedDetourFallback,
+  buildRoverApproachWorldNavigationDiagnostics({
+    result: fallbackResult,
     objectCount: request.objects.length,
     obstacleCount: countIncludedObstacles({
       obstacles: request.objects,
@@ -107,13 +104,10 @@ const buildFallbackDiagnostics = ({
     sceneCacheHit: false,
     sceneCacheKey: null,
     workerUsed: false,
-    pathClearanceM: fallbackResult.pathClearanceM,
-    minimumClearanceM: fallbackResult.minimumClearanceM,
-    timeoutBonusMs: fallbackResult.timeoutBonusMs,
     contextBuildMs: 0,
     routeSolveMs: elapsedMs,
     totalMs: elapsedMs,
-  }) as const;
+  });
 
 const serializeForFallback = (
   request: RoverApproachWorldRouteRequest,

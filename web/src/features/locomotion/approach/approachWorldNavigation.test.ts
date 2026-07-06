@@ -18,6 +18,7 @@ import {
 import {
   assessRoverApproachWorldSegmentClearance,
   buildRoverApproachWorldNavigationContext,
+  buildRoverApproachWorldNavigationDiagnostics,
   resolveRoverApproachWorldRoute,
   serializeWorldObjectObstacleSource,
   toRoverApproachWorldVector3Tuple,
@@ -165,6 +166,53 @@ describe("approachWorldNavigation", () => {
     expect(route.pathClearanceM).toBe(
       DEFAULT_ROVER_BASE_RADIUS_M + ROVER_APPROACH_DETOUR_CONFIG.pathClearancePaddingM
     );
+  });
+
+  it("builds diagnostics from a resolved route and caller timing data", () => {
+    const navigationContext = buildRoverApproachWorldNavigationContext({
+      objects: [],
+      upAxisWorld: WORLD_UP,
+    });
+    const route = resolveRoverApproachWorldRoute({
+      segmentStartWorld: SEGMENT_START_WORLD,
+      segmentEndWorld: SEGMENT_END_WORLD,
+      upAxisWorld: WORLD_UP,
+      navigationContext,
+      excludedObstacleId: null,
+      roverBaseRadiusM: DEFAULT_ROVER_BASE_RADIUS_M,
+      isObjectContactTarget: false,
+    });
+
+    const diagnostics = buildRoverApproachWorldNavigationDiagnostics({
+      result: route,
+      objectCount: 2,
+      obstacleCount: 1,
+      sceneCacheHit: true,
+      sceneCacheKey: "cache-key",
+      workerUsed: true,
+      contextBuildMs: 3,
+      routeSolveMs: 4,
+      totalMs: 7,
+    });
+
+    expect(diagnostics).toMatchObject({
+      routeMode: route.mode,
+      plannerStage: route.plannerSummary.plannerStage,
+      blockedReason: route.plannerSummary.blockedReason,
+      waypointCount: route.waypointWorlds.length,
+      usedDetourFallback: route.usedDetourFallback,
+      objectCount: 2,
+      obstacleCount: 1,
+      sceneCacheHit: true,
+      sceneCacheKey: "cache-key",
+      workerUsed: true,
+      pathClearanceM: route.pathClearanceM,
+      minimumClearanceM: route.minimumClearanceM,
+      timeoutBonusMs: route.timeoutBonusMs,
+      contextBuildMs: 3,
+      routeSolveMs: 4,
+      totalMs: 7,
+    });
   });
 
   it("reuses the cached scene and returns waypoint routing for blocked paths", () => {

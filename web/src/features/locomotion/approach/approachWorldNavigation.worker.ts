@@ -4,6 +4,7 @@ import { createLruCache } from "@/shared/lib/cache";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { nowMs } from "@/shared/lib/time";
 import {
+  buildRoverApproachWorldNavigationDiagnostics,
   buildRoverApproachWorldNavigationContext,
   countIncludedObstacles,
   createRoverApproachWorldNavigationSceneCacheKey,
@@ -72,24 +73,17 @@ workerScope.onmessage = (event: MessageEvent<ApproachWorldNavigationWorkerReques
       type: "route",
       result: serializeRoverApproachWorldRouteResult({
         ...result,
-        diagnostics: {
-          routeMode: result.mode,
-          plannerStage: result.plannerSummary.plannerStage,
-          blockedReason: result.plannerSummary.blockedReason,
-          waypointCount: result.waypointWorlds.length,
-          usedDetourFallback: result.usedDetourFallback,
+        diagnostics: buildRoverApproachWorldNavigationDiagnostics({
+          result,
           objectCount: context.sceneSummary.sourceObjectCount,
           obstacleCount,
           sceneCacheHit: cacheHit,
           sceneCacheKey: cacheKey,
           workerUsed: true,
-          pathClearanceM: result.pathClearanceM,
-          minimumClearanceM: result.minimumClearanceM,
-          timeoutBonusMs: result.timeoutBonusMs,
           contextBuildMs,
           routeSolveMs,
           totalMs: nowMs() - requestStartMs,
-        },
+        }),
       }),
     };
     workerScope.postMessage(response);

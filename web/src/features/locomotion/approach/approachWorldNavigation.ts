@@ -141,6 +141,47 @@ export type RoverApproachWorldRouteRequest = {
   isObjectContactTarget: boolean;
 };
 
+type BuildRoverApproachWorldNavigationDiagnosticsParams = {
+  result: RoverApproachWorldRouteResult;
+  objectCount: number;
+  obstacleCount: number;
+  sceneCacheHit: boolean;
+  sceneCacheKey: string | null;
+  workerUsed: boolean;
+  contextBuildMs: number;
+  routeSolveMs: number;
+  totalMs: number;
+};
+
+export const buildRoverApproachWorldNavigationDiagnostics = ({
+  result,
+  objectCount,
+  obstacleCount,
+  sceneCacheHit,
+  sceneCacheKey,
+  workerUsed,
+  contextBuildMs,
+  routeSolveMs,
+  totalMs,
+}: BuildRoverApproachWorldNavigationDiagnosticsParams): RoverApproachWorldNavigationDiagnostics => ({
+  routeMode: result.mode,
+  plannerStage: result.plannerSummary.plannerStage,
+  blockedReason: result.plannerSummary.blockedReason,
+  waypointCount: result.waypointWorlds.length,
+  usedDetourFallback: result.usedDetourFallback,
+  objectCount,
+  obstacleCount,
+  sceneCacheHit,
+  sceneCacheKey,
+  workerUsed,
+  pathClearanceM: result.pathClearanceM,
+  minimumClearanceM: result.minimumClearanceM,
+  timeoutBonusMs: result.timeoutBonusMs,
+  contextBuildMs,
+  routeSolveMs,
+  totalMs,
+});
+
 const resolveRoverApproachPathClearanceM = ({
   roverBaseRadiusM,
   isObjectContactTarget,
