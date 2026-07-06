@@ -10,8 +10,12 @@ import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defau
 import {
   WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
 } from "@/features/world-share/worldScenePackageParams";
-import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
+import {
+  type WorldSceneLayerSnapshot,
+  worldSceneManifestToLayerSnapshot,
+} from "@/features/world-share/worldSceneManifest";
 import type {
+  WorldSceneDocument,
   WorldSceneRegistryEnvelope,
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
@@ -265,9 +269,16 @@ export const useWorldSceneManager = ({
   );
 
   const applyImportedWorldSceneLayer = useCallback(
-    (worldLayout: WorldSceneLayerSnapshot, meshUriContext?: MeshUriResolutionContext) => {
+    (
+      worldLayout: WorldSceneLayerSnapshot | WorldSceneDocument,
+      meshUriContext?: MeshUriResolutionContext,
+      options: { urdfFilename?: string } = {}
+    ) => {
       if (worldLayout.urdf_xml) {
-        updateUrdfFile(worldLayout.urdf_xml, `${worldLayout.name || "world-layout"}.urdf`);
+        updateUrdfFile(
+          worldLayout.urdf_xml,
+          options.urdfFilename || `${worldLayout.name || "world-layout"}.urdf`
+        );
       }
       if (worldLayout.cameras !== undefined) {
         clearCameras();
@@ -285,23 +296,12 @@ export const useWorldSceneManager = ({
 
   const applyImportedWorldScenePackage = useCallback(
     (manifest: WorldScenePackageManifest) => {
-      const snapshot = manifest.world_snapshot;
-      updateUrdfFile(snapshot.urdf_xml, `${manifest.package_id}-${manifest.version}.urdf`);
-      clearCameras();
-      toImportedWorldSceneCameras(snapshot.cameras).forEach((camera) => {
-        addCamera(camera);
+      applyImportedWorldSceneLayer(worldSceneManifestToLayerSnapshot(manifest), undefined, {
+        urdfFilename: `${manifest.package_id}-${manifest.version}.urdf`,
       });
-      applyWorldSceneObjects(snapshot.objects);
-      setJointValues(snapshot.joint_positions);
       toast.success(`Loaded world package ${manifest.package_id}@${manifest.version}`);
     },
-    [
-      addCamera,
-      applyWorldSceneObjects,
-      clearCameras,
-      setJointValues,
-      updateUrdfFile,
-    ]
+    [applyImportedWorldSceneLayer]
   );
 
   const importWorldLayoutFiles = useCallback(
