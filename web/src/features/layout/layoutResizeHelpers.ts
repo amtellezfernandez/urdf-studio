@@ -12,7 +12,7 @@ import {
   MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT,
   MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
 } from "@/features/layout/page/constants";
-import { clampNumber } from "@/shared/lib/numeric";
+import { clampNumber, isFiniteNumber } from "@/shared/lib/numeric";
 
 export type ResizePointerDown = { t: number; x: number };
 
@@ -26,10 +26,10 @@ export const clampLeftSidebarTopPanelHeight = (
   height: number,
   containerHeight: number
 ): number => {
-  if (!Number.isFinite(height)) {
+  if (!isFiniteNumber(height)) {
     return DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT;
   }
-  if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
+  if (!isFiniteNumber(containerHeight) || containerHeight <= 0) {
     return clampNumber(height, 0.05, 0.95);
   }
 
