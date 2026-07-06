@@ -31,5 +31,15 @@ export const toFiniteNumberOrNull = (value: unknown): number | null =>
 export const toFiniteNumberOrFallback = (value: unknown, fallback: number): number =>
   isFiniteNumber(value) ? value : fallback;
 
+export const toNonNegativeFiniteNumberOrNull = (value: unknown): number | null => {
+  const finiteValue = toFiniteNumberOrNull(value);
+  return finiteValue !== null && finiteValue >= 0 ? finiteValue : null;
+};
+
+export const toNonNegativeFiniteNumberOrFallback = (
+  value: unknown,
+  fallback: number
+): number => toNonNegativeFiniteNumberOrNull(value) ?? fallback;
+
 export const parseFiniteFloatOrNull = (value: string): number | null =>
   toFiniteNumberOrNull(Number.parseFloat(value));

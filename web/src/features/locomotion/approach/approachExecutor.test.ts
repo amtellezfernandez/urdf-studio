@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
-import { computeRoverApproachStep, computeSignedPlanarYawErrorRad } from "./approachExecutor";
+import {
+  computeRoverApproachRotateTravelRad,
+  computeRoverApproachStep,
+  computeSignedPlanarYawErrorRad,
+} from "./approachExecutor";
 import type { RoverApproachPlan } from "./approachTypes";
 
 const DT_SEC = 1 / 60;
@@ -33,6 +37,10 @@ describe("computeSignedPlanarYawErrorRad", () => {
 });
 
 describe("computeRoverApproachStep", () => {
+  it("returns zero rotate travel for non-finite yaw input", () => {
+    expect(computeRoverApproachRotateTravelRad(Number.NaN, DT_SEC)).toBe(0);
+  });
+
   it("rotates in place while yaw error is high", () => {
     const step = computeRoverApproachStep({
       plan: createApproachPlan(),
@@ -116,6 +124,23 @@ describe("computeRoverApproachStep", () => {
     });
     expect(step.done).toBe(true);
     expect(step.phase).toBe("done");
+  });
+
+  it("falls back for non-finite distance, yaw, and tolerance inputs", () => {
+    const step = computeRoverApproachStep({
+      plan: {
+        ...createApproachPlan(),
+        distanceToleranceM: Number.NaN,
+      },
+      distanceToTargetM: Number.NaN,
+      yawErrorRad: Number.POSITIVE_INFINITY,
+      dtSec: DT_SEC,
+    });
+
+    expect(step.done).toBe(true);
+    expect(step.phase).toBe("done");
+    expect(step.linearTravelM).toBe(0);
+    expect(step.angularTravelRad).toBe(0);
   });
 
   it("keeps translating on detour waypoint leg until close to waypoint center", () => {

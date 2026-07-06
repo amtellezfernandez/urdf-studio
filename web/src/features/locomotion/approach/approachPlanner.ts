@@ -3,6 +3,7 @@ import {
   clampNumberToMin,
   toFiniteNumberOrFallback,
   toFiniteNumberOrNull,
+  toNonNegativeFiniteNumberOrNull,
 } from "@/shared/lib/numeric";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import type { RoverApproachPlan } from "./approachTypes";
@@ -15,11 +16,6 @@ type RoverApproachPlannerInput = {
   armReachRadiusM: number | null;
   preferredStopDistanceM?: number | null;
   preferredDistanceToleranceM?: number | null;
-};
-
-const resolveNonNegativeFiniteOrNull = (value: number | null | undefined): number | null => {
-  const finiteValue = toFiniteNumberOrNull(value);
-  return finiteValue !== null && finiteValue >= 0 ? finiteValue : null;
 };
 
 const resolvePositiveReachRadiusM = (armReachRadiusM: number | null): number | null => {
@@ -65,12 +61,14 @@ export const planRoverApproach = ({
 }: RoverApproachPlannerInput): RoverApproachPlan => {
   const reachRadiusM = resolvePositiveReachRadiusM(armReachRadiusM);
   const reachStopDistanceM = resolveRoverApproachStopDistance(armReachRadiusM);
-  const preferredStopDistance = resolveNonNegativeFiniteOrNull(preferredStopDistanceM);
+  const preferredStopDistance = toNonNegativeFiniteNumberOrNull(preferredStopDistanceM);
   const desiredStopDistanceM =
     preferredStopDistance === null
       ? reachStopDistanceM
       : Math.min(reachStopDistanceM, preferredStopDistance);
-  const preferredDistanceTolerance = resolveNonNegativeFiniteOrNull(preferredDistanceToleranceM);
+  const preferredDistanceTolerance = toNonNegativeFiniteNumberOrNull(
+    preferredDistanceToleranceM
+  );
   const distanceToleranceM =
     preferredDistanceTolerance === null
       ? ROVER_APPROACH_CONFIG.distanceToleranceM

@@ -3,6 +3,7 @@ import {
   isFiniteNumber,
   isFinitePositiveNumber,
   toFiniteNumberOrFallback,
+  toNonNegativeFiniteNumberOrFallback,
 } from "@/shared/lib/numeric";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import { computeRoverApproachRotateTravelRad, computeRoverApproachStep } from "./approachExecutor";
@@ -191,9 +192,6 @@ type ResolveAppliedRoverApproachMotionResult = {
   completedExactTurn: boolean;
 };
 
-const resolveNonNegativeFiniteOrZero = (value: number): number =>
-  clampNumberToMin(toFiniteNumberOrFallback(value, 0), 0);
-
 export const resolveAppliedRoverApproachMotion = ({
   speedState,
   dtSec,
@@ -208,10 +206,10 @@ export const resolveAppliedRoverApproachMotion = ({
     ROVER_APPROACH_CONFIG.speedDtDenominatorEpsilonSec
   );
   const unclampedLinearTravelM =
-    resolveNonNegativeFiniteOrZero(speedState.linearSpeedMps) * appliedDtSec;
+    toNonNegativeFiniteNumberOrFallback(speedState.linearSpeedMps, 0) * appliedDtSec;
   const linearTravelM = Math.min(
     unclampedLinearTravelM,
-    resolveNonNegativeFiniteOrZero(remainingDistanceM)
+    toNonNegativeFiniteNumberOrFallback(remainingDistanceM, 0)
   );
   const unclampedAngularTravelRad =
     toFiniteNumberOrFallback(speedState.angularSpeedRadps, 0) * appliedDtSec;

@@ -1,5 +1,10 @@
 import * as THREE from "three";
 import {
+  clampNumberToMin,
+  isFinitePositiveNumber,
+  toNonNegativeFiniteNumberOrFallback,
+} from "@/shared/lib/numeric";
+import {
   clampNumber,
   clampRoverApproachDtSec,
   normalizeSignedAngleRad,
@@ -26,7 +31,7 @@ const resolveYawSlowdownScale = (yawAbsRad: number): number => {
 };
 
 const resolveStoppingLimitedLinearSpeed = (distanceErrorM: number): number => {
-  if (!Number.isFinite(distanceErrorM) || distanceErrorM <= 0) return 0;
+  if (!isFinitePositiveNumber(distanceErrorM)) return 0;
   return Math.sqrt(
     STOPPING_SPEED_FACTOR * ROVER_APPROACH_CONFIG.maxLinearAccelMps2 * distanceErrorM
   );
@@ -59,7 +64,7 @@ export const computeRoverApproachRotateTravelRad = (
   dtSec: number
 ): number => {
   const clampedDt = clampRoverApproachDtSec(dtSec);
-  const yawError = Number.isFinite(yawErrorRad) ? normalizeSignedAngleRad(yawErrorRad) : 0;
+  const yawError = normalizeSignedAngleRad(yawErrorRad);
   const rotationSpeed = clampNumber(
     yawError * ROVER_APPROACH_CONFIG.rotationGain,
     -ROVER_APPROACH_CONFIG.maxAngularSpeedRadps,
@@ -84,14 +89,14 @@ export const computeRoverApproachStep = ({
   }
 
   const clampedDt = clampRoverApproachDtSec(dtSec);
-  const safeDistance = Number.isFinite(distanceToTargetM) ? Math.max(0, distanceToTargetM) : 0;
-  const yawError = Number.isFinite(yawErrorRad) ? normalizeSignedAngleRad(yawErrorRad) : 0;
+  const safeDistance = toNonNegativeFiniteNumberOrFallback(distanceToTargetM, 0);
+  const yawError = normalizeSignedAngleRad(yawErrorRad);
   const yawAbs = Math.abs(yawError);
-  const distanceToleranceM =
-    Number.isFinite(plan.distanceToleranceM) && plan.distanceToleranceM >= 0
-      ? plan.distanceToleranceM
-      : ROVER_APPROACH_CONFIG.distanceToleranceM;
-  const distanceError = Math.max(0, safeDistance - plan.desiredStopDistanceM);
+  const distanceToleranceM = toNonNegativeFiniteNumberOrFallback(
+    plan.distanceToleranceM,
+    ROVER_APPROACH_CONFIG.distanceToleranceM
+  );
+  const distanceError = clampNumberToMin(safeDistance - plan.desiredStopDistanceM, 0);
   const yawAligned = yawAbs <= ROVER_APPROACH_CONFIG.yawToleranceRad;
   const distanceAligned = distanceError <= distanceToleranceM;
 
