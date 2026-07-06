@@ -1,9 +1,5 @@
+import { parsePositiveScalar } from "@/features/layout/jointLimitDebugState";
 import { parseUrdfDocument } from "@/shared/lib/urdfBrowser";
-
-const parsePositiveJointLimitValue = (value: string | null): number | null => {
-  const parsedValue = Number(value);
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
-};
 
 export const parseJointEffortLimits = (
   urdfContent?: string
@@ -26,7 +22,7 @@ export const parseJointEffortLimits = (
   Array.from(xmlDoc.querySelectorAll("robot > joint[name]")).forEach((joint) => {
     const jointName = joint.getAttribute("name");
     if (!jointName) return;
-    jointEffortLimits[jointName] = parsePositiveJointLimitValue(
+    jointEffortLimits[jointName] = parsePositiveScalar(
       joint.querySelector("limit")?.getAttribute("effort") ?? null
     );
   });
