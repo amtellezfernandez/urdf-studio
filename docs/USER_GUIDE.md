@@ -114,43 +114,14 @@ World layouts are object-only JSON snapshots. They preserve the currently loaded
 From the first screen:
 
 1. Use `World`.
-2. Paste a public JSON link, or choose local files/folder containing the layout JSON plus referenced mesh, splat, or texture assets.
+2. Paste a public JSON link.
 3. Load the workspace once the layout is staged.
 
 From the workspace:
 
 1. Use `Scene` -> `Import Layout JSON`.
-2. Choose `From File` for a local layout JSON and its assets.
-3. Choose `From Link` for a public JSON link or GitHub `blob` link.
-4. `Default Layout` and `Demo Layout` are available from the same dialog when applicable.
-
-Mesh world objects may include physical properties. Keep visual asset details in `mesh`,
-`asset_ref`, or `appearance`; put collider, mass, friction, restitution, and fixed/collision flags
-under `physics`. The older `simulation` object is still accepted for compatibility, but new layouts
-should prefer `physics`.
-
-```json
-{
-  "id": "crate",
-  "name": "Crate",
-  "type": "mesh",
-  "position_xyz": [0, 0, 0],
-  "size_xyz": [0.4, 0.4, 0.4],
-  "color": "#888888",
-  "mesh": { "uri": "assets/crate.glb", "scale": 1 },
-  "physics": {
-    "collision_geometry": {
-      "kind": "box",
-      "size_xyz": [0.4, 0.4, 0.4]
-    },
-    "fixed": true,
-    "collision": true,
-    "mass_kg": 1,
-    "friction": 0.8,
-    "restitution": 0.1
-  }
-}
-```
+2. Choose `From Link` for a public JSON link or GitHub `blob` link.
+3. `Default Layout` and `Demo Layout` are available from the same dialog when applicable.
 
 ### Import Or Export A Scene Package
 
@@ -158,10 +129,7 @@ Scene packages include robot XML, joint positions, cameras, and world objects in
 
 - Export: `Scene` -> `Export Scene Package`.
 - Import local JSON: `Scene` -> `Import Scene Package` -> `From File`.
-- Import web JSON: `Scene` -> `Import Scene Package` -> paste the package URL -> `From Link`.
 - Browse registry packages: `Scene` -> `Browse Scene Packages`.
-
-GitHub `blob` links are accepted for scene package and layout imports and are converted to raw JSON URLs automatically.
 
 ### Use The Built-In Sample
 

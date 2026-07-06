@@ -8,7 +8,6 @@ type WorldSceneImportDialogProps = {
   onOpenChange: (open: boolean) => void;
   worldLayoutUrl: string;
   onWorldLayoutUrlChange: (value: string) => void;
-  onImportFromFile?: () => void;
   onImportFromLink: () => void;
   onImportDefaultWorld?: () => void;
   onImportDemoWorld?: () => void;
@@ -20,7 +19,6 @@ export const WorldSceneImportDialog = ({
   onOpenChange,
   worldLayoutUrl,
   onWorldLayoutUrlChange,
-  onImportFromFile,
   onImportFromLink,
   onImportDefaultWorld,
   onImportDemoWorld,
@@ -39,13 +37,12 @@ export const WorldSceneImportDialog = ({
       open={open}
       onOpenChange={onOpenChange}
       title="Import World Layout"
-      description="Choose one import source: local JSON/assets, default layout, demo layout, or a custom JSON link."
+      description="Choose one import source: a JSON link, default layout, or demo layout."
       urlInputId="world-layout-url"
       urlLabel="World Layout URL"
       url={worldLayoutUrl}
       onUrlChange={onWorldLayoutUrlChange}
       urlPlaceholder="https://raw.githubusercontent.com/org/repo/main/path/world-layout.json"
-      onImportFromFile={onImportFromFile}
       onImportFromLink={onImportFromLink}
       secondaryActions={secondaryActions}
       isSubmitting={isSubmitting}

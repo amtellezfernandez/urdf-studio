@@ -490,14 +490,12 @@ const Index = () => {
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
-    handleImportWorldLayoutFromFileDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromLinkDialog,
     handleImportWorldLayoutFromUrl,
     handleImportWorkspaceChangeSet,
     handleImportWorldScenePackage,
     handleImportWorldScenePackageFromFileDialog,
-    handleImportWorldScenePackageFromLinkDialog,
     handleExportWorldRolloutCampaign,
     handleImportWorldRolloutResults,
     handleListWorldScenePackages,
@@ -515,7 +513,6 @@ const Index = () => {
     refreshWorldRegistry,
     setIsImportingWorldLayout,
     setWorldScenePackageImportDialogOpen,
-    setWorldScenePackageImportUrlDraft,
     setWorldLayoutImportDialogOpen,
     setWorldLayoutImportUrlDraft,
     setWorldPublishDialogOpen,
@@ -526,7 +523,6 @@ const Index = () => {
     worldRolloutReview,
     worldRolloutReviewOpen,
     worldScenePackageImportDialogOpen,
-    worldScenePackageImportUrlDraft,
     worldLayoutImportDialogOpen,
     worldLayoutImportUrlDraft,
     worldPublishDialogOpen,
@@ -1675,17 +1671,13 @@ const Index = () => {
         onWorldLayoutImportDialogOpenChange={setWorldLayoutImportDialogOpen}
         worldLayoutImportUrlDraft={worldLayoutImportUrlDraft}
         onWorldLayoutImportUrlDraftChange={setWorldLayoutImportUrlDraft}
-        onImportWorldLayoutFromFileDialog={handleImportWorldLayoutFromFileDialog}
         onImportWorldLayoutFromLinkDialog={handleImportWorldLayoutFromLinkDialog}
         onImportDefaultWorldLayoutFromDialog={handleImportDefaultWorldLayoutFromDialog}
         onImportDemoWorldLayoutFromDialog={handleImportDemoWorldLayoutFromDialog}
         isImportingWorldLayout={isImportingWorldLayout}
         worldScenePackageImportDialogOpen={worldScenePackageImportDialogOpen}
         onWorldScenePackageImportDialogOpenChange={setWorldScenePackageImportDialogOpen}
-        worldScenePackageImportUrlDraft={worldScenePackageImportUrlDraft}
-        onWorldScenePackageImportUrlDraftChange={setWorldScenePackageImportUrlDraft}
         onImportWorldScenePackageFromFileDialog={handleImportWorldScenePackageFromFileDialog}
-        onImportWorldScenePackageFromLinkDialog={handleImportWorldScenePackageFromLinkDialog}
         isImportingWorldScenePackage={isImportingWorldScenePackage}
         worldRolloutReviewOpen={worldRolloutReviewOpen}
         worldRolloutReview={worldRolloutReview}

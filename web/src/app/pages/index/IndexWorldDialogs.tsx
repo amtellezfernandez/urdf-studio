@@ -37,17 +37,13 @@ type IndexWorldDialogsProps = {
   onWorldLayoutImportDialogOpenChange: WorldSceneImportDialogProps["onOpenChange"];
   worldLayoutImportUrlDraft: WorldSceneImportDialogProps["worldLayoutUrl"];
   onWorldLayoutImportUrlDraftChange: WorldSceneImportDialogProps["onWorldLayoutUrlChange"];
-  onImportWorldLayoutFromFileDialog: WorldSceneImportDialogProps["onImportFromFile"];
   onImportWorldLayoutFromLinkDialog: WorldSceneImportDialogProps["onImportFromLink"];
   onImportDefaultWorldLayoutFromDialog: WorldSceneImportDialogProps["onImportDefaultWorld"];
   onImportDemoWorldLayoutFromDialog: WorldSceneImportDialogProps["onImportDemoWorld"];
   isImportingWorldLayout: WorldSceneImportDialogProps["isSubmitting"];
   worldScenePackageImportDialogOpen: WorldScenePackageImportDialogProps["open"];
   onWorldScenePackageImportDialogOpenChange: WorldScenePackageImportDialogProps["onOpenChange"];
-  worldScenePackageImportUrlDraft: WorldScenePackageImportDialogProps["worldPackageUrl"];
-  onWorldScenePackageImportUrlDraftChange: WorldScenePackageImportDialogProps["onWorldPackageUrlChange"];
   onImportWorldScenePackageFromFileDialog: WorldScenePackageImportDialogProps["onImportFromFile"];
-  onImportWorldScenePackageFromLinkDialog: WorldScenePackageImportDialogProps["onImportFromLink"];
   isImportingWorldScenePackage: WorldScenePackageImportDialogProps["isSubmitting"];
   worldRolloutReviewOpen: WorldRolloutReviewPanelProps["open"];
   worldRolloutReview: WorldRolloutReviewPanelProps["result"];
@@ -75,17 +71,13 @@ export const IndexWorldDialogs = ({
   onWorldLayoutImportDialogOpenChange,
   worldLayoutImportUrlDraft,
   onWorldLayoutImportUrlDraftChange,
-  onImportWorldLayoutFromFileDialog,
   onImportWorldLayoutFromLinkDialog,
   onImportDefaultWorldLayoutFromDialog,
   onImportDemoWorldLayoutFromDialog,
   isImportingWorldLayout,
   worldScenePackageImportDialogOpen,
   onWorldScenePackageImportDialogOpenChange,
-  worldScenePackageImportUrlDraft,
-  onWorldScenePackageImportUrlDraftChange,
   onImportWorldScenePackageFromFileDialog,
-  onImportWorldScenePackageFromLinkDialog,
   isImportingWorldScenePackage,
   worldRolloutReviewOpen,
   worldRolloutReview,
@@ -122,7 +114,6 @@ export const IndexWorldDialogs = ({
         onOpenChange={onWorldLayoutImportDialogOpenChange}
         worldLayoutUrl={worldLayoutImportUrlDraft}
         onWorldLayoutUrlChange={onWorldLayoutImportUrlDraftChange}
-        onImportFromFile={onImportWorldLayoutFromFileDialog}
         onImportFromLink={onImportWorldLayoutFromLinkDialog}
         onImportDefaultWorld={onImportDefaultWorldLayoutFromDialog}
         onImportDemoWorld={onImportDemoWorldLayoutFromDialog}
@@ -131,10 +122,7 @@ export const IndexWorldDialogs = ({
       <WorldScenePackageImportDialog
         open={worldScenePackageImportDialogOpen}
         onOpenChange={onWorldScenePackageImportDialogOpenChange}
-        worldPackageUrl={worldScenePackageImportUrlDraft}
-        onWorldPackageUrlChange={onWorldScenePackageImportUrlDraftChange}
         onImportFromFile={onImportWorldScenePackageFromFileDialog}
-        onImportFromLink={onImportWorldScenePackageFromLinkDialog}
         isSubmitting={isImportingWorldScenePackage}
       />
       <WorldRolloutReviewPanel

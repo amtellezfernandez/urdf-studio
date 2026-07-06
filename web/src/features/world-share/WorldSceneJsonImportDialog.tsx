@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Link2, Upload } from "lucide-react";
+import { Link2 } from "lucide-react";
 
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -29,7 +29,6 @@ type WorldSceneJsonImportDialogProps = {
   url: string;
   onUrlChange: (value: string) => void;
   urlPlaceholder: string;
-  onImportFromFile?: () => void;
   onImportFromLink: () => void;
   secondaryActions?: readonly WorldSceneJsonImportDialogAction[];
   isSubmitting?: boolean;
@@ -50,7 +49,6 @@ export const WorldSceneJsonImportDialog = ({
   url,
   onUrlChange,
   urlPlaceholder,
-  onImportFromFile,
   onImportFromLink,
   secondaryActions = [],
   isSubmitting = false,
@@ -84,18 +82,6 @@ export const WorldSceneJsonImportDialog = ({
           </p>
         </div>
         <DialogFooter className="gap-2">
-          {onImportFromFile ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onImportFromFile}
-              disabled={isSubmitting}
-              className={WORLD_SCENE_JSON_IMPORT_DIALOG_CLASS_NAMES.outlineButton}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              From File
-            </Button>
-          ) : null}
           {secondaryActions.map((action) => {
             const ActionIcon = action.icon;
             return (
