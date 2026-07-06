@@ -56,8 +56,6 @@ import {
   resolveRoverPlanarObjectApproachDistance,
   shouldExecuteRoverApproachPlan,
   toRoverApproachNavigationDisplayMetrics,
-  buildRoverNavigationPreviewPoints,
-  cloneRoverNavigationWaypointWorlds,
   toRoverApproachWorldVector3Tuple,
   type RoverApproachLegTarget,
   type RoverApproachPlan,
@@ -67,6 +65,27 @@ import {
   type RoverApproachWorldRouteResult,
 } from "@/features/locomotion/approach";
 import { ROVER_APPROACH_BEFORE_IK_SOLVE_PARAMS } from "./roverApproachBeforeIkSolveParams";
+import {
+  resolveLockedRoverApproachRoutePreviewPoints,
+  resolveLockedRoverApproachWaypointLegs,
+  resolveLockedRoverApproachWaypointWorlds,
+  resolveRoverApproachNavigationRouteState,
+  resolveWaypointLegApproachPlan,
+  shouldAdvanceRoverApproachWaypointLeg,
+  shouldUseLockedPurpleRoute,
+  type RoverApproachRetreatWaypoint,
+  type RoverApproachWaypointLeg,
+} from "@/features/viewer/roverApproachRouteState";
+
+export {
+  resolveLockedRoverApproachRoutePreviewPoints,
+  resolveLockedRoverApproachWaypointLegs,
+  resolveLockedRoverApproachWaypointWorlds,
+  resolveRoverApproachNavigationRouteState,
+  resolveWaypointLegApproachPlan,
+  shouldAdvanceRoverApproachWaypointLeg,
+  shouldUseLockedPurpleRoute,
+} from "@/features/viewer/roverApproachRouteState";
 
 const resolveActiveRoverApproachLegTarget = ({
   activeWaypointLeg,
@@ -295,23 +314,6 @@ export type RoverApproachAsyncAbortReason =
   | "manual-base-drag"
   | "stale-solve";
 
-export type RoverApproachRetreatWaypoint = {
-  waypointWorld: THREE.Vector3;
-  excludedObstacleId: string;
-  retreatDistanceM: number;
-};
-
-export type RoverApproachWaypointLeg = {
-  waypointWorld: THREE.Vector3;
-  excludedObstacleId: string | null;
-};
-
-export type RoverApproachNavigationRouteState = {
-  lockedRoutePointWorlds: THREE.Vector3[];
-  navigationWaypointLegs: RoverApproachWaypointLeg[];
-  hasLockedPurpleRoute: boolean;
-};
-
 export const shouldBypassRoverApproachRoutePlanning = ({
   plan,
   retreatWaypoint,
@@ -386,61 +388,6 @@ export const resolveBlockedRoverApproachDirectRouteFallback = ({
         pathClearanceM: runtimeStopPathClearanceM,
       })
     : null;
-};
-
-export const resolveRoverApproachNavigationRouteState = ({
-  basePositionWorld,
-  segmentStartWorld,
-  retreatWaypoint,
-  navigationRoute,
-  finalFacingTarget,
-  lockedNavigationGoalWorld,
-  targetObjectId,
-}: {
-  basePositionWorld: THREE.Vector3;
-  segmentStartWorld: THREE.Vector3;
-  retreatWaypoint: RoverApproachRetreatWaypoint | null;
-  navigationRoute: RoverApproachWorldRouteResult;
-  finalFacingTarget: RoverApproachLegTarget;
-  lockedNavigationGoalWorld: THREE.Vector3 | null;
-  targetObjectId: string;
-}): RoverApproachNavigationRouteState => {
-  const routeWaypointWorlds =
-    navigationRoute.mode === "path" ? navigationRoute.waypointWorlds : [];
-  const plannedRoutePointWorlds = resolveLockedRoverApproachRoutePreviewPoints({
-    segmentStartWorld,
-    waypointWorlds: routeWaypointWorlds,
-    finalNavigationGoalWorld: finalFacingTarget.navigationGoalWorld,
-  });
-  const lockedRoutePointWorlds = (
-    retreatWaypoint
-      ? [basePositionWorld, ...plannedRoutePointWorlds]
-      : plannedRoutePointWorlds
-  ).map((pointWorld) => pointWorld.clone());
-  const navigationWaypointLegs = resolveLockedRoverApproachWaypointLegs({
-    waypointLegs: [
-      ...(retreatWaypoint
-        ? [
-            {
-              waypointWorld: retreatWaypoint.waypointWorld.clone(),
-              excludedObstacleId: retreatWaypoint.excludedObstacleId,
-            },
-          ]
-        : []),
-      ...routeWaypointWorlds.map((waypointWorld) => ({
-        waypointWorld: waypointWorld.clone(),
-        excludedObstacleId: lockedNavigationGoalWorld === null ? targetObjectId : null,
-      })),
-    ],
-  });
-  return {
-    lockedRoutePointWorlds,
-    navigationWaypointLegs,
-    hasLockedPurpleRoute: shouldUseLockedPurpleRoute({
-      retreatWaypoint,
-      routeWaypointCount: routeWaypointWorlds.length,
-    }),
-  };
 };
 
 type ResolveRoverApproachAsyncAbortReasonArgs = {
@@ -610,74 +557,6 @@ const waitForApproachArmResetAfterLocomotion = async ({
   }
   return null;
 };
-
-export const shouldAdvanceRoverApproachWaypointLeg = ({
-  settledFrameCount,
-}: {
-  settledFrameCount: number;
-}): boolean => settledFrameCount >= ROVER_APPROACH_CONFIG.settleFrames;
-
-export const resolveLockedRoverApproachRoutePreviewPoints = ({
-  segmentStartWorld,
-  waypointWorlds,
-  finalNavigationGoalWorld,
-}: {
-  segmentStartWorld: THREE.Vector3;
-  waypointWorlds: readonly THREE.Vector3[];
-  finalNavigationGoalWorld: THREE.Vector3;
-}): THREE.Vector3[] =>
-  buildRoverNavigationPreviewPoints({
-    segmentStartWorld,
-    waypointWorlds,
-    finalNavigationGoalWorld,
-  });
-
-export const resolveWaypointLegApproachPlan = ({
-  wheelDriveEnabled,
-  hasWheelDriveModel,
-  distanceToTargetM,
-  forwardDotTarget,
-}: {
-  wheelDriveEnabled: boolean;
-  hasWheelDriveModel: boolean;
-  distanceToTargetM: number;
-  forwardDotTarget: number;
-}): RoverApproachPlan =>
-  planRoverApproach({
-    wheelDriveEnabled,
-    hasWheelDriveModel,
-    distanceToTargetM,
-    forwardDotTarget,
-    armReachRadiusM: null,
-    preferredStopDistanceM: ROVER_APPROACH_DETOUR_CONFIG.waypointPlanStopDistanceM,
-  });
-
-export const resolveLockedRoverApproachWaypointWorlds = ({
-  lockedRoutePointWorlds,
-}: {
-  lockedRoutePointWorlds: readonly THREE.Vector3[];
-}): THREE.Vector3[] =>
-  cloneRoverNavigationWaypointWorlds({
-    routePointWorlds: lockedRoutePointWorlds,
-  });
-
-export const shouldUseLockedPurpleRoute = ({
-  retreatWaypoint,
-  routeWaypointCount,
-}: {
-  retreatWaypoint: RoverApproachRetreatWaypoint | null;
-  routeWaypointCount: number;
-}): boolean => retreatWaypoint !== null || routeWaypointCount > 0;
-
-export const resolveLockedRoverApproachWaypointLegs = ({
-  waypointLegs,
-}: {
-  waypointLegs: readonly RoverApproachWaypointLeg[];
-}): RoverApproachWaypointLeg[] =>
-  waypointLegs.map((waypointLeg) => ({
-    waypointWorld: waypointLeg.waypointWorld.clone(),
-    excludedObstacleId: waypointLeg.excludedObstacleId,
-  }));
 
 const resolvePlanarDirectionOrFallback = ({
   directionWorld,
