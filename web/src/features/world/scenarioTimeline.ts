@@ -1,3 +1,5 @@
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
+
 export type WorldScenarioEvent = {
   id: string;
   label: string;
@@ -17,19 +19,16 @@ type CreateWorldScenarioClockParams = {
   initialTimeMs?: number;
 };
 
-const toFiniteOr = (value: number, fallback: number) =>
-  Number.isFinite(value) ? value : fallback;
-
 export const clampToScenarioTime = (timeMs: number, durationMs: number) => {
-  const safeDuration = Math.max(0, toFiniteOr(durationMs, 0));
+  const safeDuration = Math.max(0, toFiniteNumberOrFallback(durationMs, 0));
   if (safeDuration <= 0) return 0;
-  return Math.min(safeDuration, Math.max(0, toFiniteOr(timeMs, 0)));
+  return Math.min(safeDuration, Math.max(0, toFiniteNumberOrFallback(timeMs, 0)));
 };
 
 export const normalizeScenarioTime = (timeMs: number, durationMs: number) => {
-  const safeDuration = Math.max(0, toFiniteOr(durationMs, 0));
+  const safeDuration = Math.max(0, toFiniteNumberOrFallback(durationMs, 0));
   if (safeDuration <= 0) return 0;
-  const raw = toFiniteOr(timeMs, 0) % safeDuration;
+  const raw = toFiniteNumberOrFallback(timeMs, 0) % safeDuration;
   return raw < 0 ? raw + safeDuration : raw;
 };
 
@@ -38,13 +37,13 @@ export const toScenarioTimeFromFrame = (
   totalFrames: number,
   durationMs: number
 ) => {
-  const safeDuration = Math.max(0, toFiniteOr(durationMs, 0));
+  const safeDuration = Math.max(0, toFiniteNumberOrFallback(durationMs, 0));
   if (safeDuration <= 0) return 0;
-  const safeTotalFrames = Math.max(1, Math.floor(toFiniteOr(totalFrames, 1)));
+  const safeTotalFrames = Math.max(1, Math.floor(toFiniteNumberOrFallback(totalFrames, 1)));
   if (safeTotalFrames <= 1) return 0;
   const clampedFrame = Math.min(
     safeTotalFrames - 1,
-    Math.max(0, Math.floor(toFiniteOr(frameIndex, 0)))
+    Math.max(0, Math.floor(toFiniteNumberOrFallback(frameIndex, 0)))
   );
   const alpha = clampedFrame / (safeTotalFrames - 1);
   return alpha * safeDuration;
@@ -55,7 +54,7 @@ export const createWorldScenarioClock = ({
   loop = true,
   initialTimeMs = 0,
 }: CreateWorldScenarioClockParams): WorldScenarioClock => {
-  const safeDuration = Math.max(0, toFiniteOr(durationMs, 0));
+  const safeDuration = Math.max(0, toFiniteNumberOrFallback(durationMs, 0));
   const normalize = loop ? normalizeScenarioTime : clampToScenarioTime;
   let currentMs = normalize(initialTimeMs, safeDuration);
 
@@ -66,7 +65,7 @@ export const createWorldScenarioClock = ({
       return currentMs;
     },
     advance: (deltaMs) => {
-      currentMs = normalize(currentMs + toFiniteOr(deltaMs, 0), safeDuration);
+      currentMs = normalize(currentMs + toFiniteNumberOrFallback(deltaMs, 0), safeDuration);
       return currentMs;
     },
   };
