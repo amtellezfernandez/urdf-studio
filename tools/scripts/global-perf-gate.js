@@ -10,6 +10,7 @@ import {
   PERF_GATE_TARGET_BUILD_DURATION_MS,
   PERF_GATE_WORLD_BENCHMARK_COMMAND,
 } from "./perf-gate-params.js";
+import { readUnknownErrorMessage } from "./cliHelpers.js";
 
 const EXIT_SUCCESS = 0;
 const PERF_GATE_DURATION_DECIMALS = 2;
@@ -58,7 +59,7 @@ const main = () => {
 try {
   main();
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = readUnknownErrorMessage(error);
   console.error(`[perf-gate] failure: ${message}`);
   process.exit(1);
 }

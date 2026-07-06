@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "fs";
+import { readUnknownErrorMessage } from "./cliHelpers.js";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 const COMMAND_VALIDATE = "validate";
@@ -20,7 +21,7 @@ const readManifest = (path) => {
     const text = readFileSync(path, "utf-8");
     return JSON.parse(text);
   } catch (error) {
-    fail(`failed to read manifest at ${path}: ${error instanceof Error ? error.message : String(error)}`);
+    fail(`failed to read manifest at ${path}: ${readUnknownErrorMessage(error)}`);
   }
 };
 
@@ -93,4 +94,4 @@ const main = async () => {
   await runList();
 };
 
-main().catch((error) => fail(error instanceof Error ? error.message : String(error)));
+main().catch((error) => fail(readUnknownErrorMessage(error)));

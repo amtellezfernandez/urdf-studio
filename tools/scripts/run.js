@@ -62,6 +62,7 @@ import {
   VERSION_CHECK_STATES,
 } from './updateCheck.js';
 import { createTerminalLogger } from './terminalOutput.js';
+import { readUnknownErrorMessage } from './cliHelpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -694,7 +695,7 @@ const isMainModule = () =>
 
 if (isMainModule()) {
   main().catch((error) => {
-    log(`✗ Failed to start: ${error instanceof Error ? error.message : String(error)}`, colors.red);
+    log(`✗ Failed to start: ${readUnknownErrorMessage(error)}`, colors.red);
     process.exit(1);
   });
 }

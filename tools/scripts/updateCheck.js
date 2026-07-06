@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { isTruthyEnvValue } from './runConfig.js';
+import { readUnknownErrorMessage } from './cliHelpers.js';
 import {
   RUN_OPTION_FLAGS,
   RUN_UPDATE_CHECK_API_BASE_URL,
@@ -296,7 +297,7 @@ export async function resolveOfficialVersionStatus({
   } catch (error) {
     return {
       state: VERSION_CHECK_STATES.unavailable,
-      reason: `git metadata unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      reason: `git metadata unavailable: ${readUnknownErrorMessage(error)}`,
     };
   }
 
@@ -364,7 +365,7 @@ export async function resolveOfficialVersionStatus({
       repoSlug,
       aheadBy: 0,
       behindBy: 0,
-      reason: `official version check failed: ${error instanceof Error ? error.message : String(error)}`,
+      reason: `official version check failed: ${readUnknownErrorMessage(error)}`,
     };
   }
 

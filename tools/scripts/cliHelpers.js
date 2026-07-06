@@ -13,6 +13,10 @@ export function isMainModule(importMetaUrl) {
   return Boolean(process.argv[1] && importMetaUrl === pathToFileURL(resolve(process.argv[1])).href);
 }
 
+export function readUnknownErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function runCliMain(importMetaUrl, main) {
   if (!isMainModule(importMetaUrl)) {
     return;
@@ -20,7 +24,7 @@ export function runCliMain(importMetaUrl, main) {
   try {
     main();
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(readUnknownErrorMessage(error));
     process.exitCode = 1;
   }
 }
