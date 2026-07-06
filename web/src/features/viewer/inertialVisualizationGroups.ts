@@ -21,12 +21,74 @@ export type InertiaVisualizationMetricGroup = {
   indices: number[];
 };
 
+type InertiaVisualizationLinkEntry = {
+  linkName: string;
+};
+
+export type InertiaVisualizationVisibleLinkIndices = {
+  visibleLinkIndices: number[];
+  activeVisibleLinkIndices: number[];
+  deemphasizedVisibleLinkIndices: number[];
+};
+
 const INERTIA_VISUALIZATION_METRIC_GROUP_ORDER: readonly InertiaVisualizationMetricGroupKey[] = [
   "healthy",
   "warning",
   "problematic",
   "unverified",
 ] as const;
+
+const toNonEmptyNameSet = (
+  names: readonly string[] | null | undefined
+): Set<string> | null => (names && names.length > 0 ? new Set(names) : null);
+
+const isLinkIndexInNameSet = (
+  index: number,
+  inertials: readonly InertiaVisualizationLinkEntry[],
+  linkNameSet: ReadonlySet<string>
+): boolean => {
+  const linkName = inertials[index]?.linkName;
+  return typeof linkName === "string" && linkNameSet.has(linkName);
+};
+
+export const buildInertiaVisualizationVisibleLinkIndices = ({
+  inertiaIndices,
+  inertials,
+  scopedLinkNames,
+  deemphasizedOutlineLinkNames,
+}: {
+  inertiaIndices: readonly number[];
+  inertials: readonly InertiaVisualizationLinkEntry[];
+  scopedLinkNames?: readonly string[] | null;
+  deemphasizedOutlineLinkNames?: readonly string[] | null;
+}): InertiaVisualizationVisibleLinkIndices => {
+  const scopedLinkNameSet = toNonEmptyNameSet(scopedLinkNames);
+  const deemphasizedOutlineLinkNameSet = toNonEmptyNameSet(
+    deemphasizedOutlineLinkNames
+  );
+  const visibleLinkIndices = scopedLinkNameSet
+    ? inertiaIndices.filter((index) =>
+        isLinkIndexInNameSet(index, inertials, scopedLinkNameSet)
+      )
+    : [...inertiaIndices];
+  const deemphasizedVisibleLinkIndices = deemphasizedOutlineLinkNameSet
+    ? visibleLinkIndices.filter((index) =>
+        isLinkIndexInNameSet(index, inertials, deemphasizedOutlineLinkNameSet)
+      )
+    : [];
+  const activeVisibleLinkIndices = deemphasizedOutlineLinkNameSet
+    ? visibleLinkIndices.filter(
+        (index) =>
+          !isLinkIndexInNameSet(index, inertials, deemphasizedOutlineLinkNameSet)
+      )
+    : visibleLinkIndices;
+
+  return {
+    visibleLinkIndices,
+    activeVisibleLinkIndices,
+    deemphasizedVisibleLinkIndices,
+  };
+};
 
 export const buildInertiaVisualizationMetricGroups = ({
   inertiaIndices,

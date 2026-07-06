@@ -50,7 +50,10 @@ import {
   type GeometryReferenceSource,
 } from "@/features/viewer/inertiaGeometryReference";
 import { resolveInertiaCenterMarkerScale } from "@/features/viewer/inertialVisualizationColor";
-import { buildInertiaVisualizationMetricGroups } from "@/features/viewer/inertialVisualizationGroups";
+import {
+  buildInertiaVisualizationMetricGroups,
+  buildInertiaVisualizationVisibleLinkIndices,
+} from "@/features/viewer/inertialVisualizationGroups";
 
 export type InertiaReliabilityEntry = {
   linkName: string;
@@ -220,47 +223,19 @@ export const InertialVisualization = ({
     () => Array.from(inertiaByIndex.keys()),
     [inertiaByIndex],
   );
-  const scopedLinkNameSet = useMemo(
+  const {
+    visibleLinkIndices,
+    activeVisibleLinkIndices,
+    deemphasizedVisibleLinkIndices,
+  } = useMemo(
     () =>
-      scopedLinkNames && scopedLinkNames.length > 0
-        ? new Set(scopedLinkNames)
-        : null,
-    [scopedLinkNames],
-  );
-  const deemphasizedOutlineLinkNameSet = useMemo(
-    () =>
-      deemphasizedOutlineLinkNames && deemphasizedOutlineLinkNames.length > 0
-        ? new Set(deemphasizedOutlineLinkNames)
-        : null,
-    [deemphasizedOutlineLinkNames],
-  );
-  const visibleLinkIndices = useMemo(
-    () =>
-      scopedLinkNameSet
-        ? inertiaIndices.filter((index) =>
-            scopedLinkNameSet.has(inertials[index]?.linkName),
-          )
-        : inertiaIndices,
-    [inertiaIndices, inertials, scopedLinkNameSet],
-  );
-  const deemphasizedVisibleLinkIndices = useMemo(
-    () =>
-      deemphasizedOutlineLinkNameSet
-        ? visibleLinkIndices.filter((index) =>
-            deemphasizedOutlineLinkNameSet.has(inertials[index]?.linkName),
-          )
-        : [],
-    [deemphasizedOutlineLinkNameSet, inertials, visibleLinkIndices],
-  );
-  const activeVisibleLinkIndices = useMemo(
-    () =>
-      deemphasizedOutlineLinkNameSet
-        ? visibleLinkIndices.filter(
-            (index) =>
-              !deemphasizedOutlineLinkNameSet.has(inertials[index]?.linkName),
-          )
-        : visibleLinkIndices,
-    [deemphasizedOutlineLinkNameSet, inertials, visibleLinkIndices],
+      buildInertiaVisualizationVisibleLinkIndices({
+        inertiaIndices,
+        inertials,
+        scopedLinkNames,
+        deemphasizedOutlineLinkNames,
+      }),
+    [deemphasizedOutlineLinkNames, inertiaIndices, inertials, scopedLinkNames],
   );
   const shapeGroups = useMemo(
     () =>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildInertiaVisualizationMetricGroups } from "@/features/viewer/inertialVisualizationGroups";
+import {
+  buildInertiaVisualizationMetricGroups,
+  buildInertiaVisualizationVisibleLinkIndices,
+} from "@/features/viewer/inertialVisualizationGroups";
 
 describe("buildInertiaVisualizationMetricGroups", () => {
   it("splits indices by the requested metric severity", () => {
@@ -38,5 +41,56 @@ describe("buildInertiaVisualizationMetricGroups", () => {
       { key: "problematic", indices: [] },
       { key: "unverified", indices: [] },
     ]);
+  });
+});
+
+describe("buildInertiaVisualizationVisibleLinkIndices", () => {
+  const inertials = [
+    { linkName: "base" },
+    { linkName: "shoulder" },
+    { linkName: "wrist" },
+    { linkName: "gripper" },
+  ];
+
+  it("scopes visible inertia links by name", () => {
+    expect(
+      buildInertiaVisualizationVisibleLinkIndices({
+        inertiaIndices: [0, 1, 2, 3],
+        inertials,
+        scopedLinkNames: ["shoulder", "gripper"],
+      })
+    ).toEqual({
+      visibleLinkIndices: [1, 3],
+      activeVisibleLinkIndices: [1, 3],
+      deemphasizedVisibleLinkIndices: [],
+    });
+  });
+
+  it("splits deemphasized indices out of the visible set", () => {
+    expect(
+      buildInertiaVisualizationVisibleLinkIndices({
+        inertiaIndices: [0, 1, 2, 3],
+        inertials,
+        scopedLinkNames: ["base", "shoulder", "wrist"],
+        deemphasizedOutlineLinkNames: ["base", "gripper"],
+      })
+    ).toEqual({
+      visibleLinkIndices: [0, 1, 2],
+      activeVisibleLinkIndices: [1, 2],
+      deemphasizedVisibleLinkIndices: [0],
+    });
+  });
+
+  it("keeps all provided indices visible when no scope is active", () => {
+    expect(
+      buildInertiaVisualizationVisibleLinkIndices({
+        inertiaIndices: [0, 2],
+        inertials,
+      })
+    ).toEqual({
+      visibleLinkIndices: [0, 2],
+      activeVisibleLinkIndices: [0, 2],
+      deemphasizedVisibleLinkIndices: [],
+    });
   });
 });
