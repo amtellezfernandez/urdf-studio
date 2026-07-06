@@ -21,6 +21,7 @@ import {
   readWorldLayoutBridgeRequest,
 } from "@/app/pages/index/worldSceneManagerBridge";
 import {
+  WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT,
   WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
 } from "@/app/pages/index/indexPageHelpers";
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
@@ -50,9 +51,6 @@ import {
 import { useWorldPublishController } from "@/app/pages/index/useWorldPublishController";
 import { useWorldRegistryController } from "@/app/pages/index/useWorldRegistryController";
 import { useWorldRolloutController } from "@/app/pages/index/useWorldRolloutController";
-
-const WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT =
-  ".json,application/json,.stl,.dae,.obj,.glb,.gltf,.mtl,.ply,.splat,.png,.jpg,.jpeg";
 
 type UseWorldSceneManagerParams = {
   addCamera: (camera: Omit<Camera, "id">) => void;

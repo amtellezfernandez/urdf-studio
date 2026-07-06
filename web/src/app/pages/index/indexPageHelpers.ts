@@ -5,6 +5,7 @@ import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublish
 export const DEFAULT_WORLD_SCENE_PACKAGE_ID = INDEX_PAGE_HELPER_PARAMS.defaultWorldScenePackageId;
 export const DEFAULT_WORLD_SCENE_PACKAGE_TITLE = INDEX_PAGE_HELPER_PARAMS.defaultWorldScenePackageTitle;
 export const WORLD_SCENE_PACKAGE_IMPORT_ACCEPT = INDEX_PAGE_HELPER_PARAMS.worldScenePackageImportAccept;
+export const WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT = INDEX_PAGE_HELPER_PARAMS.worldLayoutLocalImportAccept;
 const DEFAULT_WORLD_LAYOUT_EXPORT_NAME = INDEX_PAGE_HELPER_PARAMS.defaultWorldLayoutExportName;
 const ROBOT_NAME_PATTERN = /<robot\b[^>]*\bname=["']([^"']+)["']/i;
 export const toWorldRegistryRecordKey = (packageId: string, version: string) =>
