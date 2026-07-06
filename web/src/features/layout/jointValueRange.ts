@@ -4,6 +4,7 @@ import {
   WHEEL_GROUP_LABEL_PATTERN,
   WHEEL_JOINT_NAME_PATTERN,
 } from "@/features/layout/jointRangeParams";
+import { toFiniteNumberOrNull } from "@/shared/lib/numeric";
 
 type ResolveJointValueRangeInput = {
   jointName: string;
@@ -19,9 +20,6 @@ export type JointValueRange = {
   clampUpper: number | null;
   hasFiniteHardLimits: boolean;
 };
-
-const resolveFiniteNumber = (value: number | null | undefined): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 const ensureMinDisplaySpan = (min: number, max: number): { min: number; max: number } => {
   const span = max - min;
@@ -60,8 +58,8 @@ export const resolveJointValueRange = ({
     };
   }
 
-  let lower = resolveFiniteNumber(jointInfo?.lower);
-  let upper = resolveFiniteNumber(jointInfo?.upper);
+  let lower = toFiniteNumberOrNull(jointInfo?.lower);
+  let upper = toFiniteNumberOrNull(jointInfo?.upper);
   if (lower !== null && upper !== null && lower > upper) {
     const swappedLower = upper;
     upper = lower;

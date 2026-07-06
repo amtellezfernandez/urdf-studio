@@ -3,8 +3,10 @@ import {
   clampNumber,
   clampNumberToMin,
   clampNumberToOptionalBounds,
+  isFiniteNumber,
   isFinitePositiveNumber,
   toFiniteNumberOrFallback,
+  toFiniteNumberOrNull,
 } from "@/shared/lib/numeric";
 
 describe("numeric", () => {
@@ -31,6 +33,21 @@ describe("numeric", () => {
     expect(toFiniteNumberOrFallback(Number.NaN, 9)).toBe(9);
     expect(toFiniteNumberOrFallback(Number.POSITIVE_INFINITY, 9)).toBe(9);
     expect(toFiniteNumberOrFallback(undefined, 9)).toBe(9);
+  });
+
+  it("returns null for non-finite values", () => {
+    expect(toFiniteNumberOrNull(4)).toBe(4);
+    expect(toFiniteNumberOrNull(Number.NaN)).toBeNull();
+    expect(toFiniteNumberOrNull(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(toFiniteNumberOrNull(undefined)).toBeNull();
+  });
+
+  it("identifies only finite numbers", () => {
+    expect(isFiniteNumber(0)).toBe(true);
+    expect(isFiniteNumber(-1)).toBe(true);
+    expect(isFiniteNumber(Number.NaN)).toBe(false);
+    expect(isFiniteNumber(Number.POSITIVE_INFINITY)).toBe(false);
+    expect(isFiniteNumber("1")).toBe(false);
   });
 
   it("identifies only finite positive numbers", () => {

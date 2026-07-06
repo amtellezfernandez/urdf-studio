@@ -3,6 +3,7 @@ import jointColors from "@/shared/joint_colors.json";
 import { getJointColor } from "@/features/urdf/utils/jointColors";
 import { RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { JOINT_LIST_ITEM_PARAMS } from "@/features/layout/jointListItemParams";
+import { toFiniteNumberOrNull } from "@/shared/lib/numeric";
 
 type ResolveJointListItemDisplayStateArgs = {
   angleUnit: "rad" | "deg";
@@ -23,9 +24,6 @@ export type JointListItemDisplayState = {
   squareColor: string;
   velocityDisplay: string;
 };
-
-const toFiniteNumberOrNull = (value: number | null | undefined): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 export const formatJointMetricValue = (value: number | null | undefined): string => {
   const finiteValue = toFiniteNumberOrNull(value);

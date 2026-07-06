@@ -1,3 +1,5 @@
+import { isFiniteNumber } from "@/shared/lib/numeric";
+
 type JointValuesByName = Record<string, number>;
 type JointActivityUntilByName = Record<string, number>;
 
@@ -14,9 +16,6 @@ type AdvanceJointActivityStateArgs = {
   changeEpsilonRad: number;
   visibleHoldMs: number;
 };
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
 
 export const createInitialJointActivityState = (): JointActivityState => ({
   previousJointValues: {},
