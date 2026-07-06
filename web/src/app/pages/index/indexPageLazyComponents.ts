@@ -23,9 +23,3 @@ export const WorldSceneImportDialog = lazy(() =>
     default: module.WorldSceneImportDialog,
   }))
 );
-
-export const WorldScenePackageImportDialog = lazy(() =>
-  import("@/features/world-share/WorldScenePackageImportDialog").then((module) => ({
-    default: module.WorldScenePackageImportDialog,
-  }))
-);

@@ -495,6 +495,26 @@ export const parseWorldSceneManifestText = async (raw: string) => {
   return assertImportableWorldScenePackage(manifest, "Invalid world package");
 };
 
+export const parseWorldSceneLayerText = async (raw: string) => {
+  const { parseStaticWorldSceneLayerSnapshot } =
+    await loadWorldSceneManifestModule();
+  const { snapshot, errors } = parseStaticWorldSceneLayerSnapshot(JSON.parse(raw));
+  if (!snapshot) {
+    throw new Error(errors[0] ? `Invalid world JSON: ${errors.join("; ")}` : "Invalid world JSON");
+  }
+  return snapshot;
+};
+
+export const readWorldSceneLayerPayload = async (payload: unknown) => {
+  const { parseStaticWorldSceneLayerSnapshot } =
+    await loadWorldSceneManifestModule();
+  const { snapshot, errors } = parseStaticWorldSceneLayerSnapshot(payload);
+  if (!snapshot) {
+    throw new Error(errors[0] ? `Invalid world JSON: ${errors.join("; ")}` : "Invalid world JSON");
+  }
+  return snapshot;
+};
+
 export const readWorldSceneManifestPayload = async (payload: unknown) => {
   const { readWorldSceneManifestFromUnknown } =
     await loadWorldSceneManifestModule();

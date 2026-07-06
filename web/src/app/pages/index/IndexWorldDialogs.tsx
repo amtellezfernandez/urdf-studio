@@ -5,7 +5,6 @@ import {
   WorldRegistryPanel,
   WorldRolloutReviewPanel,
   WorldSceneImportDialog,
-  WorldScenePackageImportDialog,
 } from "@/app/pages/index/indexPageLazyComponents";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { resolveFeatureGateAvailability } from "@/shared/lib/featureGateUi";
@@ -13,7 +12,6 @@ import { resolveFeatureGateAvailability } from "@/shared/lib/featureGateUi";
 type WorldRegistryPanelProps = ComponentProps<typeof WorldRegistryPanel>;
 type WorldPublishDialogProps = ComponentProps<typeof WorldPublishDialog>;
 type WorldSceneImportDialogProps = ComponentProps<typeof WorldSceneImportDialog>;
-type WorldScenePackageImportDialogProps = ComponentProps<typeof WorldScenePackageImportDialog>;
 type WorldRolloutReviewPanelProps = ComponentProps<typeof WorldRolloutReviewPanel>;
 
 type IndexWorldDialogsProps = {
@@ -38,13 +36,10 @@ type IndexWorldDialogsProps = {
   worldLayoutImportUrlDraft: WorldSceneImportDialogProps["worldLayoutUrl"];
   onWorldLayoutImportUrlDraftChange: WorldSceneImportDialogProps["onWorldLayoutUrlChange"];
   onImportWorldLayoutFromLinkDialog: WorldSceneImportDialogProps["onImportFromLink"];
+  onImportWorldLayoutFromFileDialog: NonNullable<WorldSceneImportDialogProps["onImportFromFile"]>;
   onImportDefaultWorldLayoutFromDialog: WorldSceneImportDialogProps["onImportDefaultWorld"];
   onImportDemoWorldLayoutFromDialog: WorldSceneImportDialogProps["onImportDemoWorld"];
   isImportingWorldLayout: WorldSceneImportDialogProps["isSubmitting"];
-  worldScenePackageImportDialogOpen: WorldScenePackageImportDialogProps["open"];
-  onWorldScenePackageImportDialogOpenChange: WorldScenePackageImportDialogProps["onOpenChange"];
-  onImportWorldScenePackageFromFileDialog: WorldScenePackageImportDialogProps["onImportFromFile"];
-  isImportingWorldScenePackage: WorldScenePackageImportDialogProps["isSubmitting"];
   worldRolloutReviewOpen: WorldRolloutReviewPanelProps["open"];
   worldRolloutReview: WorldRolloutReviewPanelProps["result"];
   onWorldRolloutReviewOpenChange: (open: boolean) => void;
@@ -72,13 +67,10 @@ export const IndexWorldDialogs = ({
   worldLayoutImportUrlDraft,
   onWorldLayoutImportUrlDraftChange,
   onImportWorldLayoutFromLinkDialog,
+  onImportWorldLayoutFromFileDialog,
   onImportDefaultWorldLayoutFromDialog,
   onImportDemoWorldLayoutFromDialog,
   isImportingWorldLayout,
-  worldScenePackageImportDialogOpen,
-  onWorldScenePackageImportDialogOpenChange,
-  onImportWorldScenePackageFromFileDialog,
-  isImportingWorldScenePackage,
   worldRolloutReviewOpen,
   worldRolloutReview,
   onWorldRolloutReviewOpenChange,
@@ -115,15 +107,10 @@ export const IndexWorldDialogs = ({
         worldLayoutUrl={worldLayoutImportUrlDraft}
         onWorldLayoutUrlChange={onWorldLayoutImportUrlDraftChange}
         onImportFromLink={onImportWorldLayoutFromLinkDialog}
+        onImportFromFile={onImportWorldLayoutFromFileDialog}
         onImportDefaultWorld={onImportDefaultWorldLayoutFromDialog}
         onImportDemoWorld={onImportDemoWorldLayoutFromDialog}
         isSubmitting={isImportingWorldLayout}
-      />
-      <WorldScenePackageImportDialog
-        open={worldScenePackageImportDialogOpen}
-        onOpenChange={onWorldScenePackageImportDialogOpenChange}
-        onImportFromFile={onImportWorldScenePackageFromFileDialog}
-        isSubmitting={isImportingWorldScenePackage}
       />
       <WorldRolloutReviewPanel
         open={worldRolloutReviewOpen}

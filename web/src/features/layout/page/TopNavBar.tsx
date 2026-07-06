@@ -23,13 +23,11 @@ type TopNavMenusProps = Pick<
   | "onCanonicalOrder"
   | "onExportAssemblyUrdf"
   | "onExportCurrentWorldSceneLayer"
-  | "onExportCurrentWorldScenePackage"
   | "onExportWorldRolloutCampaign"
   | "onFixMeshPaths"
   | "onImportSceneLayerFromUrl"
   | "onImportWorkspaceChangeSet"
   | "onImportWorldRolloutResults"
-  | "onImportWorldScenePackage"
   | "onListWorldScenePackages"
   | "onNormalizeAxes"
   | "onOpenCameraCreator"
@@ -127,8 +125,6 @@ const TopNavMenus = ({
             onExportCurrentWorldSceneLayer={props.onExportCurrentWorldSceneLayer}
             onImportSceneLayerFromUrl={props.onImportSceneLayerFromUrl}
             onImportWorkspaceChangeSet={props.onImportWorkspaceChangeSet}
-            onExportCurrentWorldScenePackage={props.onExportCurrentWorldScenePackage}
-            onImportWorldScenePackage={props.onImportWorldScenePackage}
             onValidateCurrentWorldScenePackage={props.onValidateCurrentWorldScenePackage}
             onPublishCurrentWorldScenePackage={props.onPublishCurrentWorldScenePackage}
             onListWorldScenePackages={props.onListWorldScenePackages}

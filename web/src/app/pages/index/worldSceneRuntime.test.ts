@@ -5,6 +5,7 @@ import {
   createWorldRolloutCheckerProfile,
   downloadWorldScenePackageManifest,
   loadWorldScenePackageFromImportParams,
+  parseWorldSceneLayerText,
   parseWorldSceneManifestText,
   readWorldSceneLayerFromUrl,
   readWorldSceneManifestPayload,
@@ -352,6 +353,22 @@ describe("worldSceneRuntime world package import", () => {
 });
 
 describe("worldSceneRuntime world layout import", () => {
+  it("parses legacy package files through the unified world JSON reader", async () => {
+    const manifestPayload = createManifestPayload({
+      joint_positions: { shoulder: 0.5 },
+    });
+
+    const worldLayout = await parseWorldSceneLayerText(JSON.stringify(manifestPayload));
+
+    expect(worldLayout.name).toBe("Demo Scene");
+    expect(worldLayout.objects).toEqual(manifestPayload.world_snapshot.objects);
+    expect(worldLayout.urdf_xml).toBe(manifestPayload.world_snapshot.urdf_xml);
+    expect(worldLayout.joint_positions).toEqual({ shoulder: 0.5 });
+    expect(worldLayout.environment).toEqual({
+      frame_convention: "ros-rep-103",
+    });
+  });
+
   it("reports embedded cameras from world-scene package payloads", async () => {
     const manifestPayload = createManifestPayload({
       cameras: [

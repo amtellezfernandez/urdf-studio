@@ -491,11 +491,11 @@ const Index = () => {
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,
+    handleImportWorldLayoutFromFileDialog,
     handleImportWorldLayoutFromLinkDialog,
     handleImportWorldLayoutFromUrl,
     handleImportWorkspaceChangeSet,
     handleImportWorldScenePackage,
-    handleImportWorldScenePackageFromFileDialog,
     handleExportWorldRolloutCampaign,
     handleImportWorldRolloutResults,
     handleListWorldScenePackages,
@@ -507,12 +507,10 @@ const Index = () => {
     handleSubmitWorldPublishDialog,
     handleValidateCurrentWorldScenePackage,
     isImportingWorldLayout,
-    isImportingWorldScenePackage,
     isPublishingWorldPackage,
     publishTargetLabel,
     refreshWorldRegistry,
     setIsImportingWorldLayout,
-    setWorldScenePackageImportDialogOpen,
     setWorldLayoutImportDialogOpen,
     setWorldLayoutImportUrlDraft,
     setWorldPublishDialogOpen,
@@ -522,7 +520,6 @@ const Index = () => {
     setWorldRegistryOpen,
     worldRolloutReview,
     worldRolloutReviewOpen,
-    worldScenePackageImportDialogOpen,
     worldLayoutImportDialogOpen,
     worldLayoutImportUrlDraft,
     worldPublishDialogOpen,
@@ -1672,13 +1669,10 @@ const Index = () => {
         worldLayoutImportUrlDraft={worldLayoutImportUrlDraft}
         onWorldLayoutImportUrlDraftChange={setWorldLayoutImportUrlDraft}
         onImportWorldLayoutFromLinkDialog={handleImportWorldLayoutFromLinkDialog}
+        onImportWorldLayoutFromFileDialog={handleImportWorldLayoutFromFileDialog}
         onImportDefaultWorldLayoutFromDialog={handleImportDefaultWorldLayoutFromDialog}
         onImportDemoWorldLayoutFromDialog={handleImportDemoWorldLayoutFromDialog}
         isImportingWorldLayout={isImportingWorldLayout}
-        worldScenePackageImportDialogOpen={worldScenePackageImportDialogOpen}
-        onWorldScenePackageImportDialogOpenChange={setWorldScenePackageImportDialogOpen}
-        onImportWorldScenePackageFromFileDialog={handleImportWorldScenePackageFromFileDialog}
-        isImportingWorldScenePackage={isImportingWorldScenePackage}
         worldRolloutReviewOpen={worldRolloutReviewOpen}
         worldRolloutReview={worldRolloutReview}
         onWorldRolloutReviewOpenChange={setWorldRolloutReviewOpen}

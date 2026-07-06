@@ -8,8 +8,6 @@ type WorldsMenuProps = Pick<
   | "onExportCurrentWorldSceneLayer"
   | "onImportSceneLayerFromUrl"
   | "onImportWorkspaceChangeSet"
-  | "onExportCurrentWorldScenePackage"
-  | "onImportWorldScenePackage"
   | "onValidateCurrentWorldScenePackage"
   | "onPublishCurrentWorldScenePackage"
   | "onListWorldScenePackages"
@@ -26,8 +24,6 @@ export function WorldsMenu({
   onExportCurrentWorldSceneLayer,
   onImportSceneLayerFromUrl,
   onImportWorkspaceChangeSet,
-  onExportCurrentWorldScenePackage,
-  onImportWorldScenePackage,
   onValidateCurrentWorldScenePackage,
   onPublishCurrentWorldScenePackage,
   onListWorldScenePackages,
@@ -42,31 +38,25 @@ export function WorldsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className={cn(menuTriggerClass, "ml-1")} title="Scene package and layout tools">
+        <button className={cn(menuTriggerClass, "ml-1")} title="World document and registry tools">
           Scene
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className={cn("w-56", menuContentClass)}>
         <DropdownMenuItem onClick={onValidateCurrentWorldScenePackage} className={menuItemClass}>
-          Validate Scene Package
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onExportCurrentWorldScenePackage} className={menuItemClass}>
-          Export Scene Package
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onImportWorldScenePackage} className={menuItemClass}>
-          Import Scene Package
+          Validate World Package
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onPublishCurrentWorldScenePackage} className={menuItemClass}>
-          Publish Scene Package
+          Publish World Package
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onListWorldScenePackages} className={menuItemClass}>
-          Browse Scene Packages
+          Browse Published Worlds
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportCurrentWorldSceneLayer} className={menuItemClass}>
-          Export Layout JSON
+          Export World JSON
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportSceneLayerFromUrl} className={menuItemClass}>
-          Import Layout JSON
+          Import World JSON
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportWorkspaceChangeSet} className={menuItemClass}>
           Import Workspace Changes

@@ -131,16 +131,17 @@ From the workspace:
 Relative asset refs resolve against the loaded file set or the source URL. No asset upload step is
 required.
 
-### Import Or Export A Registry Package
+### Publish Or Browse Registry Packages
 
 Registry packages wrap the same world document in a thin envelope with `package_id`, `version`,
 `provenance`, and `artifacts`. Use them when publishing, downloading a package file, or loading
 from the registry.
 
-- Export package file: `Scene` -> `Export Scene Package`.
-- Import local JSON: `Scene` -> `Import Scene Package` -> `From File`.
-- Browse registry packages: `Scene` -> `Browse Scene Packages`.
-- Export world document: `Scene` -> `Export World Layout`. You can include or omit robot state.
+- Publish current world: `Scene` -> `Publish World Package`.
+- Browse registry packages: `Scene` -> `Browse Published Worlds`.
+- Export world document: `Scene` -> `Export World JSON`. You can include or omit robot state.
+- Import local or remote world JSON: `Scene` -> `Import World JSON`. Legacy package JSON files are
+  still accepted through the same import flow.
 
 ### Use The Built-In Sample
 
