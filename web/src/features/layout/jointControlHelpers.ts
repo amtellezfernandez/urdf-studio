@@ -8,6 +8,7 @@ import {
 } from "@/shared/lib/urdfBrowser";
 import { RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { getJointLimitsError } from "@/shared/lib/jointLimits";
+import { parseFiniteFloatOrNull } from "@/shared/lib/numeric";
 import { parseVector3 } from "@/features/urdf/editor/link-editor/sizeUtils";
 
 export type JointVector3 = [number, number, number];
@@ -20,8 +21,7 @@ const DEFAULT_ORIGIN: { xyz: JointVector3; rpy: JointVector3 } = {
 export const parseJointNumericInput = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  const parsed = Number.parseFloat(trimmed);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return parseFiniteFloatOrNull(trimmed) ?? undefined;
 };
 
 export const resolveJointOriginSnapshot = ({
@@ -72,8 +72,7 @@ export const resolveJointAvailableLinks = ({
 };
 
 export const parseAxisValue = (value: string): number | null => {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return parseFiniteFloatOrNull(value);
 };
 
 export const jointTypeNeedsLimits = (jointType: string): boolean =>

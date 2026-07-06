@@ -30,3 +30,6 @@ export const toFiniteNumberOrNull = (value: unknown): number | null =>
 
 export const toFiniteNumberOrFallback = (value: unknown, fallback: number): number =>
   isFiniteNumber(value) ? value : fallback;
+
+export const parseFiniteFloatOrNull = (value: string): number | null =>
+  toFiniteNumberOrNull(Number.parseFloat(value));

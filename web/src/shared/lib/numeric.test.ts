@@ -5,6 +5,7 @@ import {
   clampNumberToOptionalBounds,
   isFiniteNumber,
   isFinitePositiveNumber,
+  parseFiniteFloatOrNull,
   toFiniteNumberOrFallback,
   toFiniteNumberOrNull,
 } from "@/shared/lib/numeric";
@@ -57,5 +58,12 @@ describe("numeric", () => {
     expect(isFinitePositiveNumber(Number.NaN)).toBe(false);
     expect(isFinitePositiveNumber(Number.POSITIVE_INFINITY)).toBe(false);
     expect(isFinitePositiveNumber("1")).toBe(false);
+  });
+
+  it("parses finite float values or null", () => {
+    expect(parseFiniteFloatOrNull("1.25")).toBe(1.25);
+    expect(parseFiniteFloatOrNull(" 2.5 ")).toBe(2.5);
+    expect(parseFiniteFloatOrNull("abc")).toBeNull();
+    expect(parseFiniteFloatOrNull("")).toBeNull();
   });
 });
