@@ -15,9 +15,29 @@ import {
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_DURATION_MS,
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_TIME_MS,
 } from "@/features/world-share/worldScenePackageParams";
+import {
+  isBoolean,
+  isIntegerNumber,
+  isNonEmptyString,
+  isNullableString,
+  isNumber,
+  isOneOf,
+  isRecord,
+  isString,
+  normalizePortableWorldAssetRef,
+  validateAllowedFields,
+  validateCameraFovDeg,
+  validateFiniteVector,
+  validateMaxLength,
+  validateNonEmptyString,
+  validateOptionalBoolean,
+  validateOptionalFiniteNumber,
+  validateOptionalString,
+  validatePortableWorldAssetRef,
+  validatePositiveInteger,
+  validatePositiveNumber,
+} from "@/features/world-share/worldSceneManifestValidation";
 
-const WORLD_LAYOUT_VECTOR_COMPONENT_COUNT = 3 as const;
-const WORLD_LAYOUT_VECTOR_COMPONENT_LABELS = ["x", "y", "z"] as const;
 const WORLD_LAYOUT_SUPPORTED_OBJECT_TYPES = ["cube", "point", "sphere", "cylinder", "mesh"] as const;
 const WORLD_LAYOUT_SUPPORTED_ORBIT_TARGET_POINTS = ["center", "primary", "secondary"] as const;
 const WORLD_LAYOUT_SUPPORTED_IK_TARGET_TYPES = ["punctual", "orbit"] as const;
@@ -134,153 +154,6 @@ export type StaticWorldSceneLayerSnapshot = {
 };
 
 export type WorldSceneLayerSnapshot = StaticWorldSceneLayerSnapshot;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isString = (value: unknown): value is string => typeof value === "string";
-const isNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-const isIntegerNumber = (value: unknown): value is number =>
-  isNumber(value) && Number.isInteger(value);
-const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
-
-const isOneOf = <TValue extends string>(
-  value: unknown,
-  supportedValues: readonly TValue[]
-): value is TValue => isString(value) && supportedValues.includes(value as TValue);
-
-const isNullableString = (value: unknown): value is string | null => value === null || isString(value);
-
-const isNonEmptyString = (value: unknown): value is string => isString(value) && value.trim().length > 0;
-
-const validateFiniteVector = (
-  value: unknown,
-  fieldLabel: string,
-  options?: { requirePositive?: boolean }
-): string[] => {
-  const errors: string[] = [];
-  if (!Array.isArray(value) || value.length !== WORLD_LAYOUT_VECTOR_COMPONENT_COUNT) {
-    errors.push(
-      `${fieldLabel} must be an array of ${WORLD_LAYOUT_VECTOR_COMPONENT_COUNT} finite numbers`
-    );
-    return errors;
-  }
-
-  value.forEach((component, index) => {
-    const axisLabel = WORLD_LAYOUT_VECTOR_COMPONENT_LABELS[index] ?? `${index}`;
-    if (!isNumber(component)) {
-      errors.push(`${fieldLabel}[${axisLabel}] must be a finite number`);
-      return;
-    }
-    if (options?.requirePositive && component <= 0) {
-      errors.push(`${fieldLabel}[${axisLabel}] must be > 0`);
-    }
-  });
-
-  return errors;
-};
-
-const validateAllowedFields = (
-  value: Record<string, unknown>,
-  allowedFields: readonly string[],
-  fieldLabel: string
-): string[] => {
-  const unsupportedFields = Object.keys(value)
-    .filter((fieldName) => !allowedFields.includes(fieldName))
-    .sort((left, right) => left.localeCompare(right));
-  return unsupportedFields.length > 0
-    ? [`${fieldLabel} has unsupported field(s): ${unsupportedFields.join(", ")}`]
-    : [];
-};
-
-const validatePositiveInteger = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNumber(value) || !Number.isInteger(value) || value < 1) {
-    return [`${fieldLabel} must be a positive integer`];
-  }
-  return [];
-};
-
-const validateNonEmptyString = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNonEmptyString(value)) {
-    return [`${fieldLabel} must be a non-empty string`];
-  }
-  return [];
-};
-
-const validateMaxLength = (
-  value: unknown[],
-  fieldLabel: string,
-  maxLength: number
-): string[] =>
-  value.length > maxLength ? [`${fieldLabel} must contain at most ${maxLength} entries`] : [];
-
-const validatePositiveNumber = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNumber(value) || value <= 0) {
-    return [`${fieldLabel} must be a finite number > 0`];
-  }
-  return [];
-};
-
-const validateCameraFovDeg = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNumber(value) || value < 1 || value > 179) {
-    return [`${fieldLabel} must be between 1 and 179 degrees`];
-  }
-  return [];
-};
-
-const validateOptionalBoolean = (value: unknown, fieldLabel: string): string[] => {
-  if (value === undefined) return [];
-  return isBoolean(value) ? [] : [`${fieldLabel} must be a boolean`];
-};
-
-const validateOptionalString = (value: unknown, fieldLabel: string): string[] => {
-  if (value === undefined || value === null) return [];
-  return isString(value) ? [] : [`${fieldLabel} must be a string or null`];
-};
-
-const validateOptionalFiniteNumber = (
-  value: unknown,
-  fieldLabel: string,
-  options?: { minimum?: number; maximum?: number }
-): string[] => {
-  if (value === undefined || value === null) return [];
-  if (!isNumber(value)) return [`${fieldLabel} must be a finite number or null`];
-  if (options?.minimum !== undefined && value < options.minimum) {
-    return [`${fieldLabel} must be >= ${options.minimum}`];
-  }
-  if (options?.maximum !== undefined && value > options.maximum) {
-    return [`${fieldLabel} must be <= ${options.maximum}`];
-  }
-  return [];
-};
-
-const normalizePortableWorldAssetRef = (value: string): string | null => {
-  if (value !== value.trim()) return null;
-  let normalized = value.replace(/\\/g, "/");
-  while (normalized.startsWith("./")) {
-    normalized = normalized.slice(2);
-  }
-  const segments = normalized.length > 0 ? normalized.split("/") : [];
-  if (
-    normalized.length === 0 ||
-    segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") ||
-    normalized.startsWith("/") ||
-    normalized.startsWith("../") ||
-    `/${normalized}/`.includes("/../") ||
-    normalized.includes(":")
-  ) {
-    return null;
-  }
-  return normalized;
-};
-
-const validatePortableWorldAssetRef = (value: unknown, fieldLabel: string): string[] => {
-  if (!isNonEmptyString(value)) return [`${fieldLabel} must be a non-empty string`];
-  return normalizePortableWorldAssetRef(value) === null
-    ? [`${fieldLabel} must be a portable relative asset reference`]
-    : [];
-};
 
 const validateWorldObjectSimulation = (value: unknown, objectLabel: string): string[] => {
   if (value === undefined) return [];
