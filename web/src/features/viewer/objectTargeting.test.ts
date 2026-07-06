@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { CreatedObject } from "@/features/objects";
 import {
+  normalizeOrbitPhaseDeg,
   resolveObjectCenterOfMassWorld,
   resolveObjectIkTargetWorld,
+  resolveObjectOrbitFollowPath,
   resolveObjectOrbitPhaseWorldTarget,
   type IkOrbitDefaults,
 } from "./objectTargeting";
@@ -113,5 +115,78 @@ describe("objectTargeting", () => {
         orbitDefaults: ORBIT_DEFAULTS,
       })
     ).toEqual([1.3, 2, 3]);
+  });
+
+  it("normalizes orbit phases into one revolution", () => {
+    expect(normalizeOrbitPhaseDeg(390)).toBe(30);
+    expect(normalizeOrbitPhaseDeg(-30)).toBe(330);
+    expect(normalizeOrbitPhaseDeg(720)).toBe(0);
+  });
+
+  it("resolves the shortest orbit follow path across phase wraparound", () => {
+    const primaryStart = createObject({
+      orbitPhase: 350,
+      orbitSecondaryOffset: 40,
+      orbitTargetPoint: "primary",
+    });
+    expect(
+      resolveObjectOrbitFollowPath({
+        object: primaryStart,
+        orbitDefaults: ORBIT_DEFAULTS,
+      })
+    ).toEqual({
+      startPhaseDeg: 350,
+      destinationPhaseDeg: 30,
+      arcLengthDeg: 40,
+      direction: 1,
+    });
+
+    const secondaryStart = createObject({
+      orbitPhase: 350,
+      orbitSecondaryOffset: 40,
+      orbitTargetPoint: "secondary",
+    });
+    expect(
+      resolveObjectOrbitFollowPath({
+        object: secondaryStart,
+        orbitDefaults: ORBIT_DEFAULTS,
+      })
+    ).toEqual({
+      startPhaseDeg: 30,
+      destinationPhaseDeg: 350,
+      arcLengthDeg: 40,
+      direction: -1,
+    });
+  });
+
+  it("keeps full-circle orbit follow behavior when target phases overlap", () => {
+    const object = createObject({
+      orbitPhase: 0,
+      orbitSecondaryOffset: 360,
+      orbitTargetPoint: "primary",
+    });
+    expect(
+      resolveObjectOrbitFollowPath({
+        object,
+        orbitDefaults: ORBIT_DEFAULTS,
+      })
+    ).toEqual({
+      startPhaseDeg: 0,
+      destinationPhaseDeg: 0,
+      arcLengthDeg: 360,
+      direction: 1,
+    });
+  });
+
+  it("does not resolve an orbit follow path for the center target point", () => {
+    const object = createObject({
+      orbitTargetPoint: "center",
+    });
+    expect(
+      resolveObjectOrbitFollowPath({
+        object,
+        orbitDefaults: ORBIT_DEFAULTS,
+      })
+    ).toBeNull();
   });
 });

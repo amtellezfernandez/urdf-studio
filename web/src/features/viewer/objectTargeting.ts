@@ -12,6 +12,16 @@ export type WorldTargetPosition = [number, number, number];
 const resolveFiniteNumber = (value: number | undefined, fallback: number): number =>
   Number.isFinite(value) ? (value as number) : fallback;
 
+export type ObjectOrbitFollowPath = {
+  startPhaseDeg: number;
+  destinationPhaseDeg: number;
+  arcLengthDeg: number;
+  direction: 1 | -1;
+};
+
+export const normalizeOrbitPhaseDeg = (phaseDeg: number): number =>
+  ((phaseDeg % 360) + 360) % 360;
+
 export const resolveObjectCenterOfMassWorld = (
   object: Pick<CreatedObject, "position">
 ): WorldTargetPosition => [object.position.x, object.position.y, object.position.z];
@@ -41,6 +51,52 @@ export const resolveObjectOrbitPhaseWorldTarget = ({
     object.position.y + yAdjusted,
     object.position.z + z,
   ];
+};
+
+export const resolveObjectOrbitFollowPath = ({
+  object,
+  orbitDefaults,
+}: {
+  object: Pick<
+    CreatedObject,
+    "orbitPhase" | "orbitSecondaryOffset" | "orbitTargetPoint"
+  >;
+  orbitDefaults: Pick<IkOrbitDefaults, "phaseDeg" | "secondaryOffsetDeg">;
+}): ObjectOrbitFollowPath | null => {
+  if (object.orbitTargetPoint === "center" || !object.orbitTargetPoint) {
+    return null;
+  }
+
+  const basePhaseDeg = resolveFiniteNumber(object.orbitPhase, orbitDefaults.phaseDeg);
+  const secondaryOffsetDeg = resolveFiniteNumber(
+    object.orbitSecondaryOffset,
+    orbitDefaults.secondaryOffsetDeg
+  );
+  const primaryPhaseDeg = normalizeOrbitPhaseDeg(basePhaseDeg);
+  const secondaryPhaseDeg = normalizeOrbitPhaseDeg(basePhaseDeg + secondaryOffsetDeg);
+  const startPhaseDeg =
+    object.orbitTargetPoint === "primary" ? primaryPhaseDeg : secondaryPhaseDeg;
+  const destinationPhaseDeg =
+    object.orbitTargetPoint === "primary" ? secondaryPhaseDeg : primaryPhaseDeg;
+  const clockwiseDeltaDeg = normalizeOrbitPhaseDeg(
+    destinationPhaseDeg - startPhaseDeg
+  );
+  const counterClockwiseDeltaDeg =
+    clockwiseDeltaDeg === 0 ? 360 : 360 - clockwiseDeltaDeg;
+  const useClockwise = clockwiseDeltaDeg <= counterClockwiseDeltaDeg;
+  const arcLengthDeg =
+    clockwiseDeltaDeg === 0
+      ? 360
+      : useClockwise
+        ? clockwiseDeltaDeg
+        : counterClockwiseDeltaDeg;
+
+  return {
+    startPhaseDeg,
+    destinationPhaseDeg,
+    arcLengthDeg,
+    direction: useClockwise ? 1 : -1,
+  };
 };
 
 export const resolveObjectIkTargetWorld = ({

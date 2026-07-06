@@ -30,6 +30,8 @@ import {
   shouldRunSurfaceTargetApproachRetry,
 } from "@/features/viewer/ikSurfaceApproachPolicy";
 import {
+  normalizeOrbitPhaseDeg,
+  resolveObjectOrbitFollowPath,
   resolveObjectOrbitPhaseWorldTarget,
 } from "@/features/viewer/objectTargeting";
 import {
@@ -907,29 +909,15 @@ export const useIkSolver = ({
         return;
       }
 
-      const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
-
-      const basePhase = orbitTargetObject.orbitPhase ?? orbitDefaults.phaseDeg;
-      const secondaryOffset =
-        orbitTargetObject.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg;
-      const clickedPoint = orbitTargetObject.orbitTargetPoint; // "primary", "secondary", or "center"
-
-      if (clickedPoint === "center" || !clickedPoint) {
+      const orbitFollowPath = resolveObjectOrbitFollowPath({
+        object: orbitTargetObject,
+        orbitDefaults,
+      });
+      if (!orbitFollowPath) {
         toast.error("Please click on a primary or secondary orbit point first");
         return;
       }
-
-      const primaryPhase = normalizeDeg(basePhase);
-      const secondaryPhase = normalizeDeg(basePhase + secondaryOffset);
-      const startPhase = clickedPoint === "primary" ? primaryPhase : secondaryPhase;
-      const destinationPhase = clickedPoint === "primary" ? secondaryPhase : primaryPhase;
-
-      // Choose the shortest arc between the two points (matches the solid segment in the visualization)
-      const clockwiseDelta = normalizeDeg(destinationPhase - startPhase);
-      const counterClockwiseDelta = clockwiseDelta === 0 ? 360 : 360 - clockwiseDelta;
-      const useClockwise = clockwiseDelta <= counterClockwiseDelta;
-      const arcLength = clockwiseDelta === 0 ? 360 : useClockwise ? clockwiseDelta : counterClockwiseDelta;
-      const direction = useClockwise ? 1 : -1;
+      const { arcLengthDeg, direction, startPhaseDeg } = orbitFollowPath;
 
       // Stop any existing orbit following
       if (orbitFollowAnimationRef.current) {
@@ -942,7 +930,7 @@ export const useIkSolver = ({
       setOrbitFollowProgress(0);
       setIkDebugState({ lastTargetQuaternion: null });
 
-      const totalSteps = Math.max(1, Math.round(arcLength)); // 1 degree per step
+      const totalSteps = Math.max(1, Math.round(arcLengthDeg)); // 1 degree per step
       const minStepIntervalMs = 45;
 
       let currentStep = 0;
@@ -976,7 +964,9 @@ export const useIkSolver = ({
 
         // Calculate current phase along the chosen arc
         const t = totalSteps <= 1 ? 1 : currentStep / (totalSteps - 1); // cover the full arc including the end point
-        const currentPhase = normalizeDeg(startPhase + direction * arcLength * t);
+        const currentPhase = normalizeOrbitPhaseDeg(
+          startPhaseDeg + direction * arcLengthDeg * t
+        );
         const targetPositionWorld = computeTargetPosition(currentPhase);
         setIkDebugState({ lastTargetPosition: targetPositionWorld });
         const normalizedTarget = normalizeIkTargetPoseForRobotBase(robot, {
