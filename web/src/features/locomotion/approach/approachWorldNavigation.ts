@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { hashString } from "@/shared/lib/cache";
+import { toVector3Tuple, type Vector3Tuple } from "@/shared/lib/vector3Tuple";
 
 import { ROVER_APPROACH_DETOUR_CONFIG } from "./approachDetourParams";
 import {
@@ -34,7 +35,7 @@ export type RoverApproachWorldNavigationContext = {
   sceneSummary: RoverNavigationSceneSummary;
 };
 
-export type RoverApproachWorldVector3Tuple = [number, number, number];
+export type RoverApproachWorldVector3Tuple = Vector3Tuple;
 
 export type RoverApproachWorldNavigationDiagnostics = {
   routeMode: "direct" | "path" | "blocked";
@@ -383,7 +384,7 @@ const resolveValidatedNavigationDecisionRoute = ({
 
 export const toRoverApproachWorldVector3Tuple = (
   value: THREE.Vector3,
-): RoverApproachWorldVector3Tuple => [value.x, value.y, value.z];
+): RoverApproachWorldVector3Tuple => toVector3Tuple(value);
 
 export const fromRoverApproachWorldVector3Tuple = (
   value: RoverApproachWorldVector3Tuple,

@@ -1,6 +1,17 @@
 import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 
 export type Vector3Tuple = [number, number, number];
+export type Vector3Like = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export const toVector3Tuple = (value: Vector3Like): Vector3Tuple => [
+  value.x,
+  value.y,
+  value.z,
+];
 
 export const parseVector3Tuple = (
   value: string,
