@@ -9,6 +9,7 @@ import {
 } from "@/features/urdf/bake/virtualBake";
 import { executeCanonicalSynthesisViaBackend } from "@/features/urdf/inertia/robotMasteringApi";
 import { captureKinematicState } from "@/features/urdf/synthesis/kinematicSynthesizer";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { UrdfViewMode } from "@/shared/types/feature";
 
 type UseDraftPreviewActionsParams = {
@@ -85,9 +86,10 @@ export const useDraftPreviewActions = ({
       );
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to generate a canonical URDF draft from the captured synthesis."
+        readUnknownErrorMessage(
+          error,
+          "Failed to generate a canonical URDF draft from the captured synthesis."
+        )
       );
     }
   }, [

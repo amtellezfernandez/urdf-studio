@@ -47,6 +47,7 @@ import {
   COLLABORATION_WEBSOCKET_UNAUTHORIZED_CLOSE_CODE,
 } from "@/features/collaboration/collaborationParams";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type UrdfCollaborationStatus = "idle" | "connecting" | "connected" | "error";
 
@@ -371,9 +372,7 @@ export const useUrdfCollaboration = ({
       if (!applyingRemoteEventRef.current) {
         void publishUrdfUpdate(content, filename).catch((error) => {
           toast.error(
-            error instanceof Error
-              ? error.message
-              : "Failed to publish collaboration update.",
+            readUnknownErrorMessage(error, "Failed to publish collaboration update.")
           );
         });
       }
@@ -505,9 +504,7 @@ export const useUrdfCollaboration = ({
       if (!rememberRemoteSequence(event, event.payload.clientSequence)) return;
       void publishUrdfSnapshot(syncedUrdfRef.current.content).catch((error) => {
         toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to publish collaboration resync.",
+          readUnknownErrorMessage(error, "Failed to publish collaboration resync.")
         );
       });
     },

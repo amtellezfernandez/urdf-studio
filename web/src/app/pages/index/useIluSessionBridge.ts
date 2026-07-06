@@ -174,12 +174,12 @@ export const useIluSessionBridge = ({
             if (!shouldApplyHydration()) {
               return;
             }
-            const detail =
-              error instanceof Error
-                ? error.message
-                : loadedSource.source === "github"
-                  ? "GitHub assets were unavailable for the attached session."
-                  : "Local assets were unavailable for the attached session.";
+            const detail = readUnknownErrorMessage(
+              error,
+              loadedSource.source === "github"
+                ? "GitHub assets were unavailable for the attached session."
+                : "Local assets were unavailable for the attached session."
+            );
             toast.warning(
               mode === "initial"
                 ? `Attached ilu session without assets: ${detail}`

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import {
@@ -99,9 +100,7 @@ export const useWorldPublishController = ({
       setWorldPublishDialogOpen(false);
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : toWorldPublishFailureMessage(worldPublishTarget)
+        readUnknownErrorMessage(error, toWorldPublishFailureMessage(worldPublishTarget))
       );
     } finally {
       setIsPublishingWorldPackage(false);
