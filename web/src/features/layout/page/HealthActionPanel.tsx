@@ -55,7 +55,7 @@ import {
 import {
   PhysicsMaterialPicker,
   PhysicsQuickActionCard,
-} from "@/features/layout/page/HealthActionPanelPhysicsActions";
+} from "@/features/layout/page/HealthActionPanelPhysicsActionsView";
 import {
   buildCompatibilityRobotMirrorSelectionState,
   buildRepeatedInertiaSymmetryChainViewState,

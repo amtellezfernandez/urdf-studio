@@ -886,6 +886,11 @@ def build_sim_primitives(
                 )
             )
             continue
+        if world_object.primitive_type == "splat":
+            warnings.append(
+                f"Skipped splat object without collision geometry (appearance-only): {world_object.id}"
+            )
+            continue
         raise WorldLayoutTransferError(f"Unsupported primitive type: {world_object.primitive_type}")
     return tuple(primitives), tuple(warnings)
 
@@ -896,7 +901,10 @@ def count_transferable_world_objects(
     include_hidden: bool = False,
 ) -> int:
     return sum(
-        1 for world_object in layout.objects if include_hidden or not world_object.is_hidden
+        1
+        for world_object in layout.objects
+        if (include_hidden or not world_object.is_hidden)
+        and world_object.primitive_type != "splat"
     )
 
 

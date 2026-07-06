@@ -453,7 +453,7 @@ export const CoreFolderUploadScreen = ({
           ref={worldLayoutFileInputRef}
           type="file"
           multiple
-          accept=".json,application/json,.stl,.dae,.obj,.glb,.gltf,.mtl,.ply,.splat,.png,.jpg,.jpeg"
+          accept=".json,application/json,.stl,.dae,.obj,.glb,.gltf,.mtl,.ply,.spz,.splat,.ksplat,.png,.jpg,.jpeg"
           onChange={handleWorldLayoutFileSelect}
           className="hidden"
           aria-label="Select world layout JSON file and assets"

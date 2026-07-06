@@ -176,6 +176,56 @@ describe("world scene manager helper conversions", () => {
     expect(importedObject?.meshUri).toBe("blob:http://localhost/def-456");
   });
 
+  it("resolves direct splat asset refs into loadable imported object URIs", () => {
+    const [importedObject] = toImportedCreatedObjects(
+      [
+        createSerializableWorldObject({
+          type: "splat",
+          asset_ref: "assets/port-background.spz",
+          asset_scale_xyz: [1.5, 1.5, 1.5],
+          mesh: undefined,
+        }),
+      ],
+      { baseUrl: "https://example.test/world-layouts/port.world-layout.json" }
+    );
+
+    expect(importedObject?.type).toBe("splat");
+    expect(importedObject?.assetRef).toBe("assets/port-background.spz");
+    expect(importedObject?.assetScale?.toArray()).toEqual([1.5, 1.5, 1.5]);
+    expect(importedObject?.meshUri).toBe(
+      "https://example.test/world-layouts/assets/port-background.spz"
+    );
+  });
+
+  it("maps splat appearance representations to splat objects on import", () => {
+    const [importedObject] = toImportedCreatedObjects(
+      [
+        createSerializableWorldObject({
+          type: "mesh",
+          asset_ref: undefined,
+          asset_scale_xyz: undefined,
+          mesh: undefined,
+          appearance: {
+            representations: [
+              {
+                id: "crate-splat",
+                kind: "splat",
+                asset_ref: "assets/crate.spz",
+                scale_xyz: [2, 2, 2],
+              },
+            ],
+          },
+        }),
+      ],
+      { assetMap: { "assets/crate.spz": "blob:http://localhost/splat-789" } }
+    );
+
+    expect(importedObject?.type).toBe("splat");
+    expect(importedObject?.assetRef).toBe("assets/crate.spz");
+    expect(importedObject?.assetScale?.toArray()).toEqual([2, 2, 2]);
+    expect(importedObject?.meshUri).toBe("blob:http://localhost/splat-789");
+  });
+
   it("maps package cameras into camera inputs without persisted ids", () => {
     const importedCameras = toImportedWorldSceneCameras([
       {

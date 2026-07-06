@@ -444,6 +444,8 @@ def _raise_for_invalid_object_mesh_metadata(
         and not _has_wsp_mesh_asset_ref(world_object)
     ):
         raise ValueError(f"{object_path}.mesh asset reference is required for mesh objects.")
+    if world_object.get("type") == "splat" and not _has_wsp_mesh_asset_ref(world_object):
+        raise ValueError(f"{object_path}.splat asset reference is required for splat objects.")
 
 
 def _raise_for_invalid_object_appearance(

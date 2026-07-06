@@ -187,6 +187,12 @@ def _validate_world_asset_refs(envelope: WorldSceneRegistryEnvelope) -> list[str
             )
             if asset_ref_entry is None:
                 continue
+        if object_type == "splat" and content_asset_ref_entry is None:
+            errors.append(
+                f"world_snapshot.objects[{index}].splat asset reference is required for splat objects."
+            )
+            if asset_ref_entry is None:
+                continue
         if asset_ref_entry is None:
             continue
         try:
@@ -208,6 +214,12 @@ def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> 
         if object_type == "mesh" and content_asset_ref_entry is None:
             errors.append(
                 f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
+            )
+            if asset_ref_entry is None:
+                continue
+        if object_type == "splat" and content_asset_ref_entry is None:
+            errors.append(
+                f"world_snapshot.objects[{index}].splat asset reference is required for splat objects."
             )
             if asset_ref_entry is None:
                 continue

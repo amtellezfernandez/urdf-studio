@@ -43,12 +43,14 @@ import {
   validateWorldScenePackageRemotely,
 } from "@/app/pages/index/worldSceneRuntime";
 import {
+  buildImportedSplatBackgroundObject,
   downloadJsonDocument,
   downloadTextDocument,
   openFileSelectionDialog,
   applyWorldSceneLayerObjectSourceOverride,
   toImportedCreatedObjects,
   toImportedWorldSceneCameras,
+  SPLAT_BACKGROUND_IMPORT_ACCEPT,
   type MeshUriResolutionContext,
 } from "@/app/pages/index/worldSceneManagerHelpers";
 import { useWorldPublishController } from "@/app/pages/index/useWorldPublishController";
@@ -438,6 +440,26 @@ export const useWorldSceneManager = ({
     objectsRef.current = objects;
   }, [objects]);
 
+  const handleImportSplatBackground = useCallback(() => {
+    openFileSelectionDialog({
+      accept: SPLAT_BACKGROUND_IMPORT_ACCEPT,
+      onFiles: ([file]) => {
+        if (!file) return;
+        try {
+          const splatObject = buildImportedSplatBackgroundObject(file);
+          addObject(splatObject, { select: true });
+          toast.success(
+            `Splat background imported: ${splatObject.assetRef}. Exports reference it by name — keep the file next to exported layouts.`
+          );
+        } catch (error) {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to import splat background"
+          );
+        }
+      },
+    });
+  }, [addObject]);
+
   const handleImportWorldLayoutFromLinkDialog = useCallback(async () => {
     setIsImportingWorldLayout(true);
     try {
@@ -593,6 +615,7 @@ export const useWorldSceneManager = ({
     handleImportWorldLayoutFromFileDialog,
     handleImportWorldLayoutFromFolderDialog,
     handleImportWorldLayoutFromLinkDialog,
+    handleImportSplatBackground,
     handleImportWorldLayoutFromUrl,
     handleImportWorldScenePackage,
     handleExportWorldRolloutCampaign,

@@ -5,7 +5,13 @@ import {
 } from "@/shared/lib/numeric";
 import { WORLD_OBJECT_GEOMETRY_PARAMS } from "./worldObjectGeometryParams";
 
-export type WorldObjectPrimitiveType = "cube" | "point" | "sphere" | "cylinder" | "mesh";
+export type WorldObjectPrimitiveType =
+  | "cube"
+  | "point"
+  | "sphere"
+  | "cylinder"
+  | "mesh"
+  | "splat";
 
 type WorldObjectVectorLike = {
   x: number;

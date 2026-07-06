@@ -82,6 +82,10 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
   }
   if (object.meshUri && !isAbsoluteOrRootedUrl(object.meshUri)) {
     serializable.mesh = { ...serializable.mesh, uri: object.meshUri };
+  } else if (object.meshUri && object.assetRef && !isAbsoluteOrRootedUrl(object.assetRef)) {
+    // Locally imported assets use ephemeral blob: URIs; persist the portable
+    // relative asset reference so exported layouts can travel with the file.
+    serializable.mesh = { ...serializable.mesh, uri: object.assetRef };
   }
   if (object.isHidden === true) {
     serializable.is_hidden = true;

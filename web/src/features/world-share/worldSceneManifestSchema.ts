@@ -4,6 +4,7 @@ export const WORLD_LAYOUT_SUPPORTED_OBJECT_TYPES = [
   "sphere",
   "cylinder",
   "mesh",
+  "splat",
 ] as const;
 export const WORLD_LAYOUT_SUPPORTED_ORBIT_TARGET_POINTS = [
   "center",

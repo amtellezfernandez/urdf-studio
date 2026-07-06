@@ -128,6 +128,42 @@ def test_world_snapshot_accepts_layout_mesh_scale_aliases() -> None:
     assert manifest.world_snapshot.objects[0]["scale_xyz"] == [1.3, 1.4, 1.5]
 
 
+def test_world_snapshot_accepts_direct_splat_world_object_contract() -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "splat",
+            "asset_ref": "assets/port-background.spz",
+            "asset_scale_xyz": [1.0, 1.0, 1.0],
+            "mesh": {
+                "uri": "assets/port-background.spz",
+            },
+        }
+    ]
+
+    manifest = WorldScenePackageManifest.model_validate(payload)
+
+    world_object = manifest.world_snapshot.objects[0]
+    assert world_object["type"] == "splat"
+    assert world_object["asset_ref"] == "assets/port-background.spz"
+
+
+def test_world_snapshot_rejects_direct_splat_without_asset_ref() -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "splat",
+        }
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert "splat asset reference is required for splat objects" in str(exc_info.value)
+
+
 def test_world_snapshot_accepts_v1_1_appearance_physics_consistency_contract() -> None:
     payload = _manifest_payload()
     payload["schema_version"] = "1.1.0"

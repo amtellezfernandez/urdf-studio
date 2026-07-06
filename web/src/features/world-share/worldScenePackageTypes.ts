@@ -94,7 +94,7 @@ export type SerializableWorldObjectConsistencySpec = {
 export type SerializableWorldObject = {
   id: string;
   name: string;
-  type: "cube" | "point" | "sphere" | "cylinder" | "mesh";
+  type: "cube" | "point" | "sphere" | "cylinder" | "mesh" | "splat";
   position_xyz: [number, number, number];
   rotation_rpy_rad?: [number, number, number];
   size_xyz: [number, number, number];

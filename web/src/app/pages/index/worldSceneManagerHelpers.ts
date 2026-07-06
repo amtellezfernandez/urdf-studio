@@ -8,6 +8,7 @@ import {
 } from "@/features/world-share/worldRolloutParams";
 import type {
   SerializableWorldObject,
+  SerializableWorldObjectAppearanceRepresentation,
   WorldSceneDocument,
 } from "@/features/world-share/worldScenePackageTypes";
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
@@ -18,6 +19,43 @@ import {
 } from "@/app/pages/index/worldSceneRuntime";
 import { getFilenameFromPath } from "@/shared/lib/pathNames";
 import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
+
+export const SPLAT_BACKGROUND_IMPORT_ACCEPT = ".spz,.splat,.ksplat";
+
+// World Labs / SimuGen splats are y-up; the studio scene is z-up (ROS REP-103).
+const Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD = [-Math.PI / 2, 0, 0] as const;
+
+// Exports reference assets by portable relative name (the manifest validator
+// rejects rooted paths and URI schemes), so the imported file's name must be
+// normalized into that shape.
+export const toPortableSplatAssetName = (filename: string): string => {
+  const basename = filename.split(/[\\/]/).pop() ?? "";
+  const sanitized = basename.trim().replace(/[^\w.\- ]+/g, "_").replace(/^\.+/, "");
+  return sanitized || "splat-background.spz";
+};
+
+export function buildImportedSplatBackgroundObject(file: File): Omit<CreatedObject, "id"> {
+  const assetName = toPortableSplatAssetName(file.name);
+  return {
+    label: assetName,
+    type: "splat",
+    position: new Vector3(0, 0, 0),
+    rotation: normalizeWorldObjectRotationEuler({
+      x: Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD[0],
+      y: Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD[1],
+      z: Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD[2],
+    }),
+    size: new Vector3(1, 1, 1),
+    color: "#94a3b8",
+    assetRef: assetName,
+    assetScale: new Vector3(1, 1, 1),
+    meshUri: URL.createObjectURL(file),
+    source: "user",
+    trackedJointName: null,
+    isIkTarget: false,
+    ikTargetType: "punctual",
+  };
+}
 
 function downloadBlobDocument(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -153,19 +191,64 @@ const toImportedWorldMetadata = (
   return Object.keys(worldMetadata).length > 0 ? worldMetadata : undefined;
 };
 
+const readPreferredAssetRepresentation = (
+  object: SerializableWorldObject
+): SerializableWorldObjectAppearanceRepresentation | undefined => {
+  const representations = object.appearance?.representations ?? [];
+  return (
+    representations.find((representation) => representation.kind === "splat") ??
+    representations.find((representation) => representation.kind === "mesh")
+  );
+};
+
+const readObjectAssetRef = (
+  object: SerializableWorldObject,
+  representation?: SerializableWorldObjectAppearanceRepresentation
+): string | undefined =>
+  object.asset_ref ??
+  object.mesh?.asset_ref ??
+  object.mesh?.path ??
+  object.mesh?.filename ??
+  representation?.asset_ref ??
+  object.mesh?.uri;
+
+const readObjectAssetUri = (
+  object: SerializableWorldObject,
+  representation?: SerializableWorldObjectAppearanceRepresentation
+): string | undefined =>
+  object.mesh?.uri ??
+  object.mesh?.asset_ref ??
+  object.mesh?.path ??
+  object.mesh?.filename ??
+  object.asset_ref ??
+  representation?.asset_ref;
+
+const readObjectAssetScale = (
+  object: SerializableWorldObject,
+  representation?: SerializableWorldObjectAppearanceRepresentation
+): Vector3 | undefined => {
+  const scale = object.asset_scale_xyz ?? representation?.scale_xyz;
+  return scale ? new Vector3(scale[0], scale[1], scale[2]) : undefined;
+};
+
 function toImportedObjectParams(
   object: SerializableWorldObject,
   meshUriContext: MeshUriResolutionContext = {}
 ): Omit<CreatedObject, "id"> {
+  const assetRepresentation = readPreferredAssetRepresentation(object);
+  const importedObjectType: CreatedObject["type"] =
+    object.type === "mesh" && assetRepresentation?.kind === "splat"
+      ? "splat"
+      : object.type;
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
     object.ik_target_type === "orbit" ? "orbit" : "punctual";
   const geometry = resolveWorldObjectGeometry({
-    type: object.type,
+    type: importedObjectType,
     position: { x: object.position_xyz[0], y: object.position_xyz[1], z: object.position_xyz[2] },
     size: { x: object.size_xyz[0], y: object.size_xyz[1], z: object.size_xyz[2] },
   });
   const importedObject: Omit<CreatedObject, "id"> = {
-    type: object.type,
+    type: importedObjectType,
     position: geometry.position,
     rotation: normalizeWorldObjectRotationEuler(
       object.rotation_rpy_rad
@@ -178,15 +261,9 @@ function toImportedObjectParams(
     ),
     size: geometry.size,
     color: object.color,
-    assetRef: object.asset_ref ?? object.mesh?.asset_ref,
-    assetScale: object.asset_scale_xyz
-      ? new Vector3(
-          object.asset_scale_xyz[0],
-          object.asset_scale_xyz[1],
-          object.asset_scale_xyz[2]
-        )
-      : undefined,
-    meshUri: resolveMeshUri(object.mesh?.uri, meshUriContext),
+    assetRef: readObjectAssetRef(object, assetRepresentation),
+    assetScale: readObjectAssetScale(object, assetRepresentation),
+    meshUri: resolveMeshUri(readObjectAssetUri(object, assetRepresentation), meshUriContext),
     isHidden: object.is_hidden === true,
     source: object.source ?? "user",
     worldMetadata: toImportedWorldMetadata(object),

@@ -15,6 +15,7 @@ import { WORLD_OBJECT_RENDER_PARAMS } from "@/features/objects/worldObjectRender
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 import { createLinkObjectResolver } from "@/features/viewer/linkObjectResolver";
 import { MeshAssetBody } from "@/features/viewer/components/MeshAssetBody";
+import { SplatAssetBody } from "@/features/viewer/components/SplatAssetBody";
 import { OrbitVisualization } from "@/features/viewer/components/OrbitVisualization";
 import { WorldObjectEditHandles } from "@/features/viewer/components/WorldObjectEditHandles";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
@@ -137,6 +138,18 @@ function CreatedObjectBody({
   if (object.type === "mesh") {
     return (
       <MeshAssetBody
+        object={object}
+        objectPosition={objectPosition}
+        objectRotation={objectRotation}
+        pointerHandlers={pointerHandlers}
+        fallback={primitiveFallback}
+      />
+    );
+  }
+
+  if (object.type === "splat") {
+    return (
+      <SplatAssetBody
         object={object}
         objectPosition={objectPosition}
         objectRotation={objectRotation}
@@ -372,10 +385,14 @@ export const CreatedObjects = ({
             0, 0, -comAxisHalfLength,
             0, 0, comAxisHalfLength,
           ]);
+          const shouldRenderEditHandles =
+            editable &&
+            isSelected &&
+            !(createdObject.type === "splat" && objectEditMode === "resize");
 
           return (
             <group key={createdObject.id}>
-              {editable && isSelected && (
+              {shouldRenderEditHandles && (
                 <WorldObjectEditHandles
                   object={createdObject}
                   mode={objectEditMode}

@@ -4,7 +4,7 @@ import re
 
 from backend.services.world_layout_transfer_types import ConcreteWorldLayoutFrameMap
 
-WORLD_OBJECT_TYPES = frozenset({"cube", "point", "sphere", "cylinder", "mesh"})
+WORLD_OBJECT_TYPES = frozenset({"cube", "point", "sphere", "cylinder", "mesh", "splat"})
 WORLD_OBJECT_MESH_ASSET_KEYS = ("asset_ref", "path", "uri", "filename")
 WORLD_OBJECT_ASSET_SCALE_KEYS = ("asset_scale_xyz", "mesh_scale_xyz", "scale_xyz")
 
