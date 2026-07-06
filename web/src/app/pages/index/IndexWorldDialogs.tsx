@@ -37,6 +37,9 @@ type IndexWorldDialogsProps = {
   onWorldLayoutImportUrlDraftChange: WorldSceneImportDialogProps["onWorldLayoutUrlChange"];
   onImportWorldLayoutFromLinkDialog: WorldSceneImportDialogProps["onImportFromLink"];
   onImportWorldLayoutFromFileDialog: NonNullable<WorldSceneImportDialogProps["onImportFromFile"]>;
+  onImportWorldLayoutFromFolderDialog: NonNullable<
+    WorldSceneImportDialogProps["onImportFromFolder"]
+  >;
   onImportDefaultWorldLayoutFromDialog: WorldSceneImportDialogProps["onImportDefaultWorld"];
   onImportDemoWorldLayoutFromDialog: WorldSceneImportDialogProps["onImportDemoWorld"];
   isImportingWorldLayout: WorldSceneImportDialogProps["isSubmitting"];
@@ -68,6 +71,7 @@ export const IndexWorldDialogs = ({
   onWorldLayoutImportUrlDraftChange,
   onImportWorldLayoutFromLinkDialog,
   onImportWorldLayoutFromFileDialog,
+  onImportWorldLayoutFromFolderDialog,
   onImportDefaultWorldLayoutFromDialog,
   onImportDemoWorldLayoutFromDialog,
   isImportingWorldLayout,
@@ -108,6 +112,7 @@ export const IndexWorldDialogs = ({
         onWorldLayoutUrlChange={onWorldLayoutImportUrlDraftChange}
         onImportFromLink={onImportWorldLayoutFromLinkDialog}
         onImportFromFile={onImportWorldLayoutFromFileDialog}
+        onImportFromFolder={onImportWorldLayoutFromFolderDialog}
         onImportDefaultWorld={onImportDefaultWorldLayoutFromDialog}
         onImportDemoWorld={onImportDemoWorldLayoutFromDialog}
         isSubmitting={isImportingWorldLayout}

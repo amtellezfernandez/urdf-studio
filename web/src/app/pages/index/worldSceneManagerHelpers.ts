@@ -38,17 +38,22 @@ export function downloadTextDocument(payload: string, filename: string, mimeType
 
 export function openFileSelectionDialog({
   accept,
+  directory = false,
   multiple = false,
   onFiles,
 }: {
   accept: string;
+  directory?: boolean;
   multiple?: boolean;
   onFiles: (files: File[]) => void | Promise<void>;
 }) {
   const input = document.createElement("input");
   input.type = "file";
-  input.multiple = multiple;
+  input.multiple = directory || multiple;
   input.accept = accept;
+  if (directory) {
+    input.setAttribute("webkitdirectory", "");
+  }
   input.onchange = () => {
     const files = Array.from(input.files ?? []);
     if (files.length === 0) return;

@@ -491,6 +491,7 @@ const Index = () => {
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromFileDialog,
+    handleImportWorldLayoutFromFolderDialog,
     handleImportWorldLayoutFromLinkDialog,
     handleImportWorldLayoutFromUrl,
     handleImportWorkspaceChangeSet,
@@ -1668,6 +1669,7 @@ const Index = () => {
         onWorldLayoutImportUrlDraftChange={setWorldLayoutImportUrlDraft}
         onImportWorldLayoutFromLinkDialog={handleImportWorldLayoutFromLinkDialog}
         onImportWorldLayoutFromFileDialog={handleImportWorldLayoutFromFileDialog}
+        onImportWorldLayoutFromFolderDialog={handleImportWorldLayoutFromFolderDialog}
         onImportDefaultWorldLayoutFromDialog={handleImportDefaultWorldLayoutFromDialog}
         onImportDemoWorldLayoutFromDialog={handleImportDemoWorldLayoutFromDialog}
         isImportingWorldLayout={isImportingWorldLayout}

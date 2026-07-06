@@ -125,7 +125,10 @@ From the first screen:
 From the workspace:
 
 1. Use `Scene` -> `Import Layout JSON`.
-2. Choose `From Link` for a public JSON link or GitHub `blob` link.
+2. Choose one source:
+   - `From Link` for a public JSON link or GitHub `blob` link.
+   - `From File` for one JSON plus any referenced assets selected together.
+   - `From Folder` for a folder containing the JSON and its referenced assets.
 3. `Default Layout` and `Demo Layout` are available from the same dialog when applicable.
 
 Relative asset refs resolve against the loaded file set or the source URL. No asset upload step is

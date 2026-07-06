@@ -1,5 +1,6 @@
 import type {
   SerializableWorldObject,
+  WorldSceneDocument,
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import {
@@ -38,16 +39,7 @@ import {
 
 export type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
-type ParsedWorldSceneLayerSnapshot = {
-  name?: string;
-  objects: unknown[];
-  scenario_time_ms: number;
-  scenario_duration_ms: number;
-  urdf_xml?: string;
-  joint_positions?: Record<string, number>;
-  cameras?: WorldScenePackageManifest["world_snapshot"]["cameras"];
-  environment: WorldSceneLayerEnvironment;
-};
+type ParsedWorldSceneLayerSnapshot = WorldSceneDocument;
 
 export type StaticWorldSceneLayerSnapshot = {
   kind: typeof STATIC_WORLD_LAYOUT_KIND;
@@ -57,7 +49,7 @@ export type StaticWorldSceneLayerSnapshot = {
   scenario_duration_ms: typeof STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS;
   urdf_xml?: string;
   joint_positions?: Record<string, number>;
-  cameras?: WorldScenePackageManifest["world_snapshot"]["cameras"];
+  cameras?: WorldSceneDocument["cameras"];
   environment: WorldSceneLayerEnvironment;
 };
 
@@ -151,7 +143,7 @@ const readWorldSceneRegistryEnvelopeCandidate = (
     : isRecord(payload.world.environment)
       ? payload.world.environment
       : null;
-  const world = toParsedWorldSceneLayerSnapshot(payload.world, environment);
+  const world = toWorldSceneDocumentCandidate(payload.world, environment);
   if (!world) return null;
   const provenance = isRecord(payload.provenance)
     ? { ...payload.provenance }
@@ -314,7 +306,7 @@ const toWorldSnapshotValidationMessage = (error: string): string =>
     .replace(/^world layout urdf_xml/, "world_snapshot.urdf_xml")
     .replace(/^world layout joint_positions/, "world_snapshot.joint_positions");
 
-const toParsedWorldSceneLayerSnapshot = (
+const toWorldSceneDocumentCandidate = (
   value: unknown,
   environment: WorldSceneLayerEnvironment = null
 ): ParsedWorldSceneLayerSnapshot | null => {
@@ -347,7 +339,7 @@ const toParsedWorldSceneLayerSnapshot = (
         : undefined,
     cameras:
       value.cameras !== undefined
-        ? (value.cameras as WorldScenePackageManifest["world_snapshot"]["cameras"])
+        ? (value.cameras as WorldSceneDocument["cameras"])
         : undefined,
     environment,
   };
@@ -398,14 +390,14 @@ export const readWorldSceneLayerFromUnknown = (
   }
 
   if (isRecord(payload) && isRecord(payload.world_snapshot)) {
-    return toParsedWorldSceneLayerSnapshot(
+    return toWorldSceneDocumentCandidate(
       payload.world_snapshot,
       isRecord(payload.environment) ? payload.environment : null
     );
   }
 
   if (isRecord(payload) && isRecord(payload.world)) {
-    return toParsedWorldSceneLayerSnapshot(
+    return toWorldSceneDocumentCandidate(
       payload.world,
       isRecord(payload.environment)
         ? payload.environment
@@ -416,7 +408,7 @@ export const readWorldSceneLayerFromUnknown = (
   }
 
   if (isRecord(payload) && isRecord(payload.world_layout)) {
-    return toParsedWorldSceneLayerSnapshot(
+    return toWorldSceneDocumentCandidate(
       payload.world_layout,
       isRecord(payload.environment) ? payload.environment : null
     );
@@ -512,7 +504,7 @@ export const createStaticWorldSceneLayerSnapshot = (params: {
   objects: SerializableWorldObject[];
   urdf_xml?: string;
   joint_positions?: Record<string, number>;
-  cameras?: WorldScenePackageManifest["world_snapshot"]["cameras"];
+  cameras?: WorldSceneDocument["cameras"];
   environment?: WorldSceneLayerEnvironment;
 }): StaticWorldSceneLayerSnapshot => ({
   kind: STATIC_WORLD_LAYOUT_KIND,

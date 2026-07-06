@@ -10,6 +10,7 @@ type WorldSceneImportDialogProps = {
   onWorldLayoutUrlChange: (value: string) => void;
   onImportFromLink: () => void;
   onImportFromFile?: () => void;
+  onImportFromFolder?: () => void;
   onImportDefaultWorld?: () => void;
   onImportDemoWorld?: () => void;
   isSubmitting?: boolean;
@@ -22,11 +23,15 @@ export const WorldSceneImportDialog = ({
   onWorldLayoutUrlChange,
   onImportFromLink,
   onImportFromFile,
+  onImportFromFolder,
   onImportDefaultWorld,
   onImportDemoWorld,
   isSubmitting = false,
 }: WorldSceneImportDialogProps) => {
   const secondaryActions: WorldSceneJsonImportDialogAction[] = [];
+  if (onImportFromFolder) {
+    secondaryActions.push({ label: "From Folder", onClick: onImportFromFolder });
+  }
   if (onImportFromFile) {
     secondaryActions.push({ label: "From File", onClick: onImportFromFile });
   }
@@ -42,7 +47,7 @@ export const WorldSceneImportDialog = ({
       open={open}
       onOpenChange={onOpenChange}
       title="Import World JSON"
-      description="Choose one import source: a JSON link, local JSON file, default world, or demo world."
+      description="Choose one import source: a JSON link, local files, local folder, default world, or demo world."
       urlInputId="world-layout-url"
       urlLabel="World JSON URL"
       url={worldLayoutUrl}

@@ -25,6 +25,10 @@ import {
   WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT,
   WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
 } from "@/app/pages/index/indexPageHelpers";
+import {
+  buildWorldLayoutFolderAssetMap,
+  splitWorldLayoutFolderFiles,
+} from "@/app/pages/index/worldLayoutFolderImport";
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
   buildWorldSceneDocumentFromState,
@@ -299,26 +303,48 @@ export const useWorldSceneManager = ({
     ]
   );
 
+  const importWorldLayoutFiles = useCallback(
+    async (files: File[]) => {
+      const { assetFiles, layoutFile } = splitWorldLayoutFolderFiles(files);
+      if (!layoutFile) {
+        toast.error("Select a world JSON file.");
+        return;
+      }
+      setIsImportingWorldLayout(true);
+      try {
+        const raw = await layoutFile.text();
+        const worldLayout = await parseWorldSceneLayerText(raw);
+        const assetMapResult =
+          assetFiles.length > 0 ? await buildWorldLayoutFolderAssetMap(assetFiles) : null;
+        applyImportedWorldSceneLayer(worldLayout, {
+          assetMap: assetMapResult?.assetMap,
+        });
+        closeWorldLayoutImportDialog();
+        toast.success(`Loaded world from ${layoutFile.name}.`);
+      } catch (error) {
+        toast.error(readUnknownErrorMessage(error, "Failed to import world JSON"));
+      } finally {
+        setIsImportingWorldLayout(false);
+      }
+    },
+    [applyImportedWorldSceneLayer, closeWorldLayoutImportDialog]
+  );
+
   const handleImportWorldLayoutFromFileDialog = useCallback(() => {
     openFileSelectionDialog({
       accept: WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT,
-      onFiles: async ([file]) => {
-        if (!file) return;
-        setIsImportingWorldLayout(true);
-        try {
-          const raw = await file.text();
-          const worldLayout = await parseWorldSceneLayerText(raw);
-          applyImportedWorldSceneLayer(worldLayout);
-          closeWorldLayoutImportDialog();
-          toast.success(`Loaded world from ${file.name}.`);
-        } catch (error) {
-          toast.error(readUnknownErrorMessage(error, "Failed to import world JSON"));
-        } finally {
-          setIsImportingWorldLayout(false);
-        }
-      },
+      multiple: true,
+      onFiles: importWorldLayoutFiles,
     });
-  }, [applyImportedWorldSceneLayer, closeWorldLayoutImportDialog]);
+  }, [importWorldLayoutFiles]);
+
+  const handleImportWorldLayoutFromFolderDialog = useCallback(() => {
+    openFileSelectionDialog({
+      accept: WORLD_LAYOUT_LOCAL_IMPORT_ACCEPT,
+      directory: true,
+      onFiles: importWorldLayoutFiles,
+    });
+  }, [importWorldLayoutFiles]);
 
   const handleImportWorkspaceChangeSet = useCallback(() => {
     openFileSelectionDialog({
@@ -565,6 +591,7 @@ export const useWorldSceneManager = ({
     handleImportDefaultWorldLayoutFromDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromFileDialog,
+    handleImportWorldLayoutFromFolderDialog,
     handleImportWorldLayoutFromLinkDialog,
     handleImportWorldLayoutFromUrl,
     handleImportWorldScenePackage,
