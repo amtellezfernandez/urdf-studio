@@ -1,4 +1,5 @@
 import { TOP_NAV_HEIGHT_PX } from "@/features/layout/page/constants";
+import { clampNumber } from "@/shared/lib/numeric";
 
 export const SIMULATION_PREP_PANEL_WIDTH_PX = 440;
 export const SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX = 16;
@@ -11,12 +12,10 @@ export type SimulationPrepPanelPosition = {
 };
 
 export const getSimulationPrepPanelWidthPx = (viewportWidth: number): number =>
-  Math.max(
+  clampNumber(
+    viewportWidth - SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX * 2,
     0,
-    Math.min(
-      SIMULATION_PREP_PANEL_WIDTH_PX,
-      viewportWidth - SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX * 2
-    )
+    SIMULATION_PREP_PANEL_WIDTH_PX
   );
 
 export const getSimulationPrepPanelInitialPosition = (
@@ -55,7 +54,7 @@ export const clampSimulationPrepPanelPosition = ({
   );
 
   return {
-    left: Math.min(Math.max(nextLeft, minLeft), maxLeft),
-    top: Math.min(Math.max(nextTop, minTop), maxTop),
+    left: clampNumber(nextLeft, minLeft, maxLeft),
+    top: clampNumber(nextTop, minTop, maxTop),
   };
 };
