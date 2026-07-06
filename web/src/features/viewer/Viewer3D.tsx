@@ -23,7 +23,6 @@ import {
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
-import { WORLD_OBJECT_EDIT_PARAMS } from "@/features/objects/worldObjectEditParams";
 import type { Node, Edge } from "reactflow";
 import { getJointLimits, type JointAxisMap, type JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
@@ -261,6 +260,7 @@ import {
   resolveObjectAssemblyModelId,
   resolveRobotPointerSelection,
 } from "@/features/viewer/viewerPointerSelection";
+import { buildWorldObjectFocusFrame } from "@/features/viewer/worldObjectFocusFrame";
 export interface Viewer3DProps {
   workspaceMode?: WorkspaceMode;
   assemblyPrimaryModel?: { id: string; name: string };
@@ -317,8 +317,6 @@ export interface Viewer3DProps {
   enableObjectActionsInReadOnly?: boolean;
   onInertiaReliabilityChange?: (entries: InertiaReliabilityEntry[]) => void;
 }
-
-const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
 
 const URDFModel = ({
   file,
@@ -3559,44 +3557,18 @@ export const Viewer3D = ({
         if (!controls || !camera) {
           return;
         }
-        const center = object.position.clone();
-        const radius = Math.max(
-          object.size.length() * 0.5,
-          WORLD_OBJECT_EDIT_PARAMS.frameFocusMinRadiusM
-        );
-        const verticalFovRad = THREE.MathUtils.degToRad(camera.fov);
-        const horizontalFovRad =
-          2 * Math.atan(Math.tan(verticalFovRad * 0.5) * camera.aspect);
-        const minHalfFovRad = Math.max(
-          WORLD_OBJECT_EDIT_PARAMS.frameFocusMinHalfFovRad,
-          Math.min(verticalFovRad, horizontalFovRad) * 0.5
-        );
-        const distance =
-          Math.max(
-            radius / Math.sin(minHalfFovRad),
-            radius * WORLD_OBJECT_EDIT_PARAMS.frameFocusDistanceScale,
-            WORLD_OBJECT_EDIT_PARAMS.frameFocusMinDistanceM
-          ) * WORLD_OBJECT_EDIT_PARAMS.frameFocusPaddingScale;
-        const direction = new THREE.Vector3()
-          .subVectors(camera.position, controls.target)
-          .normalize();
-        if (
-          direction.lengthSq() <
-          WORLD_OBJECT_EDIT_PARAMS.frameFocusDirectionEpsilon
-        ) {
-          direction.copy(DEFAULT_OBJECT_FRAME_DIRECTION);
-        }
-        camera.position.copy(center).addScaledVector(direction, distance);
-        controls.target.copy(center);
-        controls.minDistance = Math.max(
-          radius * WORLD_OBJECT_EDIT_PARAMS.frameFocusMinDistanceScale,
-          WORLD_OBJECT_EDIT_PARAMS.frameFocusMinDistanceFallbackM
-        );
-        controls.maxDistance = Math.max(
-          radius * WORLD_OBJECT_EDIT_PARAMS.frameFocusMaxDistanceScale,
-          controls.minDistance * WORLD_OBJECT_EDIT_PARAMS.frameFocusMaxToMinDistanceRatio,
-          WORLD_OBJECT_EDIT_PARAMS.frameFocusMaxDistanceFallbackM
-        );
+        const focusFrame = buildWorldObjectFocusFrame({
+          objectPosition: object.position,
+          objectSize: object.size,
+          cameraPosition: camera.position,
+          controlsTarget: controls.target,
+          cameraFovDegrees: camera.fov,
+          cameraAspect: camera.aspect,
+        });
+        camera.position.copy(focusFrame.cameraPosition);
+        controls.target.copy(focusFrame.target);
+        controls.minDistance = focusFrame.minDistance;
+        controls.maxDistance = focusFrame.maxDistance;
         controls.update();
       };
 
