@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import "./index.css";
 
 // Always use dark mode
@@ -94,7 +95,7 @@ const renderBootFailure = (error: unknown) => {
   appendTextElement(
     panel,
     "p",
-    error instanceof Error ? error.message : "The app bundle did not start in this browser tab.",
+    readUnknownErrorMessage(error, "The app bundle did not start in this browser tab."),
     "mt-2 text-sm text-muted-foreground"
   );
 

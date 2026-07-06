@@ -6,6 +6,7 @@ import {
   ROBOT_ASSET_MIN_FETCH_WORKERS,
   ROBOT_ASSET_PATH_SEPARATOR,
 } from "@/shared/robotAssets/robotAssetManifestParams";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 export type RobotAssetManifestFileEntry = {
   path: string;
@@ -376,7 +377,7 @@ const loadFromManifestUrlCandidates = async<T>({
     try {
       return await loadCandidate(candidate, fetchImpl, copy);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = readUnknownErrorMessage(error, String(error));
       failures.push(`${candidate}: ${reason}`);
     }
   }

@@ -2,6 +2,7 @@
 
 import { highlightUrdfToHtml } from "../parsing/urdfHighlight";
 import { parseUrdfStats, type UrdfParseStats } from "@/shared/lib/urdfBrowser";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 type UrdfWorkerRequest = {
   id: number;
@@ -39,7 +40,7 @@ workerScope.onmessage = (event: MessageEvent<UrdfWorkerRequest>) => {
     const response: UrdfWorkerResponse = {
       id,
       type: "error",
-      error: error instanceof Error ? error.message : "URDF worker failed",
+      error: readUnknownErrorMessage(error, "URDF worker failed"),
     };
     workerScope.postMessage(response);
   }

@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 
 import { useRuntimeHealthStore } from "@/runtime_engine/rosviz/state/runtimeHealthStore";
 import { useWorkspaceStore } from "@/features/workspace/useWorkspaceStore";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { cn } from "@/shared/lib/utils";
 import {
   allowAttestationConnection,
@@ -68,7 +69,7 @@ export const RuntimeHealthPanel = () => {
       if (cancelled) return;
       setAttestationStatuses([]);
       setAttestationError(
-        error instanceof Error ? error.message : "Failed to load attestation status."
+        readUnknownErrorMessage(error, "Failed to load attestation status.")
       );
     }
   };
@@ -99,7 +100,7 @@ export const RuntimeHealthPanel = () => {
       await loadAttestation();
     } catch (error) {
       setAttestationError(
-        error instanceof Error ? error.message : "Failed to allow connection."
+        readUnknownErrorMessage(error, "Failed to allow connection.")
       );
     }
   };

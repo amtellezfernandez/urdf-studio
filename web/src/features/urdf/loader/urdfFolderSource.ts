@@ -3,6 +3,7 @@ import {
   normalizeExpandedUrdfPath,
 } from "@/shared/lib/urdfCore";
 import { normalizeMeshPathForMatch } from "@/shared/lib/urdfBrowser";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   collectXacroSupportFiles,
   expandXacro,
@@ -87,7 +88,7 @@ export const resolveFolderUrdfSource = async (
     const result = await (options.expandXacroFile ?? expandXacro)(xacroRelativePath, supportFiles);
     urdfContent = result.urdf;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to expand xacro file";
+    const message = readUnknownErrorMessage(error, "Failed to expand xacro file");
     throw new Error(message);
   }
 

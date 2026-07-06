@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import { createLruCache } from "@/shared/lib/cache";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   buildRoverApproachWorldNavigationContext,
   countIncludedObstacles,
@@ -96,7 +97,7 @@ workerScope.onmessage = (event: MessageEvent<ApproachWorldNavigationWorkerReques
     const response: ApproachWorldNavigationWorkerResponse = {
       id,
       type: "error",
-      error: error instanceof Error ? error.message : "World navigation worker failed",
+      error: readUnknownErrorMessage(error, "World navigation worker failed"),
     };
     workerScope.postMessage(response);
   }
