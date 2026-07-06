@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeStudioWheelDriveAuthority,
+  computeStudioWheelDriveAuthorityFromEntries,
   inferStudioWheelSideFromLateralOffset,
   STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME,
   STUDIO_WHEEL_AXIS_ALIGNMENT_WITH_UP_MAX,
@@ -430,6 +431,40 @@ describe("studioWheelDriveHeuristics", () => {
       totalWheelCount: 4,
       hasLeftDrive: true,
       hasRightDrive: false,
+    });
+  });
+
+  it("computes drive authority directly from role entries", () => {
+    const authority = computeStudioWheelDriveAuthorityFromEntries([
+      {
+        jointName: "front_left",
+        side: "left",
+        driveEnabled: true,
+      },
+      {
+        jointName: "rear_left",
+        side: "left",
+        driveEnabled: false,
+      },
+      {
+        jointName: "front_right",
+        side: "right",
+        driveEnabled: true,
+      },
+      {
+        jointName: "rear_right",
+        side: "right",
+        driveEnabled: false,
+      },
+    ]);
+
+    expect(authority).toEqual({
+      linearScale: 0.5,
+      angularScale: 0.5,
+      activeDriveCount: 2,
+      totalWheelCount: 4,
+      hasLeftDrive: true,
+      hasRightDrive: true,
     });
   });
 });

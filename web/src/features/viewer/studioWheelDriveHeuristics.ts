@@ -467,3 +467,18 @@ export const computeStudioWheelDriveAuthority = (
     hasRightDrive,
   };
 };
+
+export const computeStudioWheelDriveAuthorityFromEntries = (
+  entries: ReadonlyArray<StudioWheelDriveAuthorityInput & { driveEnabled: boolean }>
+): StudioWheelDriveAuthority =>
+  computeStudioWheelDriveAuthority(
+    entries.map((entry) => ({
+      jointName: entry.jointName,
+      side: entry.side,
+    })),
+    new Set(
+      entries
+        .filter((entry) => entry.driveEnabled)
+        .map((entry) => entry.jointName)
+    )
+  );

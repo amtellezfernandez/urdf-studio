@@ -174,6 +174,7 @@ import {
 } from "@/features/ik/runtime/adaptiveTrajectoryRuntime";
 import {
   computeStudioWheelDriveAuthority,
+  computeStudioWheelDriveAuthorityFromEntries,
   extractStudioDriveJointHintsFromUrdf,
   isStudioWheelLikeLabel,
   persistStudioDriveJointHintsToUrdf,
@@ -1816,26 +1817,11 @@ export const Viewer3D = ({
     () => toStudioWheelRoleDisplayEntries(studioWheelRoleEntries, studioWheelJointNameSet),
     [studioWheelJointNameSet, studioWheelRoleEntries]
   );
-  const activeStudioWheelDriveCount = useMemo(
-    () =>
-      studioWheelRoleDisplayEntries.filter((entry) => entry.driveEnabled).length,
-    [studioWheelRoleDisplayEntries]
-  );
   const studioWheelDriveAuthority = useMemo(
-    () =>
-      computeStudioWheelDriveAuthority(
-        studioWheelRoleDisplayEntries.map((entry) => ({
-          jointName: entry.jointName,
-          side: entry.side,
-        })),
-        new Set(
-          studioWheelRoleDisplayEntries
-            .filter((entry) => entry.driveEnabled)
-            .map((entry) => entry.jointName)
-        )
-      ),
+    () => computeStudioWheelDriveAuthorityFromEntries(studioWheelRoleDisplayEntries),
     [studioWheelRoleDisplayEntries]
   );
+  const activeStudioWheelDriveCount = studioWheelDriveAuthority.activeDriveCount;
   const studioWheelRoleMarkers = useMemo<StudioWheelRoleMarker[]>(() => {
     if (!hasStudioRobot || !isWheelRolesOpen || !robot) return [];
     return buildStudioWheelRoleMarkers(studioWheelRoleDisplayEntries, robot.joints);
