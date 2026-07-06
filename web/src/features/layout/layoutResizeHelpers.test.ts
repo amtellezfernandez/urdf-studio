@@ -51,6 +51,11 @@ describe("layoutResizeHelpers", () => {
     );
   });
 
+  it("clamps the top panel ratio when container height is unavailable", () => {
+    expect(clampLeftSidebarTopPanelHeight(-1, 0)).toBe(0.05);
+    expect(clampLeftSidebarTopPanelHeight(2, Number.NaN)).toBe(0.95);
+  });
+
   it("clamps the top panel ratio using container constraints", () => {
     const containerHeight = 800;
     const minRatio = Math.min(0.95, MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT / containerHeight);

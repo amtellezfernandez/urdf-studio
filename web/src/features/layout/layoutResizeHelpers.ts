@@ -12,11 +12,9 @@ import {
   MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT,
   MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
 } from "@/features/layout/page/constants";
+import { clampNumber } from "@/shared/lib/numeric";
 
 export type ResizePointerDown = { t: number; x: number };
-
-const clampNumber = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
 
 export const clampSidebarWidth = (width: number): number =>
   clampNumber(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
@@ -32,7 +30,7 @@ export const clampLeftSidebarTopPanelHeight = (
     return DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT;
   }
   if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
-    return Math.min(0.95, Math.max(0.05, height));
+    return clampNumber(height, 0.05, 0.95);
   }
 
   const minTopRatio = Math.min(
@@ -40,9 +38,9 @@ export const clampLeftSidebarTopPanelHeight = (
     MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT / containerHeight
   );
   const maxTopRatioFromCamera = 1 - MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT / containerHeight;
-  const maxTopRatio = Math.max(minTopRatio, Math.min(0.95, maxTopRatioFromCamera));
+  const maxTopRatio = clampNumber(maxTopRatioFromCamera, minTopRatio, 0.95);
 
-  return Math.min(maxTopRatio, Math.max(minTopRatio, height));
+  return clampNumber(height, minTopRatio, maxTopRatio);
 };
 
 export const getPointerTimestamp = (): number =>
