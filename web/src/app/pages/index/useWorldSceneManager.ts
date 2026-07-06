@@ -10,14 +10,11 @@ import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defau
 import {
   WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
 } from "@/features/world-share/worldScenePackageParams";
-import {
-  type WorldSceneLayerSnapshot,
-  worldSceneManifestToLayerSnapshot,
-} from "@/features/world-share/worldSceneManifest";
+import { type WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
 import type {
   WorldSceneDocument,
   WorldSceneRegistryEnvelope,
-  WorldScenePackageManifest,
+  SerializableWorldObject,
 } from "@/features/world-share/worldScenePackageTypes";
 import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransferApi";
 import type { CreatedObject } from "@/features/objects";
@@ -123,7 +120,9 @@ export const useWorldSceneManager = ({
   const buildCurrentWorldSceneRegistryEnvelope = useCallback(
     async (
       overrides?: Partial<
-        Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
+        Pick<WorldSceneRegistryEnvelope, "package_id" | "version" | "description"> & {
+          title: string;
+        }
       >
     ): Promise<WorldSceneRegistryEnvelope> => {
       const transferObjects = getObjectsForTransfer?.() ?? objectsRef.current;
@@ -260,7 +259,7 @@ export const useWorldSceneManager = ({
 
   const applyWorldSceneObjects = useCallback(
     (
-      sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"],
+      sceneObjects: SerializableWorldObject[],
       meshUriContext?: MeshUriResolutionContext
     ) => {
       applyCreatedObjects(toImportedCreatedObjects(sceneObjects, meshUriContext));
@@ -295,10 +294,8 @@ export const useWorldSceneManager = ({
   );
 
   const applyImportedWorldScenePackage = useCallback(
-    (manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope) => {
-      const worldLayout =
-        "world" in manifest ? manifest.world : worldSceneManifestToLayerSnapshot(manifest);
-      applyImportedWorldSceneLayer(worldLayout, undefined, {
+    (manifest: WorldSceneRegistryEnvelope) => {
+      applyImportedWorldSceneLayer(manifest.world, undefined, {
         urdfFilename: `${manifest.package_id}-${manifest.version}.urdf`,
       });
       toast.success(`Loaded world package ${manifest.package_id}@${manifest.version}`);

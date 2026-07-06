@@ -8,7 +8,6 @@ import type {
   WorldScenePackageListEntry,
   WorldScenePackageVersionRecord,
   WorldSceneRegistryEnvelope,
-  WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
 import { toWorldRegistryRecordKey } from "@/app/pages/index/indexPageHelpers";
 import {
@@ -17,9 +16,7 @@ import {
 } from "@/app/pages/index/worldSceneRuntime";
 
 type UseWorldRegistryControllerParams = {
-  applyWorldScenePackage: (
-    manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
-  ) => void;
+  applyWorldScenePackage: (manifest: WorldSceneRegistryEnvelope) => void;
 };
 
 export type UseWorldRegistryControllerResult = {

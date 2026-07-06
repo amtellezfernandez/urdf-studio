@@ -6,7 +6,10 @@ import {
   WORLD_ROLLOUT_JOB_MAX_POLLS,
   WORLD_ROLLOUT_JOB_POLL_INTERVAL_MS,
 } from "@/features/world-share/worldRolloutParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  SerializableWorldObject,
+  WorldSceneDocument,
+} from "@/features/world-share/worldScenePackageTypes";
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
 import type { WorldRolloutCheckerProfile } from "@/features/world-share/worldRolloutTypes";
 import {
@@ -129,7 +132,7 @@ const resolveMeshUri = (
 };
 
 const toImportedWorldMetadata = (
-  object: WorldScenePackageManifest["world_snapshot"]["objects"][number]
+  object: SerializableWorldObject
 ): CreatedObject["worldMetadata"] => {
   const worldMetadata: CreatedObject["worldMetadata"] = {};
   if (object.appearance !== undefined) {
@@ -151,7 +154,7 @@ const toImportedWorldMetadata = (
 };
 
 function toImportedObjectParams(
-  object: WorldScenePackageManifest["world_snapshot"]["objects"][number],
+  object: SerializableWorldObject,
   meshUriContext: MeshUriResolutionContext = {}
 ): Omit<CreatedObject, "id"> {
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
@@ -202,7 +205,7 @@ function toImportedObjectParams(
 }
 
 export function toImportedCreatedObjects(
-  sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"],
+  sceneObjects: SerializableWorldObject[],
   meshUriContext: MeshUriResolutionContext = {}
 ): CreatedObject[] {
   return sceneObjects.map((sceneObject) => ({
@@ -212,7 +215,7 @@ export function toImportedCreatedObjects(
 }
 
 export function toImportedWorldSceneCameras(
-  cameras: WorldScenePackageManifest["world_snapshot"]["cameras"]
+  cameras: NonNullable<WorldSceneDocument["cameras"]>
 ): Array<Omit<Camera, "id">> {
   return cameras.map((camera) => ({
     name: camera.name,

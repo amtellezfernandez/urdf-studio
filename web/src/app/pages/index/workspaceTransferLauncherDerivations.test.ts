@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  SerializableWorldObject,
+  WorldSceneRegistryEnvelope,
+} from "@/features/world-share/worldScenePackageTypes";
 import type { WorkspaceTransferTargetDescriptor } from "@/features/world-share/workspaceTransferApi";
 import {
   assertWorkspacePackageCarriesSceneObjects,
@@ -31,34 +33,24 @@ const createTargetDescriptor = (
 });
 
 const createWorldPackage = (
-  objects: WorldScenePackageManifest["world_snapshot"]["objects"] = [],
-): WorldScenePackageManifest => ({
-  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
+  objects: SerializableWorldObject[] = [],
+): WorldSceneRegistryEnvelope => ({
   package_id: "demo-world",
   version: "1.0.0",
-  title: "Demo World",
-  created_at: "2026-01-01T00:00:00.000Z",
-  runtime_targets: [],
-  interface: {
-    observation_modalities: ["state"],
-    action_semantics: "joint_position",
-    timestep_ms: 10,
-    frame_convention: "ros-rep-103",
-  },
+  description: "Demo World",
   artifacts: [],
-  world_snapshot: {
+  provenance: {},
+  world: {
+    name: "Demo World",
     urdf_xml: "<robot name=\"demo\"><link name=\"base\"/></robot>",
     joint_positions: {},
     cameras: [],
     objects,
     scenario_time_ms: 0,
     scenario_duration_ms: 0,
-  },
-  provenance: {},
-  security: {
-    signature_ref: null,
-    attestation_refs: [],
-    sbom_ref: null,
+    environment: {
+      frame_convention: "ros-rep-103",
+    },
   },
 });
 

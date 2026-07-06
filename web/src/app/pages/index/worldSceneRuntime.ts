@@ -12,7 +12,6 @@ import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneM
 import type {
   WorldSceneDocument,
   WorldScenePackageListEntry,
-  WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
   WorldScenePackageValidationResponse,
   WorldSceneRegistryEnvelope,
@@ -49,7 +48,9 @@ const loadWorldRolloutApiModule = () =>
   import("@/features/world-share/worldRolloutApi");
 
 type WorldScenePackageOverrides = Partial<
-  Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
+  Pick<WorldSceneRegistryEnvelope, "package_id" | "version" | "description"> & {
+    title: string;
+  }
 >;
 
 type BuildWorldSceneDocumentFromStateParams = {
@@ -94,7 +95,11 @@ type WorldScenePackageImportParams = {
 type WorldScenePackageVersionLoader = (
   packageId: string,
   version: string
-) => Promise<WorldScenePackageVersionRecordPayload>;
+) => Promise<
+  Omit<WorldScenePackageVersionRecordPayload, "manifest"> & {
+    manifest: unknown;
+  }
+>;
 
 type LoadWorldScenePackageFromImportParamsOptions = {
   fetchImplementation?: typeof fetch;
@@ -374,7 +379,7 @@ export const resolveWorldRolloutImportPayload = (
 };
 
 export const validateWorldScenePackageLocally = async (
-  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
+  manifest: WorldSceneRegistryEnvelope
 ) => {
   const [
     { readWorldSceneRegistryEnvelopeFromUnknown, validateLocalWorldSceneRegistryEnvelope },
@@ -441,7 +446,7 @@ export const validateWorldScenePackageLocally = async (
 };
 
 export const validateWorldScenePackageRemotely = async (
-  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope
+  manifest: WorldSceneRegistryEnvelope
 ): Promise<WorldScenePackageValidationResponse> => {
   const { validateWorldScenePackageManifest } =
     await loadWorldScenePackageApiModule();
@@ -489,7 +494,7 @@ export const createWorldSceneLayerExportDocument = async (
 };
 
 export const publishWorldScenePackage = async (
-  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
+  manifest: WorldSceneRegistryEnvelope,
   target: "registry" | "hub"
 ): Promise<WorldScenePackagePublishResponse> => {
   if (target === "hub") {

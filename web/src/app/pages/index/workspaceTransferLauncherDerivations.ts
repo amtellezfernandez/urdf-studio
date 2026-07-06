@@ -9,7 +9,6 @@ import type {
   WorkspaceTransferTargetStatus,
 } from "@/features/world-share/workspaceTransferApi";
 import type {
-  WorldScenePackageManifest,
   WorldSceneRegistryEnvelope,
 } from "@/features/world-share/worldScenePackageTypes";
 
@@ -105,13 +104,10 @@ export const canLaunchWorkspaceTransferTarget = (
 ): boolean => canOpenWorkspaceTarget(descriptor) && status?.available === true;
 
 export const assertWorkspacePackageCarriesSceneObjects = (
-  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
+  worldPackage: WorldSceneRegistryEnvelope,
   studioWorldObjectCount: number,
 ): void => {
-  const objectCount =
-    "world" in worldPackage
-      ? worldPackage.world.objects.length
-      : worldPackage.world_snapshot.objects.length;
+  const objectCount = worldPackage.world.objects.length;
   if (studioWorldObjectCount <= 0 || objectCount > 0) return;
   throw new Error(
     "Workspace transfer blocked: Studio has world objects, but the generated scene package is empty.",

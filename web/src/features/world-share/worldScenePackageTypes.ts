@@ -203,7 +203,7 @@ export type WorldScenePackageVersionRecord = {
   version: string;
   digest_sha256: string;
   published_at: string;
-  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope;
+  manifest: WorldSceneRegistryEnvelope;
 };
 
 export type WorldScenePackageVersionRecordPayload = {
@@ -211,7 +211,7 @@ export type WorldScenePackageVersionRecordPayload = {
   version: string;
   digest_sha256: string;
   published_at: string;
-  manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope;
+  manifest: WorldSceneRegistryEnvelope;
 };
 
 export type WorldRegistryBackendStatus = {

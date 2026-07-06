@@ -4,11 +4,9 @@ import type { BackendIdList } from "@/shared/config/backends";
 import type {
   WorldSceneRegistryEnvelope,
   WorldScenePackageListEntry,
-  WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
   WorldScenePackageValidationResponse,
   WorldScenePackageVersionRecordPayload,
-  WorldScenePackageVersionRecord,
   WorldRegistryCapabilitiesResponse,
 } from "@/features/world-share/worldScenePackageTypes";
 
@@ -70,12 +68,12 @@ export const createWorldScenePackageClient = (
   };
 
   return {
-    validateManifest: (manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope) =>
+    validateManifest: (manifest: WorldSceneRegistryEnvelope) =>
       requestJson<WorldScenePackageValidationResponse>("/validate", {
         body: manifest,
         method: "POST",
       }),
-    publishManifest: (manifest: WorldScenePackageManifest | WorldSceneRegistryEnvelope) =>
+    publishManifest: (manifest: WorldSceneRegistryEnvelope) =>
       requestJson<WorldScenePackagePublishResponse>("", { body: manifest, method: "POST" }),
     listPackages: (query: WorldScenePackageListQuery = {}) => {
       const queryString = toQueryString({
