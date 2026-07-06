@@ -417,6 +417,43 @@ describe("resolveRoverApproachObjectContactGoal", () => {
     });
   });
 
+  it("keeps contact goals finite when target size and base radius are invalid", () => {
+    const targetObject = createWorldObject({
+      id: "target",
+      type: "cube",
+      position: new THREE.Vector3(1, 0, 0),
+      size: new THREE.Vector3(Number.NaN, -1, Number.POSITIVE_INFINITY),
+    });
+    const distantObject = createWorldObject({
+      id: "distant",
+      type: "cube",
+      position: new THREE.Vector3(3, 3, 0),
+      size: new THREE.Vector3(0.2, 0.2, 0.2),
+    });
+    const worldObjects = [targetObject, distantObject];
+    const navigationContext = buildRoverApproachWorldNavigationContext({
+      objects: worldObjects,
+      upAxisWorld: WORLD_UP,
+    });
+
+    const result = resolveRoverApproachObjectContactGoal({
+      object: targetObject,
+      worldObjects,
+      basePositionWorld: BASE_POSITION_WORLD,
+      targetWorld: targetObject.position.clone(),
+      upAxisWorld: WORLD_UP,
+      navigationContext,
+      roverBaseRadiusM: Number.NaN,
+      robotFootprint: DEFAULT_ROBOT_FOOTPRINT,
+    });
+
+    expect(result).not.toBeNull();
+    expect(Number.isFinite(result?.goalWorld.x)).toBe(true);
+    expect(Number.isFinite(result?.goalWorld.y)).toBe(true);
+    expect(Number.isFinite(result?.goalWorld.z)).toBe(true);
+    expect(Number.isFinite(result?.targetMarginSq)).toBe(true);
+  });
+
   it("uses the projected footprint support radius for diagonal contact offsets", () => {
     const diagonalDirectionWorld = new THREE.Vector3(1, 1, 0).normalize();
     const supportRadiusM = resolveRoverApproachFootprintSupportRadiusM({
