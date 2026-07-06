@@ -257,6 +257,10 @@ import {
   isEditableKeyboardTarget,
   resolveRoverApproachRobotFootprint,
 } from "@/features/viewer/viewer3dHelpers";
+import {
+  resolveObjectAssemblyModelId,
+  resolveRobotPointerSelection,
+} from "@/features/viewer/viewerPointerSelection";
 export interface Viewer3DProps {
   workspaceMode?: WorkspaceMode;
   assemblyPrimaryModel?: { id: string; name: string };
@@ -1355,16 +1359,7 @@ const URDFModel = ({
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     if (isAssemblyWorkspace) {
-      let node: THREE.Object3D | null = e.object as THREE.Object3D;
-      let robotId: string | null = null;
-      while (node) {
-        const candidateId = node.userData?.assemblyModelId;
-        if (typeof candidateId === "string" && candidateId.length > 0) {
-          robotId = candidateId;
-          break;
-        }
-        node = node.parent;
-      }
+      const robotId = resolveObjectAssemblyModelId(e.object as THREE.Object3D);
       if (robotId) {
         const entry = assemblyRobotsRef.current.find((item) => item.id === robotId);
         if (entry) {
@@ -1393,63 +1388,16 @@ const URDFModel = ({
     const robot = robotRef.current;
     if (!robot) return;
     const hitObject = e.object as THREE.Object3D;
-    let hitRobot = false;
-    let node: THREE.Object3D | null = hitObject;
-    while (node) {
-      if (node === robot) {
-        hitRobot = true;
-        break;
-      }
-      node = node.parent;
-    }
-
-    let obj: THREE.Object3D | null = e.object as THREE.Object3D;
-    const linkNames = new Set(Object.keys(robot.links || {}));
-    let linkName: string | undefined;
-    while (obj) {
-      if (linkNames.has(obj.name)) {
-        linkName = obj.name;
-        break;
-      }
-      obj = obj.parent;
-    }
+    const { hitRobot, linkName, jointName } = resolveRobotPointerSelection({
+      hitObject,
+      robot,
+    });
     if (readOnlyMode && hitRobot) {
       onReadOnlyInteractionAttempt?.();
       return;
     }
-    let jointName: string | null = null;
     if (linkName) {
-      for (const [jName, jObj] of Object.entries(robot.joints ?? {})) {
-        if ((jObj.children ?? []).some((child) => child.name === linkName)) {
-          jointName = jName;
-          break;
-        }
-      }
       highlightLink(linkName, jointName);
-    }
-    if (!jointName) {
-      const isDescendantOf = (node: THREE.Object3D, ancestor: THREE.Object3D): boolean => {
-        let cursor: THREE.Object3D | null = node;
-        while (cursor) {
-          if (cursor === ancestor) return true;
-          cursor = cursor.parent;
-        }
-        return false;
-      };
-      for (const [candidateJointName, candidateJoint] of Object.entries(robot.joints ?? {})) {
-        const child = (candidateJoint.children ?? [])[0] as THREE.Object3D | undefined;
-        if (!child) continue;
-        if (isDescendantOf(hitObject, child)) {
-          jointName = candidateJointName;
-          if (!linkName) {
-            linkName = child.name || undefined;
-          }
-          break;
-        }
-      }
-      if (linkName) {
-        highlightLink(linkName, jointName);
-      }
     }
     onSelectPart?.({ linkName, jointName });
 
@@ -1462,20 +1410,15 @@ const URDFModel = ({
       (dragMode === "move-joints" || (dragMode === "drag-handle" && wheelJoint)) &&
       (!wheelJoint || wheelDriveEnabled);
     if (jointName && joint && canDragJoint) {
-        // Get joint limits from parsed URDF data
-        const limits = getJointLimits(jointLimits, jointName);
-
-        // Read current angle directly from joint
-        const currentAngle = resolveJointScalarValue(joint) ?? 0;
-
-        // Store drag start state using world/floor reference (vertical movement)
-        dragStartRef.current = {
-          x: e.clientX,
-          y: e.clientY, // Use Y for vertical mouse movement
-          angle: currentAngle,
-          lower: limits.lower,
-          upper: limits.upper
-        };
+      const limits = getJointLimits(jointLimits, jointName);
+      const currentAngle = resolveJointScalarValue(joint) ?? 0;
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        angle: currentAngle,
+        lower: limits.lower,
+        upper: limits.upper,
+      };
 
       draggingJointRef.current = jointName;
       if (wheelJoint) {
