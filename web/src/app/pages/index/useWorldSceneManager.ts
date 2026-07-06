@@ -260,10 +260,21 @@ export const useWorldSceneManager = ({
 
   const applyImportedWorldSceneLayer = useCallback(
     (worldLayout: WorldSceneLayerSnapshot, meshUriContext?: MeshUriResolutionContext) => {
+      if (worldLayout.urdf_xml) {
+        updateUrdfFile(worldLayout.urdf_xml, `${worldLayout.name || "world-layout"}.urdf`);
+      }
+      if (worldLayout.cameras !== undefined) {
+        clearCameras();
+        toImportedWorldSceneCameras(worldLayout.cameras).forEach((camera) => {
+          addCamera(camera);
+        });
+      }
+      if (worldLayout.joint_positions !== undefined) {
+        setJointValues(worldLayout.joint_positions);
+      }
       applyWorldSceneObjects(worldLayout.objects, meshUriContext);
-      setActiveWorldSnapshotRef(null);
     },
-    [applyWorldSceneObjects, setActiveWorldSnapshotRef]
+    [addCamera, applyWorldSceneObjects, clearCameras, setJointValues, updateUrdfFile]
   );
 
   const applyImportedWorldScenePackage = useCallback(
@@ -390,7 +401,7 @@ export const useWorldSceneManager = ({
         sourceOverride?: NonNullable<CreatedObject["source"]>;
       } = {}
     ) => {
-      const { worldLayout, embeddedCameras, baseUrl } = await readWorldSceneLayerFromUrl(
+      const { worldLayout, baseUrl } = await readWorldSceneLayerFromUrl(
         worldLayoutUrl,
         contextLabel
       );
@@ -401,9 +412,6 @@ export const useWorldSceneManager = ({
           baseUrl,
         }
       );
-      if (embeddedCameras > 0) {
-        toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
-      }
     },
     [applyImportedWorldSceneLayer]
   );
