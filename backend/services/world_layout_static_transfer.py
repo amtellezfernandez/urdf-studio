@@ -33,29 +33,13 @@ from backend.services.world_asset_refs import (
     normalize_portable_world_asset_ref,
     read_world_object_asset_ref,
 )
-
-SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point", "mesh"}
-CONCRETE_WORLD_LAYOUT_FRAME_MAPS = {"identity", "studio-y-up-to-z-up"}
-Z_UP_FRAME_CONVENTIONS = {
-    "ros",
-    "ros-rep-103",
-    "rep-103",
-    "urdf",
-    "world",
-    "z-up",
-    "zup",
-    "studio-z-up",
-    "urdf-studio",
-    "urdf-studio-z-up",
-}
-Y_UP_FRAME_CONVENTIONS = {
-    "studio-y-up",
-    "three-y-up",
-    "threejs-y-up",
-    "webgl-y-up",
-    "y-up",
-    "yup",
-}
+from backend.services.world_scene_contract import (
+    CONCRETE_WORLD_LAYOUT_FRAME_MAPS,
+    WORLD_OBJECT_TYPES,
+    Y_UP_FRAME_CONVENTIONS,
+    Z_UP_FRAME_CONVENTIONS,
+    normalize_world_frame_convention,
+)
 STATIC_SCENARIO_TIME_MS = 0
 STATIC_SCENARIO_DURATION_MS = 0
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
@@ -224,9 +208,9 @@ def _read_world_object(value: object, index: int) -> WorldLayoutObject:
     if not isinstance(raw_id, str) or not raw_id.strip():
         raise WorldLayoutTransferError(f"objects[{index}].id must be a non-empty string")
     raw_type = value.get("type")
-    if raw_type not in SUPPORTED_WORLD_OBJECT_TYPES:
+    if raw_type not in WORLD_OBJECT_TYPES:
         raise WorldLayoutTransferError(
-            f"objects[{index}].type must be one of: {', '.join(sorted(SUPPORTED_WORLD_OBJECT_TYPES))}"
+            f"objects[{index}].type must be one of: {', '.join(sorted(WORLD_OBJECT_TYPES))}"
         )
     physics = value.get("physics")
     if physics is not None and not _is_record(physics):
@@ -446,11 +430,6 @@ def resolve_world_layout_asset_path(asset_ref: str | None, roots: Sequence[Path]
     return None
 
 
-def _normalize_frame_convention(value: str) -> str:
-    normalized = value.strip().lower().replace("_", "-")
-    return re.sub(r"\s+", "-", normalized)
-
-
 def _read_frame_map_hint(payload: WorldLayoutPayloadRecord) -> ConcreteWorldLayoutFrameMap | None:
     environment = payload.get("environment")
     if not _is_record(environment):
@@ -560,7 +539,7 @@ def resolve_world_layout_frame_map(
         return layout.frame_map_hint
     if layout.frame_convention is None:
         return "identity"
-    normalized = _normalize_frame_convention(layout.frame_convention)
+    normalized = normalize_world_frame_convention(layout.frame_convention)
     if normalized in Z_UP_FRAME_CONVENTIONS:
         return "identity"
     if normalized in Y_UP_FRAME_CONVENTIONS:

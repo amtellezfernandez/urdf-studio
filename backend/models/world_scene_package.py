@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.json_payload import JsonObject
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
+from backend.services.world_scene_contract import (
+    WORLD_OBJECT_MESH_ASSET_KEYS,
+    WORLD_OBJECT_TYPES,
+)
 
 from backend.services.world_scene_package_params import (
     MAX_ARTIFACT_REFS,
@@ -240,7 +244,6 @@ def _raise_for_invalid_vector3(value: object, path: str) -> None:
             raise ValueError(f"{path}[{axis}] must be a finite number.")
 
 
-WORLD_OBJECT_TYPES = {"cube", "point", "sphere", "cylinder", "mesh"}
 WORLD_OBJECT_SOURCES = {
     "user",
     "world-scenario",
@@ -248,7 +251,6 @@ WORLD_OBJECT_SOURCES = {
 }
 WORLD_OBJECT_IK_TARGET_TYPES = {"punctual", "orbit"}
 WORLD_OBJECT_ORBIT_TARGET_POINTS = {"center", "primary", "secondary"}
-WORLD_OBJECT_MESH_ASSET_KEYS = ("asset_ref", "path", "uri", "filename")
 WORLD_OBJECT_SIMULATION_FIELDS = {
     "fixed",
     "collision",
