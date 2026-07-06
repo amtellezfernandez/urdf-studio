@@ -4,6 +4,7 @@ import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_AUTOLOAD, DEMO_MODE } from "@/shared/config/demo";
 import { DEFAULT_WORLD_LAYOUT_URL } from "@/shared/config/scenes";
 import { WORLD_HUB_WEB_BASE_URL } from "@/shared/config/worldHub";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { Camera } from "@/shared/types/camera";
 import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defaultSceneAutoLoadPolicy";
 import {
@@ -119,6 +120,16 @@ export const useWorldSceneManager = ({
     version: string;
   } | null>(null);
 
+  const closeWorldLayoutImportDialog = useCallback(() => {
+    setWorldLayoutImportDialogOpen(false);
+    setWorldLayoutImportUrlDraft("");
+  }, []);
+
+  const closeWorldScenePackageImportDialog = useCallback(() => {
+    setWorldScenePackageImportDialogOpen(false);
+    setWorldScenePackageImportUrlDraft("");
+  }, []);
+
   const revokeLocalWorldLayoutObjectUrls = useCallback(() => {
     localWorldLayoutObjectUrlsRef.current.forEach((objectUrl) => {
       URL.revokeObjectURL(objectUrl);
@@ -187,11 +198,11 @@ export const useWorldSceneManager = ({
           toast.error(`World package invalid in registry: ${remoteErrors}`);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "registry validation unavailable";
+        const message = readUnknownErrorMessage(error, "registry validation unavailable");
         toast.warning(`Local validation passed (${modeLabel}). Registry check failed: ${message}`);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to validate world package");
+      toast.error(readUnknownErrorMessage(error, "Failed to validate world package"));
     }
   }, [buildCurrentWorldScenePackageManifest]);
 
@@ -201,7 +212,7 @@ export const useWorldSceneManager = ({
       await downloadWorldScenePackageManifest(manifest, downloadJsonDocument);
       toast.success("World package exported");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export world package");
+      toast.error(readUnknownErrorMessage(error, "Failed to export world package"));
     }
   }, [buildCurrentWorldScenePackageManifest]);
 
@@ -219,7 +230,7 @@ export const useWorldSceneManager = ({
       downloadJsonDocument(payload, filename);
       toast.success(`World layout exported: ${worldLayoutName}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export world layout");
+      toast.error(readUnknownErrorMessage(error, "Failed to export world layout"));
     }
   }, [objects]);
 
@@ -306,16 +317,15 @@ export const useWorldSceneManager = ({
           const raw = await file.text();
           const manifest = await parseWorldSceneManifestText(raw);
           applyImportedWorldScenePackage(manifest);
-          setWorldScenePackageImportDialogOpen(false);
-          setWorldScenePackageImportUrlDraft("");
+          closeWorldScenePackageImportDialog();
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to import world package");
+          toast.error(readUnknownErrorMessage(error, "Failed to import world package"));
         } finally {
           setIsImportingWorldScenePackage(false);
         }
       },
     });
-  }, [applyImportedWorldScenePackage]);
+  }, [applyImportedWorldScenePackage, closeWorldScenePackageImportDialog]);
 
   const handleImportWorldScenePackageFromLinkDialog = useCallback(async () => {
     const importUrl = worldScenePackageImportUrlDraft.trim();
@@ -331,14 +341,17 @@ export const useWorldSceneManager = ({
         version: "",
       });
       applyImportedWorldScenePackage(manifest);
-      setWorldScenePackageImportDialogOpen(false);
-      setWorldScenePackageImportUrlDraft("");
+      closeWorldScenePackageImportDialog();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to import world package");
+      toast.error(readUnknownErrorMessage(error, "Failed to import world package"));
     } finally {
       setIsImportingWorldScenePackage(false);
     }
-  }, [applyImportedWorldScenePackage, worldScenePackageImportUrlDraft]);
+  }, [
+    applyImportedWorldScenePackage,
+    closeWorldScenePackageImportDialog,
+    worldScenePackageImportUrlDraft,
+  ]);
 
   const handleImportWorkspaceChangeSet = useCallback(() => {
     openFileSelectionDialog({
@@ -357,7 +370,7 @@ export const useWorldSceneManager = ({
             `Imported workspace changes: ${applied.appliedChangeCount} object changes${reviewOnly}`
           );
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to import workspace changes");
+          toast.error(readUnknownErrorMessage(error, "Failed to import workspace changes"));
         }
       },
     });
@@ -440,14 +453,13 @@ export const useWorldSceneManager = ({
     setIsImportingWorldLayout(true);
     try {
       await importWorldLayoutFromUrl(worldLayoutImportUrlDraft, "World layout import link");
-      setWorldLayoutImportDialogOpen(false);
-      setWorldLayoutImportUrlDraft("");
+      closeWorldLayoutImportDialog();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to import world layout");
+      toast.error(readUnknownErrorMessage(error, "Failed to import world layout"));
     } finally {
       setIsImportingWorldLayout(false);
     }
-  }, [importWorldLayoutFromUrl, worldLayoutImportUrlDraft]);
+  }, [closeWorldLayoutImportDialog, importWorldLayoutFromUrl, worldLayoutImportUrlDraft]);
 
   const handleImportWorldLayoutFromFileDialog = useCallback(() => {
     openFileSelectionDialog({
@@ -470,17 +482,16 @@ export const useWorldSceneManager = ({
           });
           revokeLocalWorldLayoutObjectUrls();
           localWorldLayoutObjectUrlsRef.current = nextObjectUrls;
-          setWorldLayoutImportDialogOpen(false);
-          setWorldLayoutImportUrlDraft("");
+          closeWorldLayoutImportDialog();
         } catch (error) {
           nextObjectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
-          toast.error(error instanceof Error ? error.message : "Failed to import world layout");
+          toast.error(readUnknownErrorMessage(error, "Failed to import world layout"));
         } finally {
           setIsImportingWorldLayout(false);
         }
       },
     });
-  }, [importWorldLayoutFromUrl, revokeLocalWorldLayoutObjectUrls]);
+  }, [closeWorldLayoutImportDialog, importWorldLayoutFromUrl, revokeLocalWorldLayoutObjectUrls]);
 
   const handleImportDefaultWorldLayoutFromDialog = useCallback(async () => {
     setIsImportingWorldLayout(true);
@@ -488,14 +499,13 @@ export const useWorldSceneManager = ({
       await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout", {
         sourceOverride: WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
       });
-      setWorldLayoutImportDialogOpen(false);
-      setWorldLayoutImportUrlDraft("");
+      closeWorldLayoutImportDialog();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to import default world layout");
+      toast.error(readUnknownErrorMessage(error, "Failed to import default world layout"));
     } finally {
       setIsImportingWorldLayout(false);
     }
-  }, [importWorldLayoutFromUrl]);
+  }, [closeWorldLayoutImportDialog, importWorldLayoutFromUrl]);
 
   const handleImportWorldLayoutFromEntry = useCallback(
     async (worldLayoutUrl: string, options?: { meshUriAssetMap?: Record<string, string> }) => {
@@ -512,7 +522,7 @@ export const useWorldSceneManager = ({
         const manifest = await loadWorldScenePackageFromImportParams(worldImportParams);
         applyImportedWorldScenePackage(manifest);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to import world link");
+        toast.error(readUnknownErrorMessage(error, "Failed to import world link"));
       }
     };
     void loadFromLink();
@@ -528,7 +538,7 @@ export const useWorldSceneManager = ({
           "World layout import link"
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to import world layout");
+        toast.error(readUnknownErrorMessage(error, "Failed to import world layout"));
       }
     };
     void loadWorldLayoutFromLink();
@@ -554,10 +564,12 @@ export const useWorldSceneManager = ({
           sourceOverride: WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
         });
       } catch (error) {
+        const unavailableMessage = "Default world layout unavailable";
+        const errorMessage = readUnknownErrorMessage(error, unavailableMessage);
         toast.warning(
-          error instanceof Error
-            ? `Default world layout unavailable: ${error.message}`
-            : "Default world layout unavailable"
+          errorMessage === unavailableMessage
+            ? unavailableMessage
+            : `${unavailableMessage}: ${errorMessage}`
         );
       }
     })();
@@ -598,7 +610,7 @@ export const useWorldSceneManager = ({
             message: "World layout applied.",
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Failed to import world layout";
+          const message = readUnknownErrorMessage(error, "Failed to import world layout");
           postWorldLayoutBridgeResult({
             target: event.source,
             origin: event.origin,
