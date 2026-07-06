@@ -2,8 +2,10 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildWorldSceneRegistryEnvelope,
   buildWorldScenePackageManifest,
   computeWorldSnapshotDigest,
+  refreshWorldSceneRegistryEnvelopeSnapshotDigest,
   refreshWorldScenePackageSnapshotDigest,
   stableStringify,
   toWorldSceneDocument,
@@ -247,6 +249,47 @@ describe("buildWorldScenePackageManifest", () => {
     expect(envelope).not.toHaveProperty("runtime_targets");
     expect(envelope).not.toHaveProperty("interface");
     expect(envelope).not.toHaveProperty("security");
+  });
+
+  it("builds thin registry envelopes directly from scene state", async () => {
+    const envelope = await buildWorldSceneRegistryEnvelope({
+      packageId: "Demo World",
+      version: "1.0.0",
+      name: "Demo World",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [TEST_CAMERA],
+      objects: [TEST_OBJECT],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+      provenance: {
+        owner: "scene-team",
+      },
+    });
+
+    expect(envelope).toEqual(
+      expect.objectContaining({
+        package_id: "demo-world",
+        version: "1.0.0",
+        provenance: {
+          owner: "scene-team",
+        },
+        world: expect.objectContaining({
+          name: "Demo World",
+          urdf_xml: "<robot name='demo'/>",
+          joint_positions: { joint_1: TEST_JOINT_POSITION_RAD },
+          cameras: [TEST_CAMERA],
+          scenario_time_ms: TEST_SCENARIO_TIME_MS,
+          scenario_duration_ms: TEST_SCENARIO_DURATION_MS,
+        }),
+      })
+    );
+    expect(envelope.artifacts).toEqual([
+      expect.objectContaining({
+        kind: "world_snapshot",
+        uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+      }),
+    ]);
   });
 
   it("converts package manifests to authored world documents", async () => {
@@ -601,6 +644,42 @@ describe("buildWorldScenePackageManifest", () => {
     expect(refreshed.artifacts).toContainEqual({
       kind: "world_snapshot",
       digest_sha256: await computeWorldSnapshotDigest(refreshed.world_snapshot),
+      uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+    });
+    expect(refreshed.artifacts).not.toContainEqual({
+      kind: "world_snapshot",
+      digest_sha256: "0".repeat(64),
+      uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+    });
+  });
+
+  it("refreshes stale world snapshot digest artifacts for thin registry envelopes", async () => {
+    const envelope = await buildWorldSceneRegistryEnvelope({
+      packageId: "Demo World",
+      version: "1.0.0",
+      name: "Demo World",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [],
+      objects: [],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+      provenance: {},
+    });
+    envelope.artifacts[0].digest_sha256 = "0".repeat(64);
+
+    const refreshed = await refreshWorldSceneRegistryEnvelopeSnapshotDigest(envelope);
+
+    expect(refreshed.artifacts).toContainEqual({
+      kind: "world_snapshot",
+      digest_sha256: await computeWorldSnapshotDigest({
+        urdf_xml: refreshed.world.urdf_xml ?? "",
+        joint_positions: refreshed.world.joint_positions ?? {},
+        cameras: refreshed.world.cameras ?? [],
+        objects: refreshed.world.objects,
+        scenario_time_ms: refreshed.world.scenario_time_ms,
+        scenario_duration_ms: refreshed.world.scenario_duration_ms,
+      }),
       uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
     });
     expect(refreshed.artifacts).not.toContainEqual({

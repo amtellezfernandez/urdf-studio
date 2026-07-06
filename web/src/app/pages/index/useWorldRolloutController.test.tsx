@@ -8,8 +8,7 @@ import {
   type UseWorldRolloutControllerResult,
 } from "@/app/pages/index/useWorldRolloutController";
 import { WORLD_ROLLOUT_IMPORT_ACCEPT } from "@/features/world-share/worldRolloutParams";
-import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 import type {
   WorldRolloutCampaignManifest,
   WorldRolloutCheckerProfile,
@@ -95,29 +94,15 @@ const WORLD_ROLLOUT_CONTROLLER_TEST_FIXTURES = {
   version: "1.0.0",
 } as const;
 
-const createManifest = (): WorldScenePackageManifest => ({
+const createManifest = (): WorldSceneRegistryEnvelope => ({
   artifacts: [],
-  created_at: "2026-07-04T00:00:00Z",
-  interface: {
-    action_semantics: "none",
-    frame_convention: "urdf",
-    observation_modalities: [],
-    timestep_ms: 0,
-  },
   package_id: WORLD_ROLLOUT_CONTROLLER_TEST_FIXTURES.packageId,
   provenance: {},
-  runtime_targets: [],
-  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
-  security: {
-    attestation_refs: [],
-    sbom_ref: null,
-    signature_ref: null,
-  },
-  title: "Demo World",
   version: WORLD_ROLLOUT_CONTROLLER_TEST_FIXTURES.version,
-  world_snapshot: {
+  world: {
     cameras: [],
     joint_positions: {},
+    name: "Demo World",
     objects: [],
     scenario_duration_ms: 0,
     scenario_time_ms: 0,
@@ -203,7 +188,7 @@ const renderWorldRolloutControllerHook = async (): Promise<RenderedHarness> => {
 
   const Harness = () => {
     hookValue = useWorldRolloutController({
-      buildCurrentWorldScenePackageManifest: buildManifestMock,
+      buildCurrentWorldSceneRegistryEnvelope: buildManifestMock,
       resolvedRobotName: WORLD_ROLLOUT_CONTROLLER_TEST_FIXTURES.robotName,
     });
     return null;

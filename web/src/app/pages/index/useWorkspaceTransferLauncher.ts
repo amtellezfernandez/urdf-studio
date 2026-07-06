@@ -14,7 +14,7 @@ import {
   throwIfWorkspaceTransferAborted,
 } from "@/features/world-share/workspaceTransferAbort";
 import type { WorkspaceTransferTargetId } from "@/features/world-share/workspaceTransferParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { WORKSPACE_TRANSFER_LAUNCHER_PARAMS } from "@/app/pages/index/workspaceTransferLauncherParams";
 import {
@@ -28,7 +28,7 @@ import {
 type UseWorkspaceTransferLauncherParams = {
   activeUrdfPath: string | null;
   attachedIluSessionId: string;
-  buildCurrentWorldScenePackageManifest: () => Promise<WorldScenePackageManifest>;
+  buildCurrentWorldSceneRegistryEnvelope: () => Promise<WorldSceneRegistryEnvelope>;
   getWorldObjectCountForTransfer?: () => number;
   meshFiles: Record<string, Blob>;
   originalUrdfContent: string;
@@ -85,7 +85,7 @@ const toastWorkspaceWarnings = (warnings: string[] | undefined): void => {
 export const useWorkspaceTransferLauncher = ({
   activeUrdfPath,
   attachedIluSessionId,
-  buildCurrentWorldScenePackageManifest,
+  buildCurrentWorldSceneRegistryEnvelope,
   getWorldObjectCountForTransfer,
   meshFiles,
   originalUrdfContent,
@@ -207,7 +207,7 @@ export const useWorkspaceTransferLauncher = ({
       setLoadingTargetId(descriptor.targetId);
       try {
         const liveWorldObjectCount = getWorldObjectCountForTransfer?.() ?? worldObjectCount;
-        const worldPackage = await buildCurrentWorldScenePackageManifest();
+        const worldPackage = await buildCurrentWorldSceneRegistryEnvelope();
         throwIfWorkspaceTransferAborted(controller.signal);
         assertWorkspacePackageCarriesSceneObjects(worldPackage, liveWorldObjectCount);
         const prepared = await openWorkspaceTransferTarget({
@@ -254,7 +254,7 @@ export const useWorkspaceTransferLauncher = ({
     [
       activeUrdfPath,
       attachedIluSessionId,
-      buildCurrentWorldScenePackageManifest,
+      buildCurrentWorldSceneRegistryEnvelope,
       getWorldObjectCountForTransfer,
       meshFiles,
       originalUrdfContent,

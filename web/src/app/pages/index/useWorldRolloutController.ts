@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import { WORLD_ROLLOUT_IMPORT_ACCEPT } from "@/features/world-share/worldRolloutParams";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneRegistryEnvelope } from "@/features/world-share/worldScenePackageTypes";
 import type {
   WorldRolloutImportResponse,
   WorldRolloutJobResponse,
@@ -23,10 +23,15 @@ import {
   waitForWorldRolloutJob,
 } from "@/app/pages/index/worldSceneManagerHelpers";
 
-type WorldRolloutInputs = Parameters<typeof buildWorldRolloutCampaignManifest>[0];
+type WorldRolloutInputs = {
+  worldPackage: WorldSceneRegistryEnvelope;
+  checkerProfile: Parameters<typeof buildWorldRolloutCampaignManifest>[0]["checkerProfile"];
+  rolloutParams: Parameters<typeof buildWorldRolloutCampaignManifest>[0]["rolloutParams"];
+  runnerParams: Parameters<typeof buildWorldRolloutCampaignManifest>[0]["runnerParams"];
+};
 
 type UseWorldRolloutControllerParams = {
-  buildCurrentWorldScenePackageManifest: () => Promise<WorldScenePackageManifest>;
+  buildCurrentWorldSceneRegistryEnvelope: () => Promise<WorldSceneRegistryEnvelope>;
   resolvedRobotName: string | null;
 };
 
@@ -43,7 +48,7 @@ const toWorldRolloutCompletionMessage = (job: WorldRolloutJobResponse) =>
   `World rollout completed: ${job.decision_count} decisions, ${job.stop_count} stops, ${job.escalation_count} escalations`;
 
 export const useWorldRolloutController = ({
-  buildCurrentWorldScenePackageManifest,
+  buildCurrentWorldSceneRegistryEnvelope,
   resolvedRobotName,
 }: UseWorldRolloutControllerParams): UseWorldRolloutControllerResult => {
   const [worldRolloutReviewOpen, setWorldRolloutReviewOpen] = useState(false);
@@ -61,12 +66,12 @@ export const useWorldRolloutController = ({
     }
 
     return {
-      worldPackage: await buildCurrentWorldScenePackageManifest(),
+      worldPackage: await buildCurrentWorldSceneRegistryEnvelope(),
       checkerProfile: rolloutConfig.checkerProfile,
       rolloutParams: rolloutConfig.rolloutParams,
       runnerParams: rolloutConfig.runnerParams,
     };
-  }, [buildCurrentWorldScenePackageManifest, resolvedRobotName]);
+  }, [buildCurrentWorldSceneRegistryEnvelope, resolvedRobotName]);
 
   const handleExportWorldRolloutCampaign = useCallback(async () => {
     try {

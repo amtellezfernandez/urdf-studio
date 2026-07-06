@@ -1,7 +1,10 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
-import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type {
+  WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
+} from "@/features/world-share/worldScenePackageTypes";
 import {
   type WorkspaceTransferTargetDescriptor,
   type WorkspaceTransferTargetId,
@@ -67,7 +70,7 @@ export type WorkspaceChangeSetApplyResponse = {
 export type OpenWorkspaceTransferTargetParams = {
   targetId: WorkspaceTransferTargetId;
   launchId?: string | null;
-  worldPackage: WorldScenePackageManifest;
+  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope;
   urdfAssetPath?: string | null;
   meshFiles: Record<string, Blob>;
   packageRoots?: Record<string, string[]>;
@@ -93,11 +96,19 @@ const loadWorldScenePackageBuilderModule = () =>
   import("@/features/world-share/worldScenePackageBuilder");
 
 const refreshWorkspaceWorldPackageDigest = async (
-  worldPackage: WorldScenePackageManifest
-): Promise<WorldScenePackageManifest> => {
-  const { refreshWorldScenePackageSnapshotDigest } =
+  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope
+): Promise<WorldSceneRegistryEnvelope> => {
+  const {
+    refreshWorldScenePackageSnapshotDigest,
+    refreshWorldSceneRegistryEnvelopeSnapshotDigest,
+  } =
     await loadWorldScenePackageBuilderModule();
-  return refreshWorldScenePackageSnapshotDigest(worldPackage);
+  if ("world" in worldPackage) {
+    return refreshWorldSceneRegistryEnvelopeSnapshotDigest(worldPackage);
+  }
+  return toWorldSceneRegistryEnvelope(
+    await refreshWorldScenePackageSnapshotDigest(worldPackage)
+  );
 };
 
 const formatTargetName = (
@@ -133,7 +144,7 @@ export const openWorkspaceTransferTarget = async ({
       },
       signal,
       body: JSON.stringify({
-        world_package: toWorldSceneRegistryEnvelope(transferWorldPackage),
+        world_package: transferWorldPackage,
         urdf_asset_path: urdfAssetPath || undefined,
         mesh_assets: meshAssets,
         package_roots: packageRoots ?? {},
@@ -183,7 +194,7 @@ export const cancelWorkspaceTransferTargetLaunch = async ({
 
 export const applyWorkspaceTransferTargetChangeSet = async (
   targetId: WorkspaceTransferTargetId,
-  worldPackage: WorldScenePackageManifest,
+  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
   const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
@@ -196,7 +207,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: toWorldSceneRegistryEnvelope(transferWorldPackage),
+        world_package: transferWorldPackage,
         change_set: changeSet,
       }),
     },
@@ -213,7 +224,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
 };
 
 export const applyWorkspaceChangeSet = async (
-  worldPackage: WorldScenePackageManifest,
+  worldPackage: WorldScenePackageManifest | WorldSceneRegistryEnvelope,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
   const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
@@ -226,7 +237,7 @@ export const applyWorkspaceChangeSet = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: toWorldSceneRegistryEnvelope(transferWorldPackage),
+        world_package: transferWorldPackage,
         change_set: changeSet,
       }),
     },

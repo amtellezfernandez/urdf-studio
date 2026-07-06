@@ -58,6 +58,21 @@ type BuildWorldSceneDocumentParams = {
   frameConvention?: string;
 };
 
+type BuildWorldSceneRegistryEnvelopeParams = {
+  packageId: string;
+  version: string;
+  name?: string;
+  urdfXml: string;
+  jointPositions: Record<string, number>;
+  cameras: Camera[];
+  objects: CreatedObject[];
+  scenarioTimeMs: number;
+  scenarioDurationMs: number;
+  environment?: Record<string, unknown> | null;
+  frameConvention?: string;
+  provenance?: Record<string, unknown>;
+};
+
 const normalizeSnapshotInteger = (value: unknown, fieldLabel: string): number => {
   const normalized = assertFiniteWorldSceneNumber(value, fieldLabel);
   if (!Number.isInteger(normalized)) {
@@ -147,6 +162,29 @@ const cloneWorldSnapshot = (
   ),
 });
 
+const cloneWorldSceneDocument = (world: WorldSceneDocument): WorldSceneDocument => ({
+  ...(world.name?.trim() ? { name: world.name.trim() } : {}),
+  objects: world.objects.map(
+    (object, index) => cloneSnapshotValue(object, `objects[${index}]`) as SerializableWorldObject
+  ),
+  scenario_time_ms: normalizeSnapshotInteger(world.scenario_time_ms, "scenario_time_ms"),
+  scenario_duration_ms: normalizeSnapshotInteger(
+    world.scenario_duration_ms,
+    "scenario_duration_ms"
+  ),
+  ...(world.urdf_xml?.trim() ? { urdf_xml: world.urdf_xml } : {}),
+  ...(world.joint_positions ? { joint_positions: cloneJointPositions(world.joint_positions) } : {}),
+  ...(world.cameras ? { cameras: world.cameras.map(cloneCamera) } : {}),
+  ...(world.environment && typeof world.environment === "object" && !Array.isArray(world.environment)
+    ? {
+        environment: cloneSnapshotValue(
+          world.environment,
+          "environment"
+        ) as Record<string, unknown>,
+      }
+    : {}),
+});
+
 const worldSceneDocumentEnvironment = ({
   environment,
   frameConvention,
@@ -167,6 +205,27 @@ const worldSnapshotArtifactRef = (digest: string): WorldArtifactRef => ({
   digest_sha256: digest,
   uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
 });
+
+const worldSceneDocumentToSnapshot = (
+  world: WorldSceneDocument
+): WorldScenePackageManifest["world_snapshot"] => {
+  if (!world.urdf_xml?.trim()) {
+    throw new Error("Cannot package world without URDF content.");
+  }
+  return {
+    urdf_xml: world.urdf_xml,
+    joint_positions: cloneJointPositions(world.joint_positions ?? {}),
+    cameras: (world.cameras ?? []).map(cloneCamera),
+    objects: world.objects.map(
+      (object, index) => cloneSnapshotValue(object, `objects[${index}]`) as SerializableWorldObject
+    ),
+    scenario_time_ms: normalizeSnapshotInteger(world.scenario_time_ms, "scenario_time_ms"),
+    scenario_duration_ms: normalizeSnapshotInteger(
+      world.scenario_duration_ms,
+      "scenario_duration_ms"
+    ),
+  };
+};
 
 export const refreshWorldScenePackageSnapshotDigest = async (
   manifest: WorldScenePackageManifest
@@ -193,6 +252,25 @@ export const refreshWorldScenePackageSnapshotDigest = async (
       attestation_refs: [...manifest.security.attestation_refs],
       sbom_ref: manifest.security.sbom_ref,
     },
+  };
+};
+
+export const refreshWorldSceneRegistryEnvelopeSnapshotDigest = async (
+  envelope: WorldSceneRegistryEnvelope
+): Promise<WorldSceneRegistryEnvelope> => {
+  const world = cloneWorldSceneDocument(envelope.world);
+  const snapshotDigest = await computeWorldSnapshotDigest(worldSceneDocumentToSnapshot(world));
+  return {
+    package_id: sanitizePackageId(envelope.package_id),
+    version: envelope.version,
+    provenance: { ...envelope.provenance },
+    artifacts: [
+      ...envelope.artifacts
+        .filter((artifact) => artifact.kind !== "world_snapshot")
+        .map((artifact) => ({ ...artifact })),
+      worldSnapshotArtifactRef(snapshotDigest),
+    ],
+    world,
   };
 };
 
@@ -253,6 +331,45 @@ export const buildWorldSceneDocument = ({
     ...(jointPositions ? { joint_positions: cloneJointPositions(jointPositions) } : {}),
     ...(cameras ? { cameras: cameras.map(cloneCamera) } : {}),
     ...(normalizedEnvironment ? { environment: normalizedEnvironment } : {}),
+  };
+};
+
+export const buildWorldSceneRegistryEnvelope = async ({
+  packageId,
+  version,
+  name,
+  urdfXml,
+  jointPositions,
+  cameras,
+  objects,
+  scenarioTimeMs,
+  scenarioDurationMs,
+  environment,
+  frameConvention,
+  provenance,
+}: BuildWorldSceneRegistryEnvelopeParams): Promise<WorldSceneRegistryEnvelope> => {
+  const normalizedPackageId = sanitizePackageId(packageId);
+  if (!normalizedPackageId) {
+    throw new Error("Package ID is empty after sanitization.");
+  }
+  const world = buildWorldSceneDocument({
+    name,
+    urdfXml,
+    jointPositions,
+    cameras,
+    objects,
+    scenarioTimeMs,
+    scenarioDurationMs,
+    environment,
+    frameConvention,
+  });
+  const snapshotDigest = await computeWorldSnapshotDigest(worldSceneDocumentToSnapshot(world));
+  return {
+    package_id: normalizedPackageId,
+    version,
+    provenance: provenance ?? {},
+    artifacts: [worldSnapshotArtifactRef(snapshotDigest)],
+    world,
   };
 };
 

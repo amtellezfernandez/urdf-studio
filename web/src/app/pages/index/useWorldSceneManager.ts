@@ -13,6 +13,7 @@ import {
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
 import type {
   WorldScenePackageManifest,
+  WorldSceneRegistryEnvelope,
 } from "@/features/world-share/worldScenePackageTypes";
 import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransferApi";
 import type { CreatedObject } from "@/features/objects";
@@ -32,6 +33,7 @@ import {
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
 import {
   buildWorldSceneDocumentFromState,
+  buildWorldSceneRegistryEnvelopeFromState,
   buildWorldScenePackageManifestFromState,
   createWorldSceneLayerExportDocument,
   loadWorldScenePackageFromImportParams,
@@ -132,6 +134,30 @@ export const useWorldSceneManager = ({
         objects: transferObjects,
         demoMode: DEMO_MODE,
         overrides,
+      });
+    },
+    [
+      cameras,
+      getObjectsForTransfer,
+      jointValues,
+      originalUrdfContent,
+      resolvedRobotName,
+      vizUrdfContent,
+    ]
+  );
+
+  const buildCurrentWorldSceneRegistryEnvelope = useCallback(
+    async (): Promise<WorldSceneRegistryEnvelope> => {
+      const transferObjects = getObjectsForTransfer?.() ?? objectsRef.current;
+      objectsRef.current = transferObjects;
+      return buildWorldSceneRegistryEnvelopeFromState({
+        resolvedRobotName,
+        vizUrdfContent,
+        originalUrdfContent,
+        jointValues,
+        cameras,
+        objects: transferObjects,
+        demoMode: DEMO_MODE,
       });
     },
     [
@@ -406,7 +432,7 @@ export const useWorldSceneManager = ({
     worldRolloutReview,
     worldRolloutReviewOpen,
   } = useWorldRolloutController({
-    buildCurrentWorldScenePackageManifest,
+    buildCurrentWorldSceneRegistryEnvelope,
     resolvedRobotName,
   });
 
@@ -586,6 +612,7 @@ export const useWorldSceneManager = ({
   }, [importWorldLayoutFromUrl]);
 
   return {
+    buildCurrentWorldSceneRegistryEnvelope,
     buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleImportDefaultWorldLayoutFromDialog,

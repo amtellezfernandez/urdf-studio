@@ -486,6 +486,7 @@ const Index = () => {
     rotateShareLink: rotateCollaborationShareLink,
   });
   const {
+    buildCurrentWorldSceneRegistryEnvelope,
     buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleImportDefaultWorldLayoutFromDialog,
@@ -552,7 +553,7 @@ const Index = () => {
   const { workspaceTransfer } = useWorkspaceTransferLauncher({
     activeUrdfPath,
     attachedIluSessionId,
-    buildCurrentWorldScenePackageManifest,
+    buildCurrentWorldSceneRegistryEnvelope,
     getWorldObjectCountForTransfer: () => useObjectStore.getState().objects.length,
     meshFiles,
     originalUrdfContent,

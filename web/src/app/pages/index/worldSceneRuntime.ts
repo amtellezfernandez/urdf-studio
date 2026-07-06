@@ -15,6 +15,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackagePublishResponse,
   WorldScenePackageValidationResponse,
+  WorldSceneRegistryEnvelope,
   WorldScenePackageVersionRecordPayload,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
@@ -71,6 +72,16 @@ type BuildWorldSceneDocumentFromStateParams = {
   objects: CreatedObject[];
   worldName?: string;
   includeRobotState?: boolean;
+};
+
+type BuildWorldSceneRegistryEnvelopeFromStateParams = {
+  resolvedRobotName: string | null;
+  vizUrdfContent: string;
+  originalUrdfContent: string;
+  jointValues: Record<string, number>;
+  cameras: Camera[];
+  objects: CreatedObject[];
+  demoMode: boolean;
 };
 
 type WorldRolloutConfigDraft = {
@@ -190,6 +201,34 @@ export const buildWorldSceneDocumentFromState = async ({
   });
 };
 
+export const buildWorldSceneRegistryEnvelopeFromState = async ({
+  resolvedRobotName,
+  vizUrdfContent,
+  originalUrdfContent,
+  jointValues,
+  cameras,
+  objects,
+  demoMode,
+}: BuildWorldSceneRegistryEnvelopeFromStateParams): Promise<WorldSceneRegistryEnvelope> => {
+  const { buildWorldSceneRegistryEnvelope } = await loadWorldScenePackageBuilderModule();
+  return buildWorldSceneRegistryEnvelope({
+    packageId: resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_ID,
+    version: WORLD_SCENE_PACKAGE_DEFAULT_VERSION,
+    name: resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
+    urdfXml: vizUrdfContent || originalUrdfContent,
+    jointPositions: { ...jointValues },
+    cameras,
+    objects,
+    scenarioTimeMs: 0,
+    scenarioDurationMs: 0,
+    provenance: {
+      source: "urdf-studio",
+      app_mode: demoMode ? "demo" : "interactive",
+      created_from: "ui",
+    },
+  });
+};
+
 export const createWorldRolloutCheckerProfile = ({
   resolvedRobotName,
   params,
@@ -248,7 +287,7 @@ export const buildWorldRolloutCampaignManifest = ({
   rolloutParams,
   runnerParams,
 }: {
-  worldPackage: WorldScenePackageManifest;
+  worldPackage: Pick<WorldSceneRegistryEnvelope, "package_id" | "version">;
   checkerProfile: WorldRolloutCheckerProfile;
   rolloutParams: Record<string, unknown>;
   runnerParams: Record<string, unknown>;
@@ -285,7 +324,7 @@ export const createWorldRolloutJobFromState = async ({
   rolloutParams,
   runnerParams,
 }: {
-  worldPackage: WorldScenePackageManifest;
+  worldPackage: WorldSceneRegistryEnvelope;
   checkerProfile: WorldRolloutCheckerProfile;
   rolloutParams: Record<string, unknown>;
   runnerParams: Record<string, unknown>;
