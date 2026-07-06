@@ -23,7 +23,7 @@ from backend.services.world_layout_transfer_types import (
     StaticWorldLayout,
     WorldLayoutFrameMap,
 )
-from backend.services.world_scene_package_digest import world_scene_package_json_payload
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 
 
 @dataclass(frozen=True)
@@ -103,7 +103,9 @@ def _active_object_count(layout: StaticWorldLayout) -> int:
 
 
 def workspace_layout_from_request(request: SimulatorWorkspacePrepareRequest) -> StaticWorldLayout:
-    return parse_static_world_layout_payload(world_scene_package_json_payload(request.world_package))
+    return parse_static_world_layout_payload(
+        world_scene_registry_envelope_json_payload(request.world_package)
+    )
 
 
 def resolved_frame_map_for_request(

@@ -19,9 +19,9 @@ from backend.services.world_layout_static_transfer import (
     resolve_world_layout_frame_map,
 )
 from backend.services.world_scene_package_compat import read_world_scene_package_manifest
+from backend.services.world_scene_package_compat import world_scene_registry_envelope_json_payload
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
-    world_scene_package_json_payload,
 )
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
@@ -204,7 +204,9 @@ def prepare_world_scene(
     include_hidden: bool,
 ) -> PreparedWorldScene:
     world_package = load_world_package(world_package_path)
-    layout = parse_static_world_layout_payload(world_scene_package_json_payload(world_package))
+    layout = parse_static_world_layout_payload(
+        world_scene_registry_envelope_json_payload(world_package)
+    )
     resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     primitives, warnings = build_sim_primitives(
         layout,
