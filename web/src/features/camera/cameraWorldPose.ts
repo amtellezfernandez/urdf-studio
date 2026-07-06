@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 import {
   CAMERA_TRANSFORM_ANGLE_TOLERANCE_DEG,
   CAMERA_TRANSFORM_OUTPUT_PRECISION,
@@ -46,9 +47,6 @@ export const resolveRobotLinkObject = (
   );
 };
 
-const toFiniteNumber = (value: unknown, fallback = 0): number =>
-  typeof value === "number" && Number.isFinite(value) ? value : fallback;
-
 const toSafePose = (value: unknown): CameraPose | null => {
   if (!value || typeof value !== "object") return null;
   const candidate = value as { xyz?: unknown; rpy?: unknown };
@@ -59,14 +57,14 @@ const toSafePose = (value: unknown): CameraPose | null => {
   }
   return {
     xyz: [
-      toFiniteNumber(xyz[0], 0),
-      toFiniteNumber(xyz[1], 0),
-      toFiniteNumber(xyz[2], 0),
+      toFiniteNumberOrFallback(xyz[0], 0),
+      toFiniteNumberOrFallback(xyz[1], 0),
+      toFiniteNumberOrFallback(xyz[2], 0),
     ],
     rpy: [
-      toFiniteNumber(rpy[0], 0),
-      toFiniteNumber(rpy[1], 0),
-      toFiniteNumber(rpy[2], 0),
+      toFiniteNumberOrFallback(rpy[0], 0),
+      toFiniteNumberOrFallback(rpy[1], 0),
+      toFiniteNumberOrFallback(rpy[2], 0),
     ],
   };
 };

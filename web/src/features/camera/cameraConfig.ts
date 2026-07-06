@@ -2,15 +2,16 @@ import { Camera, CameraConfig, CameraConfigFile } from "@/shared/types/camera";
 import jsyaml from "js-yaml";
 import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
+import { isFiniteNumber } from "@/shared/lib/numeric";
 
 const toSerializableIntrinsics = (intrinsics: Camera["intrinsics"]) => ({
   width: intrinsics.width,
   height: intrinsics.height,
   fov_deg: intrinsics.fov_deg,
-  ...(Number.isFinite(intrinsics.fx) ? { fx: intrinsics.fx } : {}),
-  ...(Number.isFinite(intrinsics.fy) ? { fy: intrinsics.fy } : {}),
-  ...(Number.isFinite(intrinsics.cx) ? { cx: intrinsics.cx } : {}),
-  ...(Number.isFinite(intrinsics.cy) ? { cy: intrinsics.cy } : {}),
+  ...(isFiniteNumber(intrinsics.fx) ? { fx: intrinsics.fx } : {}),
+  ...(isFiniteNumber(intrinsics.fy) ? { fy: intrinsics.fy } : {}),
+  ...(isFiniteNumber(intrinsics.cx) ? { cx: intrinsics.cx } : {}),
+  ...(isFiniteNumber(intrinsics.cy) ? { cy: intrinsics.cy } : {}),
   ...(intrinsics.distortion ? { distortion: intrinsics.distortion } : {}),
 });
 

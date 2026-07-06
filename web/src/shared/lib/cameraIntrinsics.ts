@@ -3,6 +3,7 @@ import type { CameraDistortion, CameraIntrinsics } from "@/shared/types/camera";
 import {
   clampNumber,
   clampNumberToMin,
+  isFiniteNumber,
   isFinitePositiveNumber,
   toFiniteNumberOrFallback,
 } from "@/shared/lib/numeric";
@@ -14,13 +15,13 @@ const MIN_NEAR = 0.001;
 const MIN_FAR_DELTA = 0.01;
 
 const clampDimension = (value: number | undefined, fallback: number) => {
-  if (!Number.isFinite(value)) return fallback;
-  return clampNumberToMin(Math.round(value as number), 1);
+  if (!isFiniteNumber(value)) return fallback;
+  return clampNumberToMin(Math.round(value), 1);
 };
 
 const clampFov = (value: number | undefined, fallback = DEFAULT_FOV_DEG) => {
-  if (!Number.isFinite(value)) return fallback;
-  return clampNumber(value as number, 1, 179);
+  if (!isFiniteNumber(value)) return fallback;
+  return clampNumber(value, 1, 179);
 };
 
 const normalizeDistortion = (
@@ -28,11 +29,11 @@ const normalizeDistortion = (
 ): CameraDistortion | undefined => {
   if (!distortion) return undefined;
   const normalized: CameraDistortion = {};
-  if (Number.isFinite(distortion.k1)) normalized.k1 = distortion.k1;
-  if (Number.isFinite(distortion.k2)) normalized.k2 = distortion.k2;
-  if (Number.isFinite(distortion.p1)) normalized.p1 = distortion.p1;
-  if (Number.isFinite(distortion.p2)) normalized.p2 = distortion.p2;
-  if (Number.isFinite(distortion.k3)) normalized.k3 = distortion.k3;
+  if (isFiniteNumber(distortion.k1)) normalized.k1 = distortion.k1;
+  if (isFiniteNumber(distortion.k2)) normalized.k2 = distortion.k2;
+  if (isFiniteNumber(distortion.p1)) normalized.p1 = distortion.p1;
+  if (isFiniteNumber(distortion.p2)) normalized.p2 = distortion.p2;
+  if (isFiniteNumber(distortion.k3)) normalized.k3 = distortion.k3;
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 };
 

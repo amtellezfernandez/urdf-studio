@@ -1,5 +1,6 @@
 import type { Camera } from "@/shared/types/camera";
 import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
+import { toFiniteNumberOrFallback } from "@/shared/lib/numeric";
 import {
   CAMERA_AUTO_UPDATE_EPSILON,
   DEFAULT_CAMERA_POSE,
@@ -12,9 +13,6 @@ export type CameraPose = {
 };
 
 const AUTO_CAMERA_NAME_PREFIX = CAMERA_AUTO_GENERATION_HELPER_PARAMS.autoCameraNamePrefix;
-
-const toSafeNumber = (value: unknown, fallback: number) =>
-  typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 export const decodeUriComponentSafe = (value: string) => {
   try {
@@ -37,14 +35,14 @@ export const toSafeCameraPose = (
   const rpy = pose?.rpy ?? DEFAULT_CAMERA_POSE.rpy;
   return {
     xyz: [
-      toSafeNumber(xyz[0], DEFAULT_CAMERA_POSE.xyz[0]),
-      toSafeNumber(xyz[1], DEFAULT_CAMERA_POSE.xyz[1]),
-      toSafeNumber(xyz[2], DEFAULT_CAMERA_POSE.xyz[2]),
+      toFiniteNumberOrFallback(xyz[0], DEFAULT_CAMERA_POSE.xyz[0]),
+      toFiniteNumberOrFallback(xyz[1], DEFAULT_CAMERA_POSE.xyz[1]),
+      toFiniteNumberOrFallback(xyz[2], DEFAULT_CAMERA_POSE.xyz[2]),
     ],
     rpy: [
-      toSafeNumber(rpy[0], DEFAULT_CAMERA_POSE.rpy[0]),
-      toSafeNumber(rpy[1], DEFAULT_CAMERA_POSE.rpy[1]),
-      toSafeNumber(rpy[2], DEFAULT_CAMERA_POSE.rpy[2]),
+      toFiniteNumberOrFallback(rpy[0], DEFAULT_CAMERA_POSE.rpy[0]),
+      toFiniteNumberOrFallback(rpy[1], DEFAULT_CAMERA_POSE.rpy[1]),
+      toFiniteNumberOrFallback(rpy[2], DEFAULT_CAMERA_POSE.rpy[2]),
     ],
   };
 };
