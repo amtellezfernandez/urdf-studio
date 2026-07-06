@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 import { COLLABORATION_SESSION_TOKEN_HEADER } from "@/features/collaboration/collaborationTransport";
 import type {
   CollaborationAccessUpdateResponse,
@@ -14,23 +15,14 @@ const CORE_API_OPTIONS = {
   requiredBackends: ["core-api"] as const,
 };
 
-const readResponseErrorDetail = async (response: Response): Promise<string> => {
-  const rawDetail = await response.text().catch(() => "");
-  if (!rawDetail) return response.statusText;
-  try {
-    const parsed = JSON.parse(rawDetail) as { detail?: unknown };
-    return typeof parsed.detail === "string" ? parsed.detail : rawDetail;
-  } catch {
-    return rawDetail;
-  }
-};
-
 const ensureJsonResponse = async <T>(
   response: Response,
   context: string,
 ): Promise<T> => {
   if (!response.ok) {
-    const detail = await readResponseErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, {
+      fallback: response.statusText,
+    });
     throw new Error(
       `${context} failed (${response.status}): ${detail || response.statusText}`,
     );

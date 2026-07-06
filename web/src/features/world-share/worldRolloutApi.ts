@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 import type {
   WorldRolloutImportRequest,
   WorldRolloutImportResponse,
@@ -9,11 +10,6 @@ import type {
 
 const WORLD_ROLLOUT_API_OPTIONS = {
   requiredBackends: ["core-api"] as const,
-};
-
-const readErrorDetail = async (response: Response, fallback: string) => {
-  const detail = await response.text();
-  return detail || fallback;
 };
 
 export const createWorldRolloutJob = async (
@@ -29,7 +25,11 @@ export const createWorldRolloutJob = async (
     { ...WORLD_ROLLOUT_API_OPTIONS, context: "World rollout job" }
   );
   if (!response.ok) {
-    throw new Error(await readErrorDetail(response, `World rollout job failed (${response.status})`));
+    throw new Error(
+      await readResponseErrorDetail(response, {
+        fallback: `World rollout job failed (${response.status})`,
+      })
+    );
   }
   return (await response.json()) as WorldRolloutJobResponse;
 };
@@ -41,7 +41,11 @@ export const getWorldRolloutJob = async (jobId: string): Promise<WorldRolloutJob
     { ...WORLD_ROLLOUT_API_OPTIONS, context: "World rollout job status" }
   );
   if (!response.ok) {
-    throw new Error(await readErrorDetail(response, `World rollout job status failed (${response.status})`));
+    throw new Error(
+      await readResponseErrorDetail(response, {
+        fallback: `World rollout job status failed (${response.status})`,
+      })
+    );
   }
   return (await response.json()) as WorldRolloutJobResponse;
 };
@@ -59,7 +63,11 @@ export const importWorldRolloutResults = async (
     { ...WORLD_ROLLOUT_API_OPTIONS, context: "World rollout import" }
   );
   if (!response.ok) {
-    throw new Error(await readErrorDetail(response, `World rollout import failed (${response.status})`));
+    throw new Error(
+      await readResponseErrorDetail(response, {
+        fallback: `World rollout import failed (${response.status})`,
+      })
+    );
   }
   return (await response.json()) as WorldRolloutImportResponse;
 };

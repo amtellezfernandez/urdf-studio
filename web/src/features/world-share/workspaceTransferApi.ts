@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import {
   type WorkspaceTransferTargetDescriptor,
@@ -104,18 +105,6 @@ const formatTargetName = (
 ): string => targetLabel?.trim() || targetId;
 
 
-const readErrorDetail = async (response: Response): Promise<string> => {
-  try {
-    const payload = (await response.clone().json()) as { detail?: unknown };
-    if (typeof payload.detail === "string" && payload.detail.trim()) {
-      return payload.detail.trim();
-    }
-  } catch {
-    // Fall back to response text below.
-  }
-  return (await response.text()).trim();
-};
-
 export const openWorkspaceTransferTarget = async ({
   targetId,
   launchId,
@@ -157,7 +146,7 @@ export const openWorkspaceTransferTarget = async ({
     }
   );
   if (!response.ok) {
-    const detail = await readErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, { fallback: "" });
     throw new Error(detail || `${targetId} workspace open failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceOpenResponse;
@@ -185,7 +174,7 @@ export const cancelWorkspaceTransferTargetLaunch = async ({
     }
   );
   if (!response.ok) {
-    const detail = await readErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, { fallback: "" });
     throw new Error(detail || `${targetId} workspace stop failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceLaunchCancelResponse;
@@ -216,7 +205,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
     }
   );
   if (!response.ok) {
-    const detail = await readErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, { fallback: "" });
     throw new Error(detail || `${targetId} workspace change import failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceChangeSetApplyResponse;
@@ -246,7 +235,7 @@ export const applyWorkspaceChangeSet = async (
     }
   );
   if (!response.ok) {
-    const detail = await readErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, { fallback: "" });
     throw new Error(detail || `Workspace change import failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceChangeSetApplyResponse;
@@ -269,7 +258,7 @@ export const fetchWorkspaceTransferTargetStatus = async (
     }
   );
   if (!response.ok) {
-    const detail = await readErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, { fallback: "" });
     throw new Error(detail || `${targetId} availability check failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceTransferTargetStatus;
@@ -292,7 +281,7 @@ export const fetchWorkspaceTransferTargets = async (): Promise<
     }
   );
   if (!response.ok) {
-    const detail = await readErrorDetail(response);
+    const detail = await readResponseErrorDetail(response, { fallback: "" });
     throw new Error(detail || `Workspace transfer target list failed (${response.status})`);
   }
   const payload = (await response.json()) as WorkspaceTransferTargetListResponse;

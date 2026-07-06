@@ -1,4 +1,5 @@
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 import type { BackendIdList } from "@/shared/config/backends";
 import type {
   WorldScenePackageListEntry,
@@ -12,19 +13,6 @@ import type {
 const WORLD_SCENE_PACKAGE_API_ROOT = "/worlds/packages";
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
-
-const readErrorText = async (response: Response) => {
-  const text = await response.text();
-  if (!text) {
-    return `HTTP ${response.status}`;
-  }
-  try {
-    const json = JSON.parse(text) as { detail?: string };
-    return json.detail || text;
-  } catch {
-    return text;
-  }
-};
 
 const toQueryString = (query: Record<string, string | number | undefined>) => {
   const params = new URLSearchParams();
@@ -51,33 +39,20 @@ export const createWorldScenePackageClient = (
 ) => {
   const root = `${trimTrailingSlash(baseUrl)}${WORLD_SCENE_PACKAGE_API_ROOT}`;
 
-  const getJson = async <T>(path: string) => {
+  const requestJson = async <T>(
+    path: string,
+    options: { body?: unknown; method?: "GET" | "POST" } = {}
+  ) => {
+    const hasBody = options.body !== undefined;
     const response = await guardedFetch(
       `${root}${path}`,
       {
-        headers: { Accept: "application/json" },
-      },
-      {
-        requiredBackends,
-        context: contextLabel,
-      }
-    );
-    if (!response.ok) {
-      throw new Error(await readErrorText(response));
-    }
-    return (await response.json()) as T;
-  };
-
-  const postJson = async <T>(path: string, body: unknown) => {
-    const response = await guardedFetch(
-      `${root}${path}`,
-      {
-        method: "POST",
+        method: options.method,
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json",
+          ...(hasBody ? { "Content-Type": "application/json" } : {}),
         },
-        body: JSON.stringify(body),
+        body: hasBody ? JSON.stringify(options.body) : undefined,
       },
       {
         requiredBackends,
@@ -85,16 +60,21 @@ export const createWorldScenePackageClient = (
       }
     );
     if (!response.ok) {
-      throw new Error(await readErrorText(response));
+      throw new Error(
+        await readResponseErrorDetail(response, { fallback: `HTTP ${response.status}` })
+      );
     }
     return (await response.json()) as T;
   };
 
   return {
     validateManifest: (manifest: WorldScenePackageManifest) =>
-      postJson<WorldScenePackageValidationResponse>("/validate", manifest),
+      requestJson<WorldScenePackageValidationResponse>("/validate", {
+        body: manifest,
+        method: "POST",
+      }),
     publishManifest: (manifest: WorldScenePackageManifest) =>
-      postJson<WorldScenePackagePublishResponse>("", manifest),
+      requestJson<WorldScenePackagePublishResponse>("", { body: manifest, method: "POST" }),
     listPackages: (query: WorldScenePackageListQuery = {}) => {
       const queryString = toQueryString({
         q: query.q,
@@ -103,13 +83,13 @@ export const createWorldScenePackageClient = (
         limit: query.limit,
         offset: query.offset,
       });
-      return getJson<WorldScenePackageListEntry[]>(queryString);
+      return requestJson<WorldScenePackageListEntry[]>(queryString);
     },
     getPackageVersion: (packageId: string, version: string) =>
-      getJson<WorldScenePackageVersionRecord>(
+      requestJson<WorldScenePackageVersionRecord>(
         `/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(version)}`
       ),
-    getCapabilities: () => getJson<WorldRegistryCapabilitiesResponse>("/capabilities"),
+    getCapabilities: () => requestJson<WorldRegistryCapabilitiesResponse>("/capabilities"),
     getVersionUrl: (packageId: string, version: string) =>
       `${root}/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(version)}`,
   };

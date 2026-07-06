@@ -1,21 +1,13 @@
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { readResponseErrorDetail } from "@/shared/lib/responseErrorDetails";
 import type { OrientationMode } from "./registry";
 import type { IkSolvePayload, IkSolveResponse, IkSolveStrategy } from "./types";
 
 type IkRemoteSolveResult =
   | { ok: true; result: IkResponsePayload }
   | { ok: false; error: string; status: IkSolveResponse["status"] };
-
-const parseIkRemoteErrorMessage = async (response: Response) => {
-  try {
-    const data = await response.json();
-    return data?.detail || data?.error || response.statusText;
-  } catch {
-    return response.statusText;
-  }
-};
 
 const buildIkRemoteSolveBody = (
   payload: IkSolvePayload,
@@ -60,7 +52,7 @@ export const requestIkRemoteSolve = async ({
   if (!response.ok) {
     return {
       ok: false,
-      error: await parseIkRemoteErrorMessage(response),
+      error: await readResponseErrorDetail(response, { fallback: response.statusText }),
       status: "solver_error",
     };
   }
