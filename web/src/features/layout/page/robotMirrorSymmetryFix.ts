@@ -26,7 +26,7 @@ import {
 } from "@/features/layout/page/repeatedInertiaSymmetryRobot";
 import { buildLinkCollisionGeometryReferences } from "@/features/viewer/inertiaGeometryReference";
 import { computeReliableInertiaBox } from "@/features/viewer/inertialMath";
-
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 const URDF_RPY_ORDER: THREE.EulerOrder = "ZYX";
 const LINK_FRAME_AXES = [
   new THREE.Vector3(1, 0, 0),
@@ -767,7 +767,7 @@ export const applyRobotMirrorParallelFix = async ({
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : INVALID_URDF_ERROR,
+      error: readUnknownErrorMessage(error, INVALID_URDF_ERROR),
     };
   }
 
@@ -1028,7 +1028,7 @@ export const applyRobotMirrorSymmetryFix = ({
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : INVALID_URDF_ERROR,
+      error: readUnknownErrorMessage(error, INVALID_URDF_ERROR),
     };
   }
 

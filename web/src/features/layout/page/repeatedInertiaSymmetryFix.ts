@@ -14,6 +14,7 @@ import {
   REPEATED_INERTIA_SYMMETRY_REPAIR_MIN_STEP_METERS,
   REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_OFFSET_METERS,
 } from "@/features/layout/page/repeatedInertiaSymmetryParams";
+import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 
 export type RepeatedInertiaSymmetryFixResult =
   | {
@@ -236,7 +237,7 @@ export const applyRepeatedInertiaSymmetryFix = async ({
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : INVALID_URDF_ERROR,
+      error: readUnknownErrorMessage(error, INVALID_URDF_ERROR),
     };
   }
 
