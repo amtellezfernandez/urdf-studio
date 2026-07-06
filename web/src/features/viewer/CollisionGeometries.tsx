@@ -25,9 +25,7 @@ import {
 } from "@/features/viewer/collisionVisibility";
 import { createLinkObjectResolver } from "@/features/viewer/linkObjectResolver";
 import {
-  composeUrdfPoseMatrix,
   composeWorldMatrixFromLinkAndLocal,
-  URDF_CYLINDER_TO_THREE_AXIS_QUATERNION,
 } from "@/shared/lib/spatialFrame";
 import { markAndCheckDuplicateCollisionEntry } from "@/features/viewer/collisionEntryDedup";
 import {
@@ -39,11 +37,12 @@ import {
   configureCollisionOverlayMesh,
   createCollisionOverlayMaterial,
 } from "@/features/viewer/collisionGeometryRenderHelpers";
-
-type CollisionInstance = {
-  linkName: string;
-  localMatrix: THREE.Matrix4;
-};
+import {
+  buildCollisionLocalMatrix,
+  buildMeshCollisionProxyInstanceFromBounds,
+  buildPrimitiveCollisionInstance,
+  type CollisionInstance,
+} from "@/features/viewer/collisionGeometryInstances";
 
 type CollisionPrimitiveInstanceRef = MutableRefObject<CollisionInstance[]>;
 type CollisionProxyTarget = "simplified" | "merged";
@@ -141,9 +140,6 @@ export const CollisionGeometries = ({
   const mergedBoundsCenterRef = useRef(new THREE.Vector3());
   const mergedCornerRef = useRef(new THREE.Vector3());
   const mergedWorldMatrixRef = useRef(new THREE.Matrix4());
-  const proxyBoundsSizeRef = useRef(new THREE.Vector3());
-  const proxyBoundsCenterRef = useRef(new THREE.Vector3());
-  const proxyMeshScaleRef = useRef(new THREE.Vector3());
   const [boxCount, setBoxCount] = useState(0);
   const [sphereCount, setSphereCount] = useState(0);
   const [cylinderCount, setCylinderCount] = useState(0);
@@ -316,23 +312,6 @@ export const CollisionGeometries = ({
         });
       };
 
-      const buildLocalMatrix = (
-        xyz: [number, number, number],
-        rpy: [number, number, number],
-        scale?: [number, number, number],
-        extraRotation?: THREE.Quaternion,
-        centerOffset?: THREE.Vector3,
-      ) =>
-        composeUrdfPoseMatrix(
-          {
-            xyz,
-            rpy,
-            scale,
-            extraRotation,
-            centerOffset,
-          },
-          new THREE.Matrix4(),
-        );
       const syncPrimitiveCounts = () => {
         setBoxCount(boxInstancesRef.current.length);
         setSphereCount(sphereInstancesRef.current.length);
@@ -355,26 +334,14 @@ export const CollisionGeometries = ({
         linkName: string;
       }) => {
         const { target, bounds, meshScale, collision, linkName } = options;
-        if (bounds.isEmpty()) return;
-        const size = proxyBoundsSizeRef.current;
-        const center = proxyBoundsCenterRef.current;
-        const scale = proxyMeshScaleRef.current.set(
-          meshScale[0],
-          meshScale[1],
-          meshScale[2],
-        );
-        bounds.getSize(size);
-        bounds.getCenter(center);
-        size.multiply(scale);
-        center.multiply(scale);
-        const localMatrix = buildLocalMatrix(
-          collision.origin.xyz,
-          collision.origin.rpy,
-          [size.x, size.y, size.z],
-          undefined,
-          center,
-        );
-        proxyTargetRefs[target].current.push({ linkName, localMatrix });
+        const instance = buildMeshCollisionProxyInstanceFromBounds({
+          bounds,
+          meshScale,
+          collision,
+          linkName,
+        });
+        if (!instance) return;
+        proxyTargetRefs[target].current.push(instance);
         if (target === "simplified") {
           syncPrimitiveCounts();
         }
@@ -443,54 +410,23 @@ export const CollisionGeometries = ({
           const geometry = collision.geometry;
           const shouldMerge = mergedLinksSet.has(linkName);
 
-          if (geometry.type === "box") {
-            const localMatrix = buildLocalMatrix(
-              collision.origin.xyz,
-              collision.origin.rpy,
-              geometry.size,
-            );
+          const primitiveInstance = buildPrimitiveCollisionInstance({
+            collision,
+            linkName,
+            useBoxProxyScale: shouldMerge,
+          });
+          if (primitiveInstance) {
             if (shouldMerge) {
-              mergedInstancesRef.current.push({ linkName, localMatrix });
+              mergedInstancesRef.current.push(primitiveInstance);
               return;
             }
-            boxInstancesRef.current.push({ linkName, localMatrix });
-            return;
-          }
-
-          if (geometry.type === "sphere") {
-            const localMatrix = buildLocalMatrix(
-              collision.origin.xyz,
-              collision.origin.rpy,
-              shouldMerge
-                ? [
-                    geometry.radius * 2,
-                    geometry.radius * 2,
-                    geometry.radius * 2,
-                  ]
-                : [geometry.radius, geometry.radius, geometry.radius],
-            );
-            if (shouldMerge) {
-              mergedInstancesRef.current.push({ linkName, localMatrix });
-              return;
+            if (primitiveInstance.primitiveType === "box") {
+              boxInstancesRef.current.push(primitiveInstance);
+            } else if (primitiveInstance.primitiveType === "sphere") {
+              sphereInstancesRef.current.push(primitiveInstance);
+            } else {
+              cylinderInstancesRef.current.push(primitiveInstance);
             }
-            sphereInstancesRef.current.push({ linkName, localMatrix });
-            return;
-          }
-
-          if (geometry.type === "cylinder") {
-            const localMatrix = buildLocalMatrix(
-              collision.origin.xyz,
-              collision.origin.rpy,
-              shouldMerge
-                ? [geometry.radius * 2, geometry.length, geometry.radius * 2]
-                : [geometry.radius, geometry.length, geometry.radius],
-              URDF_CYLINDER_TO_THREE_AXIS_QUATERNION,
-            );
-            if (shouldMerge) {
-              mergedInstancesRef.current.push({ linkName, localMatrix });
-              return;
-            }
-            cylinderInstancesRef.current.push({ linkName, localMatrix });
             return;
           }
 
@@ -551,11 +487,11 @@ export const CollisionGeometries = ({
               errorLabel: "collision mesh",
               onLoad: (loadedObject) => {
                 applyCollisionMaterial(loadedObject);
-                const localMatrix = buildLocalMatrix(
-                  collision.origin.xyz,
-                  collision.origin.rpy,
-                  geometry.scale,
-                );
+                const localMatrix = buildCollisionLocalMatrix({
+                  xyz: collision.origin.xyz,
+                  rpy: collision.origin.rpy,
+                  scale: geometry.scale,
+                });
                 applyCollisionObjectTransform(
                   loadedObject,
                   linkName,
