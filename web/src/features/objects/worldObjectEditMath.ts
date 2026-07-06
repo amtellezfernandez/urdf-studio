@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { isFiniteNumber } from "@/shared/lib/numeric";
 import { WORLD_OBJECT_GEOMETRY_PARAMS } from "./worldObjectGeometryParams";
 
 const HALF_EXTENT_SCALE = 0.5;
@@ -196,7 +197,7 @@ export const resolveCubeUniformResize = ({
 });
 
 export const snapScalar = (value: number, step: number): number => {
-  if (!Number.isFinite(value) || !Number.isFinite(step) || step <= 0) {
+  if (!isFiniteNumber(value) || !isFiniteNumber(step) || step <= 0) {
     return value;
   }
   const snapped = Math.round(value / step) * step;
