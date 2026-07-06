@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it, vi } from "vitest";
 import { resolveFolderUrdfSource } from "@/features/urdf/loader/urdfFolderSource";
-import type { FileWithPath } from "@/shared/types/file";
+import type { BrowserFileWithRelativePath } from "@/shared/lib/browserFilePaths";
 
 const createFile = ({
   content,
@@ -85,7 +85,9 @@ describe("urdfFolderSource", () => {
     expect(result.expandedFromXacro).toBe(true);
     expect(result.filename).toBe("robot.urdf");
     expect(result.relativePath).toBe("robots/robot.urdf");
-    expect((result.file as FileWithPath).webkitRelativePath).toBe("robots/robot.urdf");
+    expect((result.file as BrowserFileWithRelativePath).webkitRelativePath).toBe(
+      "robots/robot.urdf"
+    );
     expect(result.urdfDocuments).toEqual({
       "robots/robot.urdf": '<robot name="expanded" />',
     });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { toast } from "sonner";
 
 import { DEMO_AUTOLOAD, DEMO_LOCAL_MANIFEST_URL, DEMO_MANIFEST_URL, DEMO_MODE } from "@/shared/config/demo";
+import { getBrowserFileRelativePath } from "@/shared/lib/browserFilePaths";
 import {
   loadDemoFileListFromManifestUrls,
   loadDemoFileListProgressivelyFromManifestUrls,
@@ -76,11 +77,6 @@ const DEMO_MANIFEST_URL_CANDIDATES = [
   "/demo/manifest.json",
 ] as const;
 
-const getFileRelativePath = (file: File): string => {
-  const withRelativePath = file as File & { webkitRelativePath?: string };
-  return withRelativePath.webkitRelativePath || file.name;
-};
-
 export const useDemoMotionFlow = ({
   activeUrdfPath,
   availableJoints,
@@ -140,7 +136,7 @@ export const useDemoMotionFlow = ({
       }
 
       const urdfContent = await urdfFile.text();
-      const activePath = getFileRelativePath(urdfFile);
+      const activePath = getBrowserFileRelativePath(urdfFile);
       onDemoManifestPreferences?.({
         activePath,
         preferences: progressiveFileList.preferences,

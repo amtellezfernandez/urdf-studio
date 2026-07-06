@@ -39,6 +39,14 @@ describe("urdfMeshIndex", () => {
         })
       )
     ).toBe("workspace/robot/meshes/base.stl");
+    expect(
+      getFileRelativePath(
+        createFile({
+          name: "base.stl",
+          relativePath: "workspace\\robot\\meshes\\base.stl",
+        })
+      )
+    ).toBe("workspace/robot/meshes/base.stl");
   });
 
   it("registers useful path aliases and removes ambiguous basename keys", () => {

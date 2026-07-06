@@ -4,7 +4,7 @@ import {
   createExpandedXacroUrdfFile,
   createLoadedUrdfFile,
 } from "@/features/urdf/loader/urdfFileFactory";
-import type { FileWithPath } from "@/shared/types/file";
+import type { BrowserFileWithRelativePath } from "@/shared/lib/browserFilePaths";
 
 describe("urdfFileFactory", () => {
   it("creates stable viz URDF file names", async () => {
@@ -29,7 +29,9 @@ describe("urdfFileFactory", () => {
     });
 
     expect(file.name).toBe("robot.urdf");
-    expect((file as FileWithPath).webkitRelativePath).toBe("robots/robot.urdf");
+    expect((file as BrowserFileWithRelativePath).webkitRelativePath).toBe(
+      "robots/robot.urdf"
+    );
     expect(await file.text()).toBe("<robot />");
   });
 });

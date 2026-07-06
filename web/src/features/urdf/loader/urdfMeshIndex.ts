@@ -1,6 +1,6 @@
 import { COMMON_MESH_FOLDERS } from "@/features/layout/page/constants";
 import { isSupportedMeshExtension } from "@/shared/lib/urdfCore";
-import type { FileWithPath } from "@/shared/types/file";
+import { getBrowserFileRelativePath } from "@/shared/lib/browserFilePaths";
 import type { MeshFiles } from "@/shared/types/feature";
 import type { IndexedMeshAsset } from "@/features/urdf/loader/urdfMeshDebugInfo";
 
@@ -8,10 +8,7 @@ type IndexMeshResourcesOptions = {
   logFailures?: boolean;
 };
 
-export const getFileRelativePath = (file: File): string => {
-  const fileWithPath = file as FileWithPath;
-  return fileWithPath.webkitRelativePath || file.name;
-};
+export const getFileRelativePath = getBrowserFileRelativePath;
 
 const registerMeshKey = (
   meshes: MeshFiles,

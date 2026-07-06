@@ -1,3 +1,5 @@
+import { getBrowserFileRelativePath } from "@/shared/lib/browserFilePaths";
+
 export const CORE_FOLDER_UPLOAD_SCREEN_PARAMS = {
   setupEntryWideContainerClass: "max-w-7xl space-y-6",
   setupEntryPrimaryGridClass:
@@ -77,14 +79,8 @@ export const deriveSourceLabel = (value: string, fallback: string): string => {
   }
 };
 
-const getFileRelativePath = (file: File): string =>
-  ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(
-    /\\/g,
-    "/"
-  );
-
 export const deriveLocalSourceLabel = (files: File[]): string => {
-  const firstPath = files[0] ? getFileRelativePath(files[0]) : "";
+  const firstPath = files[0] ? getBrowserFileRelativePath(files[0]) : "";
   const firstSegment = firstPath.split("/").filter(Boolean)[0];
   if (firstSegment && firstSegment !== files[0]?.name) return firstSegment;
   if (files.length === 1 && files[0]) return files[0].name;
