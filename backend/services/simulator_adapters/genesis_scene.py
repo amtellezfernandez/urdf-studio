@@ -134,9 +134,11 @@ def add_primitive_entity(
     primitive: SimPrimitive,
     *,
     asset_roots: Sequence[Path] = (),
-) -> None:
+) -> Any | None:
+    """Add the primitive to the scene; returns the entity handle for primitives
+    (mesh-backed objects are added internally and return None)."""
     if add_mesh_entity_if_available(gs, scene, primitive, asset_roots):
-        return
+        return None
     try:
         if primitive.sim_type == "box":
             morph = gs.morphs.Box(
@@ -173,7 +175,7 @@ def add_primitive_entity(
         }
         if material is not None:
             entity_kwargs["material"] = material
-        scene.add_entity(**entity_kwargs)
+        return scene.add_entity(**entity_kwargs)
     except ValueError:
         raise
     except (TypeError, RuntimeError) as exc:
