@@ -206,7 +206,7 @@ is packaged for a target, not that the target can load or render that extension.
 | `.glb` / `.gltf` | yes | no (compiler rejects) | no (native loader rejects) | unverified | yes |
 | `.dae` | no | no | no | unverified | yes |
 | `.ply` | yes | no | no | unverified | yes |
-| `.usd` / `.usda` / `.usdc` | no | no | no | no | yes |
+| `.usd` / `.usda` / `.usdc` | no | no | no | no | yes (also: World<->USD interchange, below) |
 | `.spz` / `.splat` / `.ksplat` (Gaussian splat) | yes | no, appearance only | no, appearance only | no, appearance only | no |
 
 Splat rendering uses `@sparkjsdev/spark` 2.1 (with LOD) on `three` `^0.180.0`. Splats are valid

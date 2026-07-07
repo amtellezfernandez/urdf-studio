@@ -11,6 +11,7 @@ export const BACKEND_PYTHON_CORE_SETUP = {
     'numpy==2.2.6',
     'pyarrow',
     'pytest',
+    'usd-core',
     'websockets',
     'yourdfpy',
   ],
