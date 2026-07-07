@@ -156,6 +156,24 @@ Episode runs emit the existing world-rollout artifact contract
 outcomes map onto the shared decision vocabulary: satisfied → `allow`, soft violation →
 `warn`, guard breach → `reject`, timeout/step-out → `stop`, deferred review → `escalate`.
 
+## Running
+
+- One episode, one simulator:
+  `python -m backend.scripts.scenario_episode_worker --scenario <dir> --sim mujoco
+   --episode-manifest <manifest.json> --out <dir>`
+- Cross-simulator comparison (the headline command):
+  `python -m backend.scripts.scenario_run <scenario-dir> --sim mujoco --sim genesis --out <dir>`
+  Episode initial conditions are sampled once and shared across simulators; each
+  (sim, episode) runs in its own subprocess (`STUDIO_<SIM>_PYTHON` overrides honored);
+  the run emits `comparison.json` with per-sim success rates and divergence metrics
+  (final-object pose deltas, joint RMSE, success agreement).
+- As the world-rollouts runner: set `URDF_WORLD_ROLLOUT_CLI=tools/world_rollout_cli.sh`.
+  Rollout jobs created through `WorldRolloutService` (and the frontend rollout UI) then
+  execute scenario episodes; the campaign's `rollout_params` selects the scenario:
+  `{"scenario": "scenarios/carton_sorting_0001", "sim": "mujoco", "episodes": 1}`.
+  The campaign's world package overrides the scenario's `world.package`, and merged
+  trace/decision artifacts are digest-signed per the service contract.
+
 ## Determinism
 
 Randomization is sampled once per (episode, seed) by the orchestrator into an
