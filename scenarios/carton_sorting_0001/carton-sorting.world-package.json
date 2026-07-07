@@ -42,7 +42,7 @@
         "position_xyz": [
           0.4,
           -0.15,
-          0.775
+          0.755
         ],
         "rotation_rpy_rad": [
           0.0,
@@ -69,7 +69,7 @@
         "position_xyz": [
           0.45,
           0.3,
-          0.76
+          0.775
         ],
         "rotation_rpy_rad": [
           0.0,
@@ -79,13 +79,12 @@
         "size_xyz": [
           0.18,
           0.18,
-          0.08
+          0.11
         ],
         "color": "#22c55e",
         "physics": {
           "fixed": true,
-          "collision": true,
-          "friction": 0.9
+          "collision": false
         }
       },
       {
@@ -95,7 +94,7 @@
         "position_xyz": [
           0.45,
           -0.42,
-          0.76
+          0.775
         ],
         "rotation_rpy_rad": [
           0.0,
@@ -105,13 +104,12 @@
         "size_xyz": [
           0.18,
           0.18,
-          0.08
+          0.11
         ],
         "color": "#3b82f6",
         "physics": {
           "fixed": true,
-          "collision": true,
-          "friction": 0.9
+          "collision": false
         }
       }
     ],

@@ -28,12 +28,15 @@ task:
         yaw_jitter_rad: 0.4
         region: table_top
     regions:
+      # Table top surface: carton center sits at table_z + half carton height.
       table_top:
-        aabb_min: [0.25, -0.3, 0.775]
-        aabb_max: [0.6, 0.1, 0.775]
+        aabb_min: [0.25, -0.3, 0.755]
+        aabb_max: [0.6, 0.1, 0.755]
 
 success:
   all_of:
+    # bin_a is a non-colliding drop-zone volume on the table; Inside checks the
+    # carton's center against the zone AABB (scaled by ratio).
     # NOTE: the vendored `upright` checker follows Genie Sim's local-Y-up mesh
     # convention; it is unsuitable for Z-up primitive objects like this carton.
     - inside: {object: carton_1, container: bin_a, ratio: 1.2}

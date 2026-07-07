@@ -181,6 +181,85 @@ def append_primitives_to_mujoco_mjcf(
     return ET.tostring(root, encoding="unicode")
 
 
+def _mujoco_dynamic_body_attrs(primitive: SimPrimitive) -> MujocoXmlAttributes:
+    return {
+        "name": f"{primitive.sim_name}_body",
+        "pos": _format_vec(primitive.position_xyz),
+        "quat": _format_vec(primitive.quat_wxyz),
+    }
+
+
+def _mujoco_dynamic_geom_attrs(
+    primitive: SimPrimitive,
+    *,
+    mesh_name: str | None = None,
+) -> MujocoXmlAttributes:
+    # The body carries the pose; the geom is at the body origin.
+    at_origin = SimPrimitive(
+        source_id=primitive.source_id,
+        source_name=primitive.source_name,
+        sim_name=primitive.sim_name,
+        source_type=primitive.source_type,
+        sim_type=primitive.sim_type,
+        position_xyz=(0.0, 0.0, 0.0),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=primitive.size_xyz,
+        rgba=primitive.rgba,
+        collision=primitive.collision,
+        fixed=primitive.fixed,
+        mass_kg=primitive.mass_kg,
+        friction=primitive.friction,
+        restitution=primitive.restitution,
+        semantic_role=primitive.semantic_role,
+        asset_ref=primitive.asset_ref,
+        asset_scale_xyz=primitive.asset_scale_xyz,
+    )
+    attrs = _mujoco_geom_attrs(at_origin, mesh_name=mesh_name)
+    if primitive.mass_kg is not None and primitive.mass_kg > 0:
+        attrs["mass"] = _format_float(primitive.mass_kg)
+    return attrs
+
+
+def append_dynamic_primitives_to_mujoco_mjcf(
+    mjcf_text: str,
+    primitives: Sequence[SimPrimitive],
+    *,
+    include_floor: bool = False,
+    offscreen_size: tuple[int, int] | None = None,
+    asset_roots: Sequence[Path] = (),
+) -> str:
+    """Append world primitives honoring their ``fixed`` flag.
+
+    Fixed primitives become static worldbody geoms exactly like
+    ``append_primitives_to_mujoco_mjcf``; non-fixed primitives are wrapped in a
+    ``<body>`` with a ``<freejoint>`` so simulation can move them. The free
+    joint is named ``<sim_name>_freejoint`` and the body ``<sim_name>_body``.
+    """
+    try:
+        root = ET.fromstring(mjcf_text)
+    except ET.ParseError as exc:
+        raise WorldLayoutTransferError(f"Invalid MuJoCo MJCF XML: {exc}") from exc
+    if root.tag != "mujoco":
+        raise WorldLayoutTransferError("MuJoCo MJCF root element must be <mujoco>")
+    if offscreen_size is not None:
+        _set_mujoco_offscreen_size(root, offscreen_size)
+    worldbody = root.find("worldbody")
+    if worldbody is None:
+        worldbody = ET.SubElement(root, "worldbody")
+    if include_floor:
+        _add_mujoco_floor(worldbody)
+    for primitive in primitives:
+        mesh_name = _mujoco_mesh_name_for_primitive(root, primitive, asset_roots)
+        if primitive.fixed:
+            ET.SubElement(worldbody, "geom", _mujoco_geom_attrs(primitive, mesh_name=mesh_name))
+            continue
+        body = ET.SubElement(worldbody, "body", _mujoco_dynamic_body_attrs(primitive))
+        ET.SubElement(body, "freejoint", {"name": f"{primitive.sim_name}_freejoint"})
+        ET.SubElement(body, "geom", _mujoco_dynamic_geom_attrs(primitive, mesh_name=mesh_name))
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
+
+
 def export_primitives_to_mujoco_mjcf(
     primitives: Sequence[SimPrimitive],
     *,
