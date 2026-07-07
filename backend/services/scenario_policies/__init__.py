@@ -20,4 +20,8 @@ def build_scenario_policy(scenario, scenario_path):
         return WaypointPolicy.from_params(scenario, scenario_path)
     if kind == "replay":
         return ReplayPolicy.from_params(scenario, scenario_path)
+    if kind == "vla_ws":
+        from backend.services.scenario_policies.vla_ws import VlaWsPolicy
+
+        return VlaWsPolicy.from_params(scenario, scenario_path)
     raise ValueError(f"Unsupported policy kind: {kind}")

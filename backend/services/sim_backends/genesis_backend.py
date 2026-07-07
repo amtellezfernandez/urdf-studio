@@ -35,7 +35,13 @@ def _ensure_genesis_initialized(gs: Any) -> None:
         return
     requested = os.environ.get(GENESIS_BACKEND_ENV_VAR, "cpu").strip().lower()
     backend = gs.gpu if requested == "gpu" else gs.cpu
-    gs.init(backend=backend, precision="32", logging_level="warning")
+    try:
+        gs.init(backend=backend, precision="32", logging_level="warning")
+    except gs.GenesisException as exc:
+        # gs.init is once-per-process; another component (test, prepare script)
+        # may have initialized it already — reuse that runtime.
+        if "already initialized" not in str(exc).lower():
+            raise
     _GENESIS_INITIALIZED = True
 
 

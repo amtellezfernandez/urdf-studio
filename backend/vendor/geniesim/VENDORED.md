@@ -28,6 +28,9 @@ package into the same environment** — this subset intentionally shadows it.
 - `geniesim_benchmark/benchmark/__init__.py`
 - `geniesim_benchmark/benchmark/policy/base.py`
 - `geniesim_benchmark/utils/data_courier.py`
+- `geniesim_benchmark/utils/msgpack_numpy.py`
+- `geniesim_benchmark/utils/comm/retry.py`
+- `geniesim_benchmark/utils/comm/websocket_client.py`
 
 ### Patched (headers preserved; every change listed)
 - `geniesim_benchmark/plugins/ader/action/custom/upright.py`
@@ -54,8 +57,16 @@ package into the same environment** — this subset intentionally shadows it.
 - `geniesim_benchmark/utils/system_utils.py` — path resolution against URDF Studio's
   `scenarios/` dir (env override `URDF_SCENARIO_CONF_PATH`) instead of geniesim_assets.
 - `geniesim_benchmark/benchmark/policy/__init__.py` (absent upstream)
+- `geniesim_benchmark/utils/comm/__init__.py` (absent upstream)
 
-## Planned additions (Phase 6)
-`benchmark/policy/corobotpolicy.py`, `utils/msgpack_numpy.py`, `utils/transform_utils.py`
-(+ audit of their `utils.comm.retry` / `generalization_utils` / `infer_post_process`
-dependency chain), `data_collection/common/data_filter/`.
+## Deliberately not vendored
+- `benchmark/policy/corobotpolicy.py` — its dependency chain (name_utils ROBOT_CONFIGS,
+  ikfk_utils, generalization_utils camera augmentation, infer_post_process) is specific to
+  Genie's G1/G2 dual-arm embodiments and cannot drive arbitrary URDFs. URDF Studio's
+  `backend/services/scenario_policies/vla_ws.py` speaks the same WebSocket/msgpack infer
+  protocol (docs/specs/SCENARIO_POLICY_PROTOCOL.md) with a simulator-agnostic named-joint
+  action shape, reusing the vendored codec/comm modules.
+
+## Planned additions
+`data_collection/common/data_filter/` (post-hoc trajectory-quality rules), vendored when
+demo-curation lands.

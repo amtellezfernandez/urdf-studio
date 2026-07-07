@@ -121,28 +121,175 @@ def replay_label_samples(
     return [replay_label_sample(sample, targets=normalized_targets, smoke_load=smoke_load) for sample in samples]
 
 
+# Stepped-position agreement tolerance: generous enough for solver differences,
+# tight enough to reject teleports, interpenetration pop-out, and frame flips
+# (the corruption suite perturbs positions by decimeters or more).
+STEPPING_POSITION_TOLERANCE_M = 0.15
+_STEPPING_TIMESTEP_S = 0.002
+_STEPPING_MIN_DT_S = 0.002
+
+
 def replay_label_samples_with_stepping(
     samples: Sequence[WorldModelTrainingSample],
     *,
     targets: Sequence[str] | str | None = None,
-    stepping_executable: str | None = None,
+    position_tolerance_m: float = STEPPING_POSITION_TOLERANCE_M,
 ) -> list[WorldModelTrainingSample]:
-    """Label samples using a real physics stepping loop (not export-oracle mode).
+    """Label samples by actually stepping physics over the transition.
 
-    Blocked: requires an external simulator CLI that can actually step physics frames.
-    Pass stepping_executable=/path/to/sim-cli when a physics binary is available.
-    Until then, fall back to export-oracle via replay_label_samples().
+    For each state -> next_state transition: frame 0 entities are loaded into
+    MuJoCo (movable entities as free bodies with their recorded velocities),
+    physics steps for the transition's dt, and the stepped positions are
+    compared against the claimed next_state positions. A transition whose
+    claimed next state disagrees with stepped physics beyond
+    ``position_tolerance_m`` (or that diverges to NaN) is labeled fail.
     """
-    if stepping_executable is None:
-        raise NotImplementedError(
-            "Simulator stepping requires a physics simulator binary. "
-            "Set stepping_executable='/path/to/sim-cli' or use "
-            "replay_label_samples() for export-oracle labels."
-        )
-    raise NotImplementedError(
-        f"Stepping via {stepping_executable!r} is not yet implemented. "
-        "This hook is reserved for when a real physics CLI is available."
+    del targets  # stepping oracle currently runs on MuJoCo
+    return [
+        _stepping_label_sample(sample, position_tolerance_m=position_tolerance_m)
+        for sample in samples
+    ]
+
+
+def _stepping_label_sample(
+    sample: WorldModelTrainingSample,
+    *,
+    position_tolerance_m: float,
+) -> WorldModelTrainingSample:
+    started = time.perf_counter()
+    try:
+        trace = transition_trace_from_sample(sample)
+        result = _step_transition_mujoco(trace, position_tolerance_m=position_tolerance_m)
+    except (ValueError, RuntimeError) as exc:
+        result = {
+            "label": "fail",
+            "error": str(exc),
+            "max_position_error_m": None,
+            "entities_compared": 0,
+        }
+    result["runtime_ms"] = (time.perf_counter() - started) * 1000.0
+    replay_label = result["label"]
+    audit_label = "pass" if sample.executable else "fail"
+    replay_metadata = {
+        "mode": "stepping",
+        "targets": {"mujoco": result},
+        "label": replay_label,
+        "pass_count": 1 if replay_label == "pass" else 0,
+        "fail_count": 0 if replay_label == "pass" else 1,
+        "audit_label": audit_label,
+        "audit_replay_agree": replay_label == audit_label,
+        "position_tolerance_m": position_tolerance_m,
+        "runtime_ms": result["runtime_ms"],
+    }
+    return sample.model_copy(
+        deep=True,
+        update={
+            "metadata": {
+                **sample.metadata,
+                "sim_replay_label": replay_label,
+                "sim_replay": replay_metadata,
+            },
+        },
     )
+
+
+def _step_transition_mujoco(
+    trace: PhysicalRolloutTrace,
+    *,
+    position_tolerance_m: float,
+) -> dict[str, Any]:
+    import math
+    from xml.etree import ElementTree as ET
+
+    import mujoco
+
+    frame_before, frame_after = trace.frames[0], trace.frames[-1]
+    dt_s = max((frame_after.t_ms - frame_before.t_ms) / 1000.0, _STEPPING_MIN_DT_S)
+
+    root = ET.Element("mujoco", {"model": "wsp_stepping_replay"})
+    ET.SubElement(root, "compiler", {"angle": "radian"})
+    ET.SubElement(root, "option", {"timestep": str(_STEPPING_TIMESTEP_S), "gravity": "0 0 -9.81"})
+    worldbody = ET.SubElement(root, "worldbody")
+    ET.SubElement(
+        worldbody,
+        "geom",
+        {"name": "floor", "type": "plane", "pos": "0 0 0", "size": "10 10 0.01"},
+    )
+    movable_ids: list[str] = []
+    for entity in frame_before.entities:
+        size = entity.size_xyz or [0.1, 0.1, 0.1]
+        geom_attrs = {
+            "name": f"{entity.entity_id}_geom",
+            "type": "box",
+            "size": " ".join(str(component / 2.0) for component in size),
+        }
+        if entity.mass_kg is not None:
+            geom_attrs["mass"] = str(entity.mass_kg)
+        if not entity.movable:
+            geom_attrs.update(
+                {
+                    "pos": " ".join(str(v) for v in entity.position_xyz),
+                    "quat": " ".join(str(v) for v in entity.quat_wxyz),
+                }
+            )
+            ET.SubElement(worldbody, "geom", geom_attrs)
+            continue
+        body = ET.SubElement(
+            worldbody,
+            "body",
+            {
+                "name": f"{entity.entity_id}_body",
+                "pos": " ".join(str(v) for v in entity.position_xyz),
+                "quat": " ".join(str(v) for v in entity.quat_wxyz),
+            },
+        )
+        ET.SubElement(body, "freejoint", {"name": f"{entity.entity_id}_freejoint"})
+        ET.SubElement(body, "geom", geom_attrs)
+        movable_ids.append(entity.entity_id)
+
+    model = mujoco.MjModel.from_xml_string(ET.tostring(root, encoding="unicode"))
+    data = mujoco.MjData(model)
+    for entity in frame_before.entities:
+        if not entity.movable:
+            continue
+        joint_id = mujoco.mj_name2id(
+            model, mujoco.mjtObj.mjOBJ_JOINT, f"{entity.entity_id}_freejoint"
+        )
+        velocity_address = model.jnt_dofadr[joint_id]
+        data.qvel[velocity_address : velocity_address + 3] = entity.velocity_xyz
+    mujoco.mj_forward(model, data)
+
+    for _ in range(max(1, round(dt_s / _STEPPING_TIMESTEP_S))):
+        mujoco.mj_step(model, data)
+
+    claimed_positions = {
+        entity.entity_id: entity.position_xyz for entity in frame_after.entities
+    }
+    max_error = 0.0
+    compared = 0
+    for entity_id in movable_ids:
+        claimed = claimed_positions.get(entity_id)
+        if claimed is None:
+            continue
+        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"{entity_id}_body")
+        stepped = data.xpos[body_id]
+        if any(not math.isfinite(float(value)) for value in stepped):
+            return {
+                "label": "fail",
+                "error": f"stepped state diverged (NaN) for {entity_id}",
+                "max_position_error_m": None,
+                "entities_compared": compared,
+            }
+        error = math.sqrt(sum((float(s) - float(c)) ** 2 for s, c in zip(stepped, claimed)))
+        max_error = max(max_error, error)
+        compared += 1
+
+    return {
+        "label": "pass" if max_error <= position_tolerance_m else "fail",
+        "max_position_error_m": max_error,
+        "entities_compared": compared,
+        "stepped_dt_s": dt_s,
+    }
 
 
 def summarize_replay_labeled_samples(samples: Sequence[WorldModelTrainingSample]) -> dict[str, Any]:

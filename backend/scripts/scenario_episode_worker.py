@@ -20,7 +20,7 @@ from backend.models.scenario import EpisodeManifest
 from backend.services.scenario_loader import ScenarioLoadError, load_scenario
 from backend.services.scenario_runtime.episode_runner import run_episode
 
-SCENARIO_WORKER_BACKENDS = ("mujoco", "genesis")
+SCENARIO_WORKER_BACKENDS = ("mujoco", "genesis", "isaac")
 
 
 def _build_backend(sim: str, scenario, scenario_path: str):
@@ -32,6 +32,11 @@ def _build_backend(sim: str, scenario, scenario_path: str):
         from backend.services.sim_backends.genesis_backend import build_genesis_backend
 
         return build_genesis_backend(scenario, scenario_path)
+    if sim == "isaac":
+        raise ValueError(
+            "The Isaac Sim episode backend is planned but not implemented yet "
+            "(mirrors backend/services/simulator_adapters/planned_simulators.py)."
+        )
     raise ValueError(f"Unsupported simulator backend: {sim}")
 
 
