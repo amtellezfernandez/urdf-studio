@@ -50,11 +50,15 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.episode_manifest).read_text(encoding="utf-8")
         )
         backend = _build_backend(args.sim, scenario, args.scenario)
+        from backend.services.scenario_policies import build_scenario_policy
+
+        policy = build_scenario_policy(scenario, args.scenario)
         result = run_episode(
             scenario=scenario,
             manifest=manifest,
             backend=backend,
             output_dir=output_dir,
+            policy=policy,
         )
     except (ScenarioLoadError, ValueError) as exc:
         print(f"scenario episode worker failed: {exc}", file=sys.stderr)

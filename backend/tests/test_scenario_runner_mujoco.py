@@ -84,6 +84,6 @@ def test_episode_artifacts_parse_as_world_rollout_records(tmp_path: Path) -> Non
         WorldRolloutDecisionRecord.model_validate(json.loads(line)) for line in decision_lines
     ]
     assert decisions[-1].decision == "allow"
-    assert decisions[-1].rule_id == "scenario/success"
+    assert decisions[-1].rule_id.startswith("scenario/inside[")
     assert result.artifacts["trace_ndjson"]["record_count"] == len(trace_lines)
     assert result.artifacts["decisions_ndjson"]["record_count"] == len(decision_lines)

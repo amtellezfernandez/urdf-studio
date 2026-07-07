@@ -1,0 +1,12 @@
+{
+  "waypoints": [
+    {"time_s": 0.0, "joints": {"gantry_x": 0.4, "gantry_y": -0.15, "gantry_z": 0.0}},
+    {"time_s": 1.5, "joints": {"gantry_x": 0.4, "gantry_y": -0.15, "gantry_z": -0.30}},
+    {"time_s": 1.8, "joints": {"gantry_x": 0.4, "gantry_y": -0.15, "gantry_z": -0.30}, "attach": "carton_1"},
+    {"time_s": 2.6, "joints": {"gantry_x": 0.4, "gantry_y": -0.15, "gantry_z": 0.0}},
+    {"time_s": 4.0, "joints": {"gantry_x": 0.45, "gantry_y": 0.3, "gantry_z": 0.0}},
+    {"time_s": 4.8, "joints": {"gantry_x": 0.45, "gantry_y": 0.3, "gantry_z": -0.25}},
+    {"time_s": 5.0, "joints": {"gantry_x": 0.45, "gantry_y": 0.3, "gantry_z": -0.25}, "detach": true},
+    {"time_s": 5.6, "joints": {"gantry_x": 0.45, "gantry_y": 0.3, "gantry_z": 0.0}}
+  ]
+}

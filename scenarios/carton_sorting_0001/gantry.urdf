@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<!-- Minimal 3-axis gantry for the carton-sorting demo: prismatic x/y/z joints
+     moving a magnet plate. Links are visual-only (no collision geometry) so
+     the gantry never interferes with scene physics; pick/place uses the
+     kinematic weld attach (runtime.grasp_attach: weld, attach_link: magnet_link). -->
+<robot name="carton_gantry">
+  <link name="base_link">
+    <inertial>
+      <mass value="10.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.1" iyy="0.1" izz="0.1" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <link name="carriage_x">
+    <inertial>
+      <mass value="1.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.06 0.06 0.02"/></geometry>
+    </visual>
+  </link>
+
+  <link name="carriage_y">
+    <inertial>
+      <mass value="1.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.05 0.05 0.02"/></geometry>
+    </visual>
+  </link>
+
+  <link name="magnet_link">
+    <inertial>
+      <mass value="0.5"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.005" iyy="0.005" izz="0.005" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.06 0.06 0.015"/></geometry>
+    </visual>
+  </link>
+
+  <joint name="gantry_x" type="prismatic">
+    <parent link="base_link"/>
+    <child link="carriage_x"/>
+    <origin xyz="0 0 1.1" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-1.0" upper="1.0" effort="200" velocity="1.0"/>
+  </joint>
+
+  <joint name="gantry_y" type="prismatic">
+    <parent link="carriage_x"/>
+    <child link="carriage_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.0" upper="1.0" effort="200" velocity="1.0"/>
+  </joint>
+
+  <joint name="gantry_z" type="prismatic">
+    <parent link="carriage_y"/>
+    <child link="magnet_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6" upper="0.2" effort="200" velocity="1.0"/>
+  </joint>
+</robot>

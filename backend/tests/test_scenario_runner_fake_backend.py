@@ -6,6 +6,7 @@ from pathlib import Path
 
 from backend.models.scenario import EpisodeManifest, EpisodeObjectPlacement
 from backend.services.scenario_loader import load_scenario, load_scenario_world
+from backend.services.scenario_policies.base import PolicyAction, ScenarioPolicy
 from backend.services.scenario_runtime.episode_runner import run_episode
 from backend.services.sim_backends.fake_backend import FakeBackend
 from backend.services.sim_backends.types import Observation
@@ -14,23 +15,23 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO_DIR = REPO_ROOT / "scenarios" / "carton_sorting_0001"
 
 
-class PlaceAtStepPolicy:
+class PlaceAtStepPolicy(ScenarioPolicy):
     """Scripted test policy: teleports the carton into the bin at a given step."""
 
     def __init__(self, backend: FakeBackend, *, at_step: int) -> None:
+        super().__init__()
         self._backend = backend
         self._at_step = at_step
         self.reset_calls = 0
 
     def reset(self) -> None:
+        self.action_buffer.clear()
         self.reset_calls += 1
 
-    def next_joint_targets(
-        self, observation: Observation, *, step: int, instruction: str
-    ) -> dict[str, float] | None:
-        if step == self._at_step:
+    def act(self, observations: Observation, **kwargs) -> list[PolicyAction]:
+        if int(kwargs.get("step_num", 0)) == self._at_step:
             self._backend.move_object("carton_1", (0.45, 0.3, 0.775))
-        return None
+        return [PolicyAction()]
 
 
 def _fake_backend() -> FakeBackend:

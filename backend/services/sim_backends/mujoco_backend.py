@@ -52,6 +52,8 @@ class MujocoBackend(SimBackend):
         self._actuated_joint_names: list[str] = []
         self._free_joint_by_object: dict[str, str] = {}
         self._initial_qpos: np.ndarray | None = None
+        # (object_id, offset transform from attach link to object) when welded.
+        self._attached: tuple[str, np.ndarray] | None = None
 
     # --- lifecycle ---
 
@@ -146,6 +148,7 @@ class MujocoBackend(SimBackend):
         return self.get_observation()
 
     def reset(self) -> None:
+        self._attached = None
         self._mujoco.mj_resetData(self._model, self._data)
         if self._initial_qpos is not None:
             self._data.qpos[:] = self._initial_qpos
@@ -188,6 +191,65 @@ class MujocoBackend(SimBackend):
                 self._set_actuator_target(joint_name, target)
         for _ in range(max(1, substeps)):
             self._mujoco.mj_step(self._model, self._data)
+            self._apply_attachment()
+
+    # --- kinematic grasp-attach (runtime.grasp_attach: weld) ---
+
+    def attach_object(self, object_id: str) -> None:
+        if object_id not in self._free_joint_by_object:
+            raise MujocoBackendError(f"Cannot attach fixed/unknown object: {object_id}")
+        link_pose = self._attach_link_pose_matrix()
+        object_pose = self.get_obj_world_pose_matrix(f"/World/Objects/{object_id}")
+        offset = np.linalg.inv(link_pose) @ object_pose
+        self._attached = (object_id, offset)
+
+    def detach_object(self) -> None:
+        if self._attached is None:
+            return
+        object_id, _offset = self._attached
+        self._attached = None
+        self._zero_object_velocity(object_id)
+
+    def _apply_attachment(self) -> None:
+        if self._attached is None:
+            return
+        from scipy.spatial.transform import Rotation
+
+        object_id, offset = self._attached
+        target = self._attach_link_pose_matrix() @ offset
+        joint_name = self._free_joint_by_object[object_id]
+        joint_id = self._mujoco.mj_name2id(self._model, self._mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+        address = self._model.jnt_qposadr[joint_id]
+        quat_xyzw = Rotation.from_matrix(target[:3, :3]).as_quat()
+        self._data.qpos[address : address + 3] = target[:3, 3]
+        self._data.qpos[address + 3 : address + 7] = (
+            quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2],
+        )
+        self._zero_object_velocity(object_id)
+        self._mujoco.mj_forward(self._model, self._data)
+
+    def _zero_object_velocity(self, object_id: str) -> None:
+        joint_name = self._free_joint_by_object[object_id]
+        joint_id = self._mujoco.mj_name2id(self._model, self._mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+        velocity_address = self._model.jnt_dofadr[joint_id]
+        self._data.qvel[velocity_address : velocity_address + 6] = 0.0
+
+    def _attach_link_pose_matrix(self) -> np.ndarray:
+        link = self._scenario.runtime.attach_link
+        body_name = f"{_ROBOT_ATTACH_PREFIX}{link}" if link else None
+        body_id = -1
+        if body_name is not None:
+            body_id = self._mujoco.mj_name2id(self._model, self._mujoco.mjtObj.mjOBJ_BODY, body_name)
+            if body_id < 0:
+                raise MujocoBackendError(f"runtime.attach_link not found on robot: {link}")
+        if body_id < 0:
+            raise MujocoBackendError(
+                "runtime.attach_link is required when grasp_attach is used."
+            )
+        matrix = np.eye(4)
+        matrix[:3, :3] = np.array(self._data.xmat[body_id]).reshape(3, 3)
+        matrix[:3, 3] = self._data.xpos[body_id]
+        return matrix
 
     def _set_actuator_target(self, joint_name: str, target: float) -> None:
         prefixed = f"{_ROBOT_ATTACH_PREFIX}{joint_name}"

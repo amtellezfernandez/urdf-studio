@@ -72,6 +72,14 @@ class SimBackend(APICore):
     def close(self) -> None:
         pass
 
+    # --- kinematic grasp-attach (runtime.grasp_attach: weld) ---
+
+    def attach_object(self, object_id: str) -> None:
+        raise NotImplementedError(f"{self.backend_id} does not support grasp_attach.")
+
+    def detach_object(self) -> None:
+        raise NotImplementedError(f"{self.backend_id} does not support grasp_attach.")
+
     @property
     @abc.abstractmethod
     def sim_time_s(self) -> float:

@@ -9,7 +9,7 @@ world:
   include_hidden: false
 
 robot:
-  # world.urdf_xml snapshot is used when urdf is omitted
+  urdf: ./gantry.urdf
   base_pose: {xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
   init_joint_positions: {}
   init_noise_joint_regex: {}
@@ -52,10 +52,14 @@ runtime:
   max_episode_steps: 1500
   observation:
     modalities: [joint_positions, object_poses]
+  # Deterministic demo pick: attach events weld the carton to the magnet link.
+  grasp_attach: weld
+  attach_link: magnet_link
 
 policy:
-  kind: none
-  params: {}
+  kind: waypoint
+  params:
+    waypoints_file: ./waypoints.json
 
 metrics:
   - success_rate

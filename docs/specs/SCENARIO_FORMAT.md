@@ -79,10 +79,13 @@ runtime:
   checker_interval_steps: 5        # checkers tick every N control steps
   max_episode_steps: 1500
   observation: {modalities: [joint_positions, object_poses]}   # + camera_rgb later
+  grasp_attach: weld               # none | weld (kinematic attach cheat, reported in artifacts)
+  attach_link: magnet_link         # robot link objects weld to
 
 policy:
   kind: waypoint                   # waypoint | replay | vla_ws | none
-  params: {}
+  params:
+    waypoints_file: ./waypoints.json
 
 metrics: [success_rate, time_to_success_s, final_object_pose_error_m]
 
@@ -120,8 +123,30 @@ Caveats:
 - `inside`/`ontop` and friends require several consecutive passing checker ticks before
   reporting success (vendored anti-flicker behavior).
 
-Guards (`no_collision`, `above_plane`, `stable_for`) are evaluated by the episode runner
-itself, outside the vendored tree, and emit `reject` decisions.
+Guards are evaluated by the episode runner itself, outside the vendored tree:
+
+- `no_collision: {pairs: [[a, b], ...]}` — any contact between a listed pair (world-object
+  ids or `robot`) emits a `reject` decision and ends the episode (`guard_reject`).
+- `above_plane: {object, z_min}` — the object's center dropping below `z_min` rejects.
+- `stable_for: {object, seconds, max_drift_m}` — post-success stabilization: after the
+  success conditions fire, the runner keeps simulating for `seconds`, then the object must
+  not move more than `max_drift_m` over a trailing 0.2 s window; otherwise success is
+  revoked (`unstable`).
+
+## Policies
+
+- `waypoint` — scripted joint-space waypoints with linear interpolation
+  (`params.waypoints_file`). Waypoint entries: `{"time_s": float, "joints": {name: rad},
+  "attach": "object_id"?, "detach": true?}`. Attach/detach events fire once and require
+  `runtime.grasp_attach: weld` (a kinematic pin to `runtime.attach_link` — a deterministic
+  demo mechanism, flagged as `grasp_attach_used` in the episode report).
+- `replay` — replays the `robot_joints` stream of a recorded episode trace
+  (`params.trace_file`), one record per control step.
+- `vla_ws` — Genie Sim's WebSocket/msgpack VLA inference protocol (Phase 6).
+
+Policies subclass `ScenarioPolicy` (backend/services/scenario_policies/base.py), which
+wraps the vendored Genie Sim `BasePolicy` action-chunk buffering: `act(...)` returns a
+chunk of `PolicyAction`s replayed one per control step without re-inferring.
 
 ## Decisions and artifacts
 

@@ -123,6 +123,11 @@ class ScenarioRuntimeSpec(BaseModel):
     checker_interval_steps: int = Field(default=5, ge=1)
     max_episode_steps: int = Field(default=1500, ge=1)
     observation: ScenarioObservationSpec = Field(default_factory=ScenarioObservationSpec)
+    # "weld" enables the kinematic grasp-attach cheat: an attach event pins the
+    # object to the robot attach link. Deterministic demo mode; reported
+    # honestly in episode artifacts.
+    grasp_attach: Literal["none", "weld"] = "none"
+    attach_link: str | None = None
 
 
 class ScenarioPolicySpec(BaseModel):
