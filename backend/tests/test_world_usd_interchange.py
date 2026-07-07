@@ -107,7 +107,7 @@ def test_import_rejects_stage_without_rigid_gprims(tmp_path: Path) -> None:
     usda = tmp_path / "empty.usda"
     usda.write_text('#usda 1.0\ndef Xform "World" {\n}\n', encoding="utf-8")
 
-    with pytest.raises(WorldUsdInterchangeError, match="No importable rigid gprims"):
+    with pytest.raises(WorldUsdInterchangeError, match="No importable gprims"):
         import_usd_to_world(usda)
 
 
@@ -150,3 +150,106 @@ def test_cli_round_trip(tmp_path: Path) -> None:
     envelope = read_world_scene_registry_envelope(payload)
     assert envelope.package_id == "carton-sorting"
     assert len(envelope.world.objects) == 4
+
+
+def test_friction_exports_as_native_physics_material(tmp_path: Path) -> None:
+    from pxr import Usd, UsdPhysics, UsdShade
+
+    usda_path = export_world_to_usda(_carton_payload(), tmp_path / "carton.usda")
+
+    stage = Usd.Stage.Open(str(usda_path))
+    carton = stage.GetPrimAtPath("/World/Objects/carton_1")
+    # friction/restitution must NOT ride in customData — they are native materials.
+    assert "urdfstudio:friction" not in (carton.GetCustomData() or {})
+    material, _ = UsdShade.MaterialBindingAPI(carton).ComputeBoundMaterial(
+        materialPurpose="physics"
+    )
+    assert material
+    material_api = UsdPhysics.MaterialAPI(material.GetPrim())
+    assert material_api.GetDynamicFrictionAttr().Get() == pytest.approx(0.8)
+    # identical (friction, restitution) pairs share one deduplicated material
+    materials_scope = stage.GetPrimAtPath("/World/PhysicsMaterials")
+    material_count = len(list(materials_scope.GetChildren()))
+    distinct_pairs = {(0.9, None), (0.8, None)}
+    assert material_count == len(distinct_pairs)
+
+
+def test_mesh_assets_export_as_usd_mesh_geometry(tmp_path: Path) -> None:
+    import trimesh
+    from pxr import Usd, UsdGeom
+
+    asset_dir = tmp_path / "assets"
+    asset_dir.mkdir()
+    trimesh.creation.box(extents=(0.2, 0.2, 0.3)).export(str(asset_dir / "prop.stl"))
+    payload = _carton_payload()
+    payload["world"]["objects"].append(
+        {
+            "id": "scanned_prop",
+            "name": "Scanned prop",
+            "type": "mesh",
+            "position_xyz": [0.1, 0.2, 0.9],
+            "size_xyz": [0.2, 0.2, 0.3],
+            "color": "#0ea5e9",
+            "asset_ref": "assets/prop.stl",
+            "physics": {"fixed": False, "collision": True, "mass_kg": 0.4},
+        }
+    )
+
+    usda_path = export_world_to_usda(
+        payload, tmp_path / "with_mesh.usda", asset_roots=[tmp_path]
+    )
+
+    stage = Usd.Stage.Open(str(usda_path))
+    prop = stage.GetPrimAtPath("/World/Objects/scanned_prop")
+    assert prop.IsA(UsdGeom.Mesh)                      # real geometry, not a bounding cube
+    mesh = UsdGeom.Mesh(prop)
+    assert len(mesh.GetPointsAttr().Get()) >= 8
+    assert prop.GetAssetInfoByKey("urdfstudio:assetRef") == "assets/prop.stl"
+
+
+def test_usd_mesh_prims_import_as_world_mesh_objects(tmp_path: Path) -> None:
+    import trimesh
+    from pxr import Usd, UsdGeom
+
+    asset_dir = tmp_path / "assets"
+    asset_dir.mkdir()
+    trimesh.creation.box(extents=(0.2, 0.2, 0.3)).export(str(asset_dir / "prop.stl"))
+    payload = _carton_payload()
+    payload["world"]["objects"].append(
+        {
+            "id": "scanned_prop",
+            "name": "Scanned prop",
+            "type": "mesh",
+            "position_xyz": [0.1, 0.2, 0.9],
+            "size_xyz": [0.2, 0.2, 0.3],
+            "color": "#0ea5e9",
+            "asset_ref": "assets/prop.stl",
+            "physics": {"fixed": False, "collision": True, "mass_kg": 0.4},
+        }
+    )
+    usda_path = export_world_to_usda(
+        payload, tmp_path / "with_mesh.usda", asset_roots=[tmp_path]
+    )
+
+    out_dir = tmp_path / "imported"
+    imported = import_usd_to_world(usda_path, asset_output_dir=out_dir)
+
+    prop = next(obj for obj in imported["world"]["objects"] if obj["id"] == "scanned_prop")
+    assert prop["type"] == "mesh"
+    assert prop["asset_ref"] == "assets/scanned_prop.stl"
+    assert (out_dir / "assets" / "scanned_prop.stl").is_file()
+    assert prop["size_xyz"] == pytest.approx([0.2, 0.2, 0.3], abs=1e-6)
+    assert prop["physics"]["mass_kg"] == pytest.approx(0.4)
+    envelope = read_world_scene_registry_envelope(imported)   # portable ref validates
+    assert len(envelope.world.objects) == 5
+
+
+def test_friction_round_trips_through_physics_material(tmp_path: Path) -> None:
+    usda_path = export_world_to_usda(_carton_payload(), tmp_path / "carton.usda")
+
+    imported = import_usd_to_world(usda_path)
+
+    carton = next(obj for obj in imported["world"]["objects"] if obj["id"] == "carton_1")
+    assert carton["physics"]["friction"] == pytest.approx(0.8)
+    table = next(obj for obj in imported["world"]["objects"] if obj["id"] == "work_table")
+    assert table["physics"]["friction"] == pytest.approx(0.9)

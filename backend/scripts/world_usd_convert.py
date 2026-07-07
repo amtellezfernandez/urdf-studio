@@ -30,6 +30,13 @@ def main(argv: list[str] | None = None) -> int:
     export_parser = subparsers.add_parser("export", help="World package JSON -> .usda")
     export_parser.add_argument("world_package")
     export_parser.add_argument("output")
+    export_parser.add_argument(
+        "--asset-root",
+        action="append",
+        default=None,
+        help="Extra directory for resolving mesh asset references "
+        "(the world package's own directory is always searched)",
+    )
 
     import_parser = subparsers.add_parser("import", help="USD stage -> world package JSON")
     import_parser.add_argument("usd_file")
@@ -40,12 +47,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
-            payload = json.loads(Path(args.world_package).read_text(encoding="utf-8"))
-            output = export_world_to_usda(payload, args.output)
+            world_package_path = Path(args.world_package)
+            payload = json.loads(world_package_path.read_text(encoding="utf-8"))
+            asset_roots = [world_package_path.parent, *(args.asset_root or [])]
+            output = export_world_to_usda(payload, args.output, asset_roots=asset_roots)
             print(f"exported: {output}")
             return 0
         payload = import_usd_to_world(
-            args.usd_file, package_id=args.package_id, version=args.version
+            args.usd_file,
+            package_id=args.package_id,
+            version=args.version,
+            asset_output_dir=Path(args.output).parent,
         )
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
