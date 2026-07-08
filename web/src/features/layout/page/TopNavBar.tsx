@@ -30,6 +30,7 @@ type TopNavMenusProps = Pick<
   | "onImportWorkspaceChangeSet"
   | "onImportWorldRolloutResults"
   | "onListWorldScenePackages"
+  | "onOpenScenarios"
   | "onNormalizeAxes"
   | "onOpenCameraCreator"
   | "onOpenCameraUpload"
@@ -130,6 +131,7 @@ const TopNavMenus = ({
             onValidateCurrentWorldScenePackage={props.onValidateCurrentWorldScenePackage}
             onPublishCurrentWorldScenePackage={props.onPublishCurrentWorldScenePackage}
             onListWorldScenePackages={props.onListWorldScenePackages}
+            onOpenScenarios={props.onOpenScenarios}
             onExportWorldRolloutCampaign={props.onExportWorldRolloutCampaign}
             onRunLocalWorldRollout={props.onRunLocalWorldRollout}
             onImportWorldRolloutResults={props.onImportWorldRolloutResults}

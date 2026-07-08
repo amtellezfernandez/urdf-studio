@@ -76,6 +76,7 @@ export type TopNavBarProps = {
   onImportSplatBackground: () => void;
   onImportWorkspaceChangeSet: () => void;
   onListWorldScenePackages: () => void;
+  onOpenScenarios: () => void;
   onOpenWorldHubBrowser?: () => void;
   openObjectCreator: (type?: ObjectCreatorType) => void;
   onOpenCameraCreator: () => void;

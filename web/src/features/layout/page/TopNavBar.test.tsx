@@ -63,6 +63,7 @@ const createProps = (): TopNavBarProps => ({
   onImportSplatBackground: vi.fn(),
   onImportWorkspaceChangeSet: vi.fn(),
   onListWorldScenePackages: vi.fn(),
+  onOpenScenarios: vi.fn(),
   onOpenWorldHubBrowser: vi.fn(),
   openObjectCreator: vi.fn(),
   onOpenCameraCreator: vi.fn(),

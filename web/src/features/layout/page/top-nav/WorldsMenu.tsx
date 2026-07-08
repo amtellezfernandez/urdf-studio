@@ -12,6 +12,7 @@ type WorldsMenuProps = Pick<
   | "onValidateCurrentWorldScenePackage"
   | "onPublishCurrentWorldScenePackage"
   | "onListWorldScenePackages"
+  | "onOpenScenarios"
   | "onExportWorldRolloutCampaign"
   | "onRunLocalWorldRollout"
   | "onImportWorldRolloutResults"
@@ -29,6 +30,7 @@ export function WorldsMenu({
   onValidateCurrentWorldScenePackage,
   onPublishCurrentWorldScenePackage,
   onListWorldScenePackages,
+  onOpenScenarios,
   onExportWorldRolloutCampaign,
   onRunLocalWorldRollout,
   onImportWorldRolloutResults,
@@ -53,6 +55,9 @@ export function WorldsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onListWorldScenePackages} className={menuItemClass}>
           Browse Published Worlds
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onOpenScenarios} className={menuItemClass}>
+          Scenarios (Cross-Sim)
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportCurrentWorldSceneLayer} className={menuItemClass}>
           Export World JSON

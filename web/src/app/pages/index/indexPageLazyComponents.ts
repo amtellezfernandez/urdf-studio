@@ -23,3 +23,9 @@ export const WorldSceneImportDialog = lazy(() =>
     default: module.WorldSceneImportDialog,
   }))
 );
+
+export const ScenariosDialog = lazy(() =>
+  import("@/features/scenarios/ScenariosDialog").then((module) => ({
+    default: module.ScenariosDialog,
+  }))
+);

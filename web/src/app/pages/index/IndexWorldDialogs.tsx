@@ -1,6 +1,7 @@
 import { Suspense, type ComponentProps } from "react";
 
 import {
+  ScenariosDialog,
   WorldPublishDialog,
   WorldRegistryPanel,
   WorldRolloutReviewPanel,
@@ -46,6 +47,8 @@ type IndexWorldDialogsProps = {
   worldRolloutReviewOpen: WorldRolloutReviewPanelProps["open"];
   worldRolloutReview: WorldRolloutReviewPanelProps["result"];
   onWorldRolloutReviewOpenChange: (open: boolean) => void;
+  scenariosDialogOpen: boolean;
+  onScenariosDialogOpenChange: (open: boolean) => void;
 };
 
 export const IndexWorldDialogs = ({
@@ -78,6 +81,8 @@ export const IndexWorldDialogs = ({
   worldRolloutReviewOpen,
   worldRolloutReview,
   onWorldRolloutReviewOpenChange,
+  scenariosDialogOpen,
+  onScenariosDialogOpenChange,
 }: IndexWorldDialogsProps) => {
   if (!show) {
     return null;
@@ -121,6 +126,10 @@ export const IndexWorldDialogs = ({
         open={worldRolloutReviewOpen}
         result={worldRolloutReview}
         onClose={() => onWorldRolloutReviewOpenChange(false)}
+      />
+      <ScenariosDialog
+        open={scenariosDialogOpen}
+        onOpenChange={onScenariosDialogOpenChange}
       />
     </Suspense>
   );

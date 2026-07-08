@@ -228,6 +228,7 @@ const Index = () => {
     onAutoSelectEndEffector: setEndEffectorLink,
   });
   const [hasWorldOnlyContent, setHasWorldOnlyContent] = useState(false);
+  const [scenariosDialogOpen, setScenariosDialogOpen] = useState(false);
   const hasEnteredWorkspace = hasLoadedFiles || hasWorldOnlyContent;
   const handleOpenWorldOnlyWorkspace = useCallback(() => {
     setHasWorldOnlyContent(true);
@@ -1275,6 +1276,7 @@ const Index = () => {
     onImportSplatBackground: handleImportSplatBackground,
     onImportWorkspaceChangeSet: handleImportWorkspaceChangeSet,
     onListWorldScenePackages: handleListWorldScenePackages,
+    onOpenScenarios: () => setScenariosDialogOpen(true),
     onOpenWorldHubBrowser: handleOpenWorldHubBrowser,
     openObjectCreator,
     onOpenCameraCreator: () => setIsCameraCreatorOpen(true),
@@ -1676,6 +1678,8 @@ const Index = () => {
         worldRolloutReviewOpen={worldRolloutReviewOpen}
         worldRolloutReview={worldRolloutReview}
         onWorldRolloutReviewOpenChange={setWorldRolloutReviewOpen}
+        scenariosDialogOpen={scenariosDialogOpen}
+        onScenariosDialogOpenChange={setScenariosDialogOpen}
       />
     </>
   );
