@@ -128,6 +128,24 @@ Caveats:
 - `inside`/`ontop` and friends require several consecutive passing checker ticks before
   reporting success (vendored anti-flicker behavior).
 
+### Custom checkers (plugin registry)
+
+Beyond the built-in conditions, custom success checkers register through
+`backend/services/scenario_runtime/checker_registry.py` **without editing the vendored Genie
+Sim engine**. A plugin supplies a structured name (usable in `success.all_of`), an Ader DSL
+key, a `compile(params) -> value` step, and a `build(env, value)` that returns an
+`EvaluateAction` subclass (reusing the vendored APICore accessors). At evaluation time the
+registry temporarily wraps the vendored `parse_action`, so registered checkers work anywhere
+in the tree — including nested in `ActionSetWaitAll` — with no vendored patch. The shipped
+example is `near` (`{near: {object, reference, distance_m}}`), a distance predicate the
+vendored subset lacks:
+
+```yaml
+success:
+  all_of:
+    - near: {object: carton_1, reference: bin_a, distance_m: 0.2}
+```
+
 Guards are evaluated by the episode runner itself, outside the vendored tree:
 
 - `no_collision: {pairs: [[a, b], ...]}` — any contact between a listed pair (world-object

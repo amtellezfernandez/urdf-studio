@@ -41,7 +41,9 @@ def build_ader_evaluation(scenario: ScenarioDocument, api_core: Any) -> AderEval
     """
     ensure_geniesim_on_path()
     from geniesim_benchmark.plugins.ader import AderEnv, AderParams, AderTask
-    from geniesim_benchmark.plugins.ader.action.action_parsing import parse_action
+    from geniesim_benchmark.plugins.ader.action import action_parsing
+
+    from backend.services.scenario_runtime.checker_registry import install_registry_parser
 
     acts = compile_success_to_acts(scenario.success)
     env = AderEnv(api_core=api_core, params=AderParams(task_name=scenario.scenario_id))
@@ -50,7 +52,10 @@ def build_ader_evaluation(scenario: ScenarioDocument, api_core: Any) -> AderEval
     env.init_task_config = {}
     task = AderTask(env, task_definitions_path=None)
     task_progress: list[dict] = []
-    tree = parse_action(acts, task_progress, env)
+    # Custom checkers (checker_registry) build inside the tree, including nested
+    # containers, without editing the vendored parser.
+    with install_registry_parser():
+        tree = action_parsing.parse_action(acts, task_progress, env)
     task.task_progress = task_progress
     env.task = task
     env.execute_action = tree

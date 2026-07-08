@@ -15,6 +15,10 @@ from backend.models.scenario import (
 )
 from backend.models.world_scene_package import WorldSceneRegistryEnvelope
 from backend.models.json_payload import JsonObject
+from backend.services.scenario_runtime.checker_registry import (
+    plugin_by_name,
+    registered_checker_names,
+)
 from backend.services.world_scene_package_compat import read_world_scene_registry_envelope
 
 SCENARIO_FILENAME = "scenario.yaml"
@@ -148,7 +152,20 @@ _SUCCESS_COMPILERS = {
     "stack": _compile_stack,
 }
 
-SUPPORTED_SUCCESS_CONDITIONS = frozenset(_SUCCESS_COMPILERS)
+def supported_success_conditions() -> frozenset[str]:
+    """Built-in conditions plus any custom checkers from the plugin registry."""
+    return frozenset(_SUCCESS_COMPILERS) | registered_checker_names()
+
+
+def _compile_condition(name: str, params: JsonObject) -> JsonObject:
+    builtin = _SUCCESS_COMPILERS.get(name)
+    if builtin is not None:
+        return builtin(params)
+    plugin = plugin_by_name(name)
+    if plugin is not None:
+        return {plugin.dsl_key: plugin.compile(params)}
+    raise KeyError(name)
+
 
 # Guard checks are evaluated by the episode runner itself (decision: reject),
 # not by the vendored action tree.
@@ -160,15 +177,16 @@ def _validate_success_conditions(success: ScenarioSuccessSpec) -> None:
         return
     if not success.all_of:
         raise ScenarioLoadError("success.all_of must contain at least one condition (or set success.acts).")
+    supported = supported_success_conditions()
     for index, entry in enumerate(success.all_of):
         (name, params), = entry.items()
-        if name not in SUPPORTED_SUCCESS_CONDITIONS:
-            allowed = ", ".join(sorted(SUPPORTED_SUCCESS_CONDITIONS))
+        if name not in supported:
+            allowed = ", ".join(sorted(supported))
             raise ScenarioLoadError(
                 f"success.all_of[{index}]: unsupported condition {name!r}. Supported: {allowed}."
             )
         try:
-            _SUCCESS_COMPILERS[name](params if isinstance(params, dict) else {})
+            _compile_condition(name, params if isinstance(params, dict) else {})
         except (KeyError, TypeError, ValueError, IndexError) as exc:
             raise ScenarioLoadError(f"success.all_of[{index}] ({name}): invalid params: {exc}") from exc
     for index, entry in enumerate(success.guards):
@@ -205,7 +223,7 @@ def compile_success_to_acts(success: ScenarioSuccessSpec) -> JsonObject:
     if success.acts is not None:
         return success.acts
     conditions = [
-        _SUCCESS_COMPILERS[name](params if isinstance(params, dict) else {})
+        _compile_condition(name, params if isinstance(params, dict) else {})
         for entry in success.all_of
         for name, params in entry.items()
     ]
