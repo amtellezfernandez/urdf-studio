@@ -71,12 +71,34 @@ def main(argv: list[str] | None = None) -> int:
 
     report_path = output_dir / "report.json"
     report_path.write_text(json.dumps(result.to_report(), indent=2), encoding="utf-8")
+    if scenario.evaluation.record_video:
+        _render_episode_video(scenario, args.scenario, output_dir)
     print(
         f"episode {result.episode_index} [{result.backend_id}] "
         f"success={result.success} stop_reason={result.stop_reason} "
         f"steps={result.steps} sim_time_s={result.sim_time_s:.2f}"
     )
     return 0
+
+
+def _render_episode_video(scenario, scenario_path: str, output_dir: Path) -> None:
+    import json as _json
+
+    from backend.services.scenario_loader import resolve_scenario_asset_path
+    from backend.services.scenario_video import ScenarioVideoError, render_episode_video
+
+    trace_path = output_dir / "trace.ndjson"
+    if not trace_path.is_file():
+        return
+    try:
+        world_path = resolve_scenario_asset_path(scenario_path, scenario.world.package)
+        render_episode_video(
+            trace_path=trace_path,
+            world_payload=_json.loads(world_path.read_text(encoding="utf-8")),
+            output_path=output_dir / "episode.mp4",
+        )
+    except (ScenarioVideoError, OSError) as exc:  # never fail a run over video
+        print(f"episode video skipped: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":

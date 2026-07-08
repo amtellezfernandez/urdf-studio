@@ -1,0 +1,12 @@
+.git
+node_modules
+web/node_modules
+web/dist
+.venv
+third_party
+**/__pycache__
+**/*.pyc
+reports
+demo-out
+*.md
+!README.md

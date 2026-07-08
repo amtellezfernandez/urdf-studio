@@ -205,10 +205,14 @@ one comparison report (formats: `docs/specs/SCENARIO_FORMAT.md`):
 ```bash
 tools/urdf-studio doctor          # check which simulators/interchange deps are available
 tools/urdf-studio demo            # carton pick-and-place on every available simulator
+                                  # (emits report.html + episode.mp4 per sim)
 tools/urdf-studio scenario validate scenarios/carton_sorting_0001
 tools/urdf-studio scenario run scenarios/carton_sorting_0001 \
     --sim mujoco --sim genesis --out reports/scenario-runs/carton
+tools/urdf-studio scenario report reports/scenario-runs/carton   # self-contained HTML playback
 tools/urdf-studio scenario repro reports/scenario-runs/carton --out /tmp/repro-check
+tools/urdf-studio pack publish carton_sorting_0001 1.0.0         # content-addressed pack
+tools/urdf-studio pack pull carton_sorting_0001 1.0.0
 tools/urdf-studio world usd-export <world-package.json> <out.usda>   # OpenUSD interchange
 tools/urdf-studio world usd-import <scene.usd> <out.world-package.json>
 ```
@@ -219,6 +223,15 @@ recorded run and verifies the outcomes match. Set
 `URDF_WORLD_ROLLOUT_CLI=tools/world_rollout_cli.sh` to drive the same episodes from the
 rollout UI. External VLA policies plug in over WebSocket
 (`docs/specs/SCENARIO_POLICY_PROTOCOL.md`).
+
+Zero-install one-command demo via Docker:
+
+```bash
+docker build -t urdf-studio-demo -f docker/demo/Dockerfile .
+docker run --rm -v "$PWD/demo-out:/out" urdf-studio-demo
+# -> demo-out/carton-demo/{comparison.json, report.html, <sim>/episode-0/episode.mp4}
+# add --build-arg WITH_GENESIS=1 for the full two-simulator comparison
+```
 
 ## Sharing
 
