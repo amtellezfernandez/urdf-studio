@@ -1,0 +1,589 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urdf.studio/specs/scenario-1.0.0.schema.json",
+  "title": "URDF Studio Scenario (scenario-v1)",
+  "x-license": "CC0-1.0",
+  "x-license-note": "This JSON Schema describes a public URDF Studio data contract and is released under CC0-1.0 (public domain). It is generated from backend/scripts/generate_contract_schemas.py; edit the pydantic models, not this file. The schema is open; the URDF Studio implementation is separately licensed (see LICENSE).",
+  "x-generated-by": "backend/scripts/generate_contract_schemas.py",
+  "$defs": {
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ScenarioEvaluationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "episodes": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Episodes",
+          "type": "integer"
+        },
+        "seeds": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Seeds",
+          "type": "array"
+        },
+        "record_trace": {
+          "default": true,
+          "title": "Record Trace",
+          "type": "boolean"
+        },
+        "record_decisions": {
+          "default": true,
+          "title": "Record Decisions",
+          "type": "boolean"
+        },
+        "record_video": {
+          "default": false,
+          "title": "Record Video",
+          "type": "boolean"
+        }
+      },
+      "title": "ScenarioEvaluationSpec",
+      "type": "object"
+    },
+    "ScenarioObjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "target",
+            "container",
+            "obstacle",
+            "tool",
+            "reference"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "world_object_id": {
+          "minLength": 1,
+          "title": "World Object Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "world_object_id"
+      ],
+      "title": "ScenarioObjectBinding",
+      "type": "object"
+    },
+    "ScenarioObservationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "modalities": {
+          "items": {
+            "enum": [
+              "joint_positions",
+              "object_poses",
+              "camera_rgb"
+            ],
+            "type": "string"
+          },
+          "title": "Modalities",
+          "type": "array"
+        }
+      },
+      "title": "ScenarioObservationSpec",
+      "type": "object"
+    },
+    "ScenarioPolicySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "none",
+          "enum": [
+            "waypoint",
+            "replay",
+            "vla_ws",
+            "none"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "title": "ScenarioPolicySpec",
+      "type": "object"
+    },
+    "ScenarioPose": {
+      "additionalProperties": false,
+      "properties": {
+        "xyz": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Xyz",
+          "type": "array"
+        },
+        "rpy": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Rpy",
+          "type": "array"
+        }
+      },
+      "title": "ScenarioPose",
+      "type": "object"
+    },
+    "ScenarioPoseJitter": {
+      "additionalProperties": false,
+      "properties": {
+        "position_jitter_m": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Position Jitter M",
+          "type": "array"
+        },
+        "yaw_jitter_rad": {
+          "default": 0.0,
+          "title": "Yaw Jitter Rad",
+          "type": "number"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "title": "ScenarioPoseJitter",
+      "type": "object"
+    },
+    "ScenarioRandomization": {
+      "additionalProperties": false,
+      "properties": {
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "object_pose": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ScenarioPoseJitter"
+          },
+          "title": "Object Pose",
+          "type": "object"
+        },
+        "regions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ScenarioRegion"
+          },
+          "title": "Regions",
+          "type": "object"
+        }
+      },
+      "title": "ScenarioRandomization",
+      "type": "object"
+    },
+    "ScenarioRegion": {
+      "additionalProperties": false,
+      "properties": {
+        "aabb_min": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Aabb Min",
+          "type": "array"
+        },
+        "aabb_max": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Aabb Max",
+          "type": "array"
+        }
+      },
+      "required": [
+        "aabb_min",
+        "aabb_max"
+      ],
+      "title": "ScenarioRegion",
+      "type": "object"
+    },
+    "ScenarioRobotSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "urdf": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Urdf"
+        },
+        "base_pose": {
+          "$ref": "#/$defs/ScenarioPose"
+        },
+        "init_joint_positions": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Init Joint Positions",
+          "type": "object"
+        },
+        "init_noise_joint_regex": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Init Noise Joint Regex",
+          "type": "object"
+        },
+        "end_effector_link": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Effector Link"
+        }
+      },
+      "title": "ScenarioRobotSpec",
+      "type": "object"
+    },
+    "ScenarioRuntimeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "physics_timestep_s": {
+          "default": 0.002,
+          "exclusiveMinimum": 0.0,
+          "title": "Physics Timestep S",
+          "type": "number"
+        },
+        "control_hz": {
+          "default": 50.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Control Hz",
+          "type": "number"
+        },
+        "checker_interval_steps": {
+          "default": 5,
+          "minimum": 1,
+          "title": "Checker Interval Steps",
+          "type": "integer"
+        },
+        "max_episode_steps": {
+          "default": 1500,
+          "minimum": 1,
+          "title": "Max Episode Steps",
+          "type": "integer"
+        },
+        "observation": {
+          "$ref": "#/$defs/ScenarioObservationSpec"
+        },
+        "grasp_attach": {
+          "default": "none",
+          "enum": [
+            "none",
+            "weld"
+          ],
+          "title": "Grasp Attach",
+          "type": "string"
+        },
+        "attach_link": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attach Link"
+        }
+      },
+      "title": "ScenarioRuntimeSpec",
+      "type": "object"
+    },
+    "ScenarioSuccessSpec": {
+      "additionalProperties": false,
+      "description": "Structured success conditions, compiled into the Genie Sim checker DSL.\n\n``all_of`` entries are single-key mappings of a supported condition to its\nparams (validated by the loader compile step). ``acts`` is a raw Genie\nchecker-DSL passthrough that overrides ``all_of``/``timeout`` when set.\n``guards`` are hard-failure checks evaluated by the runner (decision:\nreject) rather than by the vendored action tree.",
+      "properties": {
+        "all_of": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "All Of",
+          "type": "array"
+        },
+        "guards": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Guards",
+          "type": "array"
+        },
+        "timeout_sim_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Sim Seconds"
+        },
+        "acts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "ScenarioSuccessSpec",
+      "type": "object"
+    },
+    "ScenarioTaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "minLength": 1,
+          "title": "Family",
+          "type": "string"
+        },
+        "instruction": {
+          "minLength": 1,
+          "title": "Instruction",
+          "type": "string"
+        },
+        "objects": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ScenarioObjectBinding"
+          },
+          "title": "Objects",
+          "type": "object"
+        },
+        "randomization": {
+          "$ref": "#/$defs/ScenarioRandomization"
+        }
+      },
+      "required": [
+        "family",
+        "instruction"
+      ],
+      "title": "ScenarioTaskSpec",
+      "type": "object"
+    },
+    "ScenarioWorldRef": {
+      "additionalProperties": false,
+      "properties": {
+        "package": {
+          "minLength": 1,
+          "title": "Package",
+          "type": "string"
+        },
+        "frame_map": {
+          "default": "identity",
+          "enum": [
+            "auto",
+            "identity",
+            "studio-y-up-to-z-up"
+          ],
+          "title": "Frame Map",
+          "type": "string"
+        },
+        "include_hidden": {
+          "default": false,
+          "title": "Include Hidden",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "title": "ScenarioWorldRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "scenario-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scenario_id": {
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_\\-]*$",
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "world": {
+      "$ref": "#/$defs/ScenarioWorldRef"
+    },
+    "robot": {
+      "$ref": "#/$defs/ScenarioRobotSpec"
+    },
+    "task": {
+      "$ref": "#/$defs/ScenarioTaskSpec"
+    },
+    "success": {
+      "$ref": "#/$defs/ScenarioSuccessSpec"
+    },
+    "runtime": {
+      "$ref": "#/$defs/ScenarioRuntimeSpec"
+    },
+    "policy": {
+      "$ref": "#/$defs/ScenarioPolicySpec"
+    },
+    "metrics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/ScenarioEvaluationSpec"
+    }
+  },
+  "required": [
+    "schema_version",
+    "scenario_id",
+    "world",
+    "task",
+    "success"
+  ],
+  "type": "object"
+}

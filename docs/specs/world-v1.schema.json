@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urdf.studio/specs/world-1.0.0.schema.json",
+  "title": "URDF Studio World (world-v1)",
+  "x-license": "CC0-1.0",
+  "x-license-note": "This JSON Schema describes a public URDF Studio data contract and is released under CC0-1.0 (public domain). It is generated from backend/scripts/generate_contract_schemas.py; edit the pydantic models, not this file. The schema is open; the URDF Studio implementation is separately licensed (see LICENSE).",
+  "x-generated-by": "backend/scripts/generate_contract_schemas.py",
+  "$defs": {
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "WorldArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "digest_sha256": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "title": "Digest Sha256",
+          "type": "string"
+        },
+        "uri": {
+          "minLength": 1,
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "digest_sha256",
+        "uri"
+      ],
+      "title": "WorldArtifactRef",
+      "type": "object"
+    },
+    "WorldSceneDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "objects": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "maxItems": 256,
+          "title": "Objects",
+          "type": "array"
+        },
+        "scenario_time_ms": {
+          "minimum": 0,
+          "title": "Scenario Time Ms",
+          "type": "integer"
+        },
+        "scenario_duration_ms": {
+          "maximum": 600000,
+          "minimum": 0,
+          "title": "Scenario Duration Ms",
+          "type": "integer"
+        },
+        "urdf_xml": {
+          "anyOf": [
+            {
+              "maxLength": 500000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Urdf Xml"
+        },
+        "joint_positions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "maxProperties": 512,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Joint Positions"
+        },
+        "cameras": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/JsonObject"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cameras"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "objects",
+        "scenario_time_ms",
+        "scenario_duration_ms"
+      ],
+      "title": "WorldSceneDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "package_id": {
+      "minLength": 1,
+      "title": "Package Id",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "provenance": {
+      "$ref": "#/$defs/JsonObject"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/WorldArtifactRef"
+      },
+      "maxItems": 128,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "world": {
+      "$ref": "#/$defs/WorldSceneDocument"
+    }
+  },
+  "required": [
+    "package_id",
+    "version",
+    "provenance",
+    "artifacts",
+    "world"
+  ],
+  "type": "object"
+}

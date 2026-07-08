@@ -15,6 +15,16 @@ acronym. The JSON Schema itself keeps its existing filename and location —
 `docs/specs/WSP_manifest.schema.json` — since code (`backend/tests/test_wsp_manifest_schema.py`)
 validates against that exact path; only the prose spec was renamed and consolidated.
 
+## Open contract
+
+The World format is a **public data contract**: the machine-readable JSON Schema at
+`docs/specs/world-v1.schema.json` is generated from the pydantic model
+(`backend/models/world_scene_package.py`) by
+`python -m backend.scripts.generate_contract_schemas` and released under **CC0-1.0** so any
+third-party tool can emit or validate Worlds without depending on this codebase. The schema is
+open; the URDF Studio implementation is separately licensed (see `LICENSE`). CI runs the
+generator with `--check`, so the published schema can never drift from the runtime validator.
+
 ## What a World is
 
 A World is one scene document describing the robot state and world state together:

@@ -16,6 +16,11 @@ enabling apples-to-apples comparison.
 - Loader/compiler: `backend/services/scenario_loader.py`
 - Validation CLI: `python -m backend.scripts.scenario_validate <scenario-dir>`
 - Example: `scenarios/carton_sorting_0001/scenario.yaml`
+- **Open contract**: the JSON Schema `docs/specs/scenario-v1.schema.json` is generated from the
+  model by `python -m backend.scripts.generate_contract_schemas` and released under **CC0-1.0**,
+  so third-party tooling can validate scenarios without importing this codebase. CI runs the
+  generator with `--check` to keep it in sync with the model. The schema is open; the
+  implementation is separately licensed (`LICENSE`).
 
 ## Relationship to Genie Sim
 
