@@ -37,6 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     repro_parser = scenario_sub.add_parser("repro", help="Re-run a recorded scenario run")
     repro_parser.add_argument("run_dir")
     repro_parser.add_argument("--out", required=True)
+    report_parser = scenario_sub.add_parser(
+        "report", help="Build a self-contained HTML comparison report for a run"
+    )
+    report_parser.add_argument("run_dir")
+    report_parser.add_argument("--out", default=None, help="Output .html (default: <run-dir>/report.html)")
 
     world_parser = subparsers.add_parser("world", help="World format conversions")
     world_sub = world_parser.add_subparsers(dest="world_command", required=True)
@@ -75,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "scenario" and args.scenario_command == "repro":
         return _repro(Path(args.run_dir), Path(args.out))
+    if args.command == "scenario" and args.scenario_command == "report":
+        return _report(Path(args.run_dir), Path(args.out) if args.out else None)
     if args.command == "doctor":
         return _doctor()
     if args.command == "demo":
@@ -202,6 +209,18 @@ def _repro(run_dir: Path, out_dir: Path) -> int:
             print(f"  {line}")
         return 1
     print("reproduction verified: per-episode success/stop outcomes match the original run")
+    return 0
+
+
+def _report(run_dir: Path, output_path: Path | None) -> int:
+    from backend.services.scenario_report_html import ScenarioReportError, write_run_report_html
+
+    try:
+        output = write_run_report_html(run_dir, output_path)
+    except ScenarioReportError as exc:
+        print(f"scenario report failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"report: {output}")
     return 0
 
 

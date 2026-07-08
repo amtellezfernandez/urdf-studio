@@ -176,9 +176,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     comparison_path = out_root / "comparison.json"
     write_comparison_report(comparison, comparison_path)
+
+    report_path: Path | None = None
+    try:
+        from backend.services.scenario_report_html import write_run_report_html
+
+        report_path = write_run_report_html(out_root)
+    except Exception as exc:  # noqa: BLE001 — a report failure must not fail the run
+        print(f"[scenario-run] HTML report skipped: {exc}", file=sys.stderr)
+
     print()
     print(format_comparison_table(comparison))
     print(f"\ncomparison report: {comparison_path}")
+    if report_path is not None:
+        print(f"visual report:     {report_path}")
     any_completed = any(
         report is not None for reports in per_sim_reports.values() for report in reports
     )
