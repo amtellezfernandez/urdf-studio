@@ -29,3 +29,9 @@ export const ScenariosDialog = lazy(() =>
     default: module.ScenariosDialog,
   }))
 );
+
+export const WaypointRecorderDialog = lazy(() =>
+  import("@/features/scenarios/WaypointRecorderDialog").then((module) => ({
+    default: module.WaypointRecorderDialog,
+  }))
+);

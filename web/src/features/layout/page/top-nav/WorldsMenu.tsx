@@ -13,6 +13,7 @@ type WorldsMenuProps = Pick<
   | "onPublishCurrentWorldScenePackage"
   | "onListWorldScenePackages"
   | "onOpenScenarios"
+  | "onOpenWaypointRecorder"
   | "onExportWorldRolloutCampaign"
   | "onRunLocalWorldRollout"
   | "onImportWorldRolloutResults"
@@ -31,6 +32,7 @@ export function WorldsMenu({
   onPublishCurrentWorldScenePackage,
   onListWorldScenePackages,
   onOpenScenarios,
+  onOpenWaypointRecorder,
   onExportWorldRolloutCampaign,
   onRunLocalWorldRollout,
   onImportWorldRolloutResults,
@@ -58,6 +60,9 @@ export function WorldsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onOpenScenarios} className={menuItemClass}>
           Scenarios (Cross-Sim)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onOpenWaypointRecorder} className={menuItemClass}>
+          Record Motion
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportCurrentWorldSceneLayer} className={menuItemClass}>
           Export World JSON

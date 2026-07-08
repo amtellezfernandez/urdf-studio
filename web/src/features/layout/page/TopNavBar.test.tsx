@@ -64,6 +64,7 @@ const createProps = (): TopNavBarProps => ({
   onImportWorkspaceChangeSet: vi.fn(),
   onListWorldScenePackages: vi.fn(),
   onOpenScenarios: vi.fn(),
+  onOpenWaypointRecorder: vi.fn(),
   onOpenWorldHubBrowser: vi.fn(),
   openObjectCreator: vi.fn(),
   onOpenCameraCreator: vi.fn(),

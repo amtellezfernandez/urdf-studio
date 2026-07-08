@@ -31,6 +31,7 @@ type TopNavMenusProps = Pick<
   | "onImportWorldRolloutResults"
   | "onListWorldScenePackages"
   | "onOpenScenarios"
+  | "onOpenWaypointRecorder"
   | "onNormalizeAxes"
   | "onOpenCameraCreator"
   | "onOpenCameraUpload"
@@ -132,6 +133,7 @@ const TopNavMenus = ({
             onPublishCurrentWorldScenePackage={props.onPublishCurrentWorldScenePackage}
             onListWorldScenePackages={props.onListWorldScenePackages}
             onOpenScenarios={props.onOpenScenarios}
+            onOpenWaypointRecorder={props.onOpenWaypointRecorder}
             onExportWorldRolloutCampaign={props.onExportWorldRolloutCampaign}
             onRunLocalWorldRollout={props.onRunLocalWorldRollout}
             onImportWorldRolloutResults={props.onImportWorldRolloutResults}

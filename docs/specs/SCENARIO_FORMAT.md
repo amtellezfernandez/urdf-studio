@@ -174,6 +174,29 @@ outcomes map onto the shared decision vocabulary: satisfied → `allow`, soft vi
   The campaign's world package overrides the scenario's `world.package`, and merged
   trace/decision artifacts are digest-signed per the service contract.
 
+## Authoring in the browser
+
+You don't have to hand-write `waypoints.json`. The web app's **Scene → Record Motion** panel
+turns posing the robot into a runnable scenario:
+
+1. Pose the robot with the viewer's IK targets or joint controls.
+2. **Add keyframe** captures the current joint positions at a timestamp (editable afterward).
+   Repeat pose → keyframe for each waypoint; optionally set an `attach`/`detach` object on a
+   keyframe (requires choosing an attach link, which turns on `runtime.grasp_attach: weld`).
+3. **Replay** previews the interpolated motion in the viewer — the in-browser interpolation
+   mirrors the backend `WaypointPolicy` exactly, so preview equals backend playback.
+4. **Save as scenario** (name + target/container objects) writes a full scenario — the current
+   world (as its world package), the recorded `waypoints.json`, the posed robot's URDF, and a
+   generated `scenario.yaml` (an `inside` success on target→container) — into the **writable
+   user scenario library** (`~/.urdf-studio/scenarios`, override
+   `URDF_USER_SCENARIO_LIBRARY_ROOT`). The save is validated with the runtime loader before it
+   is accepted, so an authored scenario is always runnable.
+
+Authored scenarios then appear in the Scenarios panel alongside shipped ones (the library is
+the union of the read-only repo `scenarios/` and the user library, user shadowing repo on id
+clash) and run across simulators with no extra steps. `POST /scenarios/authored` is the
+underlying API; `scenariosApi.saveAuthoredScenario` the client.
+
 ## Determinism
 
 Randomization is sampled once per (episode, seed) by the orchestrator into an

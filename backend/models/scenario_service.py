@@ -44,3 +44,20 @@ class ScenarioRunDetail(ScenarioRunSummary):
 
 class ScenarioRunListResponse(BaseModel):
     runs: list[ScenarioRunSummary] = Field(default_factory=list)
+
+
+class ScenarioAuthoringRequest(BaseModel):
+    """Save a browser-recorded motion as a runnable scenario."""
+
+    name: str = Field(..., min_length=1, max_length=120)
+    world: dict = Field(..., description="A world registry envelope payload (the current scene).")
+    waypoints: dict = Field(..., description="A WaypointPolicy document: {waypoints: [...]}.")
+    target_object_id: str = Field(..., min_length=1)
+    container_object_id: str = Field(..., min_length=1)
+    attach_link: str | None = None
+    robot_urdf: str | None = Field(
+        default=None,
+        description="URDF of the posed robot; defines the recorded joints. Falls back to "
+        "the world snapshot's urdf_xml when omitted.",
+    )
+

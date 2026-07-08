@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import {
   createScenarioRun,
@@ -11,7 +11,7 @@ vi.mock("@/shared/lib/backendGuard", () => ({
   guardedFetch: (url: string, init?: RequestInit) => mockFetch(url, init),
 }));
 
-let mockFetch: ReturnType<typeof vi.fn>;
+let mockFetch: Mock<(url: string, init?: RequestInit) => Promise<Response>>;
 
 beforeEach(() => {
   mockFetch = vi.fn();

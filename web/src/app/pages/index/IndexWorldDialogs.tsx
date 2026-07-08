@@ -2,11 +2,13 @@ import { Suspense, type ComponentProps } from "react";
 
 import {
   ScenariosDialog,
+  WaypointRecorderDialog,
   WorldPublishDialog,
   WorldRegistryPanel,
   WorldRolloutReviewPanel,
   WorldSceneImportDialog,
 } from "@/app/pages/index/indexPageLazyComponents";
+import type { WaypointRecorderContext } from "@/features/scenarios/WaypointRecorderPanel";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { resolveFeatureGateAvailability } from "@/shared/lib/featureGateUi";
 
@@ -49,6 +51,9 @@ type IndexWorldDialogsProps = {
   onWorldRolloutReviewOpenChange: (open: boolean) => void;
   scenariosDialogOpen: boolean;
   onScenariosDialogOpenChange: (open: boolean) => void;
+  waypointRecorderOpen: boolean;
+  onWaypointRecorderOpenChange: (open: boolean) => void;
+  waypointRecorderContext: WaypointRecorderContext;
 };
 
 export const IndexWorldDialogs = ({
@@ -83,6 +88,9 @@ export const IndexWorldDialogs = ({
   onWorldRolloutReviewOpenChange,
   scenariosDialogOpen,
   onScenariosDialogOpenChange,
+  waypointRecorderOpen,
+  onWaypointRecorderOpenChange,
+  waypointRecorderContext,
 }: IndexWorldDialogsProps) => {
   if (!show) {
     return null;
@@ -130,6 +138,11 @@ export const IndexWorldDialogs = ({
       <ScenariosDialog
         open={scenariosDialogOpen}
         onOpenChange={onScenariosDialogOpenChange}
+      />
+      <WaypointRecorderDialog
+        open={waypointRecorderOpen}
+        onOpenChange={onWaypointRecorderOpenChange}
+        context={waypointRecorderContext}
       />
     </Suspense>
   );

@@ -111,3 +111,29 @@ export const createScenarioRun = async (
 
 export const scenarioRunReportUrl = (runId: string): string =>
   `${API_BASE_URL}/scenarios/runs/${encodeURIComponent(runId)}/report`;
+
+export type ScenarioAuthoringRequest = {
+  name: string;
+  world: unknown;
+  waypoints: unknown;
+  target_object_id: string;
+  container_object_id: string;
+  attach_link?: string | null;
+  robot_urdf?: string | null;
+};
+
+export const saveAuthoredScenario = async (
+  request: ScenarioAuthoringRequest
+): Promise<ScenarioSummary> => {
+  const response = await guardedFetch(
+    `${API_BASE_URL}/scenarios/authored`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+    { ...SCENARIOS_API_OPTIONS, context: "Save recorded scenario" }
+  );
+  if (!response.ok) await failOn(response, `Save recorded scenario failed (${response.status})`);
+  return (await response.json()) as ScenarioSummary;
+};

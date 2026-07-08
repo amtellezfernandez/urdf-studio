@@ -158,6 +158,7 @@ const Index = () => {
   const clearObjects = useObjectStore((state) => state.clearObjects);
   const objects = useObjectStore((state) => state.objects);
   const removeObject = useObjectStore((state) => state.removeObject);
+  const jointValuesRef = useRef<Record<string, number>>({});
   const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
   const githubSource = useGitHubSourceStore((state) => state.source);
   const setGitHubSource = useGitHubSourceStore((state) => state.setSource);
@@ -229,6 +230,7 @@ const Index = () => {
   });
   const [hasWorldOnlyContent, setHasWorldOnlyContent] = useState(false);
   const [scenariosDialogOpen, setScenariosDialogOpen] = useState(false);
+  const [waypointRecorderOpen, setWaypointRecorderOpen] = useState(false);
   const hasEnteredWorkspace = hasLoadedFiles || hasWorldOnlyContent;
   const handleOpenWorldOnlyWorkspace = useCallback(() => {
     setHasWorldOnlyContent(true);
@@ -1277,6 +1279,7 @@ const Index = () => {
     onImportWorkspaceChangeSet: handleImportWorkspaceChangeSet,
     onListWorldScenePackages: handleListWorldScenePackages,
     onOpenScenarios: () => setScenariosDialogOpen(true),
+    onOpenWaypointRecorder: () => setWaypointRecorderOpen(true),
     onOpenWorldHubBrowser: handleOpenWorldHubBrowser,
     openObjectCreator,
     onOpenCameraCreator: () => setIsCameraCreatorOpen(true),
@@ -1642,6 +1645,18 @@ const Index = () => {
       FolderUploadScreen={CoreFolderUploadScreen}
     />
   );
+  jointValuesRef.current = jointValues;
+  const waypointRecorderContext = useMemo(
+    () => ({
+      getJointValues: () => jointValuesRef.current,
+      setJointValues,
+      buildWorldEnvelope: () => buildCurrentWorldSceneRegistryEnvelope(),
+      worldObjectIds: objects.map((object) => object.id).filter((id): id is string => Boolean(id)),
+      robotUrdf: vizUrdfContent ?? null,
+      robotLinks: availableLinks,
+    }),
+    [setJointValues, buildCurrentWorldSceneRegistryEnvelope, objects, vizUrdfContent, availableLinks]
+  );
   if (!hasEnteredWorkspace || thumbnailMode) {
     return gatedModeView;
   }
@@ -1680,6 +1695,9 @@ const Index = () => {
         onWorldRolloutReviewOpenChange={setWorldRolloutReviewOpen}
         scenariosDialogOpen={scenariosDialogOpen}
         onScenariosDialogOpenChange={setScenariosDialogOpen}
+        waypointRecorderOpen={waypointRecorderOpen}
+        onWaypointRecorderOpenChange={setWaypointRecorderOpen}
+        waypointRecorderContext={waypointRecorderContext}
       />
     </>
   );

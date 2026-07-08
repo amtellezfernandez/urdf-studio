@@ -4,12 +4,15 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 
 from backend.models.scenario_service import (
+    ScenarioAuthoringRequest,
     ScenarioListResponse,
     ScenarioRunDetail,
     ScenarioRunListResponse,
     ScenarioRunRequest,
+    ScenarioSummary,
     ScenarioRunSummary,
 )
+from backend.services.scenario_authoring import ScenarioAuthoringError, save_recorded_scenario
 from backend.services.scenario_library import list_scenarios
 from backend.services.scenario_run_service import ScenarioRunError, scenario_run_service
 
@@ -41,6 +44,14 @@ async def get_scenario_run_report(run_id: str) -> HTMLResponse:
     except ScenarioRunError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return HTMLResponse(content=path.read_text(encoding="utf-8"))
+
+
+@router.post("/authored", response_model=ScenarioSummary, status_code=201)
+async def create_authored_scenario(request: ScenarioAuthoringRequest) -> ScenarioSummary:
+    try:
+        return save_recorded_scenario(request)
+    except ScenarioAuthoringError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/{scenario_id}/runs", response_model=ScenarioRunSummary, status_code=202)
