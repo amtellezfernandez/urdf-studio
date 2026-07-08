@@ -5,8 +5,12 @@ import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import {
   createScenarioRun,
   getScenarioRun,
+  listScenarioPacks,
   listScenarioRuns,
   listScenarios,
+  publishScenarioPack,
+  pullScenarioPack,
+  type ScenarioPackSummary,
   type ScenarioRunDetail,
   type ScenarioRunSummary,
   type ScenarioSummary,
@@ -19,6 +23,7 @@ export type UseScenariosController = ReturnType<typeof useScenariosController>;
 export const useScenariosController = () => {
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [runs, setRuns] = useState<ScenarioRunSummary[]>([]);
+  const [packs, setPacks] = useState<ScenarioPackSummary[]>([]);
   const [activeRun, setActiveRun] = useState<ScenarioRunDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -26,15 +31,46 @@ export const useScenariosController = () => {
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [scenarioList, runList] = await Promise.all([listScenarios(), listScenarioRuns()]);
+      const [scenarioList, runList, packList] = await Promise.all([
+        listScenarios(),
+        listScenarioRuns(),
+        listScenarioPacks(),
+      ]);
       setScenarios(scenarioList);
       setRuns(runList);
+      setPacks(packList);
     } catch (error) {
       toast.error(readUnknownErrorMessage(error, "Failed to load scenarios."));
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const publishPack = useCallback(
+    async (scenarioId: string, version: string) => {
+      try {
+        const summary = await publishScenarioPack(scenarioId, version);
+        setPacks((previous) => [summary, ...previous]);
+        toast.success(`Published ${summary.package_id}@${summary.version}`);
+      } catch (error) {
+        toast.error(readUnknownErrorMessage(error, "Failed to publish pack."));
+      }
+    },
+    []
+  );
+
+  const pullPack = useCallback(
+    async (packageId: string, version: string) => {
+      try {
+        const summary = await pullScenarioPack(packageId, version);
+        toast.success(`Pulled ${summary.package_id}@${summary.version}. Refreshing…`);
+        await refresh();
+      } catch (error) {
+        toast.error(readUnknownErrorMessage(error, "Failed to pull pack."));
+      }
+    },
+    [refresh]
+  );
 
   const pollRun = useCallback(async (runId: string) => {
     try {
@@ -93,10 +129,13 @@ export const useScenariosController = () => {
   return {
     scenarios,
     runs,
+    packs,
     activeRun,
     isLoading,
     refresh,
     launchRun,
     selectRun,
+    publishPack,
+    pullPack,
   };
 };

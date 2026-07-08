@@ -46,6 +46,25 @@ class ScenarioRunListResponse(BaseModel):
     runs: list[ScenarioRunSummary] = Field(default_factory=list)
 
 
+class ScenarioPackSummary(BaseModel):
+    package_id: str
+    version: str
+    digest_sha256: str
+    title: str | None = None
+    instruction: str = ""
+    task_family: str = ""
+    size_bytes: int = 0
+    published_at: str
+
+
+class ScenarioPackListResponse(BaseModel):
+    packs: list[ScenarioPackSummary] = Field(default_factory=list)
+
+
+class ScenarioPackPublishRequest(BaseModel):
+    version: str = Field(..., min_length=1, max_length=64)
+
+
 class ScenarioAuthoringRequest(BaseModel):
     """Save a browser-recorded motion as a runnable scenario."""
 

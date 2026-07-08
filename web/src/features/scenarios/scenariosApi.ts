@@ -112,6 +112,56 @@ export const createScenarioRun = async (
 export const scenarioRunReportUrl = (runId: string): string =>
   `${API_BASE_URL}/scenarios/runs/${encodeURIComponent(runId)}/report`;
 
+export type ScenarioPackSummary = {
+  package_id: string;
+  version: string;
+  digest_sha256: string;
+  title: string | null;
+  instruction: string;
+  task_family: string;
+  size_bytes: number;
+  published_at: string;
+};
+
+export const listScenarioPacks = async (): Promise<ScenarioPackSummary[]> => {
+  const response = await guardedFetch(`${API_BASE_URL}/scenarios/packs`, undefined, {
+    ...SCENARIOS_API_OPTIONS,
+    context: "Scenario packs",
+  });
+  if (!response.ok) await failOn(response, `Scenario packs failed (${response.status})`);
+  return ((await response.json()) as { packs: ScenarioPackSummary[] }).packs;
+};
+
+export const publishScenarioPack = async (
+  scenarioId: string,
+  version: string
+): Promise<ScenarioPackSummary> => {
+  const response = await guardedFetch(
+    `${API_BASE_URL}/scenarios/${encodeURIComponent(scenarioId)}/packs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version }),
+    },
+    { ...SCENARIOS_API_OPTIONS, context: "Publish scenario pack" }
+  );
+  if (!response.ok) await failOn(response, `Publish scenario pack failed (${response.status})`);
+  return (await response.json()) as ScenarioPackSummary;
+};
+
+export const pullScenarioPack = async (
+  packageId: string,
+  version: string
+): Promise<ScenarioPackSummary> => {
+  const response = await guardedFetch(
+    `${API_BASE_URL}/scenarios/packs/${encodeURIComponent(packageId)}/${encodeURIComponent(version)}/pull`,
+    { method: "POST" },
+    { ...SCENARIOS_API_OPTIONS, context: "Pull scenario pack" }
+  );
+  if (!response.ok) await failOn(response, `Pull scenario pack failed (${response.status})`);
+  return (await response.json()) as ScenarioPackSummary;
+};
+
 export type ScenarioAuthoringRequest = {
   name: string;
   world: unknown;

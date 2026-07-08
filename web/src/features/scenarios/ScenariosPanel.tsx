@@ -17,10 +17,21 @@ const STATUS_TONE: Record<ScenarioRunStatus, string> = {
 };
 
 export const ScenariosPanel = () => {
-  const { scenarios, runs, activeRun, isLoading, refresh, launchRun, selectRun } =
-    useScenariosController();
+  const {
+    scenarios,
+    runs,
+    packs,
+    activeRun,
+    isLoading,
+    refresh,
+    launchRun,
+    selectRun,
+    publishPack,
+    pullPack,
+  } = useScenariosController();
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [sims, setSims] = useState<string[]>(["mujoco", "genesis"]);
+  const [packVersion, setPackVersion] = useState("1.0.0");
 
   const scenario = useMemo(
     () => scenarios.find((entry) => entry.scenario_id === selectedScenario) ?? scenarios[0] ?? null,
@@ -93,13 +104,29 @@ export const ScenariosPanel = () => {
                   </label>
                 ))}
               </div>
-              <Button
-                size="sm"
-                onClick={() => void launchRun(scenario.scenario_id, sims)}
-                disabled={sims.length === 0}
-              >
-                Run across {sims.length} simulator{sims.length === 1 ? "" : "s"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => void launchRun(scenario.scenario_id, sims)}
+                  disabled={sims.length === 0}
+                >
+                  Run across {sims.length} simulator{sims.length === 1 ? "" : "s"}
+                </Button>
+                <input
+                  value={packVersion}
+                  onChange={(event) => setPackVersion(event.target.value)}
+                  className="h-8 w-20 rounded border border-border/70 bg-background px-2 text-xs"
+                  aria-label="Pack version"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void publishPack(scenario.scenario_id, packVersion.trim())}
+                  disabled={!packVersion.trim()}
+                >
+                  Publish pack
+                </Button>
+              </div>
             </div>
           )}
         </section>
@@ -140,6 +167,43 @@ export const ScenariosPanel = () => {
           {activeRun && <RunResult run={activeRun} />}
         </section>
       </div>
+
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Packs (content-addressed)
+        </h3>
+        <ScrollArea className="h-28 rounded-md border border-border/70">
+          <ul className="divide-y divide-border/60">
+            {packs.map((pack) => (
+              <li
+                key={`${pack.package_id}@${pack.version}`}
+                className="flex items-center justify-between px-3 py-2"
+              >
+                <span className="min-w-0">
+                  <span className="font-medium">
+                    {pack.package_id}@{pack.version}
+                  </span>
+                  <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                    sha256:{pack.digest_sha256.slice(0, 12)}…
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void pullPack(pack.package_id, pack.version)}
+                >
+                  Pull
+                </Button>
+              </li>
+            ))}
+            {packs.length === 0 && (
+              <li className="px-3 py-6 text-center text-xs text-muted-foreground">
+                No packs published. Publish a scenario to share it as one digest.
+              </li>
+            )}
+          </ul>
+        </ScrollArea>
+      </section>
     </div>
   );
 };

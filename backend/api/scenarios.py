@@ -6,6 +6,9 @@ from fastapi.responses import HTMLResponse
 from backend.models.scenario_service import (
     ScenarioAuthoringRequest,
     ScenarioListResponse,
+    ScenarioPackListResponse,
+    ScenarioPackPublishRequest,
+    ScenarioPackSummary,
     ScenarioRunDetail,
     ScenarioRunListResponse,
     ScenarioRunRequest,
@@ -14,6 +17,7 @@ from backend.models.scenario_service import (
 )
 from backend.services.scenario_authoring import ScenarioAuthoringError, save_recorded_scenario
 from backend.services.scenario_library import list_scenarios
+from backend.services.scenario_packs import ScenarioPackError, scenario_pack_service
 from backend.services.scenario_run_service import ScenarioRunError, scenario_run_service
 
 router = APIRouter(prefix="/scenarios", tags=["scenarios"])
@@ -44,6 +48,29 @@ async def get_scenario_run_report(run_id: str) -> HTMLResponse:
     except ScenarioRunError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return HTMLResponse(content=path.read_text(encoding="utf-8"))
+
+
+@router.get("/packs", response_model=ScenarioPackListResponse)
+async def list_scenario_packs() -> ScenarioPackListResponse:
+    return ScenarioPackListResponse(packs=scenario_pack_service.list_packs())
+
+
+@router.post("/packs/{package_id}/{version}/pull", response_model=ScenarioPackSummary)
+async def pull_scenario_pack(package_id: str, version: str) -> ScenarioPackSummary:
+    try:
+        return scenario_pack_service.pull(package_id, version)
+    except ScenarioPackError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{scenario_id}/packs", response_model=ScenarioPackSummary, status_code=201)
+async def publish_scenario_pack(
+    scenario_id: str, request: ScenarioPackPublishRequest
+) -> ScenarioPackSummary:
+    try:
+        return scenario_pack_service.publish(scenario_id, request.version)
+    except ScenarioPackError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/authored", response_model=ScenarioSummary, status_code=201)

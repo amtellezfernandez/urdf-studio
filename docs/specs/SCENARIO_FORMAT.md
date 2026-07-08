@@ -202,6 +202,24 @@ the union of the read-only repo `scenarios/` and the user library, user shadowin
 clash) and run across simulators with no extra steps. `POST /scenarios/authored` is the
 underlying API; `scenariosApi.saveAuthoredScenario` the client.
 
+## Scenario packs (content-addressed sharing)
+
+A scenario directory (scenario.yaml + world package + waypoints + robot URDF + assets) can be
+frozen into a **content-addressed pack** so task suites are distributable rather than
+repo-bound. A pack is the directory as a *deterministic* zip (sorted entries, fixed
+timestamps) with a sha256 digest, addressable by `package_id@version`:
+
+- Publish validates the scenario with the runtime loader first, so a pack is always runnable:
+  `urdf-studio pack publish <scenario_id> <version>` (or `POST /scenarios/{id}/packs`).
+- `urdf-studio pack list` / `GET /scenarios/packs` lists published packs with digests.
+- Pull verifies the digest and extracts into the writable user library, where it appears in the
+  Scenarios panel and runs across simulators:
+  `urdf-studio pack pull <package_id> <version>` (or `POST /scenarios/packs/{id}/{version}/pull`).
+
+Packs live under `~/.urdf-studio/scenario-packs` (override `URDF_SCENARIO_PACKS_ROOT`). The
+Scenarios panel exposes Publish and Pull directly. Identical scenario content always yields the
+same digest, so a pulled pack is verifiable against the one that was published.
+
 ## Determinism
 
 Randomization is sampled once per (episode, seed) by the orchestrator into an

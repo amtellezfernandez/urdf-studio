@@ -48,6 +48,16 @@ def main(argv: list[str] | None = None) -> int:
     world_sub.add_parser("usd-export", add_help=False)
     world_sub.add_parser("usd-import", add_help=False)
 
+    pack_parser = subparsers.add_parser("pack", help="Publish/pull content-addressed scenario packs")
+    pack_sub = pack_parser.add_subparsers(dest="pack_command", required=True)
+    pack_publish = pack_sub.add_parser("publish", help="Freeze a scenario into a versioned pack")
+    pack_publish.add_argument("scenario_id")
+    pack_publish.add_argument("version")
+    pack_sub.add_parser("list", help="List published packs")
+    pack_pull = pack_sub.add_parser("pull", help="Install a pack into the user scenario library")
+    pack_pull.add_argument("package_id")
+    pack_pull.add_argument("version")
+
     subparsers.add_parser("rollout", add_help=False)
     subparsers.add_parser("doctor", help="Check simulator/interchange runtime health")
     demo_parser = subparsers.add_parser(
@@ -82,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         return _repro(Path(args.run_dir), Path(args.out))
     if args.command == "scenario" and args.scenario_command == "report":
         return _report(Path(args.run_dir), Path(args.out) if args.out else None)
+    if args.command == "pack":
+        return _pack(args)
     if args.command == "doctor":
         return _doctor()
     if args.command == "demo":
@@ -210,6 +222,32 @@ def _repro(run_dir: Path, out_dir: Path) -> int:
         return 1
     print("reproduction verified: per-episode success/stop outcomes match the original run")
     return 0
+
+
+def _pack(args) -> int:
+    from backend.services.scenario_packs import ScenarioPackError, scenario_pack_service
+
+    try:
+        if args.pack_command == "publish":
+            summary = scenario_pack_service.publish(args.scenario_id, args.version)
+            print(f"published {summary.package_id}@{summary.version}  sha256:{summary.digest_sha256[:12]}…")
+            return 0
+        if args.pack_command == "list":
+            packs = scenario_pack_service.list_packs()
+            if not packs:
+                print("no scenario packs published")
+                return 0
+            for pack in packs:
+                print(f"{pack.package_id}@{pack.version}  {pack.size_bytes} B  sha256:{pack.digest_sha256[:12]}…")
+            return 0
+        if args.pack_command == "pull":
+            summary = scenario_pack_service.pull(args.package_id, args.version)
+            print(f"pulled {summary.package_id}@{summary.version} into the user scenario library")
+            return 0
+    except ScenarioPackError as exc:
+        print(f"pack {args.pack_command} failed: {exc}", file=sys.stderr)
+        return 1
+    return 2
 
 
 def _report(run_dir: Path, output_path: Path | None) -> int:

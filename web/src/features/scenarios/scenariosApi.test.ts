@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 import {
   createScenarioRun,
   listScenarios,
+  publishScenarioPack,
+  pullScenarioPack,
   scenarioRunReportUrl,
 } from "@/features/scenarios/scenariosApi";
 
@@ -69,5 +71,30 @@ describe("scenariosApi", () => {
 
   it("builds the report url for a run", () => {
     expect(scenarioRunReportUrl("abc123")).toContain("/scenarios/runs/abc123/report");
+  });
+
+  it("publishes a pack with a version", async () => {
+    mockFetch.mockResolvedValue(
+      jsonResponse({ package_id: "carton", version: "1.0.0", digest_sha256: "a".repeat(64) })
+    );
+
+    await publishScenarioPack("carton", "1.0.0");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain("/scenarios/carton/packs");
+    expect(JSON.parse(String(init?.body))).toEqual({ version: "1.0.0" });
+  });
+
+  it("pulls a pack by package id and version", async () => {
+    mockFetch.mockResolvedValue(
+      jsonResponse({ package_id: "carton", version: "2.1.0", digest_sha256: "b".repeat(64) })
+    );
+
+    const summary = await pullScenarioPack("carton", "2.1.0");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain("/scenarios/packs/carton/2.1.0/pull");
+    expect(init?.method).toBe("POST");
+    expect(summary.version).toBe("2.1.0");
   });
 });
