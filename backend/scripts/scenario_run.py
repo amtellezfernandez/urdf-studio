@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -96,6 +97,18 @@ def main(argv: list[str] | None = None) -> int:
     out_root = Path(args.out)
     try:
         scenario = load_scenario(scenario_path)
+        # Stage a frozen copy of the scenario (with assets) into the run dir so
+        # the run is reproducible even if the source scenario changes later.
+        staged_scenario_dir = out_root / "scenario"
+        source_dir = scenario_path if scenario_path.is_dir() else scenario_path.parent
+        if out_root.resolve().is_relative_to(source_dir.resolve()):
+            raise ScenarioLoadError(
+                "--out must not be inside the scenario directory (staging would recurse)."
+            )
+        if staged_scenario_dir.exists():
+            shutil.rmtree(staged_scenario_dir)
+        shutil.copytree(source_dir, staged_scenario_dir)
+        scenario_path = staged_scenario_dir.resolve()
         world = load_scenario_world(scenario_path, scenario)
         if args.episodes is not None:
             scenario = scenario.model_copy(
@@ -140,6 +153,21 @@ def main(argv: list[str] | None = None) -> int:
                     f"success={report['success']} stop_reason={report['stop_reason']} "
                     f"sim_time_s={report['sim_time_s']:.2f}"
                 )
+
+    from backend.services.scenario_runtime.environment_fingerprint import (
+        environment_fingerprint,
+    )
+
+    run_manifest = {
+        "schema": "scenario_run.v1",
+        "scenario_id": scenario.scenario_id,
+        "scenario_dir": str(scenario_path),
+        "source_scenario": str(Path(args.scenario).resolve()),
+        "sims": sims,
+        "episodes": scenario.evaluation.episodes,
+        "orchestrator_environment": environment_fingerprint(),
+    }
+    (out_root / "run.json").write_text(json.dumps(run_manifest, indent=2), encoding="utf-8")
 
     comparison = build_comparison_report(
         scenario_id=scenario.scenario_id,

@@ -197,6 +197,29 @@ Use `npm run start` when you want the real app.
 3. Pick a compatible target such as Blender, PyBullet, MuJoCo, MJLab, or Genesis.
 4. Review whether the target uses URDF directly or needs a converted workspace file.
 
+### Run A Scenario Across Simulators (`urdf-studio` CLI)
+
+The scenario layer runs the same task, robot, and policy on multiple simulators and emits
+one comparison report (formats: `docs/specs/SCENARIO_FORMAT.md`):
+
+```bash
+tools/urdf-studio doctor          # check which simulators/interchange deps are available
+tools/urdf-studio demo            # carton pick-and-place on every available simulator
+tools/urdf-studio scenario validate scenarios/carton_sorting_0001
+tools/urdf-studio scenario run scenarios/carton_sorting_0001 \
+    --sim mujoco --sim genesis --out reports/scenario-runs/carton
+tools/urdf-studio scenario repro reports/scenario-runs/carton --out /tmp/repro-check
+tools/urdf-studio world usd-export <world-package.json> <out.usda>   # OpenUSD interchange
+tools/urdf-studio world usd-import <scene.usd> <out.world-package.json>
+```
+
+Every run stages a frozen scenario copy, seeded episode manifests, digest-signed
+trace/decision artifacts, and environment fingerprints — `scenario repro` re-runs a
+recorded run and verifies the outcomes match. Set
+`URDF_WORLD_ROLLOUT_CLI=tools/world_rollout_cli.sh` to drive the same episodes from the
+rollout UI. External VLA policies plug in over WebSocket
+(`docs/specs/SCENARIO_POLICY_PROTOCOL.md`).
+
 ## Sharing
 
 Local start is private to your laptop. For a shared demo or team session:

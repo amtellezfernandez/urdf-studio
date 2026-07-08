@@ -13,6 +13,7 @@ from backend.services.scenario_runtime.ader_evaluation import (
     build_ader_evaluation,
     tick_ader_checkers,
 )
+from backend.services.scenario_runtime.environment_fingerprint import environment_fingerprint
 from backend.services.scenario_runtime.trace_writer import (
     EpisodeTraceWriter,
     SCENARIO_CHECKER_MODULE_ID,
@@ -53,6 +54,7 @@ class EpisodeResult:
     final_joint_positions: dict[str, float]
     grasp_attach_used: bool = False
     artifacts: dict[str, dict[str, object]] = field(default_factory=dict)
+    environment: dict = field(default_factory=dict)
 
     def to_report(self) -> dict:
         return {
@@ -72,6 +74,7 @@ class EpisodeResult:
             "final_joint_positions": self.final_joint_positions,
             "grasp_attach_used": self.grasp_attach_used,
             "artifacts": self.artifacts,
+            "environment": self.environment,
         }
 
 
@@ -311,6 +314,7 @@ def run_episode(
         final_joint_positions=dict(final_state.joint_positions),
         grasp_attach_used=grasp_attach_used,
         artifacts=artifacts,
+        environment=environment_fingerprint(backend.backend_id),
     )
 
 

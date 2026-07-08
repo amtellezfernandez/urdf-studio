@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Unified urdf-studio CLI. Add tools/ to PATH or symlink this file.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+PYTHON="${URDF_STUDIO_PYTHON:-$REPO_ROOT/.venv/bin/python}"
+cd "$REPO_ROOT"
+exec "$PYTHON" -m backend.cli "$@"
