@@ -12,13 +12,46 @@ record formats, sha256 digests in the report), report.json.
 from __future__ import annotations
 
 import argparse
+import ctypes.util
 import json
+import os
 import sys
 from pathlib import Path
 
-from backend.models.scenario import EpisodeManifest
-from backend.services.scenario_loader import ScenarioLoadError, load_scenario
-from backend.services.scenario_runtime.episode_runner import run_episode
+
+def _select_headless_gl_platform() -> None:
+    """Route the headless Genesis worker to CPU software OpenGL (OSMesa).
+
+    Genesis builds a ``pyrender`` offscreen renderer during ``scene.build()``
+    even for a physics-only rollout (``show_viewer=False``, no camera). On Linux
+    that defaults to the ``egl`` platform, which needs a GPU EGL context — and
+    that context fails to initialize when another process already holds the
+    GPU's EGL resources (e.g. the browser's WebGL 3D viewport under WSLg),
+    surfacing as ``EGLError: No EGL context could be initialized``. OSMesa
+    renders in software, never touches the GPU, and so is immune to that
+    contention. This must run before any ``import OpenGL`` (which
+    ``import genesis`` triggers) because PyOpenGL freezes its platform on first
+    import — hence a module-level call in this worker entrypoint, ahead of the
+    project imports below. Scoped to the worker process (not the shared
+    genesis_backend module) so in-process callers with a real display keep their
+    working egl path. Respect an explicit override; only switch when libOSMesa
+    is actually loadable.
+    """
+    if "genesis" not in sys.argv:
+        return
+    if os.environ.get("PYOPENGL_PLATFORM", "").strip():
+        return
+    if ctypes.util.find_library("OSMesa"):
+        os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+
+
+_select_headless_gl_platform()
+
+# Imports intentionally follow the platform selection above: they transitively
+# reach genesis/OpenGL, and PyOpenGL freezes its platform on first import.
+from backend.models.scenario import EpisodeManifest  # noqa: E402
+from backend.services.scenario_loader import ScenarioLoadError, load_scenario  # noqa: E402
+from backend.services.scenario_runtime.episode_runner import run_episode  # noqa: E402
 
 SCENARIO_WORKER_BACKENDS = ("mujoco", "genesis", "isaac")
 

@@ -61,8 +61,14 @@ Fast smoke test:
 
 ```bash
 sudo apt-get update
-sudo apt-get install python3-dev build-essential
+sudo apt-get install python3-dev build-essential libosmesa6
 ```
+
+`libosmesa6` gives the headless simulator workers a CPU software-OpenGL path.
+Genesis builds an offscreen renderer even for physics-only rollouts; without a
+software-GL fallback it requires a GPU EGL context, which fails when another
+process already holds the GPU (for example the browser's 3D viewport under
+WSLg). OSMesa keeps cross-simulator scenario runs working regardless.
 
 On macOS, setup attempts the app and workspace viewer runtimes. Some optional native collision and simulation packages are skipped when their wheels are not portable across local Python environments.
 
