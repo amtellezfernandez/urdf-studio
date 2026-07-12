@@ -83,10 +83,48 @@ a documented package with its own README, `doctor`, and reproduce path. URDF Stu
 8. Limitations — consistency≠correctness, grasp modeling, WSL/GPU constraints, engine coverage.
 9. Release + reproducibility.
 
+## Related work & novelty verdict (lit scan 2026-07-12)
+
+Three parallel scans of RSS/CoRL/ICRA/IROS/NeurIPS + arXiv. Verdict per claimed contribution:
+
+| Claimed contribution | Verdict | Why |
+| --- | --- | --- |
+| (3) Simulator-agnostic task contract (one task, many engines) | **NOT novel** | **RoboVerse / MetaSim** (arXiv:2504.18904, ~RSS 2025) already runs one task across 6+ engines (IsaacSim/Gym, MuJoCo, Genesis, SAPIEN, PyBullet). Do not claim first. |
+| (1) Time-localized divergence *onset* ("split point") between two engines | **NOVEL** (strongest claim) | No published work locates *when* two engines' rollouts of the same scenario begin to split. Closest: **MultiSim** (EMSE 2025) — cross-sim disagreement but coarse pass/fail, no timing; Lyapunov "predictability time" — right idea, single-system, not cross-engine. |
+| (2) Attribution of divergence to subsystem (contact/solver/timestep) | **PARTIALLY DONE** | Sensitivity sweeps + solver isolation are established, but for *sim-to-real* correctness, not *sim-to-sim onset*. Closest: **Acosta et al., "Validating Robotics Simulators on Real-World Impacts"** (RA-L/IROS 2022); **"Contact Models in Robotics"** (arXiv:2304.06372, 2023, isolates solvers on a common backend). Claim novelty only for *sim-to-sim, onset-linked* attribution — NOT for parameter sensitivity per se. |
+| (4) "Consistency not correctness" framing | **No named precedent, but not new** | It is the **Verification** half of Verification-vs-Validation (computational science). Frame as *importing V&V verification into multi-engine robotics benchmarking*, not inventing a concept. Closest agreement metric: **SRCC / Sim2Real Predictivity** (RA-L 2020) — but agreement *with reality*, not between sims. |
+
+### Revised spine (post-scan)
+
+The contribution is **not** the contract (RoboVerse owns that) and **not** "we compare simulators"
+(Erez–Tassa–Todorov, ICRA 2015, did that). The defensible, sharp spine is:
+
+> **A reusable, ground-truth-free benchmark that localizes *when* two engines diverge (split point)
+> and attributes *why* (subsystem), with cross-engine *agreement* as a first-class metric.**
+
+The split-point (1) is the headline. Agreement-as-first-class-metric is the framing gap that
+RoboVerse (data unification) and PolySim (sim-to-sim as a route to sim-to-real) both leave open.
+
+### The 3 works we MUST differentiate from (reviewers will cite these)
+
+1. **RoboVerse / MetaSim** (2025) — the contract precedent. Our line: they unify *data/training*;
+   we benchmark *agreement/divergence* as the metric. **Strategic fork: build our benchmark ON
+   MetaSim (6+ engines free) instead of our homegrown scenario contract? — decide.**
+2. **PolySim** (arXiv:2510.01708, 2025) — most dangerous *recent* work; sim-to-sim eval on our
+   exact engine set. Our line: they randomize over engine differences to reach sim-to-real; we
+   *measure and attribute* those differences as the object of study, no real data needed.
+3. **Acosta et al., Validating Robotics Simulators on Real-World Impacts** (RA-L/IROS 2022) —
+   the attribution precedent. Our line: they attribute *sim-to-real* error to tunable params;
+   we attribute *sim-to-sim* divergence, tied to its *onset*.
+
+(Also cite/distinguish: Erez–Tassa–Todorov ICRA 2015 foundational comparison; Blanco-Mulero
+cloth sim-to-real benchmark RA-L 2024; Isaac Gym / Brax NeurIPS-D&B 2021 for throughput; SimBenchmark.)
+
 ## Open risks
 
-- **Novelty positioning** — simulator comparison is not new; our edge is
-  attribution + reproducible contract + real anchoring. Must be scoped precisely.
+- **Novelty is narrower than first assumed** — contract (3) is taken (RoboVerse) and framing (4)
+  is V&V; the real novelty is (1) split-point + (2) sim-to-sim onset attribution + agreement-as-metric.
+  Scope claims to exactly that or a reviewer sinks the paper.
 - **Grasp-weld cheat** undermines the contact-physics story until replaced.
 - **Two eval threads** — this benchmark vs. the WSP policy-failure eval are *separate*;
   the SO-101 data is their only shared seam. Decide deliberately whether they are one
@@ -94,7 +132,8 @@ a documented package with its own README, `doctor`, and reproduce path. URDF Stu
 
 ## TODO (next actions)
 
-- [ ] Literature scan to fix novelty positioning (deep-research).
+- [x] Literature scan to fix novelty positioning (done 2026-07-12 — see "Related work & novelty verdict").
+- [ ] Decide strategic fork: build the benchmark on RoboVerse/MetaSim (6+ engines) vs. keep homegrown scenario contract.
 - [ ] Decide commit hygiene: divergence *infrastructure* is product code (belongs on
       `main`); this branch carries *paper-specific* additions (suite, analysis, this plan).
 - [ ] Design the benchmark-suite scenario set (regimes above).
