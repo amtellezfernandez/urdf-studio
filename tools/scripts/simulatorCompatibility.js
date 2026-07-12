@@ -7,7 +7,7 @@ import {
   SIMULATOR_COMPATIBILITY_IDS,
   SIMULATOR_SETUP_MODES,
 } from './simulatorCompatibilityParams.js';
-import { SIMULATOR_CONTAINER_INSTALL_ENV } from './setupParams.js';
+import { SIMULATOR_CONTAINER_INSTALL_COMMAND } from './setupParams.js';
 import {
   buildBlenderDeployment,
   buildGenesisDeployment,
@@ -438,7 +438,7 @@ export function formatSimulatorCompatibilitySummary(report) {
   }
   if (summary.containerTargets.length > 0) {
     lines.push(`Opt-in container images: ${summary.containerTargets.map(summarizeContainerTarget).join(', ')}`);
-    lines.push(`Container build opt-in: ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 npm run setup`);
+    lines.push(`Heavy container build command: ${SIMULATOR_CONTAINER_INSTALL_COMMAND} only when you need containerized simulators`);
     lines.push('Container launch plan: npm run simulator:container:plan -- <simulator-id> --workspace <path>');
   }
   if (report?.host?.docker) {

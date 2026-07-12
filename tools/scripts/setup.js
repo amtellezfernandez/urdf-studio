@@ -7,6 +7,7 @@ import {
   getSimulatorCompatibilityReport,
 } from './simulatorCompatibility.js';
 import {
+  applySetupProfileFlags,
   buildSetupRoadmapSections,
   buildSetupSummarySections,
 } from './setupHelpers.js';
@@ -306,9 +307,17 @@ async function runSetupSequence(overrides = {}) {
 
 async function main() {
   try {
+    const setupProfiles = applySetupProfileFlags();
     logArrow('URDF Studio setup');
     logInfo('Default install: node_modules, .venv, backend Python packages, and MJLab when compatible.');
-    logInfo('Optional extras not installed by default: Blender, Genesis, PyBullet, and simulator containers.');
+    logInfo('Simulator work: npm run setup:simulators installs Blender, Genesis, and PyBullet local runtimes.');
+    logInfo('Containerized simulators: npm run setup:simulator-containers builds Docker images only when needed.');
+    if (setupProfiles.localSimulators) {
+      logInfo('Setup profile enabled: local simulator runtimes.');
+    }
+    if (setupProfiles.simulatorContainers) {
+      logInfo('Setup profile enabled: container simulator images.');
+    }
     logInfo('npm and uv commands stream live output below so long installs do not look stalled.');
     renderSetupSections(buildSetupRoadmapSections());
     const setupResult = await runSetupSequence();

@@ -39,11 +39,11 @@ Setup installs the app dependencies and local runtime used by URDF Studio. The f
 
 By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, and MJLab when compatible.
 
-Blender, Genesis, PyBullet, and simulator containers are optional and are not installed unless you explicitly opt in. The base app remains usable if an optional target runtime cannot be installed on the current laptop.
+Blender, Genesis, PyBullet, and simulator containers are optional profiles. The base app remains usable if an optional target runtime cannot be installed on the current laptop.
 
 During setup, `npm` and `uv` stream live output in the terminal so long installs do not look stalled.
 
-Blender layout round-trip sessions use a local Blender runtime. Set `URDF_STUDIO_INSTALL_BLENDER=1` when running setup to install the managed Blender 4.5 LTS runtime under `.cache/blender-runtime` on Linux and WSL x64. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory.
+Blender layout round-trip sessions use a local Blender runtime. Run `npm run setup:simulators` to install the managed Blender 4.5 LTS runtime under `.cache/blender-runtime` on Linux and WSL x64 along with the other local simulator runtimes. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory.
 
 Optional setup commands:
 
@@ -52,12 +52,25 @@ npm run setup:check
 npm run setup -- --twin
 ```
 
-Optional simulator installs:
+Local simulator setup:
+
+```bash
+npm run setup:simulators
+```
+
+This installs Blender, Genesis, and PyBullet local runtimes in addition to the default MJLab setup.
+
+Advanced per-runtime installs:
 
 ```bash
 URDF_STUDIO_INSTALL_GENESIS=1 npm run setup
 URDF_STUDIO_INSTALL_PYBULLET=1 npm run setup
-URDF_STUDIO_BUILD_SIMULATOR_CONTAINERS=1 npm run setup
+```
+
+Heavy simulator container image builds are separate from local simulator setup. Use this only when you need containerized simulators and have Docker/GPU support ready:
+
+```bash
+npm run setup:simulator-containers
 ```
 
 Direct manual installs into the managed Python environment:

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  applySetupProfileFlags,
   buildSetupRoadmapSections,
   buildSetupSummarySections,
   isTruthyEnvValue,
@@ -9,11 +10,18 @@ import {
   shouldInstallGlobalIlu,
 } from './setupHelpers.js';
 import {
+  BLENDER_FORCE_INSTALL_ENV,
+  GENESIS_FORCE_INSTALL_ENV,
   GITHUB_CLI_LOGIN_COMMAND,
   GLOBAL_ILU_INSTALL_ENV,
   GLOBAL_ILU_INSTALL_FLAG,
+  LOCAL_SIMULATORS_INSTALL_COMMAND,
+  LOCAL_SIMULATORS_INSTALL_FLAG,
   LOCAL_ILU_COMMAND,
+  PYBULLET_FORCE_INSTALL_ENV,
+  SIMULATOR_CONTAINER_INSTALL_COMMAND,
   SIMULATOR_CONTAINER_INSTALL_ENV,
+  SIMULATOR_CONTAINER_INSTALL_FLAG,
 } from './setupParams.js';
 
 test('isTruthyEnvValue recognizes supported truthy values', () => {
@@ -36,6 +44,24 @@ test('shouldInstallGlobalIlu accepts truthy env', () => {
     }),
     true
   );
+});
+
+test('applySetupProfileFlags maps public setup flags to runtime install env', () => {
+  const env = {};
+
+  const result = applySetupProfileFlags({
+    args: [LOCAL_SIMULATORS_INSTALL_FLAG, SIMULATOR_CONTAINER_INSTALL_FLAG],
+    env,
+  });
+
+  assert.deepEqual(result, {
+    localSimulators: true,
+    simulatorContainers: true,
+  });
+  assert.equal(env[BLENDER_FORCE_INSTALL_ENV], '1');
+  assert.equal(env[GENESIS_FORCE_INSTALL_ENV], '1');
+  assert.equal(env[PYBULLET_FORCE_INSTALL_ENV], '1');
+  assert.equal(env[SIMULATOR_CONTAINER_INSTALL_ENV], '1');
 });
 
 test('selectInstalledSupersededPythonDependencies only returns superseded packages present in the environment', () => {
@@ -96,10 +122,8 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
   assert.deepEqual(sections[2], {
     heading: 'Optional Extras',
     lines: [
-      'Blender is not downloaded unless URDF_STUDIO_INSTALL_BLENDER=1 is set for setup.',
-      'Genesis is not installed unless URDF_STUDIO_INSTALL_GENESIS=1 is set for setup.',
-      'PyBullet is not installed unless URDF_STUDIO_INSTALL_PYBULLET=1 is set for setup.',
-      `Simulator containers are not built unless ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 is set for setup.`,
+      `${LOCAL_SIMULATORS_INSTALL_COMMAND} installs local simulator extras: Blender, Genesis, and PyBullet.`,
+      `${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker simulator images. This can be large and is separate from normal laptop setup.`,
     ],
   });
   assert.deepEqual(sections[3], {
@@ -146,6 +170,7 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
   assert.ok(sections[0].lines.includes('Simulator compatibility preflight'));
   assert.ok(sections[0].lines.includes('Backend Python packages for URDF Studio services'));
   assert.ok(sections[0].lines.includes('Default managed extras: MJLab when compatible'));
-  assert.ok(sections[0].lines.includes('Optional extras not installed by default: Blender, Genesis, PyBullet, and simulator containers'));
+  assert.ok(sections[0].lines.includes(`Local simulator extras: ${LOCAL_SIMULATORS_INSTALL_COMMAND} installs Blender, Genesis, and PyBullet`));
+  assert.ok(sections[0].lines.includes(`Container simulator images: ${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker images only when needed`));
   assert.equal(sections.length, 1);
 });

@@ -1,11 +1,17 @@
 import {
   BLENDER_FORCE_INSTALL_ENV,
+  GENESIS_FORCE_INSTALL_ENV,
   GITHUB_CLI_LOGIN_COMMAND,
   GLOBAL_ILU_INSTALL_COMMAND,
   GLOBAL_ILU_INSTALL_ENV,
   GLOBAL_ILU_INSTALL_FLAG,
+  LOCAL_SIMULATORS_INSTALL_COMMAND,
+  LOCAL_SIMULATORS_INSTALL_FLAG,
   LOCAL_ILU_COMMAND,
+  PYBULLET_FORCE_INSTALL_ENV,
+  SIMULATOR_CONTAINER_INSTALL_COMMAND,
   SIMULATOR_CONTAINER_INSTALL_ENV,
+  SIMULATOR_CONTAINER_INSTALL_FLAG,
 } from './setupParams.js';
 
 const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes']);
@@ -20,6 +26,28 @@ export function shouldInstallGlobalIlu({
   env = process.env,
 } = {}) {
   return args.includes(GLOBAL_ILU_INSTALL_FLAG) || isTruthyEnvValue(env[GLOBAL_ILU_INSTALL_ENV]);
+}
+
+export function applySetupProfileFlags({
+  args = process.argv.slice(2),
+  env = process.env,
+} = {}) {
+  const localSimulators = args.includes(LOCAL_SIMULATORS_INSTALL_FLAG);
+  const simulatorContainers = args.includes(SIMULATOR_CONTAINER_INSTALL_FLAG);
+
+  if (localSimulators) {
+    env[BLENDER_FORCE_INSTALL_ENV] = '1';
+    env[GENESIS_FORCE_INSTALL_ENV] = '1';
+    env[PYBULLET_FORCE_INSTALL_ENV] = '1';
+  }
+  if (simulatorContainers) {
+    env[SIMULATOR_CONTAINER_INSTALL_ENV] = '1';
+  }
+
+  return {
+    localSimulators,
+    simulatorContainers,
+  };
 }
 
 function normalizePythonDistributionName(name) {
@@ -49,7 +77,8 @@ export function buildSetupRoadmapSections() {
         'Simulator compatibility preflight',
         'Backend Python packages for URDF Studio services',
         'Default managed extras: MJLab when compatible',
-        'Optional extras not installed by default: Blender, Genesis, PyBullet, and simulator containers',
+        `Local simulator extras: ${LOCAL_SIMULATORS_INSTALL_COMMAND} installs Blender, Genesis, and PyBullet`,
+        `Container simulator images: ${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker images only when needed`,
         'Hugging Face and GitHub access',
       ],
     },
@@ -126,10 +155,10 @@ export function buildSetupSummarySections({
   });
   const simulatorContainerLines = buildSimulatorRuntimeLines({
     result: simulatorContainerResult,
-    skippedLine: `Simulator container image setup was skipped. Run ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 npm run setup to build compatible container images.`,
+    skippedLine: `Simulator container image setup was skipped. This is optional and can build large Docker images; leave it off on laptops unless you need containerized simulators.`,
     installedLine: 'Compatible simulator container images are ready.',
     unavailableLine: 'Simulator container image setup is unavailable.',
-    fallbackLine: `Simulator container images are optional. Run ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 npm run setup when Docker is ready.`,
+    fallbackLine: `Simulator container images are optional and can build large Docker images. Use ${SIMULATOR_CONTAINER_INSTALL_COMMAND} only when Docker is ready and you need containerized simulators.`,
   });
 
   return [
@@ -149,10 +178,8 @@ export function buildSetupSummarySections({
     {
       heading: 'Optional Extras',
       lines: [
-        `Blender is not downloaded unless ${BLENDER_FORCE_INSTALL_ENV}=1 is set for setup.`,
-        'Genesis is not installed unless URDF_STUDIO_INSTALL_GENESIS=1 is set for setup.',
-        'PyBullet is not installed unless URDF_STUDIO_INSTALL_PYBULLET=1 is set for setup.',
-        `Simulator containers are not built unless ${SIMULATOR_CONTAINER_INSTALL_ENV}=1 is set for setup.`,
+        `${LOCAL_SIMULATORS_INSTALL_COMMAND} installs local simulator extras: Blender, Genesis, and PyBullet.`,
+        `${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker simulator images. This can be large and is separate from normal laptop setup.`,
       ],
     },
     {

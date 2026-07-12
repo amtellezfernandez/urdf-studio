@@ -16,9 +16,16 @@ export const NODE_INSTALL_SETUP = {
 };
 
 export const SIMULATOR_CONTAINER_SETUP = {
+  installFlag: '--with-simulator-containers',
+  installCommand: 'npm run setup:simulator-containers',
   installEnv: 'URDF_STUDIO_BUILD_SIMULATOR_CONTAINERS',
   skipEnv: 'URDF_STUDIO_SKIP_SIMULATOR_CONTAINERS',
   forceEnv: 'URDF_STUDIO_FORCE_SIMULATOR_CONTAINERS',
+};
+
+export const LOCAL_SIMULATORS_SETUP = {
+  installFlag: '--with-simulators',
+  installCommand: 'npm run setup:simulators',
 };
 
 export const PYTHON_TOOLCHAIN_SETUP = {
@@ -33,6 +40,10 @@ export const GLOBAL_ILU_INSTALL_FLAG = GLOBAL_ILU_SETUP.installFlag;
 export const GLOBAL_ILU_INSTALL_ENV = GLOBAL_ILU_SETUP.installEnv;
 export const GLOBAL_ILU_INSTALL_COMMAND = GLOBAL_ILU_SETUP.installCommand;
 export const SETUP_NPM_INSTALL_FLAGS = NODE_INSTALL_SETUP.npmInstallFlags;
+export const LOCAL_SIMULATORS_INSTALL_FLAG = LOCAL_SIMULATORS_SETUP.installFlag;
+export const LOCAL_SIMULATORS_INSTALL_COMMAND = LOCAL_SIMULATORS_SETUP.installCommand;
+export const SIMULATOR_CONTAINER_INSTALL_FLAG = SIMULATOR_CONTAINER_SETUP.installFlag;
+export const SIMULATOR_CONTAINER_INSTALL_COMMAND = SIMULATOR_CONTAINER_SETUP.installCommand;
 export const SIMULATOR_CONTAINER_INSTALL_ENV = SIMULATOR_CONTAINER_SETUP.installEnv;
 export const SIMULATOR_CONTAINER_SKIP_ENV = SIMULATOR_CONTAINER_SETUP.skipEnv;
 export const SIMULATOR_CONTAINER_FORCE_ENV = SIMULATOR_CONTAINER_SETUP.forceEnv;
