@@ -120,6 +120,29 @@ RoboVerse (data unification) and PolySim (sim-to-sim as a route to sim-to-real) 
 (Also cite/distinguish: Erez–Tassa–Todorov ICRA 2015 foundational comparison; Blanco-Mulero
 cloth sim-to-real benchmark RA-L 2024; Isaac Gym / Brax NeurIPS-D&B 2021 for throughput; SimBenchmark.)
 
+## Architecture decision — HYBRID (resolved 2026-07-12, from MetaSim source review)
+
+MetaSim (RoboVerseOrg/MetaSim, Apache-2.0, 6/6 target engines "actively supported") rates
+**PARTIAL** as a substrate: great for divergence, useless for attribution.
+
+| Req | MetaSim | Note |
+| --- | --- | --- |
+| R1 per-step state (joint pos/vel + object pose quat) | **Met** | uniform `TensorState.root_state[13]` + `joint_pos/vel` across engines |
+| R6 scenario format | **Met** | `ScenarioCfg`; swap one `simulator=` literal |
+| R4 identical init | init Met / rollout determinism not guaranteed | `set_states` uniform; GPU pipelines nondeterministic |
+| R5 license + engines | **Met** | Apache-2.0; young/churning package |
+| R2 contacts (points/normals/penetration) | **Not met** | only net per-body force; real on IsaacGym/MuJoCo/Newton, `NotImplementedError` on Genesis/SAPIEN/PyBullet |
+| R3 solver/integrator read-back | **Partial** | write-side, PhysX-centric; no uniform integrator |
+
+**Decision:** split the stack by layer.
+- **Breadth via MetaSim** — run the divergence/agreement matrix across 6 engines on MetaSim's
+  `get_states()` (our split-point engine grafts onto it with modest glue).
+- **Depth via our own hooks** — contact-force + solver introspection for *attribution* on a 2–3
+  engine subset (MuJoCo + engines with direct backend access), since MetaSim exposes none of it.
+
+This yields a stronger paper: wide consistency results + deep attribution case studies. Risk:
+MetaSim's contact/solver surface is its youngest, most-stubbed corner — never build attribution on it.
+
 ## Open risks
 
 - **Novelty is narrower than first assumed** — contract (3) is taken (RoboVerse) and framing (4)
@@ -133,8 +156,8 @@ cloth sim-to-real benchmark RA-L 2024; Isaac Gym / Brax NeurIPS-D&B 2021 for thr
 ## TODO (next actions)
 
 - [x] Literature scan to fix novelty positioning (done 2026-07-12 — see "Related work & novelty verdict").
-- [ ] Decide strategic fork: build the benchmark on RoboVerse/MetaSim (6+ engines) vs. keep homegrown scenario contract.
-- [ ] Decide commit hygiene: divergence *infrastructure* is product code (belongs on
-      `main`); this branch carries *paper-specific* additions (suite, analysis, this plan).
+- [x] Strategic fork resolved: HYBRID — MetaSim for breadth (divergence), own hooks for depth (attribution). See "Architecture decision".
+- [x] Commit hygiene: product infra on `main` (Genesis fix + divergence engine); paper work on this branch (plan, verdict, draft).
 - [ ] Design the benchmark-suite scenario set (regimes above).
+- [ ] Prototype: graft the split-point engine onto a MetaSim `get_states()` rollout (validate R1 in practice).
 - [ ] Spec rung-3 attribution capture (contact forces + solver config in fingerprint).
