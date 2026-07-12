@@ -74,7 +74,21 @@ def _run_worker(
         return None, f"{sim} worker timed out after {_WORKER_TIMEOUT_S}s"
     report_path = out_dir / "report.json"
     if completed.returncode != 0 or not report_path.is_file():
-        tail = "\n".join(completed.stderr.strip().splitlines()[-5:])
+        # Persist the full worker output so failures are debuggable after the fact.
+        log_path = out_dir / "worker.log"
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(
+                f"$ {' '.join(command)}\n\n=== STDOUT ===\n{completed.stdout}\n"
+                f"=== STDERR ===\n{completed.stderr}\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+        # Simulator backends (Genesis/taichi) log diagnostics to stdout, not
+        # stderr, so surface both streams — stderr first, then stdout.
+        lines = completed.stderr.strip().splitlines() or completed.stdout.strip().splitlines()
+        tail = "\n".join(lines[-8:])
         return None, f"{sim} worker exited {completed.returncode}: {tail}"
     return json.loads(report_path.read_text(encoding="utf-8")), None
 
@@ -134,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     sims = list(dict.fromkeys(args.sim))
     per_sim_reports: dict[str, list[dict | None]] = {sim: [] for sim in sims}
     per_sim_errors: dict[str, list[str]] = {sim: [] for sim in sims}
+    per_sim_trace_paths: dict[str, list[Path | None]] = {sim: [] for sim in sims}
     for sim in sims:
         for manifest, manifest_path in zip(manifests, manifest_paths):
             episode_dir = out_root / sim / f"episode-{manifest.episode_index}"
@@ -144,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
                 out_dir=episode_dir,
             )
             per_sim_reports[sim].append(report)
+            trace_path = episode_dir / "trace.ndjson"
+            per_sim_trace_paths[sim].append(trace_path if trace_path.is_file() else None)
             if error:
                 per_sim_errors[sim].append(error)
                 print(f"[scenario-run] {error}", file=sys.stderr)
@@ -173,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         scenario_id=scenario.scenario_id,
         per_sim_reports=per_sim_reports,
         per_sim_errors=per_sim_errors,
+        per_sim_trace_paths=per_sim_trace_paths,
     )
     comparison_path = out_root / "comparison.json"
     write_comparison_report(comparison, comparison_path)

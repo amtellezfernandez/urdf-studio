@@ -66,6 +66,19 @@ def test_report_embeds_trajectories_and_summary(tmp_path: Path) -> None:
     assert data["environment"]["packages"].get("mujoco")
 
 
+def test_report_includes_divergence_chart_and_wall_time(tmp_path: Path) -> None:
+    run_dir = _run(tmp_path)
+
+    html = build_run_report_html(run_dir)
+
+    # Divergence-over-time chart (populated when >=2 sims produce a trajectory)
+    # and the wall-clock summary column are present in the report scaffold.
+    assert "Divergence over time" in html
+    assert 'id="divchart"' in html
+    assert "renderDivergenceChart" in html
+    assert "wall (s)" in html
+
+
 def test_report_downsamples_long_trajectories(tmp_path: Path) -> None:
     run_dir = _run(tmp_path)
 

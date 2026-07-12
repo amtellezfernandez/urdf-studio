@@ -62,7 +62,17 @@ def test_scenario_run_then_repro_verifies_outcomes(tmp_path: Path) -> None:
     assert repro_code == 0
     repro_comparison = json.loads((repro_dir / "comparison.json").read_text(encoding="utf-8"))
     original_comparison = json.loads((run_dir / "comparison.json").read_text(encoding="utf-8"))
-    assert repro_comparison["summary"] == original_comparison["summary"]
+    # Repro reproduces deterministic outcomes; wall-clock legitimately varies
+    # between runs, so drop it before comparing summaries.
+    def _deterministic(summary: dict) -> dict:
+        return {
+            sim: {key: value for key, value in stats.items() if key != "mean_wall_time_s"}
+            for sim, stats in summary.items()
+        }
+
+    assert _deterministic(repro_comparison["summary"]) == _deterministic(
+        original_comparison["summary"]
+    )
 
 
 def test_repro_rejects_non_run_directories(tmp_path: Path, capsys) -> None:

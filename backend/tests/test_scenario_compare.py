@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -56,6 +57,63 @@ def test_comparison_report_aggregates_and_diverges() -> None:
     assert episode["final_object_pose_delta"]["carton_1"]["position_m"] == pytest.approx(0.01)
     assert episode["final_joint_rmse_rad"] == pytest.approx(math.sqrt(0.01**2 / 2))
     assert "carton_sorting_0001" in format_comparison_table(report)
+
+
+def _write_object_trace(path: Path, *, drift_per_step: float, n: int = 10) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        json.dumps(
+            {
+                "t_ms": step * 20,
+                "stream": "objects",
+                "state": {
+                    "carton_1": {
+                        "position_xyz": [0.45, 0.30 + drift_per_step * step, 0.80],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    }
+                },
+            }
+        )
+        for step in range(n)
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_comparison_attaches_trajectory_divergence_and_wall_time(tmp_path: Path) -> None:
+    mujoco_report = _report(success=True, carton_position=(0.45, 0.30, 0.80))
+    genesis_report = _report(success=True, carton_position=(0.45, 0.336, 0.80))
+    mujoco_report["wall_time_s"] = 2.0
+    genesis_report["wall_time_s"] = 6.0
+
+    report = build_comparison_report(
+        scenario_id="carton_sorting_0001",
+        per_sim_reports={"mujoco": [mujoco_report], "genesis": [genesis_report]},
+        per_sim_errors={"mujoco": [], "genesis": []},
+        per_sim_trace_paths={
+            "mujoco": [_write_object_trace(tmp_path / "mujoco/trace.ndjson", drift_per_step=0.0)],
+            "genesis": [_write_object_trace(tmp_path / "genesis/trace.ndjson", drift_per_step=0.004)],
+        },
+    )
+
+    assert report["summary"]["genesis"]["mean_wall_time_s"] == 6.0
+    trajectory = report["divergence"]["genesis_vs_mujoco"]["episodes"][0]["trajectory"]
+    assert trajectory["split"]["t_ms"] == 60  # crosses 1cm at step 3
+    assert trajectory["object_position_delta_m"]["final"] == pytest.approx(0.036, abs=1e-6)
+
+
+def test_comparison_without_traces_is_unchanged() -> None:
+    report = build_comparison_report(
+        scenario_id="carton_sorting_0001",
+        per_sim_reports={
+            "mujoco": [_report(success=True, carton_position=(0.45, 0.30, 0.795))],
+            "genesis": [_report(success=True, carton_position=(0.45, 0.30, 0.805))],
+        },
+        per_sim_errors={"mujoco": [], "genesis": []},
+    )
+    episode = report["divergence"]["genesis_vs_mujoco"]["episodes"][0]
+    assert "trajectory" not in episode
+    assert report["summary"]["mujoco"]["mean_wall_time_s"] is None
 
 
 def test_comparison_survives_one_sim_crashing() -> None:

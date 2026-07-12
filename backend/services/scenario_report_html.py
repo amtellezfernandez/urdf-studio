@@ -272,6 +272,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
     </div>
   </div>
 
+  <div class="card" id="divchart-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+      <strong>Divergence over time</strong>
+      <span class="env" id="divsplit"></span>
+    </div>
+    <canvas id="divchart" width="1040" height="260"></canvas>
+    <div class="legend" id="divlegend"></div>
+  </div>
+
   <div class="card">
     <strong>Divergence</strong>
     <table id="divergence"></table>
@@ -300,14 +309,16 @@ document.getElementById("subtitle").textContent =
 (function renderSummary() {
   const t = document.getElementById("summary");
   const head = "<tr><th>simulator</th><th class=num>episodes</th><th class=num>success</th>"
-    + "<th class=num>rate</th><th class=num>mean t (s)</th></tr>";
+    + "<th class=num>rate</th><th class=num>mean t (s)</th><th class=num>wall (s)</th></tr>";
   const rows = DATA.backends.map((b) => {
     const s = DATA.summary[b] || {};
     const mean = s.mean_time_to_success_s;
+    const wall = s.mean_wall_time_s;
     return `<tr><td><span class=chip><span class=dot style="background:${colorFor(b)}"></span>${b}</td>`
       + `<td class=num>${s.completed ?? 0}</td><td class=num>${s.success_count ?? 0}</td>`
       + `<td class=num>${s.success_rate != null ? (s.success_rate*100).toFixed(0)+"%" : "–"}</td>`
-      + `<td class=num>${mean != null ? mean.toFixed(2) : "–"}</td></tr>`;
+      + `<td class=num>${mean != null ? mean.toFixed(2) : "–"}</td>`
+      + `<td class=num>${wall != null ? wall.toFixed(2) : "–"}</td></tr>`;
   }).join("");
   t.innerHTML = head + rows;
 })();
@@ -440,6 +451,112 @@ function render(episode, frameIndex, bounds) {
   }
 }
 
+// --- divergence-over-time chart ---
+// Reads the per-episode `trajectory` section each divergence pair now carries
+// (see scenario_trace_divergence): the point is to show *when* two simulators
+// diverge, not just the final delta. Object position (mm, left axis, solid) and
+// joint RMSE (rad, right axis, dashed) are drawn per pair, each normalized to
+// its own global max; a vertical marker flags the split point.
+const _PAIR_COLORS = ["#7c3aed", "#0891b2", "#db2777", "#65a30d"];
+
+function _pairTrajectories(episodeIndex) {
+  const out = [];
+  Object.keys(DATA.divergence).forEach((pair, i) => {
+    const ep = (DATA.divergence[pair].episodes || []).find(e => e.episode_index === episodeIndex);
+    if (ep && ep.trajectory && ep.trajectory.series && ep.trajectory.series.length) {
+      out.push({ pair, color: _PAIR_COLORS[i % _PAIR_COLORS.length], t: ep.trajectory });
+    }
+  });
+  return out;
+}
+
+function renderDivergenceChart(episodeIndex) {
+  const card = document.getElementById("divchart-card");
+  const canvas = document.getElementById("divchart");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const series = _pairTrajectories(episodeIndex);
+  if (!series.length) { card.style.display = "none"; return; }
+  card.style.display = "";
+
+  const ml = 52, mr = 56, mt = 18, mb = 30;
+  const plotW = W - ml - mr, plotH = H - mt - mb;
+  const dur = Math.max(1, ...series.map(s => s.t.duration_ms));
+  const posMaxMm = Math.max(1e-9, ...series.map(s => (s.t.object_position_delta_m.max || 0) * 1000));
+  const jointMax = Math.max(1e-9, ...series.map(s => s.t.joint_rmse_rad.max || 0));
+  const gridColor = getComputedStyle(document.body).getPropertyValue("--grid");
+  const muted = getComputedStyle(document.body).getPropertyValue("--muted");
+  const fg = getComputedStyle(document.body).getPropertyValue("--fg");
+  const xOf = t => ml + (t / dur) * plotW;
+  const yPos = mm => mt + plotH - (mm / posMaxMm) * plotH;
+  const yJoint = rad => mt + plotH - (rad / jointMax) * plotH;
+
+  // frame + gridlines
+  ctx.strokeStyle = gridColor; ctx.lineWidth = 1;
+  ctx.strokeRect(ml, mt, plotW, plotH);
+  ctx.beginPath();
+  for (let k = 1; k < 4; k++) { const y = mt + (plotH * k) / 4; ctx.moveTo(ml, y); ctx.lineTo(ml + plotW, y); }
+  ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle = muted; ctx.font = "11px sans-serif";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  ctx.fillText(posMaxMm.toFixed(1), ml - 6, mt);
+  ctx.fillText("0", ml - 6, mt + plotH);
+  ctx.textAlign = "left";
+  ctx.fillText(jointMax.toFixed(3), ml + plotW + 6, mt);
+  ctx.fillText("0", ml + plotW + 6, mt + plotH);
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillText("0.0 s", ml, mt + plotH + 6);
+  ctx.fillText((dur / 1000).toFixed(1) + " s", ml + plotW, mt + plotH + 6);
+  ctx.save();
+  ctx.translate(14, mt + plotH / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("Δpos (mm)", 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(W - 12, mt + plotH / 2); ctx.rotate(Math.PI / 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("joint RMSE (rad)", 0, 0);
+  ctx.restore();
+
+  const drawLine = (pts, dashed) => {
+    ctx.beginPath();
+    ctx.setLineDash(dashed ? [5, 4] : []);
+    pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+
+  for (const s of series) {
+    ctx.lineWidth = 1.8; ctx.strokeStyle = s.color;
+    drawLine(s.t.series.filter(p => p.object_position_delta_m != null)
+      .map(p => [xOf(p.t_ms), yPos(p.object_position_delta_m * 1000)]), false);
+    ctx.globalAlpha = 0.8;
+    drawLine(s.t.series.filter(p => p.joint_rmse_rad != null)
+      .map(p => [xOf(p.t_ms), yJoint(p.joint_rmse_rad)]), true);
+    ctx.globalAlpha = 1;
+    if (s.t.split) {
+      const x = xOf(s.t.split.t_ms);
+      ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(x, mt); ctx.lineTo(x, mt + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = s.color; ctx.textAlign = x > ml + plotW * 0.6 ? "right" : "left"; ctx.textBaseline = "bottom";
+      ctx.fillText("split " + (s.t.split.t_ms / 1000).toFixed(2) + "s", x + (x > ml + plotW * 0.6 ? -4 : 4), mt + plotH - 4);
+    }
+  }
+
+  document.getElementById("divlegend").innerHTML =
+    series.map(s => `<span class=chip><span class=dot style="background:${s.color}"></span>${s.pair.replace("_vs_"," vs ")}</span>`).join("")
+    + `<span class=chip style="color:var(--muted)">solid = Δpos · dashed = joint RMSE · vertical = split</span>`;
+  document.getElementById("divsplit").innerHTML = series.map(s =>
+    s.t.split
+      ? `${s.pair.replace("_vs_"," vs ")}: diverges at <strong>${(s.t.split.t_ms/1000).toFixed(2)}s</strong> (${s.t.split.metric==="joint_rmse_rad"?"joints":"object"} crossed ${s.t.split.threshold}${s.t.split.metric==="joint_rmse_rad"?" rad":" m"})`
+      : `${s.pair.replace("_vs_"," vs ")}: no divergence above threshold`
+  ).join(" &nbsp;·&nbsp; ");
+}
+
 let current, bounds, maxFrames, playing=false, raf=null;
 
 function loadEpisode(index) {
@@ -450,6 +567,7 @@ function loadEpisode(index) {
   }));
   scrub.max=maxFrames-1; scrub.value=0;
   setFrame(0);
+  renderDivergenceChart(current.episode_index);
 }
 
 function frameClock(frameIndex) {
@@ -473,7 +591,10 @@ scrub.oninput=()=>{ playing=false; playBtn.textContent="▶ Play"; setFrame(pars
 episodeSelect.onchange=()=>loadEpisode(parseInt(episodeSelect.value,10));
 
 if (DATA.episodes.length) loadEpisode(DATA.episodes[0].episode_index);
-else document.querySelector(".views").innerHTML="<p class=sub>No episode trajectories recorded.</p>";
+else {
+  document.querySelector(".views").innerHTML="<p class=sub>No episode trajectories recorded.</p>";
+  document.getElementById("divchart-card").style.display="none";
+}
 </script>
 </body>
 </html>

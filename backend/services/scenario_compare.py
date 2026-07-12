@@ -5,6 +5,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+from backend.services.scenario_trace_divergence import compare_trajectories
+
 SCENARIO_COMPARISON_SCHEMA = "scenario_comparison_report.v1"
 
 
@@ -13,23 +15,34 @@ def build_comparison_report(
     scenario_id: str,
     per_sim_reports: dict[str, list[dict[str, Any] | None]],
     per_sim_errors: dict[str, list[str]],
+    per_sim_trace_paths: dict[str, list[Path | None]] | None = None,
 ) -> dict[str, Any]:
     """Aggregate per-sim episode reports into the cross-simulator comparison.
 
     ``per_sim_reports[sim][episode]`` is an episode report dict (or None when
     that episode failed to run). Divergence metrics compare each simulator
     pair on episodes both completed.
+
+    ``per_sim_trace_paths[sim][episode]`` optionally points at that episode's
+    ``trace.ndjson``. When both simulators in a pair have a trace for the same
+    episode, the divergence entry gains a ``trajectory`` section localizing
+    *when* they diverged (see ``scenario_trace_divergence``). Omitted, the
+    report is exactly the final-state comparison it has always been.
     """
     backends = sorted(per_sim_reports)
     summary = {
         backend: _summarize_backend(reports)
         for backend, reports in per_sim_reports.items()
     }
+    trace_paths = per_sim_trace_paths or {}
     divergence = {}
     for index, backend_a in enumerate(backends):
         for backend_b in backends[index + 1:]:
             divergence[f"{backend_a}_vs_{backend_b}"] = _pair_divergence(
-                per_sim_reports[backend_a], per_sim_reports[backend_b]
+                per_sim_reports[backend_a],
+                per_sim_reports[backend_b],
+                trace_paths.get(backend_a),
+                trace_paths.get(backend_b),
             )
     return {
         "schema": SCENARIO_COMPARISON_SCHEMA,
@@ -45,12 +58,21 @@ def _summarize_backend(reports: list[dict[str, Any] | None]) -> dict[str, Any]:
     completed = [report for report in reports if report is not None]
     successes = [report for report in completed if report.get("success")]
     times = [report.get("sim_time_s", 0.0) for report in successes]
+    # Wall-clock is recorded per episode but was previously dropped here; it is
+    # the only signal that answers "which simulator is faster", so surface the
+    # mean across completed episodes (independent of success/sim-time).
+    wall_times = [
+        report["wall_time_s"]
+        for report in completed
+        if isinstance(report.get("wall_time_s"), (int, float))
+    ]
     return {
         "episodes": len(reports),
         "completed": len(completed),
         "success_count": len(successes),
         "success_rate": (len(successes) / len(completed)) if completed else 0.0,
         "mean_time_to_success_s": (sum(times) / len(times)) if times else None,
+        "mean_wall_time_s": (sum(wall_times) / len(wall_times)) if wall_times else None,
         "stop_reasons": _count_values(completed, "stop_reason"),
         "grasp_attach_used": any(report.get("grasp_attach_used") for report in completed),
     }
@@ -67,6 +89,8 @@ def _count_values(reports: list[dict[str, Any]], key: str) -> dict[str, int]:
 def _pair_divergence(
     reports_a: list[dict[str, Any] | None],
     reports_b: list[dict[str, Any] | None],
+    trace_paths_a: list[Path | None] | None = None,
+    trace_paths_b: list[Path | None] | None = None,
 ) -> dict[str, Any]:
     episodes = []
     agreements = 0
@@ -77,19 +101,40 @@ def _pair_divergence(
         compared += 1
         agree = bool(report_a.get("success")) == bool(report_b.get("success"))
         agreements += int(agree)
-        episodes.append(
-            {
-                "episode_index": episode_index,
-                "success_agreement": agree,
-                "final_object_pose_delta": _final_pose_deltas(report_a, report_b),
-                "final_joint_rmse_rad": _joint_rmse(report_a, report_b),
-            }
+        entry = {
+            "episode_index": episode_index,
+            "success_agreement": agree,
+            "final_object_pose_delta": _final_pose_deltas(report_a, report_b),
+            "final_joint_rmse_rad": _joint_rmse(report_a, report_b),
+        }
+        trajectory = _episode_trajectory_divergence(
+            trace_paths_a, trace_paths_b, episode_index
         )
+        if trajectory is not None:
+            entry["trajectory"] = trajectory
+        episodes.append(entry)
     return {
         "compared_episodes": compared,
         "success_agreement_rate": (agreements / compared) if compared else None,
         "episodes": episodes,
     }
+
+
+def _episode_trajectory_divergence(
+    trace_paths_a: list[Path | None] | None,
+    trace_paths_b: list[Path | None] | None,
+    episode_index: int,
+) -> dict[str, Any] | None:
+    """Trajectory divergence for one episode, if both traces are available."""
+    if not trace_paths_a or not trace_paths_b:
+        return None
+    if episode_index >= len(trace_paths_a) or episode_index >= len(trace_paths_b):
+        return None
+    path_a = trace_paths_a[episode_index]
+    path_b = trace_paths_b[episode_index]
+    if path_a is None or path_b is None:
+        return None
+    return compare_trajectories(path_a, path_b)
 
 
 def _final_pose_deltas(
