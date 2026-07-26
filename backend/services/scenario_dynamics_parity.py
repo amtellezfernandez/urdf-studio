@@ -54,7 +54,20 @@ def check_dynamics_parity(
 
     gains_a: dict[str, dict[str, float]] = config_a.get("joint_gains", {})
     gains_b: dict[str, dict[str, float]] = config_b.get("joint_gains", {})
-    for joint_name in sorted(set(gains_a) & set(gains_b)):
+    shared_joints = sorted(set(gains_a) & set(gains_b))
+    if gains_a and gains_b and not shared_joints:
+        # Both sides have gains but name them so differently that none line
+        # up — that's not "no mismatch to report", it's "parity couldn't be
+        # checked at all", which is worse and must not read as a clean pass.
+        mismatches.append(
+            {
+                "field": "joint_names",
+                "joint": None,
+                "value_a": sorted(gains_a),
+                "value_b": sorted(gains_b),
+            }
+        )
+    for joint_name in shared_joints:
         for field in ("kp", "kv"):
             value_a = gains_a[joint_name].get(field)
             value_b = gains_b[joint_name].get(field)

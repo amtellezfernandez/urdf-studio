@@ -79,6 +79,18 @@ def test_report_includes_divergence_chart_and_wall_time(tmp_path: Path) -> None:
     assert "wall (s)" in html
 
 
+def test_report_renders_dynamics_parity_warnings(tmp_path: Path) -> None:
+    run_dir = _run(tmp_path)
+
+    html = build_run_report_html(run_dir)
+
+    # The divergence table must read dynamics_parity out of DATA so a
+    # config-mismatch warning (see scenario_dynamics_parity) is visible in
+    # the report itself, not just the underlying JSON.
+    assert "dynamics_parity" in html
+    assert "mismatched tuning" in html
+
+
 def test_report_downsamples_long_trajectories(tmp_path: Path) -> None:
     run_dir = _run(tmp_path)
 

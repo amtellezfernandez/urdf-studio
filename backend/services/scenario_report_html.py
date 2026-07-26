@@ -333,6 +333,14 @@ document.getElementById("subtitle").textContent =
   for (const pair of pairs) {
     const d = DATA.divergence[pair];
     const rate = d.success_agreement_rate;
+    const parity = d.dynamics_parity;
+    if (parity && !parity.matches) {
+      const detail = parity.mismatches.map((m) =>
+        `${m.field}${m.joint ? ` [${m.joint}]` : ""}: ${m.value_a} vs ${m.value_b}`
+      ).join("; ");
+      html += `<tr><td colspan=6 class=bad>⚠ ${pair.replace("_vs_"," vs ")} ran with `
+        + `mismatched tuning, not just physics — ${detail}</td></tr>`;
+    }
     for (const ep of d.episodes) {
       const deltas = ep.final_object_pose_delta || {};
       const obj = Object.keys(deltas)[0];

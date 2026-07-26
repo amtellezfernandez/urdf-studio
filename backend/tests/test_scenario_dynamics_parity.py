@@ -60,6 +60,18 @@ def test_missing_control_config_values_are_skipped_not_flagged() -> None:
     assert result["mismatches"] == []
 
 
+def test_disjoint_joint_names_are_flagged_not_silently_passed() -> None:
+    config_a = _config(joint_gains={"mujoco_only_joint": {"kp": 60.0, "kv": 4.0}})
+    config_b = _config(joint_gains={"genesis_only_joint": {"kp": 600.0, "kv": 35.0}})
+
+    result = check_dynamics_parity(config_a, config_b)
+
+    assert result["matches"] is False
+    mismatch = next(m for m in result["mismatches"] if m["field"] == "joint_names")
+    assert mismatch["value_a"] == ["mujoco_only_joint"]
+    assert mismatch["value_b"] == ["genesis_only_joint"]
+
+
 def test_two_empty_configs_are_unchecked() -> None:
     empty = {"physics_timestep_s": None, "gravity_z": None, "joint_gains": {}}
 
