@@ -52,6 +52,7 @@ class MujocoBackend(SimBackend):
         self._actuated_joint_names: list[str] = []
         self._free_joint_by_object: dict[str, str] = {}
         self._initial_qpos: np.ndarray | None = None
+        self._physics_timestep_s = 0.0
         # (object_id, offset transform from attach link to object) when welded.
         self._attached: tuple[str, np.ndarray] | None = None
 
@@ -73,6 +74,7 @@ class MujocoBackend(SimBackend):
         self._model = spec.compile()
         self._data = mujoco.MjData(self._model)
         self._model.opt.timestep = physics_timestep_s
+        self._physics_timestep_s = physics_timestep_s
         self._index_scene()
         mujoco.mj_forward(self._model, self._data)
         self._initial_qpos = np.copy(self._data.qpos)
@@ -265,6 +267,19 @@ class MujocoBackend(SimBackend):
     @property
     def sim_time_s(self) -> float:
         return float(self._data.time)
+
+    def control_config(self) -> dict[str, Any]:
+        return {
+            "physics_timestep_s": self._physics_timestep_s,
+            "gravity_z": float(self._model.opt.gravity[2]) if self._model is not None else None,
+            "joint_gains": {
+                joint_name.removeprefix(_ROBOT_ATTACH_PREFIX): {
+                    "kp": _ACTUATOR_KP,
+                    "kv": _ACTUATOR_KV,
+                }
+                for joint_name in self._actuated_joint_names
+            },
+        }
 
     def get_observation(self) -> Observation:
         return Observation(

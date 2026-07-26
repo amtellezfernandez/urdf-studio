@@ -103,6 +103,17 @@ def test_apicore_accessors_are_consistent(conformant_backend) -> None:
     assert isinstance(joints, dict)
 
 
+def test_control_config_has_the_shape_dynamics_parity_expects(conformant_backend) -> None:
+    config = conformant_backend.control_config()
+
+    assert "physics_timestep_s" in config
+    assert "gravity_z" in config
+    assert isinstance(config["joint_gains"], dict)
+    for gains in config["joint_gains"].values():
+        assert "kp" in gains
+        assert "kv" in gains
+
+
 def test_reset_is_repeatable(conformant_backend) -> None:
     first = conformant_backend.reset_episode(_MANIFEST)
     conformant_backend.step(None, substeps=50)

@@ -133,6 +133,50 @@ def test_comparison_survives_one_sim_crashing() -> None:
     assert report["errors"]["genesis"] == ["genesis worker exited 1: boom"]
 
 
+def test_comparison_flags_mismatched_controller_gains() -> None:
+    mujoco_report = _report(success=True, carton_position=(0.45, 0.30, 0.795))
+    genesis_report = _report(success=True, carton_position=(0.45, 0.30, 0.795))
+    mujoco_report["environment"] = {
+        "control_config": {
+            "physics_timestep_s": 0.002,
+            "gravity_z": -9.81,
+            "joint_gains": {"gantry_x": {"kp": 60.0, "kv": 4.0}},
+        }
+    }
+    genesis_report["environment"] = {
+        "control_config": {
+            "physics_timestep_s": 0.002,
+            "gravity_z": -9.81,
+            "joint_gains": {"gantry_x": {"kp": 600.0, "kv": 35.0}},
+        }
+    }
+
+    report = build_comparison_report(
+        scenario_id="carton_sorting_0001",
+        per_sim_reports={"mujoco": [mujoco_report], "genesis": [genesis_report]},
+        per_sim_errors={"mujoco": [], "genesis": []},
+    )
+
+    parity = report["divergence"]["genesis_vs_mujoco"]["dynamics_parity"]
+    assert parity["matches"] is False
+    fields = {mismatch["field"] for mismatch in parity["mismatches"]}
+    assert fields == {"kp", "kv"}
+    assert "WARNING" in format_comparison_table(report)
+
+
+def test_comparison_omits_dynamics_parity_without_control_config() -> None:
+    report = build_comparison_report(
+        scenario_id="carton_sorting_0001",
+        per_sim_reports={
+            "mujoco": [_report(success=True, carton_position=(0.45, 0.30, 0.795))],
+            "genesis": [_report(success=True, carton_position=(0.45, 0.30, 0.795))],
+        },
+        per_sim_errors={"mujoco": [], "genesis": []},
+    )
+
+    assert "dynamics_parity" not in report["divergence"]["genesis_vs_mujoco"]
+
+
 def test_manifest_sampling_is_deterministic_and_region_clamped() -> None:
     scenario = load_scenario(SCENARIO_DIR)
     world = load_scenario_world(SCENARIO_DIR, scenario)

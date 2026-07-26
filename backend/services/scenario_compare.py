@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+from backend.services.scenario_dynamics_parity import check_dynamics_parity
 from backend.services.scenario_trace_divergence import compare_trajectories
 
 SCENARIO_COMPARISON_SCHEMA = "scenario_comparison_report.v1"
@@ -38,12 +39,18 @@ def build_comparison_report(
     divergence = {}
     for index, backend_a in enumerate(backends):
         for backend_b in backends[index + 1:]:
-            divergence[f"{backend_a}_vs_{backend_b}"] = _pair_divergence(
+            pair = _pair_divergence(
                 per_sim_reports[backend_a],
                 per_sim_reports[backend_b],
                 trace_paths.get(backend_a),
                 trace_paths.get(backend_b),
             )
+            dynamics_parity = _pair_dynamics_parity(
+                per_sim_reports[backend_a], per_sim_reports[backend_b]
+            )
+            if dynamics_parity is not None:
+                pair["dynamics_parity"] = dynamics_parity
+            divergence[f"{backend_a}_vs_{backend_b}"] = pair
     return {
         "schema": SCENARIO_COMPARISON_SCHEMA,
         "scenario_id": scenario_id,
@@ -118,6 +125,33 @@ def _pair_divergence(
         "success_agreement_rate": (agreements / compared) if compared else None,
         "episodes": episodes,
     }
+
+
+def _pair_dynamics_parity(
+    reports_a: list[dict[str, Any] | None],
+    reports_b: list[dict[str, Any] | None],
+) -> dict[str, Any] | None:
+    """Config-parity check between two backends, using either's first report.
+
+    Physics/controller tuning is set once per backend per run, not per
+    episode, so the first completed episode's ``environment.control_config``
+    speaks for the whole run.
+    """
+    config_a = _backend_control_config(reports_a)
+    config_b = _backend_control_config(reports_b)
+    if config_a is None or config_b is None:
+        return None
+    return check_dynamics_parity(config_a, config_b)
+
+
+def _backend_control_config(reports: list[dict[str, Any] | None]) -> dict[str, Any] | None:
+    for report in reports:
+        if report is None:
+            continue
+        config = report.get("environment", {}).get("control_config")
+        if config is not None:
+            return config
+    return None
 
 
 def _episode_trajectory_divergence(
@@ -198,6 +232,15 @@ def format_comparison_table(report: dict[str, Any]) -> str:
             f"{pair}: agreement={rate if rate is not None else '-'} "
             f"episodes={data['compared_episodes']}"
         )
+        parity = data.get("dynamics_parity")
+        if parity is not None and not parity["matches"]:
+            lines.append(f"  WARNING: {pair} ran with mismatched tuning, not just physics:")
+            for mismatch in parity["mismatches"]:
+                joint = f" [{mismatch['joint']}]" if mismatch["joint"] else ""
+                lines.append(
+                    f"    {mismatch['field']}{joint}: "
+                    f"{mismatch['value_a']} vs {mismatch['value_b']}"
+                )
         for episode in data["episodes"]:
             for object_id, delta in episode["final_object_pose_delta"].items():
                 lines.append(

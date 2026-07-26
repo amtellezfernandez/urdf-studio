@@ -225,6 +225,15 @@ class GenesisBackend(SimBackend):
     def sim_time_s(self) -> float:
         return self._steps * self._dt_s
 
+    def control_config(self) -> dict[str, Any]:
+        from backend.services.simulator_adapters.genesis_robot import joint_controller_gains
+
+        return {
+            "physics_timestep_s": self._dt_s,
+            "gravity_z": -9.81,
+            "joint_gains": joint_controller_gains(self._joint_dof_indices),
+        }
+
     def get_observation(self) -> Observation:
         return Observation(
             sim_time_s=self.sim_time_s,

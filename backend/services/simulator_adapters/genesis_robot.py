@@ -8,7 +8,10 @@ from typing import Any, TypedDict
 
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 from backend.services.simulator_adapters.numeric import is_finite_number
-from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
+from backend.services.simulator_adapters.params import (
+    GENESIS_SCENE_PARAMS,
+    GenesisControllerGroupParams,
+)
 
 
 class GenesisRobotUrdfMorphKwargs(TypedDict):
@@ -67,6 +70,37 @@ def joint_dof_indices_by_name(robot_entity: Any) -> dict[str, int]:
     return indices
 
 
+def controller_group_for_joint(joint_name: str) -> GenesisControllerGroupParams:
+    normalized_joint_name = joint_name.lower()
+    is_gripper = any(
+        term in normalized_joint_name
+        for term in GENESIS_SCENE_PARAMS.controller_policy.gripper_name_terms
+    )
+    return (
+        GENESIS_SCENE_PARAMS.gripper_controller
+        if is_gripper
+        else GENESIS_SCENE_PARAMS.arm_controller
+    )
+
+
+def joint_controller_gains(
+    joint_dof_indices: dict[str, int],
+) -> dict[str, dict[str, float]]:
+    """Per-joint kp/kv the position controller was configured with.
+
+    Mirrors the grouping ``configure_robot_position_controller`` applies, so
+    callers (e.g. a cross-sim dynamics-parity check) see the gains actually
+    in effect without re-deriving the gripper/arm split themselves.
+    """
+    return {
+        joint_name: {
+            "kp": controller_group_for_joint(joint_name).kp,
+            "kv": controller_group_for_joint(joint_name).kv,
+        }
+        for joint_name in joint_dof_indices
+    }
+
+
 def configure_robot_position_controller(
     robot_entity: Any,
     joint_dof_indices: dict[str, int],
@@ -80,16 +114,7 @@ def configure_robot_position_controller(
     force_upper: list[float] = []
     for joint_name, dof_index in joint_dof_indices.items():
         dof_indices.append(dof_index)
-        normalized_joint_name = joint_name.lower()
-        is_gripper = any(
-            term in normalized_joint_name
-            for term in GENESIS_SCENE_PARAMS.controller_policy.gripper_name_terms
-        )
-        controller = (
-            GENESIS_SCENE_PARAMS.gripper_controller
-            if is_gripper
-            else GENESIS_SCENE_PARAMS.arm_controller
-        )
+        controller = controller_group_for_joint(joint_name)
         kp_values.append(controller.kp)
         kv_values.append(controller.kv)
         force_limit = controller.force_limit

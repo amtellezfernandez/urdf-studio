@@ -314,8 +314,14 @@ def run_episode(
         final_joint_positions=dict(final_state.joint_positions),
         grasp_attach_used=grasp_attach_used,
         artifacts=artifacts,
-        environment=environment_fingerprint(backend.backend_id),
+        environment=_environment_with_control_config(backend),
     )
+
+
+def _environment_with_control_config(backend: SimBackend) -> dict:
+    environment = environment_fingerprint(backend.backend_id)
+    environment["control_config"] = backend.control_config()
+    return environment
 
 
 def _require_weld(scenario: ScenarioDocument) -> None:

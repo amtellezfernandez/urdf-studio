@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from backend.models.scenario import EpisodeManifest
 from backend.services.scenario_runtime.vendor_loader import ensure_geniesim_on_path
@@ -71,6 +71,16 @@ class SimBackend(APICore):
 
     def close(self) -> None:
         pass
+
+    def control_config(self) -> dict[str, Any]:
+        """Physics/controller tuning in effect after ``load_scene``.
+
+        Cross-sim comparisons can only attribute a divergence to "different
+        physics" if the two backends were actually run with matching tuning;
+        this is the parity check's input. Backends without real dynamics
+        tuning (e.g. a kinematic fake) keep the empty default.
+        """
+        return {"physics_timestep_s": None, "gravity_z": None, "joint_gains": {}}
 
     # --- kinematic grasp-attach (runtime.grasp_attach: weld) ---
 
