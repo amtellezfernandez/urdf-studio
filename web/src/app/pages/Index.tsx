@@ -790,6 +790,7 @@ const Index = () => {
     handleExportWorldRolloutCampaign,
     handleImportWorldRolloutResults,
     handleListWorldScenePackages,
+    handleImportHkPortWorldFromDialog,
     handleLoadGeneratedWorldScenePackage,
     handleLoadWorldScenePackageFromRegistry,
     handleOpenWorldHubBrowser,
@@ -3728,6 +3729,7 @@ const Index = () => {
             onImportFromLink={handleImportWorldLayoutFromLinkDialog}
             onImportDefaultWorld={handleImportDefaultWorldLayoutFromDialog}
             onImportDemoWorld={handleImportDemoWorldLayoutFromDialog}
+            onImportHkPortWorld={handleImportHkPortWorldFromDialog}
             isSubmitting={isImportingWorldLayout}
           />
           <WorldRolloutReviewPanel

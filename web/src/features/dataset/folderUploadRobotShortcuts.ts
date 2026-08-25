@@ -23,9 +23,9 @@ export const FOLDER_UPLOAD_ROBOT_SHORTCUTS = {
     id: "so101",
     manifestUrl: "/demo/so101/manifest.json",
     cameraConfigUrl: "/demo/so101/camera-config.json",
-    worldLayoutUrl: "/world-layouts/world-labs-third-person-controller.world-package.json",
+    worldLayoutUrl: "/world-layouts/world-labs-hk-port.world-package.json",
     displayName: "SO101",
-    sourceLabel: "bundled SO101 starter with World Labs Marble world",
+    sourceLabel: "bundled SO101 starter with HK Port World Labs world",
     buttonLabel: "Try SO101",
   },
 } as const satisfies Record<string, FolderUploadRobotShortcut>;

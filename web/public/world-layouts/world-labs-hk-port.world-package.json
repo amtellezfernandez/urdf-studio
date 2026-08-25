@@ -1,0 +1,239 @@
+{
+  "schema_version": "1.0.0",
+  "package_id": "world-labs-hk-port",
+  "version": "0.1.0",
+  "title": "HK Port World Labs",
+  "description": "Bundled World Labs Marble port world from a shared zip. Includes the generated splat world, panorama, collider mesh, and separate reusable element GLBs for a container ship, gantry crane, and shipping container.",
+  "created_at": "2026-06-06T14:13:00+02:00",
+  "runtime_targets": [
+    {
+      "name": "wsp",
+      "mode": "native"
+    },
+    {
+      "name": "mujoco",
+      "mode": "python"
+    },
+    {
+      "name": "genesis",
+      "mode": "python"
+    },
+    {
+      "name": "three-spark-rapier",
+      "mode": "native"
+    }
+  ],
+  "interface": {
+    "observation_modalities": ["splat", "mesh", "collider", "rgb", "element_mesh", "state"],
+    "action_semantics": "world_scene_static_layout",
+    "timestep_ms": 33,
+    "frame_convention": "world-labs-generated-metric-scale"
+  },
+  "artifacts": [
+    {
+      "kind": "world_labs_splat_500k",
+      "digest_sha256": "b14d22e9fb56e50826f65ad8a84bc3f58e40ce4ccca28bca46d3651abe028e4c",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-500k.spz"
+    },
+    {
+      "kind": "world_labs_collider_glb",
+      "digest_sha256": "a13f21bff974bffbe4774d5fb4ef91366b60c46b6b53022e30127183d2139684",
+      "uri": "/world-layouts/world-labs-hk-port/0-world.glb"
+    },
+    {
+      "kind": "world_labs_panorama",
+      "digest_sha256": "b66b9352f1df2361e9a65abd09fb1762da76bf5f74f42ffb446487a2a0e27bc4",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-pano.png"
+    },
+    {
+      "kind": "world_labs_thumbnail",
+      "digest_sha256": "f7139d822dc8d60638bd9add25757d2c25bad73ea80cea50222d2954e84bc399",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-thumbnail.webp"
+    },
+    {
+      "kind": "world_labs_plate_image",
+      "digest_sha256": "a071902bba8e9d2ceaa53158b769eb4aaabb53d356889ec7ea40a762463f6ed3",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-plate.png"
+    },
+    {
+      "kind": "world_labs_raw_world_json",
+      "digest_sha256": "060024fb9f252a981ed32a9dea7f733e0549d36af2c1c690b37cefec74e791e0",
+      "uri": "/world-layouts/world-labs-hk-port/0-world.json"
+    },
+    {
+      "kind": "world_labs_splat_150k",
+      "digest_sha256": "881c9912a76fe2901bc6010a49bb5750eed6da511efec310424bf32a79152845",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-150k.spz"
+    },
+    {
+      "kind": "world_labs_splat_100k",
+      "digest_sha256": "f91e47e3459eb728f801cf910b43dd833c6441e56a8c7f2c2df79614c7529766",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-100k.spz"
+    },
+    {
+      "kind": "world_labs_splat_full_res",
+      "digest_sha256": "b22e4acc620977b9cb277383cfc8de833e2abd1dc075baf4e62c309ab8fbdd00",
+      "uri": "/world-layouts/world-labs-hk-port/0-world-full_res.spz"
+    },
+    {
+      "kind": "world_labs_element_glb_container_ship",
+      "digest_sha256": "d1a630f4d84aebd8f9200862900b8ab726a169f7a7fc892fa67d6e436e9af862",
+      "uri": "/world-layouts/world-labs-hk-port/elements/container-ship/1-container-ship.glb"
+    },
+    {
+      "kind": "world_labs_element_preview_container_ship",
+      "digest_sha256": "af5567189642318d904bfa4af8229a895826328c39664654300875578b9df59b",
+      "uri": "/world-layouts/world-labs-hk-port/elements/container-ship/0-container-ship.png"
+    },
+    {
+      "kind": "world_labs_element_metadata_container_ship",
+      "digest_sha256": "d6d6e1a701277599e07c9855188daa9fb2b75bf41dd657760c38cc4c4f5e9867",
+      "uri": "/world-layouts/world-labs-hk-port/elements/container-ship/object.json"
+    },
+    {
+      "kind": "world_labs_element_glb_gantry_crane",
+      "digest_sha256": "e506f3ee46c3f9bc1a24a7e438879c1361fdbb916602d8990106449fe62dc428",
+      "uri": "/world-layouts/world-labs-hk-port/elements/gantry-crane/1-gantry-crane.glb"
+    },
+    {
+      "kind": "world_labs_element_preview_gantry_crane",
+      "digest_sha256": "95f95278da8a55fd4836ffa3facde9c460b8768b662c5ae815011714f5a92790",
+      "uri": "/world-layouts/world-labs-hk-port/elements/gantry-crane/0-gantry-crane.png"
+    },
+    {
+      "kind": "world_labs_element_metadata_gantry_crane",
+      "digest_sha256": "a0fb3deab1770de6b271a018bb34df250744a51b6a24a7fe6be172400cf5bfe7",
+      "uri": "/world-layouts/world-labs-hk-port/elements/gantry-crane/object.json"
+    },
+    {
+      "kind": "world_labs_element_glb_shipping_container",
+      "digest_sha256": "f1c1a1bc6fff03148638395654f5a2b69a1348af3cb8e291d5a1b1ff9632fdd4",
+      "uri": "/world-layouts/world-labs-hk-port/elements/shipping-container/0-shipping-container.glb"
+    },
+    {
+      "kind": "world_labs_element_preview_shipping_container",
+      "digest_sha256": "335a6987494a66fee43dda5dfc0dd04ba884e5b93e1bbe147f527bc7966ebeeb",
+      "uri": "/world-layouts/world-labs-hk-port/elements/shipping-container/0-shipping-container.png"
+    },
+    {
+      "kind": "world_labs_element_metadata_shipping_container",
+      "digest_sha256": "1dd678708be705bb39d762b1fc80b74434b7cefb7ad53bb0a4b587b38f49560a",
+      "uri": "/world-layouts/world-labs-hk-port/elements/shipping-container/object.json"
+    }
+  ],
+  "world_snapshot": {
+    "urdf_xml": "<robot name=\"world_labs_hk_port\"/>",
+    "joint_positions": {},
+    "cameras": [],
+    "objects": [
+      {
+        "id": "hk_port_ground_reference",
+        "name": "HK Port ground reference",
+        "type": "cube",
+        "position_xyz": [0.0, -0.025, 0.0],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [12.0, 0.05, 12.0],
+        "color": "#334155",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "hk_port_container_ship_element_proxy",
+        "name": "Container ship element asset",
+        "type": "cube",
+        "position_xyz": [-1.8, 0.25, -1.2],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [1.0, 0.35, 2.0],
+        "color": "#14532d",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "hk_port_gantry_crane_element_proxy",
+        "name": "Gantry crane element asset",
+        "type": "cube",
+        "position_xyz": [0.0, 0.5, -1.2],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.65, 1.0, 0.65],
+        "color": "#f97316",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "hk_port_shipping_container_element_proxy",
+        "name": "Shipping container element asset",
+        "type": "cube",
+        "position_xyz": [1.4, 0.22, -1.2],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.8, 0.4, 1.9],
+        "color": "#2563eb",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      }
+    ],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "provenance": {
+    "source": "world_labs_zip",
+    "provider": "World Labs",
+    "source_registry": "world-labs-marble",
+    "world_id": "e4be99a7-41b8-47ca-836f-d8eecf8a07e4",
+    "world_marble_url": "https://marble.worldlabs.ai/world/e4be99a7-41b8-47ca-836f-d8eecf8a07e4",
+    "preview_image_url": "/world-layouts/world-labs-hk-port/0-world-thumbnail.webp",
+    "tags": ["world-labs", "marble", "hk-port", "gaussian-splat", "elements", "wsp"],
+    "metric_scale_factor": 9.463177,
+    "ground_plane_offset": 6.456091,
+    "splat_uniform_scale": 9.463177,
+    "collider_glb_uniform_scale": 9.463177,
+    "local_assets": {
+      "active_splat_spz": "/world-layouts/world-labs-hk-port/0-world-500k.spz",
+      "alternate_splats": [
+        "/world-layouts/world-labs-hk-port/0-world-100k.spz",
+        "/world-layouts/world-labs-hk-port/0-world-150k.spz",
+        "/world-layouts/world-labs-hk-port/0-world-full_res.spz"
+      ],
+      "collider_glb": "/world-layouts/world-labs-hk-port/0-world.glb",
+      "panorama": "/world-layouts/world-labs-hk-port/0-world-pano.png",
+      "thumbnail": "/world-layouts/world-labs-hk-port/0-world-thumbnail.webp",
+      "raw_world": "/world-layouts/world-labs-hk-port/0-world.json"
+    },
+    "element_assets": [
+      {
+        "id": "container-ship",
+        "name": "container ship",
+        "glb": "/world-layouts/world-labs-hk-port/elements/container-ship/1-container-ship.glb",
+        "preview": "/world-layouts/world-labs-hk-port/elements/container-ship/0-container-ship.png",
+        "metadata": "/world-layouts/world-labs-hk-port/elements/container-ship/object.json"
+      },
+      {
+        "id": "gantry-crane",
+        "name": "gantry container crane",
+        "glb": "/world-layouts/world-labs-hk-port/elements/gantry-crane/1-gantry-crane.glb",
+        "preview": "/world-layouts/world-labs-hk-port/elements/gantry-crane/0-gantry-crane.png",
+        "metadata": "/world-layouts/world-labs-hk-port/elements/gantry-crane/object.json"
+      },
+      {
+        "id": "shipping-container",
+        "name": "shipping container",
+        "glb": "/world-layouts/world-labs-hk-port/elements/shipping-container/0-shipping-container.glb",
+        "preview": "/world-layouts/world-labs-hk-port/elements/shipping-container/0-shipping-container.png",
+        "metadata": "/world-layouts/world-labs-hk-port/elements/shipping-container/object.json"
+      }
+    ],
+    "notes": [
+      "This package is loaded as the default world package and replaces any previous active world package.",
+      "Element GLBs are bundled as reusable assets; they are not auto-placed into the splat because the zip does not include scene placement transforms.",
+      "Generated geometry is a candidate world asset, not certified robot-executable geometry. Run WSP audit/replay after metric scale and collision checks."
+    ]
+  },
+  "security": {
+    "signature_ref": null,
+    "attestation_refs": [],
+    "sbom_ref": null
+  }
+}

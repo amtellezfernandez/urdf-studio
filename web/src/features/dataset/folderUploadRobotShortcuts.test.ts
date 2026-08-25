@@ -84,7 +84,7 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     expect(shortcut.manifestUrl).toBe("/demo/so101/manifest.json");
     expect(shortcut.cameraConfigUrl).toBe("/demo/so101/camera-config.json");
     expect(shortcut.worldLayoutUrl).toBe(
-      "/world-layouts/world-labs-third-person-controller.world-package.json"
+      "/world-layouts/world-labs-hk-port.world-package.json"
     );
     expect(manifest.label).toBe("SO101");
     expect(urdfEntry?.path).toBe("robot.urdf");

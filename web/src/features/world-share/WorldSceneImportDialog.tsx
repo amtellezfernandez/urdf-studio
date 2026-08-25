@@ -18,6 +18,7 @@ type WorldSceneImportDialogProps = {
   onImportFromLink: () => void;
   onImportDefaultWorld?: () => void;
   onImportDemoWorld?: () => void;
+  onImportHkPortWorld?: () => void;
   isSubmitting?: boolean;
 };
 
@@ -29,6 +30,7 @@ export const WorldSceneImportDialog = ({
   onImportFromLink,
   onImportDefaultWorld,
   onImportDemoWorld,
+  onImportHkPortWorld,
   isSubmitting = false,
 }: WorldSceneImportDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
@@ -36,7 +38,7 @@ export const WorldSceneImportDialog = ({
       <DialogHeader>
         <DialogTitle className="text-[#f0f0f0]">Import World Layout</DialogTitle>
         <DialogDescription className="text-[#a8a8a8]">
-          Choose one import source: default layout, demo layout, or a custom JSON link.
+          Choose one import source: default layout, demo layout, bundled port world, or a custom JSON link.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -82,6 +84,17 @@ export const WorldSceneImportDialog = ({
               className="border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
             >
               Demo Layout
+            </Button>
+          ) : null}
+          {onImportHkPortWorld ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onImportHkPortWorld}
+              disabled={isSubmitting}
+              className="border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+            >
+              HK Port World
             </Button>
           ) : null}
           <Button

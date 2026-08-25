@@ -13,6 +13,7 @@ import { useCameraStore } from "@/shared/store/useCameraStore";
 import { WORLD_SCENARIO_DEFAULT_SEED, WORLD_SCENARIO_SOURCES } from "@/features/world/worldScenarioParams";
 import { buildWorldScenarioTimeline } from "@/features/world/worldScenarioEngine";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
+import { useWorldSceneRuntimeStore } from "@/features/world-share/worldSceneRuntimeStore";
 import { useThumbnailBootstrap } from "@/app/pages/index/useThumbnailBootstrap";
 import {
   readThumbnailRenderState,
@@ -325,6 +326,7 @@ export const useCameraRuntimeOrchestration = ({
           updateTrackedJoint(id, targetReference);
         });
       }
+      useWorldSceneRuntimeStore.getState().setActiveWorldScenePackage(null);
       return hasAutoCameras || Boolean(baseReference);
     },
     [

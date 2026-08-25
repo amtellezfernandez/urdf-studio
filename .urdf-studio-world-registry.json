@@ -1,0 +1,678 @@
+{
+  "packages": {
+    "demo_world_registry_api_1377bc95": {
+      "1.0.19": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_1377bc95",
+          "provenance": {},
+          "version": "1.0.19",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_1377bc95",
+        "published_at": "2026-07-08T17:00:25.108831Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.19"
+      }
+    },
+    "demo_world_registry_api_2c9ae61e": {
+      "1.0.44": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_2c9ae61e",
+          "provenance": {},
+          "version": "1.0.44",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_2c9ae61e",
+        "published_at": "2026-07-08T16:04:40.510050Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.44"
+      }
+    },
+    "demo_world_registry_api_403f396d": {
+      "1.0.64": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_403f396d",
+          "provenance": {},
+          "version": "1.0.64",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_403f396d",
+        "published_at": "2026-07-07T14:18:19.695805Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.64"
+      }
+    },
+    "demo_world_registry_api_4fbcd89f": {
+      "1.0.79": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_4fbcd89f",
+          "provenance": {},
+          "version": "1.0.79",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_4fbcd89f",
+        "published_at": "2026-07-06T14:54:14.693205Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.79"
+      }
+    },
+    "demo_world_registry_api_53f06cd2": {
+      "1.0.83": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_53f06cd2",
+          "provenance": {},
+          "version": "1.0.83",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_53f06cd2",
+        "published_at": "2026-07-07T14:52:35.426204Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.83"
+      }
+    },
+    "demo_world_registry_api_6e4e7ff7": {
+      "1.0.110": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_6e4e7ff7",
+          "provenance": {},
+          "version": "1.0.110",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_6e4e7ff7",
+        "published_at": "2026-07-08T16:11:12.563467Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.110"
+      }
+    },
+    "demo_world_registry_api_6e9c99cc": {
+      "1.0.110": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_6e9c99cc",
+          "provenance": {},
+          "version": "1.0.110",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_6e9c99cc",
+        "published_at": "2026-07-08T08:44:01.087181Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.110"
+      }
+    },
+    "demo_world_registry_api_71612e76": {
+      "1.0.113": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_71612e76",
+          "provenance": {},
+          "version": "1.0.113",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_71612e76",
+        "published_at": "2026-07-08T08:21:58.427817Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.113"
+      }
+    },
+    "demo_world_registry_api_7aa65fdf": {
+      "1.0.122": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_7aa65fdf",
+          "provenance": {},
+          "version": "1.0.122",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_7aa65fdf",
+        "published_at": "2026-07-06T14:38:05.598602Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.122"
+      }
+    },
+    "demo_world_registry_api_82f78354": {
+      "1.0.130": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_82f78354",
+          "provenance": {},
+          "version": "1.0.130",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_82f78354",
+        "published_at": "2026-07-06T14:54:58.064915Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.130"
+      }
+    },
+    "demo_world_registry_api_94bdfae5": {
+      "1.0.148": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_94bdfae5",
+          "provenance": {},
+          "version": "1.0.148",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_94bdfae5",
+        "published_at": "2026-07-08T17:17:19.087146Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.148"
+      }
+    },
+    "demo_world_registry_api_95b3c6b0": {
+      "1.0.149": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_95b3c6b0",
+          "provenance": {},
+          "version": "1.0.149",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_95b3c6b0",
+        "published_at": "2026-07-08T08:31:38.585361Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.149"
+      }
+    },
+    "demo_world_registry_api_a7e42d56": {
+      "1.0.167": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_a7e42d56",
+          "provenance": {},
+          "version": "1.0.167",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_a7e42d56",
+        "published_at": "2026-07-07T14:38:04.965809Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.167"
+      }
+    },
+    "demo_world_registry_api_aa1fe247": {
+      "1.0.170": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_aa1fe247",
+          "provenance": {},
+          "version": "1.0.170",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_aa1fe247",
+        "published_at": "2026-07-07T14:16:30.613066Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.170"
+      }
+    },
+    "demo_world_registry_api_ab6bb8b0": {
+      "1.0.171": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_ab6bb8b0",
+          "provenance": {},
+          "version": "1.0.171",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_ab6bb8b0",
+        "published_at": "2026-07-06T14:53:35.833202Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.171"
+      }
+    },
+    "demo_world_registry_api_b78f7d66": {
+      "1.0.183": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_b78f7d66",
+          "provenance": {},
+          "version": "1.0.183",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_b78f7d66",
+        "published_at": "2026-07-06T15:54:07.001758Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.183"
+      }
+    },
+    "demo_world_registry_api_c463081a": {
+      "1.0.196": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_c463081a",
+          "provenance": {},
+          "version": "1.0.196",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_c463081a",
+        "published_at": "2026-07-08T16:19:21.578963Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.196"
+      }
+    },
+    "demo_world_registry_api_c6195ebb": {
+      "1.0.198": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_c6195ebb",
+          "provenance": {},
+          "version": "1.0.198",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_c6195ebb",
+        "published_at": "2026-07-07T14:05:20.458135Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.198"
+      }
+    },
+    "demo_world_registry_api_d052c3ae": {
+      "1.0.208": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_d052c3ae",
+          "provenance": {},
+          "version": "1.0.208",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_d052c3ae",
+        "published_at": "2026-07-07T14:17:22.888341Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.208"
+      }
+    },
+    "demo_world_registry_api_d2959c9f": {
+      "1.0.210": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_d2959c9f",
+          "provenance": {},
+          "version": "1.0.210",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_d2959c9f",
+        "published_at": "2026-07-06T13:05:14.066518Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.210"
+      }
+    },
+    "demo_world_registry_api_eb503355": {
+      "1.0.235": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_eb503355",
+          "provenance": {},
+          "version": "1.0.235",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_eb503355",
+        "published_at": "2026-07-06T13:11:23.020578Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.235"
+      }
+    },
+    "demo_world_registry_api_f7f7be15": {
+      "1.0.247": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_f7f7be15",
+          "provenance": {},
+          "version": "1.0.247",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_f7f7be15",
+        "published_at": "2026-07-07T13:52:34.238732Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.247"
+      }
+    },
+    "demo_world_registry_api_f91a0d26": {
+      "1.0.249": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_f91a0d26",
+          "provenance": {},
+          "version": "1.0.249",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_f91a0d26",
+        "published_at": "2026-07-07T13:42:27.099254Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.249"
+      }
+    },
+    "demo_world_registry_api_fd2b126d": {
+      "1.0.253": {
+        "digest_sha256": "c18a042f60639e3818df3a765e97e9af5517f74d217a24e752e63f67d1a7b3a5",
+        "manifest": {
+          "artifacts": [],
+          "package_id": "demo_world_registry_api_fd2b126d",
+          "provenance": {},
+          "version": "1.0.253",
+          "world": {
+            "cameras": [],
+            "environment": {
+              "frame_convention": "ros-rep-103"
+            },
+            "joint_positions": {},
+            "name": "Demo World",
+            "objects": [],
+            "scenario_duration_ms": 0,
+            "scenario_time_ms": 0,
+            "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>"
+          }
+        },
+        "package_id": "demo_world_registry_api_fd2b126d",
+        "published_at": "2026-07-07T14:02:04.996329Z",
+        "runtime_targets": [],
+        "trust_level": "metadata_only",
+        "version": "1.0.253"
+      }
+    }
+  },
+  "registry_file_version": 1,
+  "updated_at": "2026-07-08T17:17:19.087332+00:00"
+}

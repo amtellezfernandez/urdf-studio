@@ -39,6 +39,8 @@ const readFiniteMetadataNumber = (
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 };
 
+const isWorldLabsPanoramaUri = (uri: string) => /\.(jpe?g|png|webp)$/i.test(uri);
+
 export const fitPerspectiveCameraToWorldBounds = ({
   bounds,
   camera,
@@ -215,7 +217,8 @@ export const WorldLabsEnvironmentLayer = () => {
   const panoArtifact = useMemo(
     () =>
       activeWorldPackage?.artifacts.find(
-        (artifact) => artifact.kind.includes("panorama") && artifact.uri.endsWith(".jpg")
+        (artifact) =>
+          artifact.kind.includes("panorama") && isWorldLabsPanoramaUri(artifact.uri)
       ) ?? null,
     [activeWorldPackage]
   );

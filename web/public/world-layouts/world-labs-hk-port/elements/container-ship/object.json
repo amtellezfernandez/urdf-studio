@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "world": "hk-port",
+  "object": {
+    "id": "container-ship",
+    "name": "container ship",
+    "description": "Large ocean-going container ship with a dark green hull, white superstructure at the stern, and multiple stacked rows of multicolored shipping containers loaded on deck.",
+    "materials": [
+      "painted steel hull",
+      "painted steel superstructure",
+      "painted corrugated steel containers"
+    ],
+    "source_images": [
+      "worlds/hk-port/source/0-gemini-generated-image-y8pnefy8pnefy8pn.png"
+    ],
+    "evidence": [
+      {
+        "image": "worlds/hk-port/source/0-gemini-generated-image-y8pnefy8pnefy8pn.png",
+        "location_in_image": "center-right, docked at the main berth"
+      }
+    ],
+    "generate_as_3d_object": true,
+    "working_dir": "worlds/hk-port/output/container-ship"
+  },
+  "updated_at": "2026-06-06T12:09:12.829Z"
+}

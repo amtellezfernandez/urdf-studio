@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_AUTOLOAD, DEMO_MODE } from "@/shared/config/demo";
-import { DEFAULT_WORLD_LAYOUT_URL } from "@/shared/config/scenes";
+import { DEFAULT_WORLD_LAYOUT_URL, HK_PORT_WORLD_PACKAGE_URL } from "@/shared/config/scenes";
 import { WORLD_HUB_WEB_BASE_URL } from "@/shared/config/worldHub";
 import type { Camera } from "@/shared/types/camera";
 import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defaultSceneAutoLoadPolicy";
@@ -668,6 +668,19 @@ export const useWorldSceneManager = ({
     }
   }, [importWorldLayoutFromUrl]);
 
+  const handleImportHkPortWorldFromDialog = useCallback(async () => {
+    setIsImportingWorldLayout(true);
+    try {
+      await importWorldLayoutFromUrl(HK_PORT_WORLD_PACKAGE_URL, "HK Port World Labs world");
+      setWorldLayoutImportDialogOpen(false);
+      setWorldLayoutImportUrlDraft("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to import HK Port world");
+    } finally {
+      setIsImportingWorldLayout(false);
+    }
+  }, [importWorldLayoutFromUrl]);
+
   const handleImportWorldLayoutFromEntry = useCallback(
     async (worldLayoutUrl: string) => {
       await importWorldLayoutFromUrl(worldLayoutUrl, "World layout import link");
@@ -809,6 +822,7 @@ export const useWorldSceneManager = ({
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
+    handleImportHkPortWorldFromDialog,
     handleImportWorldLayoutFromEntry,
     handleImportWorldLayoutFromLinkDialog,
     handleImportWorldLayoutFromUrl,

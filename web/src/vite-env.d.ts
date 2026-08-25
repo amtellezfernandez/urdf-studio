@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_WORLD_HUB_WEB_BASE_URL?: string;
   readonly VITE_DEFAULT_WORLD_LAYOUT_URL?: string;
   readonly VITE_DEMO_WORLD_LAYOUT_URL?: string;
+  readonly VITE_HK_PORT_WORLD_PACKAGE_URL?: string;
 }
 
 interface ImportMeta {

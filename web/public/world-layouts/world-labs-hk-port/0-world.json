@@ -1,0 +1,38 @@
+{
+  "world_id": "e4be99a7-41b8-47ca-836f-d8eecf8a07e4",
+  "display_name": "",
+  "tags": null,
+  "assets": {
+    "mesh": {
+      "collider_mesh_url": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/75c53ae3.glb"
+    },
+    "imagery": {
+      "pano_url": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/6d7bdfff-a98a-4870-9e04-f30b455d9c50_panos/rgb_0.png"
+    },
+    "splats": {
+      "spz_urls": {
+        "500k": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/0c0134cf-6ef3-4ff4-9bca-f7762f05b2a2_ceramic_500k.spz",
+        "100k": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/ea200962-a7b5-4aa5-a7d9-756286a8f0b9_dust_100k.spz",
+        "150k": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/ab3fac04-1bbe-4e6e-ae1a-363840ebee9b_ceramic_150k.spz",
+        "full_res": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/4a2997c8-c449-4970-a92f-3259c67e4745_ceramic.spz"
+      },
+      "semantics_metadata": {
+        "metric_scale_factor": 9.463177,
+        "ground_plane_offset": 6.456091
+      }
+    },
+    "thumbnail_url": "https://cdn.marble.worldlabs.ai/e4be99a7-41b8-47ca-836f-d8eecf8a07e4/c11a821e-e43a-4586-9880-68591a6bbcc8_sand_mpi/thumbnail.webp",
+    "caption": "The scene is a coastal container port terminal, captured from an elevated angle in a realistic style, presenting a functional industrial environment under an overcast sky. The overall tone is practical and industrious, focusing on the large-scale operations of maritime trade. The wide concrete dock yard is expansive, featuring an empty surface that stretches across the foreground and beyond the immediate view, suggesting ample space for container storage and movement. Along the pier, active berths accommodate large cargo ships, with two vessels currently docked and undergoing operations. Overhead, numerous gantry cranes, painted in dark blue and white, line the berths, their towering structures poised to load and unload containers. Beyond the immediate port infrastructure, the calm, grey-blue ocean extends to the horizon, meeting a light overcast sky, indicating an open coastal air with diffuse, even lighting. A long, narrow breakwater or jetty extends into the ocean, defining a sheltered harbor area for the ships. The port layout continues around the bend of the breakwater, with additional container stacks visible in the distance, implying a much larger facility. The concrete surface of the dock yard exhibits subtle markings and seams, evidence of its heavy-duty construction and use, and the absence of fog or haze ensures clear visibility across the entire scene. The 360 scene is faultless."
+  },
+  "created_at": null,
+  "updated_at": null,
+  "permission": {
+    "public": false,
+    "allowed_readers": [],
+    "allowed_writers": [],
+    "allow_id_access": false
+  },
+  "world_prompt": null,
+  "world_marble_url": "https://marble.worldlabs.ai/world/e4be99a7-41b8-47ca-836f-d8eecf8a07e4",
+  "model": null
+}
