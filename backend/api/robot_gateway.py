@@ -462,7 +462,7 @@ async def start_robot_gateway_lerobot_direct_teleop(
             detail="Control lease is held by another operator.",
         )
     _release_lerobot_direct_teleop_ports(req)
-    runtime.release_hardware()
+    runtime.disconnect_hardware()
     try:
         return await anyio.to_thread.run_sync(
             partial(

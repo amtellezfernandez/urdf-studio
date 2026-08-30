@@ -33,6 +33,19 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_OPENARM_MINI_MOTOR_MODEL,
 )
 
+_LEROBOT_CONFIG_JSON_DICT_FIELD_NAMES = frozenset(
+    (
+        "cameras",
+        "joint_directions",
+        "joint_ids",
+        "joint_limits",
+        "joint_ranges",
+        "max_relative_target",
+        "motor_can_ids",
+        "motor_config",
+    )
+)
+
 
 @dataclass(frozen=True)
 class _OpenArmMiniLeaderCalibrationPorts:
@@ -159,15 +172,38 @@ def build_lerobot_leader_calibration_command(
     calibration_id: str | None = None,
     calibration_group: str | None = None,
 ) -> list[str]:
+    return [
+        _resolve_lerobot_calibrate_bin(),
+        *build_lerobot_leader_teleop_cli_args(
+            port=port,
+            port_left=port_left,
+            port_right=port_right,
+            motor_ids=motor_ids,
+            motor_model=motor_model,
+            calibration_profile=calibration_profile,
+            calibration_id=calibration_id,
+            calibration_group=calibration_group,
+        ),
+    ]
+
+
+def build_lerobot_leader_teleop_cli_args(
+    *,
+    port: str,
+    port_left: str | None = None,
+    port_right: str | None = None,
+    motor_ids: list[int] | None = None,
+    motor_model: str | None = None,
+    calibration_profile: str | None = None,
+    calibration_id: str | None = None,
+    calibration_group: str | None = None,
+) -> list[str]:
     teleop_type = _resolve_lerobot_leader_teleop_type(
         calibration_profile=calibration_profile,
         motor_ids=motor_ids,
         motor_model=motor_model,
     )
-    command = [
-        _resolve_lerobot_calibrate_bin(),
-        f"--teleop.type={teleop_type}",
-    ]
+    args = [f"--teleop.type={teleop_type}"]
     if teleop_type in {
         ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
         ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
@@ -179,23 +215,23 @@ def build_lerobot_leader_calibration_command(
             port_right=port_right,
         )
         if openarm_ports.has_distinct_pair:
-            command[1] = (
+            args[0] = (
                 f"--teleop.type={ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE}"
             )
-            command.extend(
+            args.extend(
                 (
                     f"--teleop.left_arm_config.port={openarm_ports.left_port}",
                     f"--teleop.right_arm_config.port={openarm_ports.right_port}",
                 )
             )
         else:
-            command[1] = f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}"
-            command.append(f"--teleop.port={openarm_ports.selected_port}")
+            args[0] = f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}"
+            args.append(f"--teleop.port={openarm_ports.selected_port}")
             if openarm_ports.selected_side:
-                command.append(f"--teleop.side={openarm_ports.selected_side}")
+                args.append(f"--teleop.side={openarm_ports.selected_side}")
     else:
         openarm_ports = None
-        command.append(f"--teleop.port={port}")
+        args.append(f"--teleop.port={port}")
     calibration_command_id = _resolve_lerobot_leader_calibration_id(
         port,
         calibration_id,
@@ -203,10 +239,8 @@ def build_lerobot_leader_calibration_command(
             openarm_ports.has_distinct_pair if openarm_ports is not None else False
         ),
     )
-    command.append(
-        f"--teleop.id={calibration_command_id}"
-    )
-    return command
+    args.append(f"--teleop.id={calibration_command_id}")
+    return args
 
 
 def _start_lerobot_calibration_command(
@@ -402,6 +436,9 @@ def _build_config_json_args(config_json: str | None) -> list[str]:
 
 def _build_config_json_value_args(path: tuple[str, ...], value: Any) -> list[str]:
     if isinstance(value, dict):
+        if path[-1] in _LEROBOT_CONFIG_JSON_DICT_FIELD_NAMES:
+            cli_key = ".".join(path)
+            return [f"--{cli_key}={json.dumps(value, separators=(',', ':'))}"]
         args: list[str] = []
         for key, child_value in sorted(value.items()):
             if not isinstance(key, str) or not key:

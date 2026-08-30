@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  OPERATOR_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
   OPERATOR_LEADER_SIDES,
   OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
 } from "@/features/teleop/params/operatorTeleopParams";
@@ -94,6 +95,38 @@ describe("resolveLeRobotDirectTeleopLeaderRequest", () => {
         portRight: "/dev/serial/by-id/openarm-right",
         calibrationCategory: "teleoperators",
         calibrationProfile: OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+        calibrationId: "openarm-pair",
+        calibrationGroup: OPERATOR_LEADER_SIDES.right,
+      },
+      issue: null,
+    });
+  });
+
+  it("uses left and right ports for explicit bimanual OpenArm Mini teleoperators", () => {
+    expect(
+      resolveLeRobotDirectTeleopLeaderRequest([
+        buildTeleoperatorTarget({
+          path: "/dev/serial/by-id/openarm-right",
+          side: OPERATOR_LEADER_SIDES.right,
+          calibrationProfile: OPERATOR_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
+          calibrationId: "openarm-pair",
+          calibrationGroup: OPERATOR_LEADER_SIDES.right,
+        }),
+        buildTeleoperatorTarget({
+          path: "/dev/serial/by-id/openarm-left",
+          side: OPERATOR_LEADER_SIDES.left,
+          calibrationProfile: OPERATOR_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
+          calibrationId: "openarm-pair",
+          calibrationGroup: OPERATOR_LEADER_SIDES.left,
+        }),
+      ]),
+    ).toEqual({
+      leader: {
+        port: "/dev/serial/by-id/openarm-right",
+        portLeft: "/dev/serial/by-id/openarm-left",
+        portRight: "/dev/serial/by-id/openarm-right",
+        calibrationCategory: "teleoperators",
+        calibrationProfile: OPERATOR_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
         calibrationId: "openarm-pair",
         calibrationGroup: OPERATOR_LEADER_SIDES.right,
       },

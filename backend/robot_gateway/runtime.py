@@ -207,6 +207,9 @@ class RobotGatewayRuntime:
         self._last_control_datagram_sequences.clear()
         return self._adapter.disconnect()
 
+    def disconnect_hardware(self) -> int:
+        return self._adapter.disconnect()
+
     def reload_lerobot_calibration_file(
         self,
         calibration_path: Path,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   OPERATOR_HELPER_DEFAULT_OPERATOR_ID,
@@ -36,6 +36,7 @@ type OperatorLeRobotDirectTeleopCardView = {
 
 type UseOperatorLeRobotDirectTeleopParams = {
   available: boolean;
+  autoStart?: boolean;
   followerConnected: boolean;
   teleoperatorTargets: readonly OperatorLeaderTelemetryTarget[];
   baseUrl: string;
@@ -46,6 +47,7 @@ type UseOperatorLeRobotDirectTeleopParams = {
 };
 
 type UseOperatorLeRobotDirectTeleopResult = {
+  busy: boolean;
   running: boolean;
   card: OperatorLeRobotDirectTeleopCardView | undefined;
 };
@@ -123,6 +125,7 @@ export const resolveLeRobotDirectTeleopLeaderRequest = (
 
 export const useOperatorLeRobotDirectTeleop = ({
   available,
+  autoStart = false,
   followerConnected,
   teleoperatorTargets,
   baseUrl,
@@ -135,17 +138,30 @@ export const useOperatorLeRobotDirectTeleop = ({
     null,
   );
   const [busy, setBusy] = useState(false);
+  const lastAutoStartKeyRef = useRef<string | null>(null);
   const leaderResolution = useMemo(
     () => resolveLeRobotDirectTeleopLeaderRequest(teleoperatorTargets),
     [teleoperatorTargets],
   );
+  const leaderStartKey = useMemo(() => {
+    const leader = leaderResolution.leader;
+    if (!leader) return null;
+    return [
+      leader.port ?? "",
+      leader.portLeft ?? "",
+      leader.portRight ?? "",
+      leader.calibrationProfile ?? "",
+      leader.calibrationId ?? "",
+      leader.calibrationGroup ?? "",
+    ].join("|");
+  }, [leaderResolution.leader]);
   const running =
     status?.running === true ||
     status?.state === "running" ||
     status?.state === "stopping";
 
   useEffect(() => {
-    if (!available || !followerConnected) {
+    if (!available) {
       setStatus(null);
       return;
     }
@@ -177,9 +193,11 @@ export const useOperatorLeRobotDirectTeleop = ({
       cancelled = true;
       stopPolling();
     };
-  }, [authorization, available, baseUrl, followerConnected]);
+  }, [authorization, available, baseUrl]);
 
-  const handleStart = useCallback(async () => {
+  const startDirectTeleop = useCallback(async (
+    options: { automatic?: boolean } = {},
+  ) => {
     const leader = leaderResolution.leader;
     if (!leader) {
       onStatusMessage(
@@ -208,7 +226,9 @@ export const useOperatorLeRobotDirectTeleop = ({
       onStatusMessage(
         nextStatus.lastError ??
           (nextStatus.running
-            ? "LeRobot direct teleop started."
+            ? options.automatic
+              ? "LeRobot direct teleop started automatically."
+              : "LeRobot direct teleop started."
             : "LeRobot direct teleop did not start."),
       );
     } catch (error) {
@@ -228,6 +248,39 @@ export const useOperatorLeRobotDirectTeleop = ({
     onBeforeStart,
     onStatusMessage,
     operatorId,
+  ]);
+
+  const handleStart = useCallback(() => {
+    void startDirectTeleop();
+  }, [startDirectTeleop]);
+
+  useEffect(() => {
+    if (
+      !autoStart ||
+      !available ||
+      !followerConnected ||
+      busy ||
+      running ||
+      status === null ||
+      status.state === "error" ||
+      !leaderResolution.leader ||
+      leaderStartKey === null ||
+      lastAutoStartKeyRef.current === leaderStartKey
+    ) {
+      return;
+    }
+    lastAutoStartKeyRef.current = leaderStartKey;
+    void startDirectTeleop({ automatic: true });
+  }, [
+    autoStart,
+    available,
+    busy,
+    followerConnected,
+    leaderResolution.leader,
+    leaderStartKey,
+    running,
+    startDirectTeleop,
+    status,
   ]);
 
   const handleStop = useCallback(async () => {
@@ -267,6 +320,7 @@ export const useOperatorLeRobotDirectTeleop = ({
   );
 
   return {
+    busy,
     running,
     card: available
       ? {

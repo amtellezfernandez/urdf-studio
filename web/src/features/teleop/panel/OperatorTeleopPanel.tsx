@@ -1736,6 +1736,7 @@ export const OperatorTeleopPanel = ({
   }, [clearActiveControls, commandQueue]);
   const lerobotDirectTeleop = useOperatorLeRobotDirectTeleop({
     available: lerobotDirectTeleopAvailable,
+    autoStart: true,
     followerConnected: followerHardwareConnectionActive,
     teleoperatorTargets: baseLeaderStatePollTargets,
     baseUrl,
@@ -1745,9 +1746,11 @@ export const OperatorTeleopPanel = ({
     onStatusMessage: setPanelStatusMessage,
   });
   const lerobotDirectTeleopRunning = lerobotDirectTeleop.running;
+  const lerobotDirectTeleopHardwareExclusive =
+    lerobotDirectTeleop.running || lerobotDirectTeleop.busy;
   const leaderInputTelemetryActive =
     openArmLeaderAutodetectActive &&
-    !lerobotDirectTeleopRunning &&
+    !lerobotDirectTeleopHardwareExclusive &&
     (leaderTeleopViewerModeActive || calibrationFileEditLeaderTelemetryRequested) &&
     leaderStatePollTargets.length > 0;
   const selectedTeleopInputConfigured =
@@ -1871,7 +1874,7 @@ export const OperatorTeleopPanel = ({
   const browserLeaderHardwareRelayEnabled =
     followerHardwareMotionReady &&
     !lerobotDirectTeleopAvailable &&
-    !lerobotDirectTeleopRunning;
+    !lerobotDirectTeleopHardwareExclusive;
   const manualJointJogProfileSelected = Boolean(
     selectedProfile &&
       selectedProfile.capabilities.jointJog &&

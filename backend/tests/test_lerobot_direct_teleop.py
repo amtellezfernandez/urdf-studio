@@ -182,6 +182,44 @@ def test_lerobot_direct_teleop_command_flattens_bimanual_follower_config() -> No
     assert all("right_arm_config={" not in arg for arg in command)
 
 
+def test_lerobot_direct_teleop_command_keeps_lerobot_dict_fields_whole() -> None:
+    command = build_lerobot_direct_teleop_command(
+        RobotGatewayAdapterConfig(
+            adapter_kind=ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+            robot_id="openarm",
+            lerobot_robot_type="bi_openarm_follower",
+            lerobot_id="my_follower",
+            lerobot_config_json=json.dumps(
+                {
+                    "left_arm_config": {
+                        "port": "can0",
+                        "motor_config": {
+                            "joint_1": [1, 17, "dm8009"],
+                        },
+                    },
+                    "right_arm_config": {
+                        "port": "can1",
+                        "motor_config": {
+                            "joint_1": [1, 17, "dm8009"],
+                        },
+                    },
+                }
+            ),
+        ),
+        _build_start_request(),
+    )
+
+    assert (
+        '--robot.left_arm_config.motor_config={"joint_1":[1,17,"dm8009"]}'
+        in command
+    )
+    assert (
+        '--robot.right_arm_config.motor_config={"joint_1":[1,17,"dm8009"]}'
+        in command
+    )
+    assert all(".motor_config.joint_1" not in arg for arg in command)
+
+
 def test_lerobot_direct_teleop_release_helper_releases_unique_leader_ports() -> None:
     released_ports: list[str] = []
     request = _build_start_request(
