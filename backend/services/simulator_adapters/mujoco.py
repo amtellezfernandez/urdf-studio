@@ -216,6 +216,63 @@ def apply_mjcf_workspace_repairs(mjcf_content: str) -> tuple[str, tuple[str, ...
     return ET.tostring(root, encoding="unicode"), warnings
 
 
+def apply_mjcf_mesh_unit_repairs(
+    mujoco: object,
+    model: object,
+    mjcf_content: str,
+    *,
+    robot_mesh_names: set[str],
+    max_unscaled_mesh_extent_m: float = 10.0,
+) -> tuple[str, tuple[str, ...]]:
+    """Scale evidently millimetre-authored robot meshes to MuJoCo metres.
+
+    URDF joint transforms are conventionally expressed in metres, while CAD STL
+    files are commonly authored in millimetres.  The URDF-to-MJCF bridge cannot
+    infer that missing unit declaration.  Limit the repair to the source robot
+    assets, leave explicitly scaled meshes alone, and only act on an implausibly
+    large mesh extent so deliberately large world objects remain untouched.
+    """
+    if not robot_mesh_names:
+        return mjcf_content, ()
+    root = ET.fromstring(mjcf_content)
+    mesh_elements = {
+        element.get("name"): element
+        for element in root.findall("./asset/mesh")
+        if element.get("name") in robot_mesh_names
+    }
+    repaired_names: list[str] = []
+    mesh_count = int(getattr(model, "nmesh", 0))
+    for mesh_id in range(mesh_count):
+        mesh_name = getattr(mujoco, "mj_id2name")(model, getattr(mujoco, "mjtObj").mjOBJ_MESH, mesh_id)
+        element = mesh_elements.get(mesh_name)
+        if element is None or element.get("scale") is not None:
+            continue
+        mesh_scale = getattr(model, "mesh_scale")[mesh_id]
+        if any(abs(float(value) - 1.0) > 1e-9 for value in mesh_scale):
+            continue
+        vertices = getattr(model, "mesh_vert")
+        start = int(getattr(model, "mesh_vertadr")[mesh_id])
+        count = int(getattr(model, "mesh_vertnum")[mesh_id])
+        if count <= 0:
+            continue
+        mesh_vertices = vertices[start:start + count]
+        extent = max(
+            max(float(vertex[axis]) for vertex in mesh_vertices)
+            - min(float(vertex[axis]) for vertex in mesh_vertices)
+            for axis in range(3)
+        )
+        if extent <= max_unscaled_mesh_extent_m:
+            continue
+        element.set("scale", "0.001 0.001 0.001")
+        repaired_names.append(str(mesh_name))
+    if not repaired_names:
+        return mjcf_content, ()
+    return (
+        ET.tostring(root, encoding="unicode"),
+        (f"Scaled {len(repaired_names)} robot mesh asset(s) from millimetres to metres.",),
+    )
+
+
 def _unique_mesh_name(source_path: Path, robot_dir: Path) -> str:
     try:
         rel = source_path.relative_to(robot_dir)

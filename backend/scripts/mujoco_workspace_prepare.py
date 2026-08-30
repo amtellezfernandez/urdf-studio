@@ -14,7 +14,10 @@ from backend.scripts.simulator_workspace_cli import add_common_workspace_args
 from backend.services.simulator_adapters.camera_transfer import (
     append_cameras_to_mujoco_mjcf,
 )
-from backend.services.simulator_adapters.mujoco import apply_mjcf_workspace_repairs
+from backend.services.simulator_adapters.mujoco import (
+    apply_mjcf_mesh_unit_repairs,
+    apply_mjcf_workspace_repairs,
+)
 from backend.services.simulator_adapters.mujoco_camera import (
     write_mujoco_camera_screenshots,
 )
@@ -111,6 +114,37 @@ def _load_model_with_workspace_repair(mujoco: Any, mjcf_path: Path) -> tuple[Any
         return model, repaired_path, warnings
 
 
+def _robot_mjcf_mesh_names(mjcf_path: Path) -> set[str]:
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(mjcf_path.read_text(encoding="utf-8"))
+    return {
+        name
+        for mesh in root.findall("./asset/mesh")
+        if (name := mesh.get("name"))
+    }
+
+
+def _apply_robot_mesh_unit_repair(
+    mujoco: Any,
+    model: Any,
+    mjcf_path: Path,
+    *,
+    robot_mesh_names: set[str],
+) -> tuple[Any, Path, tuple[str, ...]]:
+    repaired_content, warnings = apply_mjcf_mesh_unit_repairs(
+        mujoco,
+        model,
+        mjcf_path.read_text(encoding="utf-8"),
+        robot_mesh_names=robot_mesh_names,
+    )
+    if not warnings:
+        return model, mjcf_path, ()
+    repaired_path = mjcf_path.with_name(f"{mjcf_path.stem}.scaled{mjcf_path.suffix}")
+    repaired_path.write_text(repaired_content, encoding="utf-8")
+    return mujoco.MjModel.from_xml_path(str(repaired_path.resolve())), repaired_path, warnings
+
+
 def _is_known_mjcf_inertial_load_error(error: ValueError) -> bool:
     message = str(error).lower()
     return "inertia" in message or "inertial" in message
@@ -142,6 +176,7 @@ def prepare_mujoco_workspace_scene(
         print(f"{log_prefix} warning: {warning}", flush=True)
     cameras = simulator_scene.cameras
 
+    robot_mesh_names = _robot_mjcf_mesh_names(robot_mjcf_path)
     mjcf_path = robot_mjcf_path
     if simulator_scene.primitives or cameras:
         combined_mjcf = robot_mjcf_path.read_text(encoding="utf-8")
@@ -156,6 +191,13 @@ def prepare_mujoco_workspace_scene(
         mjcf_path.write_text(combined_mjcf, encoding="utf-8")
 
     model, mjcf_path, mjcf_repair_warnings = _load_model_with_workspace_repair(mujoco, mjcf_path)
+    model, mjcf_path, mesh_unit_warnings = _apply_robot_mesh_unit_repair(
+        mujoco,
+        model,
+        mjcf_path,
+        robot_mesh_names=robot_mesh_names,
+    )
+    mjcf_repair_warnings = (*mjcf_repair_warnings, *mesh_unit_warnings)
     for warning in mjcf_repair_warnings:
         print(f"{log_prefix} warning: {warning}", flush=True)
     data = mujoco.MjData(model)
