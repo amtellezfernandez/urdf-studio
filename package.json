@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node tools/scripts/ensure-node-dependencies.js",
     "dev": "vite --config config/vite.config.ts",
     "build": "vite build --config config/vite.config.ts",
     "build:dev": "vite build --mode development --config config/vite.config.ts",
@@ -27,6 +28,7 @@
     "setup:simulators": "node tools/scripts/setup.js --with-simulators",
     "setup:simulator-containers": "node tools/scripts/setup.js --with-simulator-containers",
     "setup:check": "node --test tools/scripts/setup.test.mjs tools/scripts/setupSequence.test.mjs tools/scripts/setupIluRuntime.test.mjs tools/scripts/setupCommandResults.test.mjs tools/scripts/setupNodeRuntime.test.mjs tools/scripts/setupBlenderRuntime.test.mjs tools/scripts/setupPythonRuntime.test.mjs tools/scripts/setupBackendPythonRuntime.test.mjs tools/scripts/setupOptionalPythonRuntime.test.mjs tools/scripts/setupPythonRuntimes.test.mjs tools/scripts/setupToolchainRuntime.test.mjs tools/scripts/setupAuthConfig.test.mjs tools/scripts/setupSimulatorContainers.test.mjs tools/scripts/setupParams.test.mjs tools/scripts/setupHelpers.test.mjs tools/scripts/runConfig.test.mjs tools/scripts/simulatorHostProbeUtils.test.mjs tools/scripts/simulatorIsaacSimChecker.test.mjs tools/scripts/simulatorHostCapabilities.test.mjs tools/scripts/simulatorCompatibilityRules.test.mjs tools/scripts/simulatorCompatibility.test.mjs tools/scripts/simulatorCompatibilityCli.test.mjs tools/scripts/simulatorContainerBuild.test.mjs tools/scripts/simulatorContainerPlan.test.mjs tools/scripts/simulatorDeployment.test.mjs tools/scripts/resolveIluRequire.test.mjs tools/scripts/wslWindowsLocalhostRelay.test.mjs",
+    "prestart": "node tools/scripts/ensure-node-dependencies.js",
     "start": "node tools/scripts/run.js",
     "twin": "node scripts/twin.js --twin",
     "world:list": "node tools/scripts/world-package-cli.js list",
