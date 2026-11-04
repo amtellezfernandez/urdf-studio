@@ -7,6 +7,7 @@ import { useObjectStore } from "@/features/objects";
 import { resolveTrackingReference } from "@/features/viewer/trackingTarget";
 import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
 import { LabeledNumberField } from "@/features/layout/sidebarNumberField";
+import { OBJECT_EDITOR_PARAMS } from "@/features/layout/objectEditorParams";
 import {
   applyObjectEditorKeyboardCommand,
   normalizeDegrees360,
@@ -56,13 +57,6 @@ const OBJECT_EDITOR_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
 const OBJECT_EDIT_MODES: ObjectEditMode[] = ["move", "rotate", "resize"];
 const OBJECT_TRANSFORM_SPACES: ObjectTransformSpace[] = ["world", "local"];
 
-const SPLAT_SCALE_MIN = 0.001;
-const SPLAT_SCALE_MAX = 1000;
-// Multiplicative scrub: each pixel of horizontal drag multiplies the scale by
-// e^(±sensitivity), so dragging feels uniform across magnitudes and can never
-// push the scale to zero or negative.
-const SPLAT_SCALE_DRAG_SENSITIVITY = 0.005;
-
 type ObjectScaleScrubFieldProps = {
   value: number;
   onScrub: (value: number) => void;
@@ -78,7 +72,10 @@ function ObjectScaleScrubField({ value, onScrub, onCommit }: ObjectScaleScrubFie
   } | null>(null);
 
   const clampScale = (next: number) =>
-    Math.min(SPLAT_SCALE_MAX, Math.max(SPLAT_SCALE_MIN, next));
+    Math.min(
+      OBJECT_EDITOR_PARAMS.splatScaleMax,
+      Math.max(OBJECT_EDITOR_PARAMS.splatScaleMin, next)
+    );
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -101,7 +98,8 @@ function ObjectScaleScrubField({ value, onScrub, onCommit }: ObjectScaleScrubFie
     if (!dragState || dragState.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - dragState.startX;
     const next = clampScale(
-      dragState.startValue * Math.exp(deltaX * SPLAT_SCALE_DRAG_SENSITIVITY)
+      dragState.startValue *
+      Math.exp(deltaX * OBJECT_EDITOR_PARAMS.splatScaleDragSensitivity)
     );
     dragState.lastValue = next;
     onScrub(next);
@@ -120,8 +118,8 @@ function ObjectScaleScrubField({ value, onScrub, onCommit }: ObjectScaleScrubFie
         role="slider"
         aria-label="Splat scale"
         aria-valuenow={value}
-        aria-valuemin={SPLAT_SCALE_MIN}
-        aria-valuemax={SPLAT_SCALE_MAX}
+        aria-valuemin={OBJECT_EDITOR_PARAMS.splatScaleMin}
+        aria-valuemax={OBJECT_EDITOR_PARAMS.splatScaleMax}
         title="Drag horizontally to scale"
         className="h-5 flex-1 cursor-ew-resize select-none rounded bg-[#2a2a2a] text-center text-[10px] leading-5 text-[#d4d4d4] transition-colors hover:bg-[#3d3d3d]"
         onPointerDown={handlePointerDown}
@@ -136,7 +134,7 @@ function ObjectScaleScrubField({ value, onScrub, onCommit }: ObjectScaleScrubFie
         value={value}
         onValueChange={(next) => onCommit(next)}
         step={0.01}
-        min={SPLAT_SCALE_MIN}
+        min={OBJECT_EDITOR_PARAMS.splatScaleMin}
         className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
         labelClassName="sr-only"
         wrapperClassName="w-16 space-y-0"

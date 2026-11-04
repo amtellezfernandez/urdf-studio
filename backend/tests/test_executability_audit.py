@@ -387,6 +387,12 @@ def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_pat
 
 
 def test_genesis_export_records_expected_smoke_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        simulator_export_module,
+        "_simulator_smoke_dependency_available",
+        lambda _import_name: True,
+    )
+
     def _raise_smoke_error(*_args, **_kwargs):
         raise RuntimeError("genesis smoke crashed")
 
@@ -405,6 +411,12 @@ def test_genesis_export_records_expected_smoke_errors(monkeypatch) -> None:
 
 
 def test_genesis_export_preserves_unexpected_smoke_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        simulator_export_module,
+        "_simulator_smoke_dependency_available",
+        lambda _import_name: True,
+    )
+
     def _raise_unexpected_error(*_args, **_kwargs):
         raise KeyError("unexpected genesis smoke bookkeeping failure")
 

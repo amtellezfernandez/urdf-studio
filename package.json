@@ -20,7 +20,7 @@
     "scalar-constants:check": "node tools/scripts/topLevelScalarConstantAudit.js",
     "scalar-constants:report": "node tools/scripts/topLevelScalarConstantAudit.js --report",
     "scalar-constants:test": "node --test tools/scripts/topLevelScalarConstantAudit.test.mjs",
-    "tools:check": "node --test \"tools/scripts/*.test.mjs\"",
+    "tools:check": "node --test tools/scripts/*.test.mjs",
     "smoke": "npm run lint && npm run typecheck && npm run tools:check && npm run scalar-constants:check && node tools/scripts/ilu-cli-smoke.js && npm run demo:mode:check",
     "release:check": "npm run smoke && npm run policy-check && npm run dead-code -- --report --no-fail && npm run architecture-check && npm run package:check && npm run test:backend && npm run simulator:workspace:check:fixtures && npm run simulator:blender:check:fixtures && npm run test && npm run perf:gate",
     "postinstall": "node scripts/twin.js",

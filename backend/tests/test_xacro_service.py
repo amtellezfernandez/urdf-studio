@@ -1,10 +1,21 @@
 import base64
+import os
 
 import pytest
 from fastapi import HTTPException
 
 from backend.models.xacro import XacroExpandRequest, XacroFile
+from backend.services.ilu_urdf import XACRODOC_WHEEL
 from backend.services.xacro import expand_xacro
+
+
+_XACRO_RUNTIME_AVAILABLE = XACRODOC_WHEEL.exists() or bool(
+    os.environ.get("I_LOVE_URDF_XACRODOC_WHEEL")
+)
+pytestmark = pytest.mark.skipif(
+    not _XACRO_RUNTIME_AVAILABLE,
+    reason="xacro runtime is optional; run npm run setup or provide I_LOVE_URDF_XACRODOC_WHEEL",
+)
 
 
 def _b64(text: str) -> str:

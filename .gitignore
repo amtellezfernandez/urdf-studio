@@ -33,6 +33,7 @@ web/node_modules/
 # Build outputs and generated reports
 dist/
 **/dist/
+MUJOCO_LOG.TXT
 reports/
 coverage/
 **/coverage/

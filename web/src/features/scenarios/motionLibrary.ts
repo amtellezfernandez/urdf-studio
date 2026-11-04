@@ -1,4 +1,5 @@
 import type { RecordedKeyframe } from "@/features/scenarios/waypointRecording";
+import { MOTION_LIBRARY_PARAMS } from "@/features/scenarios/motionLibraryParams";
 
 export type MotionClip = {
   id: string;
@@ -6,8 +7,6 @@ export type MotionClip = {
   createdAt: string;
   keyframes: RecordedKeyframe[];
 };
-
-const STORAGE_KEY = "urdf-studio-motion-library-v1";
 
 const cloneKeyframes = (keyframes: RecordedKeyframe[]): RecordedKeyframe[] =>
   keyframes.map((keyframe) => ({ ...keyframe, joints: { ...keyframe.joints } }));
@@ -25,7 +24,9 @@ const isRecordedKeyframe = (value: unknown): value is RecordedKeyframe => {
 
 export const readMotionLibrary = (storage: Storage = window.localStorage): MotionClip[] => {
   try {
-    const parsed: unknown = JSON.parse(storage.getItem(STORAGE_KEY) ?? "[]");
+    const parsed: unknown = JSON.parse(
+      storage.getItem(MOTION_LIBRARY_PARAMS.storageKey) ?? "[]"
+    );
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((clip): clip is MotionClip =>
@@ -45,7 +46,7 @@ export const readMotionLibrary = (storage: Storage = window.localStorage): Motio
 export const writeMotionLibrary = (
   clips: MotionClip[],
   storage: Storage = window.localStorage
-): void => storage.setItem(STORAGE_KEY, JSON.stringify(clips));
+): void => storage.setItem(MOTION_LIBRARY_PARAMS.storageKey, JSON.stringify(clips));
 
 export const createMotionClip = (name: string, keyframes: RecordedKeyframe[]): MotionClip => ({
   id: crypto.randomUUID(),

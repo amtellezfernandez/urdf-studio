@@ -19,8 +19,10 @@ import {
 } from "@/app/pages/index/worldSceneRuntime";
 import { getFilenameFromPath } from "@/shared/lib/pathNames";
 import { cloneJsonSerializableValue } from "@/shared/lib/jsonSerializableClone";
+import { WORLD_SCENE_MANAGER_PARAMS } from "@/app/pages/index/worldSceneManagerParams";
 
-export const SPLAT_BACKGROUND_IMPORT_ACCEPT = ".spz,.splat,.ksplat";
+export const SPLAT_BACKGROUND_IMPORT_ACCEPT =
+  WORLD_SCENE_MANAGER_PARAMS.splatBackgroundImportAccept;
 
 // World Labs / SimuGen splats are y-up; the studio scene is z-up (ROS REP-103).
 const Y_UP_SPLAT_TO_STUDIO_ROTATION_RPY_RAD = [-Math.PI / 2, 0, 0] as const;

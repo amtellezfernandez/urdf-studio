@@ -15,8 +15,7 @@ import {
   type ScenarioRunSummary,
   type ScenarioSummary,
 } from "@/features/scenarios/scenariosApi";
-
-const ACTIVE_RUN_POLL_MS = 1500;
+import { SCENARIOS_CONTROLLER_PARAMS } from "@/features/scenarios/scenariosControllerParams";
 
 export type UseScenariosController = ReturnType<typeof useScenariosController>;
 
@@ -80,7 +79,10 @@ export const useScenariosController = () => {
         previous.map((run) => (run.run_id === runId ? { ...run, ...detail } : run))
       );
       if (detail.status === "queued" || detail.status === "running") {
-        pollRef.current = setTimeout(() => void pollRun(runId), ACTIVE_RUN_POLL_MS);
+        pollRef.current = setTimeout(
+          () => void pollRun(runId),
+          SCENARIOS_CONTROLLER_PARAMS.activeRunPollMs
+        );
       } else if (detail.status === "failed") {
         toast.error(detail.error || "Scenario run failed.");
       } else {
@@ -103,7 +105,10 @@ export const useScenariosController = () => {
         setActiveRun({ ...summary, comparison: null, has_report: false });
         toast.success(`Launched ${scenarioId} on ${sims.join(", ")}`);
         if (pollRef.current) clearTimeout(pollRef.current);
-        pollRef.current = setTimeout(() => void pollRun(summary.run_id), ACTIVE_RUN_POLL_MS);
+        pollRef.current = setTimeout(
+          () => void pollRun(summary.run_id),
+          SCENARIOS_CONTROLLER_PARAMS.activeRunPollMs
+        );
       } catch (error) {
         toast.error(readUnknownErrorMessage(error, "Failed to launch scenario run."));
       }

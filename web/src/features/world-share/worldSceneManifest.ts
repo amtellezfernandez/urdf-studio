@@ -37,6 +37,7 @@ import {
   validateAllowedFields,
   validateMaxLength,
 } from "@/features/world-share/worldSceneManifestValidation";
+import { WORLD_SCENE_MANIFEST_PARAMS } from "@/features/world-share/worldSceneManifestParams";
 
 export type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
@@ -55,8 +56,6 @@ export type StaticWorldSceneLayerSnapshot = {
 };
 
 export type WorldSceneLayerSnapshot = StaticWorldSceneLayerSnapshot;
-const DEFAULT_WORLD_SCENE_PACKAGE_CREATED_AT = "1970-01-01T00:00:00.000Z";
-
 const toStaticWorldSceneLayerSnapshot = (
   snapshot: ParsedWorldSceneLayerSnapshot
 ): StaticWorldSceneLayerSnapshot => ({
@@ -167,7 +166,7 @@ const readWorldSceneRegistryEnvelopeCandidate = (
     created_at:
       isString(payload.created_at) && !Number.isNaN(Date.parse(payload.created_at))
         ? payload.created_at
-        : DEFAULT_WORLD_SCENE_PACKAGE_CREATED_AT,
+        : WORLD_SCENE_MANIFEST_PARAMS.defaultPackageCreatedAt,
     runtime_targets: [],
     interface: {
       observation_modalities:

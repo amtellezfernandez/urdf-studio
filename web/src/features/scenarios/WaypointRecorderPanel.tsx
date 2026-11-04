@@ -11,6 +11,7 @@ import { saveAuthoredScenario } from "@/features/scenarios/scenariosApi";
 import { MotionTimeline } from "@/features/scenarios/MotionTimeline";
 import { MotionLibraryPanel } from "@/features/scenarios/MotionLibraryPanel";
 import { useWaypointRecorder } from "@/features/scenarios/useWaypointRecorder";
+import { WAYPOINT_RECORDER_PARAMS } from "@/features/scenarios/waypointRecorderParams";
 
 export type WaypointRecorderContext = {
   getJointValues: () => Record<string, number>;
@@ -21,8 +22,6 @@ export type WaypointRecorderContext = {
   robotLinks: string[];
 };
 
-const NONE = "__none__";
-
 export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderContext }) => {
   const recorder = useWaypointRecorder({
     getJointValues: context.getJointValues,
@@ -31,7 +30,7 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
   const [scenarioName, setScenarioName] = useState("");
   const [targetObject, setTargetObject] = useState<string>("");
   const [containerObject, setContainerObject] = useState<string>("");
-  const [attachLink, setAttachLink] = useState<string>(NONE);
+  const [attachLink, setAttachLink] = useState<string>(WAYPOINT_RECORDER_PARAMS.noneValue);
   const [isSaving, setIsSaving] = useState(false);
 
   const objectOptions = context.worldObjectIds;
@@ -41,7 +40,7 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
       scenarioName.trim().length > 0 &&
       Boolean(targetObject) &&
       Boolean(containerObject) &&
-      (!recorder.usesAttach || attachLink !== NONE),
+      (!recorder.usesAttach || attachLink !== WAYPOINT_RECORDER_PARAMS.noneValue),
     [recorder.keyframes.length, recorder.usesAttach, scenarioName, targetObject, containerObject, attachLink]
   );
 
@@ -55,7 +54,10 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
         waypoints: recorder.document,
         target_object_id: targetObject,
         container_object_id: containerObject,
-        attach_link: recorder.usesAttach && attachLink !== NONE ? attachLink : null,
+        attach_link:
+          recorder.usesAttach && attachLink !== WAYPOINT_RECORDER_PARAMS.noneValue
+            ? attachLink
+            : null,
         robot_urdf: context.robotUrdf,
       });
       toast.success(`Saved scenario: ${summary.scenario_id}. Open Scenarios to run it.`);
@@ -153,16 +155,18 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
                   </td>
                   <td className="px-2 py-1">
                     <select
-                      value={keyframe.attach ?? NONE}
+                      value={keyframe.attach ?? WAYPOINT_RECORDER_PARAMS.noneValue}
                       onChange={(event) =>
                         recorder.setKeyframeAttach(
                           index,
-                          event.target.value === NONE ? null : event.target.value
+                          event.target.value === WAYPOINT_RECORDER_PARAMS.noneValue
+                            ? null
+                            : event.target.value
                         )
                       }
                       className="h-7 rounded border border-border/70 bg-background px-1"
                     >
-                      <option value={NONE}>—</option>
+                      <option value={WAYPOINT_RECORDER_PARAMS.noneValue}>—</option>
                       {objectOptions.map((id) => (
                         <option key={id} value={id}>
                           {id}
@@ -242,7 +246,7 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
               onChange={(event) => setAttachLink(event.target.value)}
               className="h-8 w-full rounded border border-border/70 bg-background px-2"
             >
-              <option value={NONE}>select…</option>
+              <option value={WAYPOINT_RECORDER_PARAMS.noneValue}>select…</option>
               {context.robotLinks.map((link) => (
                 <option key={link} value={link}>
                   {link}

@@ -7,9 +7,7 @@ import {
   type RecordedKeyframe,
   type WaypointsDocument,
 } from "@/features/scenarios/waypointRecording";
-
-const REPLAY_INTERVAL_MS = 33;
-const RECORD_INTERVAL_MS = 67;
+import { WAYPOINT_RECORDER_PARAMS } from "@/features/scenarios/waypointRecorderParams";
 
 type UseWaypointRecorderParams = {
   // Live joint state from the viewer.
@@ -79,7 +77,7 @@ export const useWaypointRecorder = ({
         ...previous,
         { time_s: Number(time_s.toFixed(3)), joints: { ...getJointValues() } },
       ]);
-    }, RECORD_INTERVAL_MS);
+    }, WAYPOINT_RECORDER_PARAMS.recordIntervalMs);
     return stopRecordTimer;
   }, [getJointValues, isRecording, stopRecordTimer]);
 
@@ -175,7 +173,7 @@ export const useWaypointRecorder = ({
         stopReplayTimer();
         setIsReplaying(false);
       }
-    }, REPLAY_INTERVAL_MS);
+    }, WAYPOINT_RECORDER_PARAMS.replayIntervalMs);
   }, [keyframes, setJointValues, stopReplayTimer]);
 
   const document: WaypointsDocument = buildWaypointsDocument(keyframes);
