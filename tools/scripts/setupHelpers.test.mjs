@@ -10,6 +10,7 @@ import {
   shouldInstallGlobalIlu,
 } from './setupHelpers.js';
 import {
+  BACKEND_NATIVE_SIM_FORCE_ENV,
   BLENDER_FORCE_INSTALL_ENV,
   GENESIS_FORCE_INSTALL_ENV,
   GITHUB_CLI_LOGIN_COMMAND,
@@ -18,6 +19,11 @@ import {
   LOCAL_SIMULATORS_INSTALL_COMMAND,
   LOCAL_SIMULATORS_INSTALL_FLAG,
   LOCAL_ILU_COMMAND,
+  MJLAB_FORCE_INSTALL_ENV,
+  MJLAB_INSTALL_COMMAND,
+  MJLAB_INSTALL_FLAG,
+  NATIVE_SIM_INSTALL_COMMAND,
+  NATIVE_SIM_INSTALL_FLAG,
   PYBULLET_FORCE_INSTALL_ENV,
   SIMULATOR_CONTAINER_INSTALL_COMMAND,
   SIMULATOR_CONTAINER_INSTALL_ENV,
@@ -50,18 +56,28 @@ test('applySetupProfileFlags maps public setup flags to runtime install env', ()
   const env = {};
 
   const result = applySetupProfileFlags({
-    args: [LOCAL_SIMULATORS_INSTALL_FLAG, SIMULATOR_CONTAINER_INSTALL_FLAG],
+    args: [
+      LOCAL_SIMULATORS_INSTALL_FLAG,
+      SIMULATOR_CONTAINER_INSTALL_FLAG,
+      NATIVE_SIM_INSTALL_FLAG,
+      MJLAB_INSTALL_FLAG,
+    ],
     env,
   });
 
   assert.deepEqual(result, {
     localSimulators: true,
     simulatorContainers: true,
+    mjx: true,
+    mjlab: true,
+    genesis: false,
   });
   assert.equal(env[BLENDER_FORCE_INSTALL_ENV], '1');
   assert.equal(env[GENESIS_FORCE_INSTALL_ENV], '1');
   assert.equal(env[PYBULLET_FORCE_INSTALL_ENV], '1');
   assert.equal(env[SIMULATOR_CONTAINER_INSTALL_ENV], '1');
+  assert.equal(env[BACKEND_NATIVE_SIM_FORCE_ENV], '1');
+  assert.equal(env[MJLAB_FORCE_INSTALL_ENV], '1');
 });
 
 test('selectInstalledSupersededPythonDependencies only returns superseded packages present in the environment', () => {
@@ -116,12 +132,13 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
       'Node app dependencies in node_modules',
       'Unified Python runtime in .venv',
       'Backend Python packages used by URDF Studio services',
-      'MJLab when this machine is compatible',
     ],
   });
   assert.deepEqual(sections[2], {
     heading: 'Optional Extras',
     lines: [
+      `${NATIVE_SIM_INSTALL_COMMAND} installs the native JAX/MJX runtime after compatibility checks.`,
+      `${MJLAB_INSTALL_COMMAND} installs the MJLab + MuJoCo Warp validation runtime after compatibility checks.`,
       `${LOCAL_SIMULATORS_INSTALL_COMMAND} installs local simulator extras: Blender, Genesis, and PyBullet.`,
       `${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker simulator images. This can be large and is separate from normal laptop setup.`,
     ],
@@ -169,7 +186,9 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
   assert.ok(sections[0].lines.includes('Unified Python backend runtime'));
   assert.ok(sections[0].lines.includes('Simulator compatibility preflight'));
   assert.ok(sections[0].lines.includes('Backend Python packages for URDF Studio services'));
-  assert.ok(sections[0].lines.includes('Default managed extras: MJLab when compatible'));
+  assert.ok(sections[0].lines.includes('Portable backend Python packages'));
+  assert.ok(sections[0].lines.includes(`MJX: ${NATIVE_SIM_INSTALL_COMMAND} installs the native JAX/MJX runtime`));
+  assert.ok(sections[0].lines.includes(`MJLab: ${MJLAB_INSTALL_COMMAND} installs the CUDA-oriented validation runtime`));
   assert.ok(sections[0].lines.includes(`Local simulator extras: ${LOCAL_SIMULATORS_INSTALL_COMMAND} installs Blender, Genesis, and PyBullet`));
   assert.ok(sections[0].lines.includes(`Container simulator images: ${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker images only when needed`));
   assert.equal(sections.length, 1);

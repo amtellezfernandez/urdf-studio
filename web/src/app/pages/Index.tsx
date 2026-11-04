@@ -55,6 +55,7 @@ import { useCameraExportActions } from "@/app/pages/index/useCameraExportActions
 import { useUrdfExportActions } from "@/app/pages/index/useUrdfExportActions";
 import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
 import { IndexWorldDialogs } from "@/app/pages/index/IndexWorldDialogs";
+import { MotionDock } from "@/features/scenarios/MotionDock";
 import { useIndexSourceLoaders } from "@/app/pages/index/useIndexSourceLoaders";
 import {
   buildCollisionMeshStats,
@@ -1479,6 +1480,18 @@ const Index = () => {
     onCameraUploadOpenChange: setIsCameraUploadOpen,
   };
 
+  const waypointRecorderContext = useMemo(
+    () => ({
+      getJointValues: () => jointValuesRef.current,
+      setJointValues,
+      buildWorldEnvelope: () => buildCurrentWorldSceneRegistryEnvelope(),
+      worldObjectIds: objects.map((object) => object.id).filter((id): id is string => Boolean(id)),
+      robotUrdf: vizUrdfContent ?? null,
+      robotLinks: availableLinks,
+    }),
+    [setJointValues, buildCurrentWorldSceneRegistryEnvelope, objects, vizUrdfContent, availableLinks]
+  );
+
   const { pageLayoutProps, viewerLayoutProps } = useIndexPageLayoutProps({
     isLoading,
     topNavBarProps,
@@ -1621,6 +1634,7 @@ const Index = () => {
       urdfFile: viewerDraftPreview.urdfFile,
       urdfAnalysis: viewerDraftPreview.urdfAnalysis,
       vizUrdfContent: viewerDraftPreview.vizUrdfContent,
+      motionDock: <MotionDock context={waypointRecorderContext} />,
     },
   };
 
@@ -1646,17 +1660,6 @@ const Index = () => {
     />
   );
   jointValuesRef.current = jointValues;
-  const waypointRecorderContext = useMemo(
-    () => ({
-      getJointValues: () => jointValuesRef.current,
-      setJointValues,
-      buildWorldEnvelope: () => buildCurrentWorldSceneRegistryEnvelope(),
-      worldObjectIds: objects.map((object) => object.id).filter((id): id is string => Boolean(id)),
-      robotUrdf: vizUrdfContent ?? null,
-      robotLinks: availableLinks,
-    }),
-    [setJointValues, buildCurrentWorldSceneRegistryEnvelope, objects, vizUrdfContent, availableLinks]
-  );
   if (!hasEnteredWorkspace || thumbnailMode) {
     return gatedModeView;
   }

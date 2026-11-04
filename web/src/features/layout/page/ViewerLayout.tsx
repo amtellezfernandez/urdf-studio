@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
 import type { RepeatedInertiaSymmetryChain } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RepeatedInertiaSymmetryCenterMode } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
@@ -94,6 +94,7 @@ type ViewerLayoutProps = {
   onObjectSelect?: Viewer3DProps["onObjectSelect"];
   onInertiaReliabilityChange?: Viewer3DProps["onInertiaReliabilityChange"];
   enableObjectActionsInReadOnly?: boolean;
+  motionDock?: ReactNode;
 };
 
 export const ViewerLayout = ({
@@ -161,6 +162,7 @@ export const ViewerLayout = ({
   enableObjectActionsInReadOnly = false,
   thumbnailMode = false,
   onFixMissingMeshRefs,
+  motionDock,
 }: ViewerLayoutProps) => {
   const viewerKey = `urdf-${urdfContentVersion}`;
   const viewerProps = toViewer3DProps({
@@ -288,6 +290,7 @@ export const ViewerLayout = ({
           />
         )}
       </div>
+      {motionDock}
     </main>
   );
 };

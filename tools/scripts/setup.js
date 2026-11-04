@@ -309,7 +309,8 @@ async function main() {
   try {
     const setupProfiles = applySetupProfileFlags();
     logArrow('URDF Studio setup');
-    logInfo('Default install: node_modules, .venv, backend Python packages, and MJLab when compatible.');
+    logInfo('Default install: node_modules, .venv, and portable backend Python packages only.');
+    logInfo('Optional runtimes: npm run setup -- --with-mjx or npm run setup -- --with-mjlab.');
     logInfo('Simulator work: npm run setup:simulators installs Blender, Genesis, and PyBullet local runtimes.');
     logInfo('Containerized simulators: npm run setup:simulator-containers builds Docker images only when needed.');
     if (setupProfiles.localSimulators) {
@@ -317,6 +318,12 @@ async function main() {
     }
     if (setupProfiles.simulatorContainers) {
       logInfo('Setup profile enabled: container simulator images.');
+    }
+    if (setupProfiles.mjx) {
+      logInfo('Setup profile enabled: native JAX/MJX runtime.');
+    }
+    if (setupProfiles.mjlab) {
+      logInfo('Setup profile enabled: MJLab validation runtime.');
     }
     logInfo('npm and uv commands stream live output below so long installs do not look stalled.');
     renderSetupSections(buildSetupRoadmapSections());

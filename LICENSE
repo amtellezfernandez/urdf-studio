@@ -1,50 +1,71 @@
-PROPRIETARY LICENSE - ALL RIGHTS RESERVED
+URDF STUDIO PROPRIETARY NON-COMMERCIAL LICENSE
+Version 1.0 — 31 August 2026
 
-Copyright (c) 2026 ALBA MARIA TELLEZ FERNANDEZ
+Copyright (c) 2026 Alba Maria Tellez Fernandez. All rights reserved.
 
-This source code and all associated materials are proprietary intellectual
-property of ALBA MARIA TELLEZ FERNANDEZ ("Owner"). All rights are reserved.
+1. Scope
 
-No license or permission is granted under any intellectual property rights
-except as expressly and separately agreed in writing by the Owner. Without
-such written permission, you may not use, copy, modify, publish, distribute,
-sublicense, sell, lease, lend, or create derivative works from this code or
-its outputs.
+This license applies to the URDF Studio source code, documentation, assets,
+and other materials in this repository (the “Software”), except materials that
+state their own license or are identified as third-party materials.
 
-Confidentiality / NDA-like obligations: If you have access to this code as a
-collaborator, contractor, employee, or contributor, you must keep it
-confidential. You may not disclose, discuss, or share any non-public aspects of
-this codebase or related information unless the Owner has expressly made that
-information public in writing. You may use the code solely for the Owner's
-benefit and only as authorized in writing by the Owner.
+2. Limited non-commercial permission
 
-No ownership for collaborators (past or future): You acquire no ownership or IP
-rights in the codebase by collaborating. Any rights you may claim apply only,
-if at all, to your own Contributions created after you start collaborating, and
-even then those rights are immediately assigned to the Owner as stated below.
+Subject to these terms, Alba Maria Tellez Fernandez (the “Licensor”) grants you
+a personal, revocable, non-exclusive, non-transferable, non-sublicensable right
+to use, copy, and modify the Software solely for non-commercial personal,
+educational, evaluation, and research purposes.
 
-Contributions and IP assignment: Any contribution, modification, suggestion,
-or other material you provide for this codebase (a "Contribution"), including
-all modifications made after you start collaborating, is hereby irrevocably
-assigned to the Owner, including all worldwide intellectual property rights.
-You waive, to the maximum extent permitted by law, any moral rights or similar
-rights in your Contributions and agree not to assert any ownership or claim of
-IP in the codebase or Contributions now or in the future.
+“Non-commercial” means not primarily intended for, directed toward, or used in
+connection with commercial advantage, monetary compensation, paid services,
+revenue-generating activity, or the development, operation, or support of a
+commercial product or service.
 
-No claims to proceeds: You shall not claim any royalties, revenue share, or
-other compensation from the use, licensing, sale, or commercialization of the
-codebase or its outputs, whether by the Owner or any third party.
+3. Restrictions
 
-Owner freedom of action: The Owner may open source, sell, license, or otherwise
-commercialize the codebase (in whole or in part) at any time without your
-consent, and nothing in this license restricts the Owner from doing so.
+Without the Licensor’s prior written permission, you may not:
 
-No implied rights: Nothing in this license shall be interpreted as granting any
-rights by implication, estoppel, or otherwise.
+  a. use the Software for any commercial purpose;
+  b. distribute, publish, disclose, sublicense, sell, lease, lend, host, or
+     otherwise make the Software or any modified version available to others;
+  c. use the Software to train, improve, benchmark, or provide a commercial
+     model, service, or product;
+  d. remove or alter copyright, attribution, license, or other proprietary
+     notices; or
+  e. represent that you are affiliated with, endorsed by, or authorized by the
+     Licensor.
 
-Governing law and jurisdiction: This license is governed by the laws of
-France. The courts of Paris, France, have exclusive jurisdiction over any
-dispute arising from or relating to this license or the codebase.
+4. Ownership and contributions
 
-If you do not agree to these terms, you must not access, use, or contribute to
-this code.
+The Software is licensed, not sold. The Licensor retains all right, title, and
+interest in and to the Software and all related intellectual-property rights.
+No contribution, modification, or other material may be submitted for inclusion
+in the Software without the Licensor’s prior written approval and a separately
+executed contributor agreement.
+
+5. Third-party materials
+
+Third-party components remain subject to their own licenses. This license does
+not change or restrict rights granted under those licenses; it governs only the
+Licensor’s original materials.
+
+6. Termination
+
+This license terminates automatically if you violate any term. On termination,
+you must stop using the Software and delete all copies under your control,
+except where retention is required by law.
+
+7. No warranty; limitation of liability
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE
+LICENSOR SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
+FROM OR IN CONNECTION WITH THE SOFTWARE OR THIS LICENSE.
+
+8. Governing law
+
+This license is governed by the laws of France. The courts of Paris, France,
+have exclusive jurisdiction over disputes arising from it.
+
+For commercial licensing or other permissions, contact the Licensor in writing.

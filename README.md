@@ -80,7 +80,7 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. It can take a while the first time.
 
-By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, and MJLab when compatible.
+By default, `npm run setup` installs the app dependencies, the unified Python runtime, and portable backend packages only. It never installs NVIDIA drivers, CUDA toolkits, NVIDIA Container Toolkit, or system packages.
 
 Blender, Genesis, PyBullet, and simulator containers are optional profiles. The base app remains usable if an optional target runtime is absent on the current laptop.
 
@@ -93,6 +93,8 @@ Useful setup commands:
 ```bash
 npm run setup:check
 npm run setup -- --twin
+npm run setup -- --with-mjx
+npm run setup -- --with-mjlab
 ```
 
 Local simulator setup:
@@ -101,7 +103,7 @@ Local simulator setup:
 npm run setup:simulators
 ```
 
-This installs Blender, Genesis, and PyBullet local runtimes in addition to the default MJLab setup.
+This installs Blender, Genesis, and PyBullet local runtimes. Add MJX or MJLab separately when needed.
 
 Advanced per-runtime installs:
 
@@ -127,20 +129,21 @@ Default `npm run setup` install inventory:
 
 - `node_modules` for the web app and local tooling
 - `.venv` with the unified Python runtime used by backend services
-- Backend Python packages required by URDF Studio
-- MJLab when the current machine is compatible
+- Portable backend Python packages required by URDF Studio
 
 Not installed by default:
 
 - Blender runtime
 - Genesis
+- MJX / JAX native simulation runtime
+- MJLab / MuJoCo Warp validation runtime
 - PyBullet
 - Simulator container images
 - Every simulator globally
 
 ## WSL2 Simulator Setup
 
-Use WSL2, not WSL1. The core app, URDF loading, PyBullet, MuJoCo, MJLab, Genesis, MJX containers, and managed Blender are the supported WSL path when the host has the required display, GPU, and Docker features. Setup detects the machine first and installs only the default managed runtimes unless you explicitly opt into more with `npm run setup:simulators` or `npm run setup:simulator-containers`.
+Use WSL2, not WSL1. The core app, URDF loading, PyBullet, MuJoCo, MJLab, Genesis, MJX containers, and managed Blender are the supported WSL path when the host has the required display, GPU, and Docker features. Setup detects the machine first; add individual runtimes only with an explicit setup profile.
 
 Before installing heavy simulator runtimes, check the basics inside WSL:
 
@@ -167,7 +170,7 @@ WSL target behavior:
 - Isaac Sim is intentionally blocked inside WSL. Use native Linux with the official NVIDIA workflow, or an official Isaac Sim container on a compatible native Linux GPU host.
 - SAPIEN Vulkan rendering is intentionally blocked inside WSL. Use a native Linux GPU host with a Vulkan render device.
 
-Do not install every simulator globally. Run `npm run setup` and let URDF Studio install the default managed runtimes for the current machine. Add Blender or other simulator runtimes only when you need them. Use `npm run simulator:container:plan -- <simulator-id>` to see the exact Docker command for simulator targets that should run in a container.
+Do not install every simulator globally. Run `npm run setup` for the portable application runtime. Add each simulator only when you need it. Use `npm run simulator:container:plan -- <simulator-id>` to see the exact Docker command for simulator targets that should run in a container.
 
 To inspect one simulator target before installing or launching it:
 
@@ -344,6 +347,6 @@ npm run build
 
 ## License And Contributions
 
-- License: see [LICENSE](LICENSE)
+- License: proprietary, non-commercial use only; see [LICENSE](LICENSE)
 - Contributions require written permission and a CLA: see [CLA.md](CLA.md)
 - Contributing guidelines: see [CONTRIBUTING.md](CONTRIBUTING.md)

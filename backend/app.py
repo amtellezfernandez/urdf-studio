@@ -20,6 +20,7 @@ from backend.api.health import router as health_router
 from backend.api.ilu_assembly import router as ilu_assembly_router
 from backend.api.ik import router as ik_router
 from backend.api.ikd_runtime import router as ikd_runtime_router
+from backend.api.optional_runtime_install import router as optional_runtime_install_router
 from backend.api.ilu_urdf import router as ilu_urdf_router
 from backend.api.ilu_session import router as ilu_session_router
 from backend.api.robot_mastering import router as robot_mastering_router
@@ -64,6 +65,7 @@ API_ROUTERS = (
     attestation_router,
     ik_router,
     ikd_runtime_router,
+    optional_runtime_install_router,
     robot_mastering_router,
     samples_router,
     world_bridge_router,

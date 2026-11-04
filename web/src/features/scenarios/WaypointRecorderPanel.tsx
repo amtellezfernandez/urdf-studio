@@ -8,6 +8,8 @@ import { Input } from "@/shared/ui/input";
 import { NumberInput } from "@/shared/ui/number-input";
 import { ScrollArea } from "@/shared/ui/scroll-area";
 import { saveAuthoredScenario } from "@/features/scenarios/scenariosApi";
+import { MotionTimeline } from "@/features/scenarios/MotionTimeline";
+import { MotionLibraryPanel } from "@/features/scenarios/MotionLibraryPanel";
 import { useWaypointRecorder } from "@/features/scenarios/useWaypointRecorder";
 
 export type WaypointRecorderContext = {
@@ -77,7 +79,7 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
           </Button>
         )}
         <Button size="sm" variant="outline" onClick={recorder.addKeyframe}>
-          + Add keyframe
+          + Key
         </Button>
         {recorder.isReplaying ? (
           <Button size="sm" variant="outline" onClick={recorder.pauseReplay}>
@@ -90,7 +92,7 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
             onClick={recorder.replay}
             disabled={recorder.keyframes.length < 1}
           >
-            ▶ Replay
+            ▶ Play
           </Button>
         )}
         <Button
@@ -102,20 +104,28 @@ export const WaypointRecorderPanel = ({ context }: { context: WaypointRecorderCo
           Clear
         </Button>
         <span className="ml-auto text-xs text-muted-foreground">
-          {recorder.keyframes.length} keyframe(s) · {recorder.duration.toFixed(2)}s
+          {recorder.keyframes.length} key(s) · {recorder.duration.toFixed(2)}s
           {recorder.isReplaying ? ` · t=${recorder.previewTime.toFixed(2)}s` : ""}
         </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Pose the robot with the viewer's IK targets or joint controls, then add a keyframe at
-        each pose. Replay previews the interpolated motion; saving turns it into a runnable
-        scenario.
+        Pose with IK or joint controls, set keys in the Dope Sheet, and refine values in the
+        Graph Editor. Playback uses the same interpolation as scenario execution.
       </p>
+
+      <MotionTimeline
+        keyframes={recorder.keyframes}
+        duration={recorder.duration}
+        previewTime={recorder.previewTime}
+        onSeek={recorder.seek}
+      />
+
+      <MotionLibraryPanel keyframes={recorder.keyframes} onLoad={recorder.loadKeyframes} />
 
       <ScrollArea className="h-40 rounded-md border border-border/70">
         {recorder.keyframes.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No keyframes yet. Pose the robot and click “Add keyframe”.
+            No keys yet. Pose the robot and click “+ Key”.
           </p>
         ) : (
           <table className="w-full text-xs">

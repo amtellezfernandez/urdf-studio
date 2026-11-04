@@ -37,7 +37,7 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. The first run can take several minutes.
 
-By default, `npm run setup` installs the app dependencies, the unified Python runtime, backend packages, and MJLab when compatible.
+By default, `npm run setup` installs the app dependencies, the unified Python runtime, and portable backend packages only. It never installs NVIDIA drivers, CUDA toolkits, NVIDIA Container Toolkit, or system packages.
 
 Blender, Genesis, PyBullet, and simulator containers are optional profiles. The base app remains usable if an optional target runtime cannot be installed on the current laptop.
 
@@ -50,6 +50,8 @@ Optional setup commands:
 ```bash
 npm run setup:check
 npm run setup -- --twin
+npm run setup -- --with-mjx
+npm run setup -- --with-mjlab
 ```
 
 Local simulator setup:
@@ -58,7 +60,7 @@ Local simulator setup:
 npm run setup:simulators
 ```
 
-This installs Blender, Genesis, and PyBullet local runtimes in addition to the default MJLab setup.
+This installs Blender, Genesis, and PyBullet local runtimes. Add MJX or MJLab separately when needed.
 
 Advanced per-runtime installs:
 
@@ -84,13 +86,14 @@ Default `npm run setup` install inventory:
 
 - `node_modules` for the web app and local tooling
 - `.venv` with the unified Python runtime used by backend services
-- Backend Python packages required by URDF Studio
-- MJLab when the current machine is compatible
+- Portable backend Python packages required by URDF Studio
 
 Not installed by default:
 
 - Blender runtime
 - Genesis
+- MJX / JAX native simulation runtime
+- MJLab / MuJoCo Warp validation runtime
 - PyBullet
 - Simulator container images
 - Every simulator globally

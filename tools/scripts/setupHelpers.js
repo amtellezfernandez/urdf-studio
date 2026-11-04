@@ -1,6 +1,7 @@
 import {
   BLENDER_FORCE_INSTALL_ENV,
   GENESIS_FORCE_INSTALL_ENV,
+  GENESIS_INSTALL_FLAG,
   GITHUB_CLI_LOGIN_COMMAND,
   GLOBAL_ILU_INSTALL_COMMAND,
   GLOBAL_ILU_INSTALL_ENV,
@@ -8,6 +9,12 @@ import {
   LOCAL_SIMULATORS_INSTALL_COMMAND,
   LOCAL_SIMULATORS_INSTALL_FLAG,
   LOCAL_ILU_COMMAND,
+  BACKEND_NATIVE_SIM_FORCE_ENV,
+  MJLAB_FORCE_INSTALL_ENV,
+  MJLAB_INSTALL_COMMAND,
+  MJLAB_INSTALL_FLAG,
+  NATIVE_SIM_INSTALL_COMMAND,
+  NATIVE_SIM_INSTALL_FLAG,
   PYBULLET_FORCE_INSTALL_ENV,
   SIMULATOR_CONTAINER_INSTALL_COMMAND,
   SIMULATOR_CONTAINER_INSTALL_ENV,
@@ -34,6 +41,9 @@ export function applySetupProfileFlags({
 } = {}) {
   const localSimulators = args.includes(LOCAL_SIMULATORS_INSTALL_FLAG);
   const simulatorContainers = args.includes(SIMULATOR_CONTAINER_INSTALL_FLAG);
+  const mjx = args.includes(NATIVE_SIM_INSTALL_FLAG);
+  const mjlab = args.includes(MJLAB_INSTALL_FLAG);
+  const genesis = args.includes(GENESIS_INSTALL_FLAG);
 
   if (localSimulators) {
     env[BLENDER_FORCE_INSTALL_ENV] = '1';
@@ -43,10 +53,22 @@ export function applySetupProfileFlags({
   if (simulatorContainers) {
     env[SIMULATOR_CONTAINER_INSTALL_ENV] = '1';
   }
+  if (mjx) {
+    env[BACKEND_NATIVE_SIM_FORCE_ENV] = '1';
+  }
+  if (mjlab) {
+    env[MJLAB_FORCE_INSTALL_ENV] = '1';
+  }
+  if (genesis) {
+    env[GENESIS_FORCE_INSTALL_ENV] = '1';
+  }
 
   return {
     localSimulators,
     simulatorContainers,
+    mjx,
+    mjlab,
+    genesis,
   };
 }
 
@@ -76,7 +98,9 @@ export function buildSetupRoadmapSections() {
         'Unified Python backend runtime',
         'Simulator compatibility preflight',
         'Backend Python packages for URDF Studio services',
-        'Default managed extras: MJLab when compatible',
+        'Portable backend Python packages',
+        `MJX: ${NATIVE_SIM_INSTALL_COMMAND} installs the native JAX/MJX runtime`,
+        `MJLab: ${MJLAB_INSTALL_COMMAND} installs the CUDA-oriented validation runtime`,
         `Local simulator extras: ${LOCAL_SIMULATORS_INSTALL_COMMAND} installs Blender, Genesis, and PyBullet`,
         `Container simulator images: ${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker images only when needed`,
         'Hugging Face and GitHub access',
@@ -172,12 +196,13 @@ export function buildSetupSummarySections({
         'Node app dependencies in node_modules',
         'Unified Python runtime in .venv',
         'Backend Python packages used by URDF Studio services',
-        'MJLab when this machine is compatible',
       ],
     },
     {
       heading: 'Optional Extras',
       lines: [
+        `${NATIVE_SIM_INSTALL_COMMAND} installs the native JAX/MJX runtime after compatibility checks.`,
+        `${MJLAB_INSTALL_COMMAND} installs the MJLab + MuJoCo Warp validation runtime after compatibility checks.`,
         `${LOCAL_SIMULATORS_INSTALL_COMMAND} installs local simulator extras: Blender, Genesis, and PyBullet.`,
         `${SIMULATOR_CONTAINER_INSTALL_COMMAND} builds Docker simulator images. This can be large and is separate from normal laptop setup.`,
       ],

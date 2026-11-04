@@ -22,11 +22,11 @@ export const WaypointRecorderDialog = ({
   context,
 }: WaypointRecorderDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="max-w-3xl">
+    <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Record Motion</DialogTitle>
+        <DialogTitle>Motion Studio</DialogTitle>
         <DialogDescription>
-          Pose the robot, capture keyframes, and save a runnable scenario — no code.
+          Pose, keyframe, replay, and save robot motion as a runnable scenario.
         </DialogDescription>
       </DialogHeader>
       {open && <WaypointRecorderPanel context={context} />}

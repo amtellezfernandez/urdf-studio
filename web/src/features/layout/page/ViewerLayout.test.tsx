@@ -192,12 +192,14 @@ describe("ViewerLayout", () => {
       createProps({
         showUrdfEditor: true,
         urdfEditorSplitView: true,
+        motionDock: createElement("div", { "data-motion-dock": "true" }),
       })
     );
 
     expect(container.querySelector('[data-viewer-host="urdf-7"]')).toBeTruthy();
     expect(container.querySelector('[data-urdf-comparison="true:true:true"]')).toBeTruthy();
     expect(container.querySelector("[data-workspace-viewer-content]")).toBeNull();
+    expect(container.querySelector('[data-motion-dock="true"]')).toBeTruthy();
 
     await act(async () => {
       root.unmount();

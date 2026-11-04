@@ -62,7 +62,7 @@ export function WorldsMenu({
           Scenarios (Cross-Sim)
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onOpenWaypointRecorder} className={menuItemClass}>
-          Record Motion
+          Motion Studio
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportCurrentWorldSceneLayer} className={menuItemClass}>
           Export World JSON

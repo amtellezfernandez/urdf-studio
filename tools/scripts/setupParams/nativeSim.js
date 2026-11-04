@@ -1,4 +1,6 @@
 export const NATIVE_SIM_SETUP = {
+  installFlag: '--with-mjx',
+  installCommand: 'npm run setup -- --with-mjx',
   skipAutoInstallEnv: 'URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL',
   forceInstallEnv: 'URDF_STUDIO_INSTALL_NATIVE_SIM',
   jaxDependencies: [
@@ -24,6 +26,8 @@ export const NATIVE_SIM_SETUP = {
 
 export const BACKEND_NATIVE_SIM_SKIP_ENV = NATIVE_SIM_SETUP.skipAutoInstallEnv;
 export const BACKEND_NATIVE_SIM_FORCE_ENV = NATIVE_SIM_SETUP.forceInstallEnv;
+export const NATIVE_SIM_INSTALL_FLAG = NATIVE_SIM_SETUP.installFlag;
+export const NATIVE_SIM_INSTALL_COMMAND = NATIVE_SIM_SETUP.installCommand;
 export const BACKEND_PYTHON_JAX_DEPENDENCIES = NATIVE_SIM_SETUP.jaxDependencies;
 export const MJX_DEPENDENCIES = NATIVE_SIM_SETUP.mjxDependencies;
 export const BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT =

@@ -94,7 +94,7 @@ describe("LeftSidebarPanel", () => {
       root.render(createElement(LeftSidebarPanel, props));
     });
 
-    expect(container.textContent).toContain("Simulation Prep");
+    expect(container.textContent).toContain("Runtimes");
     expect(container.textContent).toContain("Genesis");
     expect(container.textContent).not.toContain("URDF simulation workspace");
     expect(container.querySelector("[data-camera-panel]")?.getAttribute("data-camera-panel")).toBe("1");
@@ -113,6 +113,48 @@ describe("LeftSidebarPanel", () => {
       );
     });
     expect(props.onVerticalResizeStart).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("groups simulation and DCC targets into collapsible runtime categories", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = createProps();
+    props.workspaceTransfer = {
+      ...workspaceTransfer,
+      targets: [
+        ...workspaceTransfer.targets,
+        {
+          ...workspaceTransfer.targets[0],
+          id: "blender",
+          label: "Blender",
+          targetKind: "authoring_tool",
+          openLabel: "Open in Blender",
+          openingLabel: "Opening Blender",
+        },
+      ],
+    };
+
+    await act(async () => {
+      root.render(createElement(LeftSidebarPanel, props));
+    });
+
+    const groups = [...container.querySelectorAll("section[aria-label]")];
+    const simulators = groups.find((group) => group.getAttribute("aria-label") === "Simulators")?.querySelector("button");
+    const dcc = groups.find((group) => group.getAttribute("aria-label") === "DCC & Render")?.querySelector("button");
+    expect(simulators?.getAttribute("aria-expanded")).toBe("true");
+    expect(dcc?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("Blender");
+
+    await act(async () => {
+      dcc?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(dcc?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.textContent).not.toContain("Blender");
 
     await act(async () => {
       root.unmount();
@@ -237,14 +279,14 @@ describe("LeftSidebarPanel", () => {
       root.render(createElement(LeftSidebarPanel, props));
     });
 
-    const disabledButton = container.querySelector(
-      'button[aria-label="Genesis: Missing optional dependency: blender"]'
+    const installButton = container.querySelector(
+      'button[aria-label="Install Genesis"]'
     ) as HTMLButtonElement | null;
-    expect(disabledButton).toBeTruthy();
-    expect(disabledButton?.disabled).toBe(true);
-    expect(disabledButton?.querySelector(".lucide-info")).toBeTruthy();
-    expect(disabledButton?.querySelector(".lucide-arrow-up-right")).toBeFalsy();
-    expect(disabledButton?.querySelector("span")?.className).toContain("bg-muted");
+    expect(installButton).toBeTruthy();
+    expect(installButton?.disabled).toBe(false);
+    expect(installButton?.querySelector(".lucide-info")).toBeTruthy();
+    expect(installButton?.querySelector(".lucide-arrow-up-right")).toBeFalsy();
+    expect(installButton?.querySelector("span")?.className).toContain("bg-muted");
 
     await act(async () => {
       root.unmount();

@@ -9,6 +9,7 @@ import {
 } from "@/features/scenarios/waypointRecording";
 
 const REPLAY_INTERVAL_MS = 33;
+const RECORD_INTERVAL_MS = 67;
 
 type UseWaypointRecorderParams = {
   // Live joint state from the viewer.
@@ -29,6 +30,7 @@ export const useWaypointRecorder = ({
   const [isReplaying, setIsReplaying] = useState(false);
   const [previewTime, setPreviewTime] = useState(0);
   const recordStartRef = useRef<number | null>(null);
+  const recordRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const replayRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const replayStartRef = useRef<number | null>(null);
 
@@ -39,18 +41,47 @@ export const useWaypointRecorder = ({
     }
   }, []);
 
-  useEffect(() => () => stopReplayTimer(), [stopReplayTimer]);
+  const stopRecordTimer = useCallback(() => {
+    if (recordRef.current) {
+      clearInterval(recordRef.current);
+      recordRef.current = null;
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      stopReplayTimer();
+      stopRecordTimer();
+    },
+    [stopReplayTimer, stopRecordTimer]
+  );
 
   const startRecording = useCallback(() => {
     recordStartRef.current = nowSeconds();
-    setKeyframes([]);
+    setKeyframes([{ time_s: 0, joints: { ...getJointValues() } }]);
     setIsRecording(true);
-  }, []);
+  }, [getJointValues]);
 
   const stopRecording = useCallback(() => {
+    stopRecordTimer();
     setIsRecording(false);
     recordStartRef.current = null;
-  }, []);
+  }, [stopRecordTimer]);
+
+  useEffect(() => {
+    if (!isRecording) return;
+    stopRecordTimer();
+    recordRef.current = setInterval(() => {
+      const startedAt = recordStartRef.current;
+      if (startedAt === null) return;
+      const time_s = Math.max(0, nowSeconds() - startedAt);
+      setKeyframes((previous) => [
+        ...previous,
+        { time_s: Number(time_s.toFixed(3)), joints: { ...getJointValues() } },
+      ]);
+    }, RECORD_INTERVAL_MS);
+    return stopRecordTimer;
+  }, [getJointValues, isRecording, stopRecordTimer]);
 
   const addKeyframe = useCallback(() => {
     const elapsed =
@@ -90,15 +121,42 @@ export const useWaypointRecorder = ({
   }, []);
 
   const clear = useCallback(() => {
+    stopRecordTimer();
     setKeyframes([]);
     recordStartRef.current = null;
     setIsRecording(false);
-  }, []);
+  }, [stopRecordTimer]);
+
+  const loadKeyframes = useCallback(
+    (nextKeyframes: RecordedKeyframe[]) => {
+      stopReplayTimer();
+      stopRecordTimer();
+      setIsReplaying(false);
+      setIsRecording(false);
+      recordStartRef.current = null;
+      setPreviewTime(0);
+      setKeyframes(nextKeyframes.map((keyframe) => ({ ...keyframe, joints: { ...keyframe.joints } })));
+      setJointValues(interpolateWaypoints(nextKeyframes, 0));
+    },
+    [setJointValues, stopRecordTimer, stopReplayTimer]
+  );
 
   const pauseReplay = useCallback(() => {
     stopReplayTimer();
     setIsReplaying(false);
   }, [stopReplayTimer]);
+
+  const seek = useCallback(
+    (time: number) => {
+      const duration = waypointsDuration(keyframes);
+      const clamped = Math.min(Math.max(0, Number.isFinite(time) ? time : 0), duration);
+      stopReplayTimer();
+      setIsReplaying(false);
+      setPreviewTime(clamped);
+      setJointValues(interpolateWaypoints(keyframes, clamped));
+    },
+    [keyframes, setJointValues, stopReplayTimer]
+  );
 
   const replay = useCallback(() => {
     if (keyframes.length < 1) return;
@@ -139,6 +197,8 @@ export const useWaypointRecorder = ({
     setKeyframeDetach,
     removeKeyframe,
     clear,
+    loadKeyframes,
+    seek,
     replay,
     pauseReplay,
   };

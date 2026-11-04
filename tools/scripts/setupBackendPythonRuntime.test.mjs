@@ -59,14 +59,7 @@ test('backend native simulation install policy honors skip, force, platform, and
     }),
     false
   );
-  assert.equal(
-    shouldInstallBackendNativeSimRuntime({
-      env: {},
-      platform: 'linux',
-      managedInstallAllowed: (_report, simulatorId) => simulatorId === 'mjx',
-    }),
-    true
-  );
+  assert.equal(shouldInstallBackendNativeSimRuntime({ env: {} }), false);
 });
 
 test('backend dependency resolution composes portable, collision, and native stacks', () => {
@@ -76,7 +69,7 @@ test('backend dependency resolution composes portable, collision, and native sta
     managedInstallAllowed: () => false,
   });
   const fullLinux = resolveBackendPythonDependencies({
-    env: {},
+    env: { [BACKEND_NATIVE_SIM_FORCE_ENV]: '1' },
     platform: 'linux',
     managedInstallAllowed: () => true,
   });
@@ -94,7 +87,7 @@ test('backend verification script follows selected runtime stacks', () => {
     managedInstallAllowed: () => false,
   });
   const fullLinux = resolveBackendPythonVerifyImportScript({
-    env: {},
+    env: { [BACKEND_NATIVE_SIM_FORCE_ENV]: '1' },
     platform: 'linux',
     managedInstallAllowed: () => true,
   });

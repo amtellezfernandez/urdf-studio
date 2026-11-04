@@ -1,4 +1,6 @@
 export const MJLAB_SETUP = {
+  installFlag: '--with-mjlab',
+  installCommand: 'npm run setup -- --with-mjlab',
   skipAutoInstallEnv: 'URDF_STUDIO_SKIP_MJLAB_AUTO_INSTALL',
   forceInstallEnv: 'URDF_STUDIO_INSTALL_MJLAB',
   packages: {
@@ -11,6 +13,8 @@ export const MJLAB_SETUP = {
 
 export const MJLAB_SKIP_AUTO_INSTALL_ENV = MJLAB_SETUP.skipAutoInstallEnv;
 export const MJLAB_FORCE_INSTALL_ENV = MJLAB_SETUP.forceInstallEnv;
+export const MJLAB_INSTALL_FLAG = MJLAB_SETUP.installFlag;
+export const MJLAB_INSTALL_COMMAND = MJLAB_SETUP.installCommand;
 export const MJLAB_MUJOCO_WARP_PACKAGE = MJLAB_SETUP.packages.mujocoWarp;
 export const MJLAB_DEPENDENCIES = Object.values(MJLAB_SETUP.packages);
 export const MJLAB_VERIFY_IMPORT_SCRIPT = MJLAB_SETUP.verifyImportScript;

@@ -4,6 +4,8 @@
 // instead of failing on a missing or too-old torch. A floor (not an exact pin)
 // keeps the platform-correct torch build resolvable across CPU/CUDA/MPS.
 const buildGenesisSetup = (torchMinVersion) => ({
+  installFlag: '--with-genesis',
+  installCommand: 'npm run setup -- --with-genesis',
   skipAutoInstallEnv: 'URDF_STUDIO_SKIP_GENESIS_AUTO_INSTALL',
   forceInstallEnv: 'URDF_STUDIO_INSTALL_GENESIS',
   torchMinVersion,
@@ -30,6 +32,8 @@ export const GENESIS_SETUP = buildGenesisSetup('2.8');
 
 export const GENESIS_SKIP_AUTO_INSTALL_ENV = GENESIS_SETUP.skipAutoInstallEnv;
 export const GENESIS_FORCE_INSTALL_ENV = GENESIS_SETUP.forceInstallEnv;
+export const GENESIS_INSTALL_FLAG = GENESIS_SETUP.installFlag;
+export const GENESIS_INSTALL_COMMAND = GENESIS_SETUP.installCommand;
 export const GENESIS_TORCH_MIN_VERSION = GENESIS_SETUP.torchMinVersion;
 export const GENESIS_TORCH_PACKAGE = GENESIS_SETUP.packages.torch;
 export const GENESIS_WORLD_PACKAGE = GENESIS_SETUP.packages.world;

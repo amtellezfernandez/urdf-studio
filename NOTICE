@@ -2,14 +2,10 @@ urdf-studio
 
 Copyright (C) 2026 Alba Maria Tellez Fernandez
 
-This project is licensed under the GNU Affero General Public License
-version 3 only (AGPL-3.0-only). The full license text is in LICENSE.
-
-When conveying original or modified versions, preserve this notice,
-copyright notices, and author attribution. Modified versions must remain
-licensed as a whole under AGPL-3.0-only. Modified versions offered over a
-network must provide the Corresponding Source to users as required by
-AGPLv3 section 13.
+This project is proprietary software made available under the URDF Studio
+Proprietary Non-Commercial License, Version 1.0. The full license text is in
+LICENSE. Commercial use, distribution, and sublicensing require the Owner's
+prior written permission.
 
 Preferred upstream repository for public modifications:
 https://github.com/amtellezfernandez/urdf-studio

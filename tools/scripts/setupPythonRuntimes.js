@@ -42,12 +42,11 @@ export function shouldInstallPybulletRuntime({
 
 export function shouldInstallMjlabRuntime({
   env = process.env,
-  platform = process.platform,
 } = {}) {
   return shouldInstallOptionalPythonRuntime({
     skipAutoInstallEnv: MJLAB_SKIP_AUTO_INSTALL_ENV,
     forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
-    defaultInstall: platform !== 'win32',
+    defaultInstall: false,
     env,
   });
 }

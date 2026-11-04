@@ -1,5 +1,5 @@
-import { memo, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUpRight, ChevronsRight, Info, LoaderCircle, X } from "lucide-react";
+import { memo, useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ArrowUpRight, ChevronDown, ChevronsRight, Info, LoaderCircle, X } from "lucide-react";
 import { CameraPreviewPanel } from "@/features/layout/panels/CameraPreviewPanel";
 import type { MeshFiles } from "@/shared/types/feature";
 import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
@@ -21,6 +21,10 @@ import {
   VIEWPORT_HEIGHT_WITH_TOP_NAV,
 } from "@/features/layout/page/constants";
 import { SidebarDock } from "@/features/layout/page/SidebarDock";
+import {
+  OptionalRuntimeInstallDialog,
+  type OptionalRuntimeId,
+} from "@/features/layout/page/OptionalRuntimeInstallDialog";
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { cn } from "@/shared/lib/utils";
@@ -81,17 +85,13 @@ const resolveSidebarWorkspaceTargets = (
 const resolveWorkspaceTargetSummary = ({
   targets,
   workspaceLauncherStatusLabel,
-  workspaceTransfer,
 }: {
   targets: WorkspaceTransferTargetState[];
   workspaceLauncherStatusLabel?: string;
-  workspaceTransfer: WorkspaceTransferState | null | undefined;
 }): string =>
   targets.length > 0
-    ? `${targets.length} targets${
-        workspaceTransfer?.sceneSummary ? ` · ${workspaceTransfer.sceneSummary}` : ""
-      }`
-    : workspaceLauncherStatusLabel ?? "Workspace targets";
+    ? `${targets.length} launch target${targets.length === 1 ? "" : "s"}`
+    : workspaceLauncherStatusLabel ?? "No runtime targets";
 
 const getWorkspaceTransferBadgeClassName = (target: WorkspaceTransferTargetState) =>
   cn(
@@ -126,11 +126,19 @@ const getWorkspaceTransferStatusDotClassName = (target: WorkspaceTransferTargetS
         : "bg-muted-foreground/40"
   );
 
+const optionalRuntimeIdForTarget = (target: WorkspaceTransferTargetState): OptionalRuntimeId | null =>
+  target.canOpen || (target.id !== "genesis" && target.id !== "mjlab" && target.id !== "mjx")
+    ? null
+    : target.id;
+
 const WorkspaceTransferTargetButton = ({
   target,
+  onRequestInstall,
 }: {
   target: WorkspaceTransferTargetState;
+  onRequestInstall: (runtimeId: OptionalRuntimeId) => void;
 }) => {
+  const installableRuntimeId = optionalRuntimeIdForTarget(target);
   const title =
     target.isBusy && target.onCancel
       ? target.cancelLabel ?? `Stop opening ${target.label}`
@@ -138,15 +146,23 @@ const WorkspaceTransferTargetButton = ({
   return (
     <button
       type="button"
-      onClick={target.isBusy && target.onCancel ? target.onCancel : target.onAction}
-      disabled={!target.canOpen}
+      onClick={
+        target.isBusy && target.onCancel
+          ? target.onCancel
+          : installableRuntimeId
+            ? () => onRequestInstall(installableRuntimeId)
+            : target.onAction
+      }
+      disabled={!target.canOpen && !installableRuntimeId}
       className={getWorkspaceTransferTargetClassName(target)}
       aria-label={
         target.canOpen
           ? target.isBusy
             ? target.cancelLabel ?? `Stop opening ${target.label}`
             : target.openLabel
-          : target.disabledLabel
+          : installableRuntimeId
+            ? `Install ${target.label}`
+            : target.disabledLabel
       }
       title={title}
     >
@@ -187,8 +203,8 @@ const WorkspaceTransferLauncherButton = ({
     onClick={onOpenWorkspaceLauncher}
     disabled={!onOpenWorkspaceLauncher}
     className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border/55 bg-background/35 px-2 text-[10px] font-medium text-foreground transition-colors hover:border-border/80 hover:bg-muted/25 disabled:cursor-not-allowed disabled:opacity-45"
-    aria-label="Simulation Prep"
-    title={statusLabel ? `Simulation Prep: ${statusLabel}` : "Simulation Prep"}
+    aria-label="Open runtime launcher"
+    title={statusLabel ? `Open runtime launcher: ${statusLabel}` : "Open runtime launcher"}
   >
     <span
       aria-hidden="true"
@@ -196,9 +212,65 @@ const WorkspaceTransferLauncherButton = ({
         needsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
       }`}
     />
+    <span>Open</span>
     <ArrowUpRight className="h-3 w-3" />
   </button>
 );
+
+type RuntimeGroupId = "simulators" | "dcc";
+
+const RUNTIME_GROUPS: Array<{
+  id: RuntimeGroupId;
+  label: string;
+  matches: (target: WorkspaceTransferTargetState) => boolean;
+}> = [
+  {
+    id: "simulators",
+    label: "Simulators",
+    matches: (target) => target.targetKind === "physics_simulator",
+  },
+  {
+    id: "dcc",
+    label: "DCC & Render",
+    matches: (target) => target.targetKind === "authoring_tool" || target.targetKind === "renderer",
+  },
+];
+
+const RuntimeTargetGroup = ({
+  group,
+  targets,
+  expanded,
+  onToggle,
+  onRequestInstall,
+}: {
+  group: (typeof RUNTIME_GROUPS)[number];
+  targets: WorkspaceTransferTargetState[];
+  expanded: boolean;
+  onToggle: () => void;
+  onRequestInstall: (runtimeId: OptionalRuntimeId) => void;
+}) => {
+  if (targets.length === 0) return null;
+  return (
+    <section className="border-b border-border/25 last:border-b-0" aria-label={group.label}>
+      <button
+        type="button"
+        className="flex h-7 w-full items-center gap-1.5 px-2 text-left text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground"
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${expanded ? "" : "-rotate-90"}`}
+          aria-hidden="true"
+        />
+        <span>{group.label}</span>
+        <span className="ml-auto tabular-nums text-muted-foreground/70">{targets.length}</span>
+      </button>
+      {expanded ? targets.map((target) => (
+        <WorkspaceTransferTargetButton key={target.id} target={target} onRequestInstall={onRequestInstall} />
+      )) : null}
+    </section>
+  );
+};
 
 const WorkspaceTransferPanel = ({
   needsAttention,
@@ -206,14 +278,28 @@ const WorkspaceTransferPanel = ({
   statusLabel,
   summary,
   targets,
-}: WorkspaceTransferPanelProps) => (
+}: WorkspaceTransferPanelProps) => {
+  const [installRuntimeId, setInstallRuntimeId] = useState<OptionalRuntimeId | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<RuntimeGroupId, boolean>>({
+    simulators: true,
+    dcc: true,
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = "urdf-studio-optional-runtime-onboarding-v1";
+    if (window.localStorage.getItem(storageKey)) return;
+    const firstUnavailable = targets.find((target) => optionalRuntimeIdForTarget(target) !== null);
+    if (!firstUnavailable) return;
+    window.localStorage.setItem(storageKey, "seen");
+    setInstallRuntimeId(optionalRuntimeIdForTarget(firstUnavailable));
+  }, [targets]);
+  return <>
   <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/45 bg-background/45">
     <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/30 px-2 py-2">
       <div className="min-w-0">
         <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          Simulation Prep
+          Runtimes
         </div>
-        <div className="mt-1 truncate text-xs text-foreground">Simulators + tools</div>
         <div className="mt-0.5 truncate text-[9px] text-muted-foreground">{summary}</div>
       </div>
       <WorkspaceTransferLauncherButton
@@ -224,8 +310,15 @@ const WorkspaceTransferPanel = ({
     </div>
     {targets.length > 0 ? (
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {targets.map((target) => (
-          <WorkspaceTransferTargetButton key={target.id} target={target} />
+        {RUNTIME_GROUPS.map((group) => (
+          <RuntimeTargetGroup
+            key={group.id}
+            group={group}
+            targets={targets.filter(group.matches)}
+            expanded={expandedGroups[group.id]}
+            onToggle={() => setExpandedGroups((current) => ({ ...current, [group.id]: !current[group.id] }))}
+            onRequestInstall={setInstallRuntimeId}
+          />
         ))}
       </div>
     ) : (
@@ -234,7 +327,13 @@ const WorkspaceTransferPanel = ({
       </div>
     )}
   </div>
-);
+  <OptionalRuntimeInstallDialog
+    runtimeId={installRuntimeId}
+    open={installRuntimeId !== null}
+    onOpenChange={(open) => { if (!open) setInstallRuntimeId(null); }}
+  />
+  </>;
+};
 
 const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
   const {
@@ -269,7 +368,6 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
   const workspaceTargetSummary = resolveWorkspaceTargetSummary({
     targets: workspaceTargets,
     workspaceLauncherStatusLabel,
-    workspaceTransfer,
   });
 
   if (workspaceModeUi.isAssembly) {

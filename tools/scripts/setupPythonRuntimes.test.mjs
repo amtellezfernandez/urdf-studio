@@ -57,6 +57,7 @@ test('named simulator Python runtime install policy honors skip, force, and plat
     }),
     true
   );
+  assert.equal(shouldInstallMjlabRuntime({ env: {}, platform: 'linux' }), false);
 });
 
 test('simulator compatibility result distinguishes skipped and forced failures', () => {

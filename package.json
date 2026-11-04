@@ -2,6 +2,7 @@
   "name": "urdf-studio",
   "private": true,
   "version": "1.0.0",
+  "license": "LicenseRef-URDF-Studio-Proprietary-NonCommercial",
   "type": "module",
   "scripts": {
     "predev": "node tools/scripts/ensure-node-dependencies.js",

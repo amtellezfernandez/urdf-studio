@@ -37,9 +37,6 @@ import {
 
 export function shouldInstallBackendNativeSimRuntime({
   env = process.env,
-  platform = process.platform,
-  simulatorCompatibilityReport = null,
-  managedInstallAllowed = isManagedSimulatorInstallAllowed,
 } = {}) {
   if (isTruthyEnvValue(env[BACKEND_NATIVE_SIM_SKIP_ENV])) {
     return false;
@@ -47,7 +44,7 @@ export function shouldInstallBackendNativeSimRuntime({
   if (isTruthyEnvValue(env[BACKEND_NATIVE_SIM_FORCE_ENV])) {
     return true;
   }
-  return platform !== 'darwin' && managedInstallAllowed(simulatorCompatibilityReport, 'mjx');
+  return false;
 }
 
 export function shouldInstallBackendCollisionStack({
