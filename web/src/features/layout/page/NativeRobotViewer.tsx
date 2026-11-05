@@ -22,16 +22,25 @@ export const NativeRobotViewer = ({ source, onLoaded }: NativeRobotViewerProps) 
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [axisNotice, setAxisNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setReady(false);
     setError(null);
+    setAxisNotice(null);
   }, [source]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent): void => {
       if (event.source !== frameRef.current?.contentWindow) return;
       if (event.data?.type === "IFRAME_READY") setReady(true);
+      if (event.data?.type === "USD_AXIS_ADAPTER") {
+        const adapter = event.data;
+        const source = adapter.sourceUpAxis ? String(adapter.sourceUpAxis).toUpperCase() : "?";
+        const target = adapter.targetUpAxis ? String(adapter.targetUpAxis).toUpperCase() : "Z";
+        setAxisNotice(adapter.warning || `Axis ${source} → ${target}`);
+        if (adapter.warning) console.warn(adapter.warning);
+      }
       if (event.data?.type === "SCENE_LOADED" || event.data?.type === "USD_LOADED") onLoaded?.();
       if (event.data?.type === "ERROR") setError(String(event.data.error));
     };
@@ -93,6 +102,11 @@ export const NativeRobotViewer = ({ source, onLoaded }: NativeRobotViewerProps) 
       {error ? (
         <div className="absolute inset-x-3 bottom-3 rounded-md border border-destructive/40 bg-background/95 p-3 text-xs text-destructive shadow-lg">
           {source.format} scene failed to load: {error}
+        </div>
+      ) : null}
+      {axisNotice && source.format === "USD" ? (
+        <div className="pointer-events-none absolute right-3 top-3 rounded-md border border-border/50 bg-background/85 px-2 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur-sm">
+          {axisNotice}
         </div>
       ) : null}
     </div>

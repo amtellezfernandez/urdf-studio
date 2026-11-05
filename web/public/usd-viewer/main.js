@@ -4,6 +4,9 @@ import {
   PerspectiveCamera,
   Scene,
   Group,
+  GridHelper,
+  AxesHelper,
+  Color,
   WebGLRenderer,
   SRGBColorSpace,
   NeutralToneMapping,
@@ -19,6 +22,7 @@ import {
   parseFilePath,
   safeCall,
   getEntryFile,
+  resolveAxisAdapter,
 } from "./usdUtils.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -283,9 +287,12 @@ export function init(options = { container: null, hdrPath: null }) {
           timeout = 1000 / stage.GetTimeCodesPerSecond();
         }
 
-        // if up axis is z, rotate, otherwise make sure rotation is 0, in case we rotated in the past and need to undo it
-        window.usdRoot.rotation.x =
-          String.fromCharCode(stage.GetUpAxis()) === "z" ? -Math.PI / 2 : 0;
+        const sourceUpAxis = stage.GetUpAxis
+          ? String.fromCharCode(stage.GetUpAxis()).toLowerCase()
+          : "";
+        const axisAdapter = resolveAxisAdapter(sourceUpAxis, "z");
+        window.usdRoot.rotation.set(...axisAdapter.rotationEuler);
+        post("USD_AXIS_ADAPTER", axisAdapter);
 
         fitCameraToSelection(window.camera, window._controls, [window.usdRoot]);
         ready = true;
@@ -385,6 +392,15 @@ export function init(options = { container: null, hdrPath: null }) {
         camera.position.x = 0;
 
         const scene = (window.scene = new Scene());
+        scene.background = new Color(0x111111);
+
+        const grid = new GridHelper(240, 240, 0x4c4c4c, 0x292929);
+        grid.rotation.x = Math.PI / 2;
+        grid.name = "URDF Studio Grid";
+        scene.add(grid);
+        const axes = new AxesHelper(1.5);
+        axes.name = "URDF Studio Axes";
+        scene.add(axes);
 
         const usdRoot = (window.usdRoot = new Group());
         usdRoot.name = "USD Root";

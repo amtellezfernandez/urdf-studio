@@ -65,3 +65,47 @@ export async function getEntryFile(fileEntry) {
     return null;
   }
 }
+// Coordinate-frame adapter shared by native USD loading and diagnostics.
+// URDF Studio's canonical workspace frame is Z-up. This deliberately does
+// not guess when a source stage omits or declares an unsupported axis.
+export function resolveAxisAdapter(sourceUpAxis, targetUpAxis = "z") {
+  const source = String(sourceUpAxis || "").trim().toLowerCase();
+  const target = String(targetUpAxis || "z").trim().toLowerCase();
+  const supported = new Set(["x", "y", "z"]);
+  if (!supported.has(source) || !supported.has(target)) {
+    return {
+      sourceUpAxis: source || null,
+      targetUpAxis: target,
+      rotationEuler: [0, 0, 0],
+      applied: false,
+      confidence: "unknown",
+      warning: "USD stage up-axis is missing or unsupported; no axis remap was applied.",
+    };
+  }
+  if (source === target) {
+    return {
+      sourceUpAxis: source,
+      targetUpAxis: target,
+      rotationEuler: [0, 0, 0],
+      applied: false,
+      confidence: "declared",
+      warning: null,
+    };
+  }
+  const rotations = {
+    "x->z": [0, -Math.PI / 2, 0],
+    "y->z": [Math.PI / 2, 0, 0],
+    "z->x": [0, Math.PI / 2, 0],
+    "z->y": [-Math.PI / 2, 0, 0],
+    "x->y": [0, 0, -Math.PI / 2],
+    "y->x": [0, 0, Math.PI / 2],
+  };
+  return {
+    sourceUpAxis: source,
+    targetUpAxis: target,
+    rotationEuler: rotations[`${source}->${target}`] || [0, 0, 0],
+    applied: true,
+    confidence: "declared",
+    warning: null,
+  };
+}
