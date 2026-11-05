@@ -801,6 +801,27 @@ export function init(options = { container: null, hdrPath: null }) {
                 false /* canWrite */,
                 true /* canOwn */
               );
+              // Some SimReady packages contain layers whose authored
+              // sublayer/reference paths are basename-only even though the
+              // files are delivered in a configuration folder. Keep the
+              // package-relative path, and add a non-destructive root alias
+              // so those authored references remain resolvable.
+              if (fileName && dir !== "/" && /\.(usd|usda|usdc|usdz)$/i.test(fileName)) {
+                try {
+                  if (!USD.FS_analyzePath(`/${fileName}`).exists) {
+                    USD.FS_createDataFile(
+                      "/",
+                      fileName,
+                      new Uint8Array(buffer.slice(0)),
+                      true /* canRead */,
+                      false /* canWrite */,
+                      true /* canOwn */
+                    );
+                  }
+                } catch (aliasError) {
+                  console.warn("Could not create USD basename alias", fileName, aliasError);
+                }
+              }
             }
             // Determine root
             let root = primaryPath;

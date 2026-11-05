@@ -38,6 +38,9 @@ const isUsableRobotFile = (file: File): boolean =>
 const filePath = (file: File): string =>
   (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
 
+const normalizeRemoteSourceUrl = (value: string): string =>
+  value.trim().replaceAll("\\_", "_");
+
 const detectNativeRobot = async (
   files: File[]
 ): Promise<{ format: NativeRobotFormat; primaryPath: string } | null> => {
@@ -196,8 +199,9 @@ export const useRobotSourceController = ({
 
   const stageUrlRobotSource = useCallback(
     (url: string): void => {
-      const githubRepositoryUrl = normalizeGitHubRepositoryInput(url);
-      const label = deriveSourceLabel(url, githubRepositoryUrl ? "GitHub robot" : "Remote robot");
+      const normalizedUrl = normalizeRemoteSourceUrl(url);
+      const githubRepositoryUrl = normalizeGitHubRepositoryInput(normalizedUrl);
+      const label = deriveSourceLabel(normalizedUrl, githubRepositoryUrl ? "GitHub robot" : "Remote robot");
       stageRobot({
         label,
         kind: githubRepositoryUrl ? "github" : "url",
@@ -212,7 +216,7 @@ export const useRobotSourceController = ({
             }
             const isOpenUsd = (() => {
               try {
-                const parsed = new URL(url);
+                const parsed = new URL(normalizedUrl);
                 return (
                   parsed.hostname.toLowerCase().endsWith("huggingface.co") &&
                   parsed.pathname.startsWith("/datasets/") &&
@@ -225,12 +229,12 @@ export const useRobotSourceController = ({
               }
             })();
             if (isOpenUsd) {
-              await onOpenUsdSelected(url);
+              await onOpenUsdSelected(normalizedUrl);
             } else {
-              await onUrlSelected(url);
+              await onUrlSelected(normalizedUrl);
             }
             setLoadedRobotName(label);
-            rememberRecentRobotSource({ kind: "url", url });
+            rememberRecentRobotSource({ kind: "url", url: normalizedUrl });
           } finally {
             setIsLoadingUrl(false);
           }

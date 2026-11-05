@@ -129,9 +129,11 @@ const HUGGING_FACE_PACKAGE_SUFFIXES = /\.(usd|usda|usdc|usdz|png|jpg|jpeg|webp|e
 const MAX_HUGGING_FACE_PACKAGE_FILES = 512;
 const MAX_HUGGING_FACE_PACKAGE_BYTES = 512 * 1024 * 1024;
 const MAX_HUGGING_FACE_PACKAGE_FILE_BYTES = 256 * 1024 * 1024;
+const normalizeRemoteSourceUrl = (sourceUrl: string): string =>
+  sourceUrl.trim().replaceAll("\\_", "_");
 
 const loadPinnedHuggingFaceUsdPackage = async (sourceUrl: string): Promise<NativeRobotSource> => {
-  const parsed = new URL(sourceUrl);
+  const parsed = new URL(normalizeRemoteSourceUrl(sourceUrl));
   const parts = parsed.pathname.split("/").filter(Boolean);
   const dataset = `${parts[1]}/${parts[2]}`;
   const revision = parts[4];
@@ -626,9 +628,10 @@ const Index = () => {
     worldImportParams,
   });
   const handleOpenUsdSource = useCallback(async (sourceUrl: string): Promise<void> => {
+    const normalizedSourceUrl = normalizeRemoteSourceUrl(sourceUrl);
     const directHuggingFaceUsdUrl = (() => {
       try {
-        const parsed = new URL(sourceUrl);
+        const parsed = new URL(normalizedSourceUrl);
         const parts = parsed.pathname.split("/").filter(Boolean);
         const isDatasetFile =
           parsed.hostname.toLowerCase().endsWith("huggingface.co") &&
@@ -646,7 +649,7 @@ const Index = () => {
       }
     })();
     if (directHuggingFaceUsdUrl) {
-      const packageSource = await loadPinnedHuggingFaceUsdPackage(sourceUrl);
+      const packageSource = await loadPinnedHuggingFaceUsdPackage(normalizedSourceUrl);
       setNativeRobotSource({
         ...packageSource,
       });
@@ -657,7 +660,7 @@ const Index = () => {
     const response = await fetch(`${API_BASE_URL}/usd/import-url`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ source_url: sourceUrl }),
+      body: JSON.stringify({ source_url: normalizedSourceUrl }),
     });
     const responseText = await response.text();
     const payload = (() => {
@@ -676,7 +679,7 @@ const Index = () => {
         format: "USD",
         files: [],
         primaryPath: "",
-        label: sourceUrl.split("/").pop() || "OpenUSD robot",
+        label: normalizedSourceUrl.split("/").pop() || "OpenUSD robot",
         url: `${API_BASE_URL}${payload.native_url}`,
       });
     } else if (payload.world_url) {
