@@ -15,5 +15,13 @@ displayColor interpolation=uniform -> updatePrimvar(..., "uniform")
 ```
 
 The source and Emscripten SDK are intentionally build inputs, not vendored
-runtime files. Set `OPENUSD_EMSCRIPTEN_SOURCE` and `EMSDK` in the build
-environment, then run `node tools/usd-viewer/build-bindings.mjs`.
+runtime files. To bootstrap the pinned source and Emscripten 3.1.55 into the
+repository cache and build the binding, run:
+
+```bash
+node tools/usd-viewer/build-bindings.mjs --bootstrap
+```
+
+For CI or an already provisioned machine, set `OPENUSD_EMSCRIPTEN_SOURCE` to
+the `needle/feature/wasm-improvements` checkout and `EMSDK` to the activated
+Emscripten checkout, then run the same script without `--bootstrap`.
