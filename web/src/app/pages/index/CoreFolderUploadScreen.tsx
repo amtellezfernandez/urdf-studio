@@ -184,11 +184,11 @@ export const CoreFolderUploadScreen = ({
     <SourcePanel
       icon={Bot}
       title="Robot"
-      description="Load a robot from a local folder, GitHub repository, or direct URL. URDF, Xacro, MJCF, and OpenUSD are supported."
+      description="Load a robot from a local folder, GitHub or Hugging Face source, or direct URL. URDF, Xacro, MJCF, and OpenUSD are supported."
       infoContent={
         <>
-          GitHub repositories are scanned for a robot asset. URDF/Xacro, MJCF/XML, and USD/USDA/USDC/ USDZ
-          files are recognized automatically; an optional path can select a specific asset.
+          GitHub and Hugging Face sources are scanned for a robot asset. URDF/Xacro, MJCF/XML, and
+          USD/USDA/USDC/USDZ files are recognized automatically; pinned asset URLs are supported.
         </>
       }
       isDropActive={robotSourceDropActive}
@@ -203,7 +203,7 @@ export const CoreFolderUploadScreen = ({
         <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Input
             type="text"
-            placeholder="owner/repository, GitHub URL, or robot file URL"
+            placeholder="owner/repository, GitHub or Hugging Face URL, or robot file URL"
             value={urlSource}
             onChange={(event) => setUrlSource(event.target.value)}
             disabled={isLoadingUrl}
