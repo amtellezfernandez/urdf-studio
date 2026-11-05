@@ -41,6 +41,7 @@ export class HydraMesh {
     this._materials = [];
     this._baseMaterial = null;
     this._subsetSections = [];
+    this._displayColor = null;
 
     let material = new MeshPhysicalMaterial({
       side: DoubleSide,
@@ -171,15 +172,27 @@ export class HydraMesh {
     // Keep the base material active until at least one subset has resolved.
     this._mesh.material =
       this._materials.length > 1 ? this._materials : this._materials[0];
+    this._applyDisplayColorFallback();
+  }
+
+  _applyDisplayColorFallback() {
+    if (!this._displayColor) return;
+
+    // Do not assume the mesh has a single material: USD geom subsets are
+    // represented by a Three.js material array after binding.
+    const materials = Array.isArray(this._mesh.material)
+      ? this._mesh.material
+      : [this._mesh.material];
+    for (const material of materials) {
+      if (material?.color) material.color.copy(this._displayColor);
+    }
+    for (const material of materials) {
+      if (material) material.needsUpdate = true;
+    }
   }
 
   setDisplayColor(data, interpolation) {
     if (DISABLE_MATERIALS) return;
-
-    const wasDefaultMaterial = this._mesh.material === defaultMaterial;
-    if (wasDefaultMaterial) {
-      this._mesh.material = this._mesh.material.clone();
-    }
 
     this._colors = null;
 
@@ -187,10 +200,19 @@ export class HydraMesh {
       // SimReady materials frequently author one color per face/element
       // (uniform interpolation). The preview delegate only needs the first
       // color as a stable material fallback when no bound material exists.
-      this._mesh.material.color = new Color().fromArray(data);
+      this._displayColor = new Color().fromArray(data);
+      this._applyDisplayColorFallback();
     } else if (interpolation === "vertex") {
-      this._mesh.material.vertexColors = true;
-      if (wasDefaultMaterial) this._mesh.material.color = new Color(0xffffff);
+      const materials = Array.isArray(this._mesh.material)
+        ? this._mesh.material
+        : [this._mesh.material];
+      for (const material of materials) {
+        if (material) {
+          material.vertexColors = true;
+          material.color?.set(0xffffff);
+          material.needsUpdate = true;
+        }
+      }
       this._colors = data.slice(0);
       this.updateOrder(this._colors, "color");
     } else {
