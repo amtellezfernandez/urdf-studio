@@ -155,8 +155,10 @@ export class HydraMesh {
         this._geometry.addGroup(section.start, section.length, i + 1);
       }
     }
-    this._mesh = new Mesh(this._geometry, this._materials);
-    this._interface.config.usdRoot.add(this._mesh);
+    // Keep the original mesh object. Replacing it here loses the transform,
+    // visibility, name, and other state already assigned by Hydra, which
+    // detaches materialized robot parts from their authored link pose.
+    this._mesh.material = this._materials;
   }
 
   setDisplayColor(data, interpolation) {
