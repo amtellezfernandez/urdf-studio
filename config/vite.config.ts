@@ -164,6 +164,13 @@ export default defineConfig(({ mode }) => {
     server: {
       host: runtimeConfig.web.bindHost,
       port: runtimeConfig.web.port,
+      headers: {
+        // The vendored USD/MuJoCo workers use SharedArrayBuffer when available.
+        // credentialless keeps third-party viewer modules loadable while enabling
+        // cross-origin isolation for the native robot viewers.
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "credentialless",
+      },
       fs: {
         strict: true,
         allow: devServerFileAllowList,
