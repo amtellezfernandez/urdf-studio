@@ -290,6 +290,10 @@ export class HydraMesh {
     // the Hydra resource graph has completed its sync pass.
     if (this._subsetSections.length > 0) this._applySubsetMaterials();
   }
+
+  refreshMaterials() {
+    if (this._subsetSections.length > 0) this._applySubsetMaterials();
+  }
 }
 
 // Stub classes for camera and light prims to prevent Hydra warnings
@@ -729,6 +733,7 @@ export class HydraMaterial {
 
     if (!mainMaterialNode || DISABLE_MATERIALS) {
       this._material = defaultMaterial;
+      this._interface.refreshMaterialBindings(this._id);
       return;
     }
 
@@ -783,5 +788,6 @@ export class HydraMaterial {
         this._material
       );
     }
+    this._interface.refreshMaterialBindings(this._id);
   }
 }

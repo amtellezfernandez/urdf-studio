@@ -63,6 +63,14 @@ export class ThreeRenderDelegateInterface {
     }
   }
 
+  refreshMaterialBindings(materialId) {
+    for (const mesh of Object.values(this.meshes)) {
+      if (mesh._subsetSections?.some((section) => section.materialId === materialId)) {
+        mesh.refreshMaterials();
+      }
+    }
+  }
+
   CommitResources() {
     for (const id in this.meshes) {
       const hydraMesh = this.meshes[id];
