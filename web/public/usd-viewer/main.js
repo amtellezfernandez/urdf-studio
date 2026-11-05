@@ -5,7 +5,9 @@ import {
   Scene,
   Group,
   GridHelper,
-  AxesHelper,
+  BufferGeometry,
+  Line,
+  LineBasicMaterial,
   Color,
   WebGLRenderer,
   SRGBColorSpace,
@@ -358,13 +360,7 @@ export function init(options = { container: null, hdrPath: null }) {
           return;
         }
 
-        camera.position.z = 7;
-        camera.position.y = 7;
-        camera.position.x = 0;
-
-        const direction = controls.target
-          .clone()
-          .sub(camera.position)
+        const direction = new Vector3(1, 1, 0.5)
           .normalize()
           .multiplyScalar(distance);
 
@@ -376,20 +372,20 @@ export function init(options = { container: null, hdrPath: null }) {
 
         camera.updateProjectionMatrix();
 
-        camera.position.copy(controls.target).sub(direction);
+        camera.position.copy(controls.target).add(direction);
         controls.update();
       }
 
       async function setup() {
         const camera = (window.camera = new PerspectiveCamera(
-          27,
+          50,
           window.innerWidth / window.innerHeight,
-          1,
-          3500
+          0.01,
+          1000
         ));
-        camera.position.z = 7;
-        camera.position.y = 7;
-        camera.position.x = 0;
+        // Match URDF Studio's canonical ROS frame: X forward, Y left, Z up.
+        camera.up.set(0, 0, 1);
+        camera.position.set(1, 1, 0.5);
 
         const scene = (window.scene = new Scene());
         scene.background = new Color(0x111111);
@@ -398,7 +394,22 @@ export function init(options = { container: null, hdrPath: null }) {
         grid.rotation.x = Math.PI / 2;
         grid.name = "URDF Studio Grid";
         scene.add(grid);
-        const axes = new AxesHelper(1.5);
+        // Three's AxesHelper uses default colors and Y-up conventions. Keep
+        // the visual contract identical to the URDF viewer instead.
+        const axes = new Group();
+        const axisLength = 1.5;
+        const axisDefinitions = [
+          [[1, 0, 0], 0xbe2c41], // X / red
+          [[0, 1, 0], 0x6da424], // Y / green
+          [[0, 0, 1], 0x3464ad], // Z / blue
+        ];
+        for (const [[x, y, z], color] of axisDefinitions) {
+          const geometry = new BufferGeometry().setFromPoints([
+            new Vector3(0, 0, 0),
+            new Vector3(x * axisLength, y * axisLength, z * axisLength),
+          ]);
+          axes.add(new Line(geometry, new LineBasicMaterial({ color })));
+        }
         axes.name = "URDF Studio Axes";
         scene.add(axes);
 
@@ -452,6 +463,8 @@ export function init(options = { container: null, hdrPath: null }) {
         ));
         controls.enableDamping = true;
         controls.dampingFactor = 0.2;
+        controls.screenSpacePanning = false;
+        controls.target.set(0, 0, 0);
         controls.update();
 
         window.addEventListener("resize", onWindowResize);
