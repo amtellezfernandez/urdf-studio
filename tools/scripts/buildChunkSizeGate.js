@@ -49,9 +49,14 @@ const evaluateBuildChunkSizeGate = ({
   chunks,
   chunkLimits,
   totalJsMaxBytes,
+  deferredChunkPrefixes = [],
 }) => {
   const failures = [];
-  const totalJsBytes = sumBytes(chunks);
+  const deferredChunks = chunks.filter((chunk) =>
+    deferredChunkPrefixes.some((prefix) => chunk.fileName.startsWith(prefix))
+  );
+  const measuredChunks = chunks.filter((chunk) => !deferredChunks.includes(chunk));
+  const totalJsBytes = sumBytes(measuredChunks);
 
   if (totalJsBytes > totalJsMaxBytes) {
     failures.push(
@@ -78,6 +83,7 @@ const evaluateBuildChunkSizeGate = ({
   return {
     failures,
     totalJsBytes,
+    deferredJsBytes: sumBytes(deferredChunks),
   };
 };
 
@@ -85,12 +91,14 @@ const checkBuildChunkSizes = ({
   distDir = path.resolve(rootDir, PERF_GATE_BUILD_CHUNK_SIZE_CHECK.distDir),
   chunkLimits = PERF_GATE_BUILD_CHUNK_SIZE_CHECK.chunkLimits,
   totalJsMaxBytes = PERF_GATE_BUILD_CHUNK_SIZE_CHECK.totalJsMaxBytes,
+  deferredChunkPrefixes = PERF_GATE_BUILD_CHUNK_SIZE_CHECK.deferredChunkPrefixes,
 } = {}) => {
   const chunks = collectBuildJsChunks(distDir);
   const result = evaluateBuildChunkSizeGate({
     chunks,
     chunkLimits,
     totalJsMaxBytes,
+    deferredChunkPrefixes,
   });
 
   if (result.failures.length > 0) {
@@ -111,7 +119,10 @@ const checkBuildChunkSizes = ({
 const main = () => {
   const result = checkBuildChunkSizes();
   console.log(
-    `[build-chunk-size] OK ${result.chunks.length} JS chunks, ${formatBytes(result.totalJsBytes)} total`
+    `[build-chunk-size] OK ${result.chunks.length} JS chunks, ${formatBytes(result.totalJsBytes)} initial JS` +
+      (result.deferredJsBytes > 0
+        ? `, ${formatBytes(result.deferredJsBytes)} deferred JS`
+        : "")
   );
 };
 

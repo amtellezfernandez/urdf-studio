@@ -1,4 +1,5 @@
-import { Html, Line } from "@react-three/drei";
+import { Html } from "@react-three/drei/web/Html.js";
+import { Line } from "@react-three/drei/core/Line.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";

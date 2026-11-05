@@ -1,7 +1,8 @@
 import { useRef, useMemo } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import { Billboard, Text } from "@react-three/drei";
+import { Billboard } from "@react-three/drei/core/Billboard.js";
+import { Text } from "@react-three/drei/core/Text.js";
 import { AXIS_GIZMO_3D_PARAMS } from "@/features/viewer/axisGizmo3DParams";
 
 type AxisViewDirection = "front" | "back" | "top" | "bottom" | "left" | "right";

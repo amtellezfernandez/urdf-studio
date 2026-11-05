@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Html } from "@react-three/drei";
+import { Html } from "@react-three/drei/web/Html.js";
 import { extend, useThree, type ThreeEvent } from "@react-three/fiber";
 import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 

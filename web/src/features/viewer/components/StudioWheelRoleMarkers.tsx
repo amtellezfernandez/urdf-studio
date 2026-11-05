@@ -1,4 +1,4 @@
-import { Html } from "@react-three/drei";
+import { Html } from "@react-three/drei/web/Html.js";
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";

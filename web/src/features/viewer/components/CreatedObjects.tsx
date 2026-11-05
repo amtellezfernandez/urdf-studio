@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -14,8 +16,6 @@ import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjec
 import { WORLD_OBJECT_RENDER_PARAMS } from "@/features/objects/worldObjectRenderParams";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 import { createLinkObjectResolver } from "@/features/viewer/linkObjectResolver";
-import { MeshAssetBody } from "@/features/viewer/components/MeshAssetBody";
-import { SplatAssetBody } from "@/features/viewer/components/SplatAssetBody";
 import { OrbitVisualization } from "@/features/viewer/components/OrbitVisualization";
 import { WorldObjectEditHandles } from "@/features/viewer/components/WorldObjectEditHandles";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
@@ -25,6 +25,17 @@ import {
   shouldMoveToObjectOnRepeatedClick,
   shouldToggleObjectSelectionOnSingleClick,
 } from "@/features/viewer/objectTargetClickPolicy";
+
+const LazyMeshAssetBody = lazy(() =>
+  import("@/features/viewer/components/MeshAssetBody").then(({ MeshAssetBody }) => ({
+    default: MeshAssetBody,
+  }))
+);
+const LazySplatAssetBody = lazy(() =>
+  import("@/features/viewer/components/SplatAssetBody").then(({ SplatAssetBody }) => ({
+    default: SplatAssetBody,
+  }))
+);
 
 type CreatedObjectsProps = {
   allowRetargetOnClick?: boolean;
@@ -137,25 +148,29 @@ function CreatedObjectBody({
 
   if (object.type === "mesh") {
     return (
-      <MeshAssetBody
-        object={object}
-        objectPosition={objectPosition}
-        objectRotation={objectRotation}
-        pointerHandlers={pointerHandlers}
-        fallback={primitiveFallback}
-      />
+      <Suspense fallback={primitiveFallback}>
+        <LazyMeshAssetBody
+          object={object}
+          objectPosition={objectPosition}
+          objectRotation={objectRotation}
+          pointerHandlers={pointerHandlers}
+          fallback={primitiveFallback}
+        />
+      </Suspense>
     );
   }
 
   if (object.type === "splat") {
     return (
-      <SplatAssetBody
-        object={object}
-        objectPosition={objectPosition}
-        objectRotation={objectRotation}
-        pointerHandlers={pointerHandlers}
-        fallback={primitiveFallback}
-      />
+      <Suspense fallback={primitiveFallback}>
+        <LazySplatAssetBody
+          object={object}
+          objectPosition={objectPosition}
+          objectRotation={objectRotation}
+          pointerHandlers={pointerHandlers}
+          fallback={primitiveFallback}
+        />
+      </Suspense>
     );
   }
 

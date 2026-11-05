@@ -17,6 +17,10 @@ export const PERF_GATE_BUILD_CHUNK_SIZE_COMMAND = ["node", "tools/scripts/buildC
 export const PERF_GATE_BUILD_CHUNK_SIZE_CHECK = {
   distDir: "web/dist",
   totalJsMaxBytes: 4_800_000,
+  // Splat rendering is an opt-in asset path. It must not be downloaded by the
+  // normal URDF workspace, so keep it out of the initial-load budget while
+  // retaining its emitted chunk for on-demand loading.
+  deferredChunkPrefixes: ["SplatAssetBody-"],
   chunkLimits: [
     { name: "App", prefix: "App-", maxBytes: 980_000, required: true },
     { name: "three", prefix: "three-", maxBytes: 850_000, required: true },

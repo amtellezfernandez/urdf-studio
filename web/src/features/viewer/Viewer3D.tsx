@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei/core/OrbitControls.js";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";

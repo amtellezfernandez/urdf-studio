@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Line } from "@react-three/drei";
+import { Line } from "@react-three/drei/core/Line.js";
 
 import { ASSEMBLY_PLACEMENT_HELPERS_PARAMS } from "@/features/viewer/assemblyPlacementHelpersParams";
 import {

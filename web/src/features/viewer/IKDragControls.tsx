@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
+import { Html } from "@react-three/drei/web/Html.js";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import { API_BASE_URL } from "@/shared/config/api";

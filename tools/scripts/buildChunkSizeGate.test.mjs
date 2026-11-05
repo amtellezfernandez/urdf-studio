@@ -31,6 +31,25 @@ test("evaluateBuildChunkSizeGate accepts chunks under configured limits", () => 
   assert.deepEqual(result, {
     failures: [],
     totalJsBytes: 180,
+    deferredJsBytes: 0,
+  });
+});
+
+test("evaluateBuildChunkSizeGate excludes explicitly deferred chunks from initial output", () => {
+  const result = evaluateBuildChunkSizeGate({
+    chunks: [
+      { fileName: "App-abc.js", relativePath: "assets/App-abc.js", bytes: 100 },
+      { fileName: "SplatAssetBody-def.js", relativePath: "assets/SplatAssetBody-def.js", bytes: 400 },
+    ],
+    chunkLimits: [],
+    totalJsMaxBytes: 150,
+    deferredChunkPrefixes: ["SplatAssetBody-"],
+  });
+
+  assert.deepEqual(result, {
+    failures: [],
+    totalJsBytes: 100,
+    deferredJsBytes: 400,
   });
 });
 

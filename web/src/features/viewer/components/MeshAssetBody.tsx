@@ -1,5 +1,5 @@
 import { Component, Suspense, useMemo, type ReactNode } from "react";
-import { useGLTF } from "@react-three/drei";
+import { useGLTF } from "@react-three/drei/core/Gltf.js";
 import { useLoader, type ThreeEvent } from "@react-three/fiber";
 import { PLYLoader, STLLoader } from "three-stdlib";
 
