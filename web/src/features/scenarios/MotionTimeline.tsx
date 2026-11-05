@@ -6,6 +6,7 @@ type MotionTimelineProps = {
   previewTime: number;
   onSeek: (time: number) => void;
   compact?: boolean;
+  curveLabel?: string;
 };
 
 const timelineDuration = (duration: number) => Math.max(duration, 1);
@@ -46,6 +47,7 @@ export const MotionTimeline = ({
   previewTime,
   onSeek,
   compact = false,
+  curveLabel = "recorded joints",
 }: MotionTimelineProps) => {
   const displayDuration = timelineDuration(duration);
   const playhead = `${(Math.min(Math.max(previewTime, 0), displayDuration) / displayDuration) * 100}%`;
@@ -99,7 +101,7 @@ export const MotionTimeline = ({
       <div className="space-y-1 rounded border border-border/60 bg-background px-2 py-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-wide text-foreground">Graph Editor</span>
-            <span>{curves.length > 0 ? `first ${curves.length} recorded joints` : "no curves yet"}</span>
+            <span>{curves.length > 0 ? `first ${curves.length} ${curveLabel}` : "no curves yet"}</span>
           </div>
           {curves.length === 0 ? (
             <div className={`grid ${compact ? "h-[76px]" : "h-[108px]"} place-items-center border-t border-border/50 text-xs text-muted-foreground`}>

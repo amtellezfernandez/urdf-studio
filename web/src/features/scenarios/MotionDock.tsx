@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { Button } from "@/shared/ui/button";
 import { MotionTimeline } from "@/features/scenarios/MotionTimeline";
 import type { WaypointRecorderContext } from "@/features/scenarios/WaypointRecorderPanel";
 import { useWaypointRecorder } from "@/features/scenarios/useWaypointRecorder";
+import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 
 type MotionDockProps = {
   context: WaypointRecorderContext;
@@ -17,6 +19,50 @@ export const MotionDock = ({ context }: MotionDockProps) => {
     getJointValues: context.getJointValues,
     setJointValues: context.setJointValues,
   });
+  const activePlaybackFrames = useViewerPlaybackStore(
+    (state) => state.activeFramePlayback?.frames ?? null
+  );
+  const activePlaybackFrameIndex = useViewerPlaybackStore((state) => state.currentFrame);
+  const setPlaybackFrame = useViewerPlaybackStore((state) => state.setFrame);
+  const playbackKeyframes = useMemo(() => {
+    if (!activePlaybackFrames || activePlaybackFrames.length === 0) return [];
+    const stride = Math.max(1, Math.ceil(activePlaybackFrames.length / 40));
+    const sampled = activePlaybackFrames
+      .filter((_, index) => index % stride === 0)
+      .map((frame) => ({
+        time_s: frame.timestamp / 1000,
+        joints: { ...frame.joints },
+      }));
+    const last = activePlaybackFrames[activePlaybackFrames.length - 1];
+    if (sampled.at(-1)?.time_s !== last.timestamp / 1000) {
+      sampled.push({ time_s: last.timestamp / 1000, joints: { ...last.joints } });
+    }
+    return sampled;
+  }, [activePlaybackFrames]);
+  const showingPlayback = recorder.keyframes.length === 0 && playbackKeyframes.length > 0;
+  const displayedKeyframes = showingPlayback ? playbackKeyframes : recorder.keyframes;
+  const displayedDuration = showingPlayback
+    ? playbackKeyframes.at(-1)?.time_s ?? 0
+    : recorder.duration;
+  const displayedPreviewTime = showingPlayback
+    ? (activePlaybackFrames?.[activePlaybackFrameIndex]?.timestamp ?? 0) / 1000
+    : recorder.previewTime;
+  const handleTimelineSeek = (time: number) => {
+    if (!showingPlayback || !activePlaybackFrames) {
+      recorder.seek(time);
+      return;
+    }
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    activePlaybackFrames.forEach((frame, index) => {
+      const distance = Math.abs(frame.timestamp / 1000 - time);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    setPlaybackFrame(nearestIndex);
+  };
 
   return (
     <section
@@ -28,6 +74,11 @@ export const MotionDock = ({ context }: MotionDockProps) => {
           <span className="mr-1 text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
             Motion
           </span>
+          {showingPlayback ? (
+            <span className="rounded border border-border/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Sample playback
+            </span>
+          ) : null}
           {recorder.isRecording ? (
             <Button size="sm" variant="destructive" onClick={recorder.stopRecording}>
               ■ Stop
@@ -63,15 +114,18 @@ export const MotionDock = ({ context }: MotionDockProps) => {
             Clear
           </Button>
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-            {recorder.keyframes.length} keys · {recorder.duration.toFixed(2)}s
+            {showingPlayback
+              ? `${activePlaybackFrames?.length ?? 0} frames · ${displayedDuration.toFixed(2)}s`
+              : `${recorder.keyframes.length} keys · ${recorder.duration.toFixed(2)}s`}
           </span>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
           <MotionTimeline
-            keyframes={recorder.keyframes}
-            duration={recorder.duration}
-            previewTime={recorder.previewTime}
-            onSeek={recorder.seek}
+            keyframes={displayedKeyframes}
+            duration={displayedDuration}
+            previewTime={displayedPreviewTime}
+            onSeek={handleTimelineSeek}
+            curveLabel={showingPlayback ? "sample joints" : undefined}
             compact
           />
         </div>
