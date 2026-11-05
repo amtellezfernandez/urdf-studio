@@ -34,6 +34,7 @@ from backend.api.world_bridge import router as world_bridge_router
 from backend.api.world_registry import router as world_registry_router
 from backend.api.world_rollouts import router as world_rollouts_router
 from backend.api.workspace_transfer import router as workspace_transfer_router
+from backend.api.usd_import import router as usd_import_router
 from backend.core.request_audit import (
     REQUEST_ID_HEADER,
     get_request_id_for_http_request,
@@ -79,6 +80,7 @@ API_ROUTERS = (
     collaboration_ws_router,
     simulation_prep_router,
     scenarios_router,
+    usd_import_router,
 )
 
 

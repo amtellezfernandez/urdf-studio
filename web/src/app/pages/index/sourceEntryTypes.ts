@@ -17,6 +17,7 @@ export type SourceEntryActions = {
   ) => Promise<void>;
   onGitHubSelected: (params: SourceEntryGitHubParams) => Promise<void>;
   onUrlSelected: (url: string) => Promise<void>;
+  onOpenUsdSelected: (url: string) => Promise<void>;
   onPlayDemoMotion: () => void | Promise<void>;
   onImportWorldLayout: (
     worldLayoutUrl: string,

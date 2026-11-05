@@ -38,6 +38,7 @@ const createActions = (): SourceEntryActions => ({
   onGitHubSelected: vi.fn(async () => undefined),
   onImportWorldLayout: vi.fn(async () => undefined),
   onOpenWorldOnlyWorkspace: vi.fn(),
+  onOpenUsdSelected: vi.fn(async () => undefined),
   onPlayDemoMotion: vi.fn(),
   onUrlSelected: vi.fn(async () => undefined),
 });

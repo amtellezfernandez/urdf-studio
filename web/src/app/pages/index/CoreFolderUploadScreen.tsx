@@ -6,6 +6,7 @@ import {
 } from "react";
 import {
   ArrowRight,
+  Box,
   Bot,
   Camera,
   Check,
@@ -44,6 +45,7 @@ export const CoreFolderUploadScreen = ({
   onFolderSelected,
   onGitHubSelected,
   onUrlSelected,
+  onOpenUsdSelected,
   onPlayDemoMotion,
   onImportWorldLayout,
   onOpenWorldOnlyWorkspace,
@@ -57,6 +59,8 @@ export const CoreFolderUploadScreen = ({
   const clearCameras = useCameraStore((state) => state.clearCameras);
   const removeCamera = useCameraStore((state) => state.removeCamera);
   const [isLoadingSetup, setIsLoadingSetup] = useState(false);
+  const [isLoadingUsd, setIsLoadingUsd] = useState(false);
+  const [usdSource, setUsdSource] = useState("");
   const shouldPreserveCamerasForRobotLoad = useCallback(
     () => useCameraStore.getState().cameras.length > 0,
     []
@@ -217,7 +221,7 @@ export const CoreFolderUploadScreen = ({
         <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Input
             type="text"
-            placeholder="URL or Hugging Face resolve link"
+            placeholder="https://.../robot.urdf or .xacro"
             value={urlSource}
             onChange={(event) => setUrlSource(event.target.value)}
             disabled={isLoadingUrl}
@@ -414,6 +418,66 @@ export const CoreFolderUploadScreen = ({
     </SourcePanel>
   );
 
+  const renderOpenUsdLoader = () => (
+    <SourcePanel
+      icon={Box}
+      title="OpenUSD asset"
+      description="Open a pinned Hugging Face USD/USDA/USDC file or SimReady asset folder as a local preview."
+      infoContent={
+        <>
+          URDF Studio does not host the source permanently. The selected Hugging Face revision is
+          fetched for this session, converted to a preview World, and kept linked to its dataset,
+          revision, and original USD filename. Native USD remains the source for simulator export.
+        </>
+      }
+      isDropActive={false}
+      onDropActiveChange={() => undefined}
+      onDrop={() => undefined}
+    >
+      <form
+        className="space-y-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const source = usdSource.trim();
+          if (!source) return;
+          setIsLoadingUsd(true);
+          void onOpenUsdSelected(source)
+            .catch((error: unknown) => {
+              toast.error(error instanceof Error ? error.message : "OpenUSD import failed.");
+            })
+            .finally(() => setIsLoadingUsd(false));
+        }}
+      >
+        <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <Input
+            type="url"
+            placeholder="https://huggingface.co/datasets/.../blob/<revision>/robot.usda"
+            value={usdSource}
+            onChange={(event) => setUsdSource(event.target.value)}
+            disabled={isLoadingUsd}
+            className="min-w-0 flex-1 bg-background/80"
+          />
+          <Button
+            type="submit"
+            disabled={isLoadingUsd || !usdSource.trim()}
+            size="sm"
+            className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+          >
+            {isLoadingUsd ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Box className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Open
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground/80">
+          Remote source · pinned revisions recommended · preview meshes are extracted server-side
+        </p>
+      </form>
+    </SourcePanel>
+  );
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-start bg-background px-4 py-6">
       <div className="flex w-full items-start justify-between pb-2">
@@ -496,6 +560,7 @@ export const CoreFolderUploadScreen = ({
           <div className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryStackClass}>
             {renderRobotLoader()}
             {renderCameraSetupLoader()}
+            {renderOpenUsdLoader()}
           </div>
           {renderWorldLayoutLoader()}
         </div>

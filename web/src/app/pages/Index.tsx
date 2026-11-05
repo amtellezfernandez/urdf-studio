@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, startTransition, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { API_BASE_URL } from "@/shared/config/api";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import {
   autoComputeCameraPoseDefault,
@@ -553,6 +554,23 @@ const Index = () => {
     vizUrdfContent,
     worldImportParams,
   });
+  const handleOpenUsdSource = useCallback(async (sourceUrl: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/usd/import-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ source_url: sourceUrl }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      detail?: string;
+      world_url?: string;
+    };
+    if (!response.ok || !payload.world_url) {
+      throw new Error(payload.detail ?? `OpenUSD import failed (HTTP ${response.status})`);
+    }
+    await handleImportWorldLayoutFromEntry(`${API_BASE_URL}${payload.world_url}`);
+    setHasWorldOnlyContent(true);
+    toast.success("OpenUSD preview opened. Source revision and provenance are preserved.");
+  }, [handleImportWorldLayoutFromEntry]);
   const { workspaceTransfer } = useWorkspaceTransferLauncher({
     activeUrdfPath,
     attachedIluSessionId,
@@ -1650,6 +1668,7 @@ const Index = () => {
       loadFilesFromFolderWithFreshCameras={loadFilesFromFolderWithFreshCameras}
       onLoadGitHubSource={handleLoadGitHubSource}
       onLoadUrlSource={handleLoadUrlSource}
+      onOpenUsdSource={handleOpenUsdSource}
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
       onOpenWorldOnlyWorkspace={handleOpenWorldOnlyWorkspace}
       onPlayDemoMotion={handlePlayDemoMotion}

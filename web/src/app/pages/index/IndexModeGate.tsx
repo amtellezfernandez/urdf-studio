@@ -11,6 +11,7 @@ type IndexModeGateProps = {
   loadFilesFromFolderWithFreshCameras: SourceEntryActions["onFolderSelected"];
   onLoadGitHubSource: SourceEntryActions["onGitHubSelected"];
   onLoadUrlSource: SourceEntryActions["onUrlSelected"];
+  onOpenUsdSource: SourceEntryActions["onOpenUsdSelected"];
   onImportWorldLayout: SourceEntryActions["onImportWorldLayout"];
   onOpenWorldOnlyWorkspace: SourceEntryActions["onOpenWorldOnlyWorkspace"];
   onPlayDemoMotion: SourceEntryActions["onPlayDemoMotion"];
@@ -33,6 +34,7 @@ export const IndexModeGate = ({
   loadFilesFromFolderWithFreshCameras,
   onLoadGitHubSource,
   onLoadUrlSource,
+  onOpenUsdSource,
   onImportWorldLayout,
   onOpenWorldOnlyWorkspace,
   onPlayDemoMotion,
@@ -52,6 +54,7 @@ export const IndexModeGate = ({
           onFolderSelected={loadFilesFromFolderWithFreshCameras}
           onGitHubSelected={onLoadGitHubSource}
           onUrlSelected={onLoadUrlSource}
+          onOpenUsdSelected={onOpenUsdSource}
           onPlayDemoMotion={onPlayDemoMotion}
           onImportWorldLayout={onImportWorldLayout}
           onOpenWorldOnlyWorkspace={onOpenWorldOnlyWorkspace}
