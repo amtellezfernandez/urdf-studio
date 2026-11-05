@@ -6,9 +6,7 @@ import json
 import re
 import shutil
 import tempfile
-import urllib.error
 import urllib.parse
-import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,56 +75,45 @@ def parse_huggingface_source(source_url: str) -> HuggingFaceSource:
     return HuggingFaceSource(dataset, revision, root_path.strip("/"), path if kind != "tree" else "", source_url.strip())
 
 
-def _api_tree_url(source: HuggingFaceSource) -> str:
-    path = "/".join(urllib.parse.quote(part, safe="") for part in source.root_path.split("/") if part)
-    suffix = f"/{path}" if path else ""
-    return f"https://huggingface.co/api/datasets/{urllib.parse.quote(source.dataset, safe='/')}/tree/{urllib.parse.quote(source.revision, safe='')}{suffix}?recursive=true"
-
-
-def _read_url(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "URDF-Studio/OpenUSD-import"})
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            if int(response.headers.get("Content-Length") or 0) > _MAX_FILE_BYTES:
-                raise ValueError("Remote OpenUSD asset exceeds the 256 MiB import limit.")
-            data = response.read(_MAX_FILE_BYTES + 1)
-    except urllib.error.URLError as exc:
-        raise ValueError(f"Could not fetch Hugging Face asset: {exc.reason}") from exc
-    if len(data) > _MAX_FILE_BYTES:
-        raise ValueError("Remote OpenUSD asset exceeds the 256 MiB import limit.")
-    return data
-
-
 def _download_package(source: HuggingFaceSource, destination: Path) -> tuple[Path, int]:
-    payload = json.loads(_read_url(_api_tree_url(source)))
-    if not isinstance(payload, list):
-        raise ValueError("Hugging Face returned an invalid dataset tree.")
-    files = [entry for entry in payload if isinstance(entry, dict) and entry.get("type") == "file"]
-    files = [entry for entry in files if Path(str(entry.get("path", ""))).suffix.lower() in _PACKAGE_SUFFIXES]
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:  # pragma: no cover - setup normally installs this dependency
+        raise ValueError("Hugging Face OpenUSD loading requires the huggingface_hub package.") from exc
+
+    destination.mkdir(parents=True, exist_ok=True)
+    package_root = source.root_path.strip("/")
+    pattern_root = package_root or "*"
+    allow_patterns = [
+        f"{pattern_root}/*{suffix}"
+        for suffix in _PACKAGE_SUFFIXES
+    ] + [
+        f"{pattern_root}/**/*{suffix}"
+        for suffix in _PACKAGE_SUFFIXES
+    ]
+    snapshot_download(
+        repo_id=source.dataset,
+        repo_type="dataset",
+        revision=source.revision,
+        local_dir=destination,
+        allow_patterns=allow_patterns,
+        max_workers=8,
+    )
+
+    files = [
+        path
+        for path in destination.rglob("*")
+        if path.is_file() and path.suffix.lower() in _PACKAGE_SUFFIXES
+    ]
     if len(files) > _MAX_PACKAGE_FILES:
         raise ValueError("The Hugging Face folder contains too many package files.")
-    if not files:
-        raise ValueError("No downloadable files were found in the Hugging Face asset folder.")
-    selected = source.usd_path or next((str(entry["path"]) for entry in files if Path(str(entry.get("path", ""))).suffix.lower() in _USD_SUFFIXES), "")
-    if not selected:
-        raise ValueError("The Hugging Face folder does not contain an OpenUSD file.")
-    prefix = f"{source.root_path.rstrip('/')}/" if source.root_path else ""
-    for entry in files:
-        relative = str(entry.get("path", ""))
-        if prefix and not relative.startswith(prefix):
-            continue
-        relative_to_root = relative[len(prefix):] if prefix else relative
-        if not relative_to_root or ".." in Path(relative_to_root).parts:
-            continue
-        target = destination / relative_to_root
-        target.parent.mkdir(parents=True, exist_ok=True)
-        raw_url = f"https://huggingface.co/datasets/{urllib.parse.quote(source.dataset, safe='/')}/resolve/{urllib.parse.quote(source.revision, safe='')}/{urllib.parse.quote(relative, safe='/')}?download=true"
-        target.write_bytes(_read_url(raw_url))
-    selected_relative = selected[len(prefix):] if prefix and selected.startswith(prefix) else selected
-    usd_file = destination / selected_relative
-    if not usd_file.is_file():
-        raise ValueError(f"Selected OpenUSD file was not downloaded: {selected}")
-    return usd_file, len(files)
+    selected = destination / source.usd_path if source.usd_path else next(
+        (path for path in files if path.suffix.lower() in _USD_SUFFIXES),
+        None,
+    )
+    if selected is None or not selected.is_file():
+        raise ValueError("The Hugging Face package does not contain the selected OpenUSD file.")
+    return selected, len(files)
 
 
 def _record_import(source: HuggingFaceSource) -> tuple[str, UsdImportRecord]:
