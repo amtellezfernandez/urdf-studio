@@ -284,6 +284,13 @@ export function init(options = { container: null, hdrPath: null }) {
           stage = window.driver.GetStage();
         }
         window.usdStage = stage;
+        // SimReady roots commonly keep robot geometry behind payload arcs.
+        // The browser delegate does not implicitly load those payloads, so
+        // request the complete stage before the first draw. This is safe for
+        // stages without payloads and prevents an apparently successful but
+        // empty viewer.
+        safeCall(stage, "Load");
+        safeCall(window.driver, "Draw");
         if (stage.GetEndTimeCode) {
           endTimeCode = stage.GetEndTimeCode();
           timeout = 1000 / stage.GetTimeCodesPerSecond();
