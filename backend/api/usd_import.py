@@ -23,7 +23,20 @@ router = APIRouter(prefix="/usd", tags=["usd-import"])
 _HF_HOSTS = {"huggingface.co", "www.huggingface.co", "hf.co"}
 _REVISION_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _USD_SUFFIXES = {".usd", ".usda", ".usdc", ".usdz"}
-_PACKAGE_SUFFIXES = _USD_SUFFIXES | {".json", ".png", ".jpg", ".jpeg", ".exr", ".mtl", ".obj", ".stl", ".ply"}
+_PACKAGE_SUFFIXES = _USD_SUFFIXES | {
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".exr",
+    ".hdr",
+    ".tga",
+    ".bmp",
+    ".mtl",
+    ".obj",
+    ".stl",
+    ".ply",
+}
 _MAX_FILE_BYTES = 256 * 1024 * 1024
 _MAX_PACKAGE_FILES = 512
 
@@ -70,6 +83,12 @@ def parse_huggingface_source(source_url: str) -> HuggingFaceSource:
     if not path or (kind != "tree" and suffix not in _USD_SUFFIXES):
         raise ValueError("The selected Hugging Face path must identify an OpenUSD file or folder.")
     root_path = path if kind == "tree" else str(Path(path).parent)
+    # SimReady packages commonly keep the authoritative USD in a
+    # ``simready_usd`` child alongside mesh/material variants.  Download the
+    # package root so a direct .usda link resolves the same dependencies as
+    # the corresponding folder link.
+    if kind != "tree" and Path(root_path).name == "simready_usd":
+        root_path = str(Path(root_path).parent)
     if root_path == ".":
         root_path = ""
     return HuggingFaceSource(dataset, revision, root_path.strip("/"), path if kind != "tree" else "", source_url.strip())

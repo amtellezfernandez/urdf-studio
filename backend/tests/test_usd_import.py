@@ -14,7 +14,7 @@ def test_parse_huggingface_usd_file_preserves_dataset_revision_and_folder() -> N
 
     assert source.dataset == "agibot-assets/simready-assets"
     assert source.revision == "b0628c2800bb1d64559489d6b2b8643b0d502fcc"
-    assert source.root_path == "g2_omnipicker/simready_usd"
+    assert source.root_path == "g2_omnipicker"
     assert source.usd_path.endswith("g2_omnipicker.usda")
 
 
