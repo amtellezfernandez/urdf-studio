@@ -51,6 +51,19 @@ const detectNativeRobot = async (
   return null;
 };
 
+const normalizeGitHubRepositoryInput = (value: string): string | null => {
+  const candidate = value.trim();
+  if (/^[\w.-]+\/[\w.-]+(?:\/.*)?$/.test(candidate) && !candidate.includes("://")) {
+    return `https://github.com/${candidate}`;
+  }
+  try {
+    const parsed = new URL(candidate);
+    return parsed.hostname.toLowerCase() === "github.com" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
 export const useRobotSourceController = ({
   onFolderSelected,
   onGitHubSelected,
@@ -183,13 +196,20 @@ export const useRobotSourceController = ({
 
   const stageUrlRobotSource = useCallback(
     (url: string): void => {
-      const label = deriveSourceLabel(url, "Remote robot");
+      const githubRepositoryUrl = normalizeGitHubRepositoryInput(url);
+      const label = deriveSourceLabel(url, githubRepositoryUrl ? "GitHub robot" : "Remote robot");
       stageRobot({
         label,
-        kind: "url",
+        kind: githubRepositoryUrl ? "github" : "url",
         load: async () => {
           setIsLoadingUrl(true);
           try {
+            if (githubRepositoryUrl) {
+              await onGitHubSelected({ repoUrl: githubRepositoryUrl });
+              setLoadedRobotName(label);
+              rememberRecentRobotSource({ kind: "github", repoUrl: githubRepositoryUrl });
+              return;
+            }
             const isOpenUsd = (() => {
               try {
                 const parsed = new URL(url);
@@ -217,7 +237,7 @@ export const useRobotSourceController = ({
         },
       });
     },
-    [onOpenUsdSelected, onUrlSelected, rememberRecentRobotSource, stageRobot]
+    [onGitHubSelected, onOpenUsdSelected, onUrlSelected, rememberRecentRobotSource, stageRobot]
   );
 
   const stageUrlRobot = useCallback(
@@ -225,7 +245,7 @@ export const useRobotSourceController = ({
       event?.preventDefault();
       const url = urlSource.trim();
       if (!url) {
-        toast.error("Paste a URDF, Xacro, Hugging Face, or raw URL first.");
+        toast.error("Paste a repository name, GitHub URL, or robot file URL first.");
         return;
       }
       stageUrlRobotSource(url);

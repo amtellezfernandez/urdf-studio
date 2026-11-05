@@ -9,7 +9,6 @@ import {
   Bot,
   Camera,
   Check,
-  Github,
   Globe,
   Loader2,
   Play,
@@ -80,10 +79,8 @@ export const CoreFolderUploadScreen = ({
   );
   const {
     clearLastLocalFolder,
-    githubUrl,
     handleFolderSelect,
     handleRobotSourceDrop,
-    isLoadingGithub,
     isLoadingUrl,
     lastLocalFolder,
     loadedRobotName,
@@ -91,10 +88,8 @@ export const CoreFolderUploadScreen = ({
     recentRobotSources,
     removeRecentRobotSource,
     robotSourceDropActive,
-    setGithubUrl,
     setRobotSourceDropActive,
     setUrlSource,
-    stageGithubRobot,
     stageRecentRobotSource,
     stageUrlRobot,
     stagedRobot,
@@ -204,38 +199,11 @@ export const CoreFolderUploadScreen = ({
         dropHint="Drag a robot package here"
         onBrowse={() => folderInputRef.current?.click()}
       />
-      <form className="space-y-2" onSubmit={stageGithubRobot}>
-        <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
-          <div className="flex w-full min-w-0 items-center gap-1.5">
-            <Input
-              type="text"
-              placeholder="GitHub repository URL"
-              value={githubUrl}
-              onChange={(event) => setGithubUrl(event.target.value)}
-              disabled={isLoadingGithub}
-              className="min-w-0 flex-1 bg-background/80"
-            />
-            <Button
-              type="submit"
-              disabled={isLoadingGithub || !githubUrl.trim()}
-              size="sm"
-              className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-            >
-              {isLoadingGithub ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Github className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Load
-            </Button>
-          </div>
-        </div>
-      </form>
       <form onSubmit={stageUrlRobot}>
         <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Input
             type="text"
-            placeholder="URDF, Xacro, MJCF, or OpenUSD URL"
+            placeholder="owner/repository, GitHub URL, or robot file URL"
             value={urlSource}
             onChange={(event) => setUrlSource(event.target.value)}
             disabled={isLoadingUrl}
