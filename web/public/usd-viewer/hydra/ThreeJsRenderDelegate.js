@@ -31,6 +31,13 @@ export class ThreeRenderDelegateInterface {
   createRPrim(typeId, id) {
     if (DEBUG_PRIMS) console.log("Creating RPrim:", typeId, id);
     const mesh = new HydraMesh(id, this);
+    // Hide only explicit helper/origin markers from the visual preview. Do
+    // not hide collision proxies: their transforms must remain inspectable so
+    // an offset collision shape exposes an asset or adapter problem rather
+    // than being silently masked.
+    if (/\/visuals\/(?:[^/]*_)?(?:IMU_)?ORIGIN(?:\/|$)/i.test(String(id))) {
+      mesh.setVisible(false);
+    }
     this.meshes[id] = mesh;
     return mesh;
   }

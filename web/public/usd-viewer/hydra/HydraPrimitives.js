@@ -103,6 +103,10 @@ export class HydraMesh {
     this._mesh.matrixAutoUpdate = false;
   }
 
+  setVisible(visible) {
+    this._mesh.visible = visible;
+  }
+
   /**
    * Sets automatically generated normals on the mesh. Should only be used if there are no authored normals.
    * @param {} normals
@@ -165,7 +169,10 @@ export class HydraMesh {
 
     this._colors = null;
 
-    if (interpolation === "constant") {
+    if (interpolation === "constant" || interpolation === "uniform") {
+      // SimReady materials frequently author one color per face/element
+      // (uniform interpolation). The preview delegate only needs the first
+      // color as a stable material fallback when no bound material exists.
       this._mesh.material.color = new Color().fromArray(data);
     } else if (interpolation === "vertex") {
       this._mesh.material.vertexColors = true;
