@@ -12,6 +12,7 @@ import {
   Github,
   Globe,
   Loader2,
+  Play,
   Trash2,
   X,
 } from "lucide-react";
@@ -43,6 +44,7 @@ export const CoreFolderUploadScreen = ({
   onFolderSelected,
   onGitHubSelected,
   onUrlSelected,
+  onPlayDemoMotion,
   onImportWorldLayout,
   onOpenWorldOnlyWorkspace,
 }: CoreFolderUploadScreenProps) => {
@@ -123,6 +125,10 @@ export const CoreFolderUploadScreen = ({
     () => (cameras.length === 1 ? "1 camera" : `${cameras.length} cameras`),
     [cameras.length]
   );
+
+  const handlePlayDemoMotionClick = useCallback((): void => {
+    void onPlayDemoMotion();
+  }, [onPlayDemoMotion]);
 
   const handleLoadSetup = useCallback(async (): Promise<void> => {
     if (!stagedRobot) {
@@ -420,6 +426,18 @@ export const CoreFolderUploadScreen = ({
             onCheckedChange={handleGPUModeToggle}
             className="data-[state=checked]:bg-[#ff63d5]/80"
           />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Button
+            onClick={handlePlayDemoMotionClick}
+            size="sm"
+            className="h-9 min-w-[170px] rounded-md border border-border/70 bg-background/60 px-3 text-xs font-medium text-foreground shadow-none hover:border-border hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="mr-2 inline-flex h-4 w-4 items-center justify-center text-muted-foreground">
+              <Play className="h-3.5 w-3.5" />
+            </span>
+            <span>Play Sample Motion</span>
+          </Button>
         </div>
       </div>
       <div className={`w-full ${CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryWideContainerClass}`}>
