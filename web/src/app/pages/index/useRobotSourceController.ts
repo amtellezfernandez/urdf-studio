@@ -28,7 +28,7 @@ type UseRobotSourceControllerParams = {
   onGitHubSelected: SourceEntryActions["onGitHubSelected"];
   onUrlSelected: SourceEntryActions["onUrlSelected"];
   onOpenUsdSelected: SourceEntryActions["onOpenUsdSelected"];
-  onNativeRobotSelected: SourceEntryActions["onNativeRobotSelected"];
+  onNativeRobotSelected?: SourceEntryActions["onNativeRobotSelected"];
   shouldPreserveCameras: () => boolean;
 };
 
@@ -39,7 +39,7 @@ const filePath = (file: File): string =>
   (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
 
 const normalizeRemoteSourceUrl = (value: string): string =>
-  value.trim().replaceAll("\\_", "_");
+  value.trim().split("\\_").join("_");
 
 const detectNativeRobot = async (
   files: File[]
@@ -105,7 +105,7 @@ export const useRobotSourceController = ({
         return;
       }
       const nativeRobot = await detectNativeRobot(files);
-      if (nativeRobot) {
+      if (nativeRobot && onNativeRobotSelected) {
         await onNativeRobotSelected(files, nativeRobot.primaryPath, nativeRobot.format);
         setLoadedRobotName(label);
         return;

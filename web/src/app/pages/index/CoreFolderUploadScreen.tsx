@@ -41,7 +41,7 @@ type CoreFolderUploadScreenProps = SourceEntryActions;
 
 const isHuggingFaceOpenUsdUrl = (value: string): boolean => {
   try {
-    const parsed = new URL(value.trim().replaceAll("\\_", "_"));
+    const parsed = new URL(value.trim().split("\\_").join("_"));
     return (
       parsed.hostname.toLowerCase().endsWith("huggingface.co") &&
       parsed.pathname.startsWith("/datasets/") &&

@@ -41,9 +41,6 @@ export const ViewerHost = ({
   nativeRobotSource = null,
   fallbackClassName = "h-full w-full bg-background",
 }: ViewerHostProps) => {
-  if (nativeRobotSource) {
-    return <NativeRobotViewer source={nativeRobotSource} />;
-  }
   const rosVizFlagEnabled = useSyncExternalStore(
     subscribeFeatureFlags,
     () => isFeatureFlagEnabled("rosViz"),
@@ -58,6 +55,10 @@ export const ViewerHost = ({
     rosVizGateReason: rosVizGate.unavailableReason,
     webGpuSupported: canUseWebGpu(),
   });
+
+  if (nativeRobotSource) {
+    return <NativeRobotViewer source={nativeRobotSource} />;
+  }
 
   const usesRosVizRuntime = runtimeDecision.runtime === "rosViz";
   const runtimePrefix = usesRosVizRuntime

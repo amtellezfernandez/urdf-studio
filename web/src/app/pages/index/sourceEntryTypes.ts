@@ -20,7 +20,7 @@ export type SourceEntryActions = {
   onGitHubSelected: (params: SourceEntryGitHubParams) => Promise<void>;
   onUrlSelected: (url: string) => Promise<void>;
   onOpenUsdSelected: (url: string) => Promise<void>;
-  onNativeRobotSelected: (files: File[], primaryPath: string, format: NativeRobotFormat) => Promise<void>;
+  onNativeRobotSelected?: (files: File[], primaryPath: string, format: NativeRobotFormat) => Promise<void>;
   onPlayDemoMotion: () => void | Promise<void>;
   onImportWorldLayout: (
     worldLayoutUrl: string,

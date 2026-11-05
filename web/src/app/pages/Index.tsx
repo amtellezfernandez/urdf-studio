@@ -130,7 +130,7 @@ const MAX_HUGGING_FACE_PACKAGE_FILES = 512;
 const MAX_HUGGING_FACE_PACKAGE_BYTES = 512 * 1024 * 1024;
 const MAX_HUGGING_FACE_PACKAGE_FILE_BYTES = 256 * 1024 * 1024;
 const normalizeRemoteSourceUrl = (sourceUrl: string): string =>
-  sourceUrl.trim().replaceAll("\\_", "_");
+  sourceUrl.trim().split("\\_").join("_");
 
 const loadPinnedHuggingFaceUsdPackage = async (sourceUrl: string): Promise<NativeRobotSource> => {
   const parsed = new URL(normalizeRemoteSourceUrl(sourceUrl));

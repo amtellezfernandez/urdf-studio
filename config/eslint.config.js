@@ -12,7 +12,18 @@ const baseTypeScriptRules = {
 };
 
 export default tseslint.config(
-  { ignores: [".claude", ".venv", ".venv-*", ".uv-cache", "node_modules", "**/dist", "third_party"] },
+  {
+    ignores: [
+      ".claude",
+      ".venv",
+      ".venv-*",
+      ".uv-cache",
+      "node_modules",
+      "**/dist",
+      "third_party",
+      "web/public",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
