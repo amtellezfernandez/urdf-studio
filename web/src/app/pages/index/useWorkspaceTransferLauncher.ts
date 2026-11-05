@@ -119,7 +119,13 @@ export const useWorkspaceTransferLauncher = ({
       .catch((error) => {
         if (cancelled) return;
         setTargetDescriptors([]);
-        toast.error(readUnknownErrorMessage(error, "Workspace targets unavailable."));
+        // Transfer targets are an optional workspace capability. Do not surface
+        // a startup toast while the robot/source viewer is still usable; the
+        // launcher itself reports the unavailable backend when opened.
+        console.warn(
+          "Workspace transfer targets unavailable:",
+          readUnknownErrorMessage(error, "Workspace targets unavailable.")
+        );
       });
     return () => {
       cancelled = true;
