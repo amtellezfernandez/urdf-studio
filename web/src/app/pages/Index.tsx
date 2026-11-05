@@ -570,6 +570,37 @@ const Index = () => {
     worldImportParams,
   });
   const handleOpenUsdSource = useCallback(async (sourceUrl: string): Promise<void> => {
+    const directHuggingFaceUsdUrl = (() => {
+      try {
+        const parsed = new URL(sourceUrl);
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        const isDatasetFile =
+          parsed.hostname.toLowerCase().endsWith("huggingface.co") &&
+          parts[0] === "datasets" &&
+          parts.length >= 6 &&
+          (parts[3] === "blob" || parts[3] === "resolve") &&
+          /\.(usd|usda|usdc|usdz)$/i.test(parts.slice(5).join("/"));
+        if (!isDatasetFile) return null;
+        if (parts[3] === "resolve") return parsed.toString();
+        parts[3] = "resolve";
+        parsed.pathname = `/${parts.join("/")}`;
+        return parsed.toString();
+      } catch {
+        return null;
+      }
+    })();
+    if (directHuggingFaceUsdUrl) {
+      setNativeRobotSource({
+        format: "USD",
+        files: [],
+        primaryPath: "",
+        label: directHuggingFaceUsdUrl.split("/").pop() || "OpenUSD robot",
+        url: directHuggingFaceUsdUrl,
+      });
+      setHasWorldOnlyContent(true);
+      toast.success("Pinned Hugging Face OpenUSD file opened.");
+      return;
+    }
     const response = await fetch(`${API_BASE_URL}/usd/import-url`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
