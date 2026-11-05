@@ -125,7 +125,10 @@ import {
 import { useSimulationPrepRepairActions } from "@/app/pages/index/useSimulationPrepRepairActions";
 import type { NativeRobotFormat, NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
-const HUGGING_FACE_PACKAGE_SUFFIXES = /\.(usd|usda|usdc|usdz|png|jpg|jpeg|exr|hdr|tga|bmp|obj|stl|ply)$/i;
+const HUGGING_FACE_PACKAGE_SUFFIXES = /\.(usd|usda|usdc|usdz|png|jpg|jpeg|webp|exr|hdr|tiff|tga|bmp|obj|mtl|stl|ply|fbx|dae|gltf|glb|bin|ktx2|basis|dds|vdb|material|materialx|json|xml|wav|mp3|ogg)$/i;
+const MAX_HUGGING_FACE_PACKAGE_FILES = 512;
+const MAX_HUGGING_FACE_PACKAGE_BYTES = 512 * 1024 * 1024;
+const MAX_HUGGING_FACE_PACKAGE_FILE_BYTES = 256 * 1024 * 1024;
 
 const loadPinnedHuggingFaceUsdPackage = async (sourceUrl: string): Promise<NativeRobotSource> => {
   const parsed = new URL(sourceUrl);
@@ -137,26 +140,39 @@ const loadPinnedHuggingFaceUsdPackage = async (sourceUrl: string): Promise<Nativ
   const treeUrl = `https://huggingface.co/api/datasets/${dataset}/tree/${revision}/${rootPath}?recursive=true`;
   const treeResponse = await fetch(treeUrl);
   if (!treeResponse.ok) throw new Error(`Hugging Face asset listing failed (HTTP ${treeResponse.status})`);
-  const tree = (await treeResponse.json()) as Array<{ type: string; path: string }>;
+  const tree = (await treeResponse.json()) as Array<{ type: string; path: string; size?: number }>;
   const packageFiles = tree.filter(
     (entry) => entry.type === "file" && HUGGING_FACE_PACKAGE_SUFFIXES.test(entry.path)
   );
+  if (packageFiles.length > MAX_HUGGING_FACE_PACKAGE_FILES) {
+    throw new Error(`Hugging Face package is too large (${packageFiles.length} files; limit ${MAX_HUGGING_FACE_PACKAGE_FILES}).`);
+  }
+  const knownBytes = packageFiles.reduce((total, entry) => total + (entry.size || 0), 0);
+  if (knownBytes > MAX_HUGGING_FACE_PACKAGE_BYTES) {
+    throw new Error("Hugging Face package is too large (limit 512 MB).");
+  }
   if (!packageFiles.some((entry) => entry.path.endsWith(`/${primaryPath}`))) {
     throw new Error("The pinned Hugging Face package does not contain the selected USD file.");
   }
-  const files = await Promise.all(
-    packageFiles.map(async (entry) => {
+  let downloadedBytes = 0;
+  const files: File[] = [];
+  for (const entry of packageFiles) {
       const fileUrl = `https://huggingface.co/datasets/${dataset}/resolve/${revision}/${entry.path}`;
       const response = await fetch(fileUrl);
       if (!response.ok) throw new Error(`Failed to fetch Hugging Face asset ${entry.path}`);
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength > MAX_HUGGING_FACE_PACKAGE_FILE_BYTES ||
+        downloadedBytes + bytes.byteLength > MAX_HUGGING_FACE_PACKAGE_BYTES) {
+        throw new Error("Hugging Face package exceeds the 512 MB local preview limit.");
+      }
+      downloadedBytes += bytes.byteLength;
       const relativePath = entry.path.startsWith(`${rootPath}/`)
         ? entry.path.slice(rootPath.length + 1)
         : entry.path;
-      const file = new File([await response.arrayBuffer()], relativePath);
+      const file = new File([bytes], relativePath);
       Object.defineProperty(file, "webkitRelativePath", { value: relativePath });
-      return file;
-    })
-  );
+      files.push(file);
+  }
   return {
     format: "USD",
     files,

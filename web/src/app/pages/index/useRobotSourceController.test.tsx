@@ -264,7 +264,7 @@ describe("useRobotSourceController", () => {
     expect(harness.getHook().stagedRobot).toBeNull();
     expect(harness.onUrlSelectedMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledWith(
-      "Paste a URDF, Xacro, Hugging Face, or raw URL first."
+      "Paste a repository name, GitHub URL, or robot file URL first."
     );
 
     await harness.unmount();

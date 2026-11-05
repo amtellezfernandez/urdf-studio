@@ -130,6 +130,7 @@ export const useIndexSourceLoaders = ({
       } catch (error) {
         const message = readUnknownErrorMessage(error, "Failed to load GitHub repository.");
         toast.error(message);
+        throw error;
       }
     },
     [loadFilesFromFolderWithFreshCameras, onNativeRobotSelected, setGitHubSource]
