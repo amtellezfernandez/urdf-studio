@@ -125,6 +125,46 @@ import {
 import { useSimulationPrepRepairActions } from "@/app/pages/index/useSimulationPrepRepairActions";
 import type { NativeRobotFormat, NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
+const HUGGING_FACE_PACKAGE_SUFFIXES = /\.(usd|usda|usdc|usdz|png|jpg|jpeg|exr|hdr|tga|bmp|obj|stl|ply)$/i;
+
+const loadPinnedHuggingFaceUsdPackage = async (sourceUrl: string): Promise<NativeRobotSource> => {
+  const parsed = new URL(sourceUrl);
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  const dataset = `${parts[1]}/${parts[2]}`;
+  const revision = parts[4];
+  const rootPath = parts.slice(5, -1).join("/");
+  const primaryPath = parts[parts.length - 1];
+  const treeUrl = `https://huggingface.co/api/datasets/${dataset}/tree/${revision}/${rootPath}?recursive=true`;
+  const treeResponse = await fetch(treeUrl);
+  if (!treeResponse.ok) throw new Error(`Hugging Face asset listing failed (HTTP ${treeResponse.status})`);
+  const tree = (await treeResponse.json()) as Array<{ type: string; path: string }>;
+  const packageFiles = tree.filter(
+    (entry) => entry.type === "file" && HUGGING_FACE_PACKAGE_SUFFIXES.test(entry.path)
+  );
+  if (!packageFiles.some((entry) => entry.path.endsWith(`/${primaryPath}`))) {
+    throw new Error("The pinned Hugging Face package does not contain the selected USD file.");
+  }
+  const files = await Promise.all(
+    packageFiles.map(async (entry) => {
+      const fileUrl = `https://huggingface.co/datasets/${dataset}/resolve/${revision}/${entry.path}`;
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error(`Failed to fetch Hugging Face asset ${entry.path}`);
+      const relativePath = entry.path.startsWith(`${rootPath}/`)
+        ? entry.path.slice(rootPath.length + 1)
+        : entry.path;
+      const file = new File([await response.arrayBuffer()], relativePath);
+      Object.defineProperty(file, "webkitRelativePath", { value: relativePath });
+      return file;
+    })
+  );
+  return {
+    format: "USD",
+    files,
+    primaryPath,
+    label: primaryPath,
+  };
+};
+
 const Index = () => {
   const navigate = useNavigate();
   useIkConfigSync({ enabled: FEATURE_GATES.ikRemoteSolve.enabled });
@@ -590,12 +630,9 @@ const Index = () => {
       }
     })();
     if (directHuggingFaceUsdUrl) {
+      const packageSource = await loadPinnedHuggingFaceUsdPackage(sourceUrl);
       setNativeRobotSource({
-        format: "USD",
-        files: [],
-        primaryPath: "",
-        label: directHuggingFaceUsdUrl.split("/").pop() || "OpenUSD robot",
-        url: directHuggingFaceUsdUrl,
+        ...packageSource,
       });
       setHasWorldOnlyContent(true);
       toast.success("Pinned Hugging Face OpenUSD file opened.");
