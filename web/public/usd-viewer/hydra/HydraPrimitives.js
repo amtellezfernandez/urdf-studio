@@ -39,6 +39,8 @@ export class HydraMesh {
     this._uvs = undefined;
     this._indices = undefined;
     this._materials = [];
+    this._baseMaterial = null;
+    this._subsetSections = [];
 
     let material = new MeshPhysicalMaterial({
       side: DoubleSide,
@@ -46,6 +48,7 @@ export class HydraMesh {
       // envMap: hydraInterface.config.envMap,
     });
     this._materials.push(material);
+    this._baseMaterial = material;
     this._mesh = new Mesh(this._geometry, material);
     this._mesh.castShadow = true;
     this._mesh.receiveShadow = true;
@@ -137,28 +140,37 @@ export class HydraMesh {
     if (DEBUG.materials) console.log("Setting material:", materialId);
     const material = this._interface.materials[materialId];
     if (material) {
-      this._mesh.material = material._material;
+      this._baseMaterial = material._material;
+      this._applySubsetMaterials();
     } else {
       console.error("Material not found:", materialId);
     }
   }
 
   setGeomSubsetMaterial(sections) {
-    //console.log("setting subset material: ", this._id, sections)
+    this._subsetSections = sections || [];
+    this._applySubsetMaterials();
+  }
 
-    for (let i = 0; i < sections.length; i++) {
-      const section = sections[i];
-      if (this._interface.materials[section.materialId]) {
-        this._materials.push(
-          this._interface.materials[section.materialId]._material
-        );
-        this._geometry.addGroup(section.start, section.length, i + 1);
-      }
+  _applySubsetMaterials() {
+    this._geometry.clearGroups();
+    this._materials = [this._baseMaterial || this._mesh.material];
+    for (const section of this._subsetSections) {
+      const material = this._interface.materials[section.materialId];
+      if (!material) continue;
+
+      // Group indices must follow the resolved material array, not the USD
+      // section index. Materials can arrive after the mesh and some sections
+      // may still be unresolved during an early sync pass.
+      const materialIndex = this._materials.length;
+      this._materials.push(material._material);
+      this._geometry.addGroup(section.start, section.length, materialIndex);
     }
-    // Keep the original mesh object. Replacing it here loses the transform,
-    // visibility, name, and other state already assigned by Hydra, which
-    // detaches materialized robot parts from their authored link pose.
-    this._mesh.material = this._materials;
+
+    // A Three.js mesh with an array material and no groups renders nothing.
+    // Keep the base material active until at least one subset has resolved.
+    this._mesh.material =
+      this._materials.length > 1 ? this._materials : this._materials[0];
   }
 
   setDisplayColor(data, interpolation) {
@@ -250,7 +262,9 @@ export class HydraMesh {
   }
 
   commit() {
-    // All Three.js resources are already updated during the sync phase.
+    // Material prims may be created after the mesh; retry subset binding once
+    // the Hydra resource graph has completed its sync pass.
+    if (this._subsetSections.length > 0) this._applySubsetMaterials();
   }
 }
 
