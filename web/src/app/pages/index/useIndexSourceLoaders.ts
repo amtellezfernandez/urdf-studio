@@ -9,6 +9,7 @@ import {
   buildIluGitHubCandidateFileList,
   fetchIluGitHubRepoFiles,
 } from "@/features/urdf/github/iluGitHubImport";
+import { fetchGitHubFilesAsFileObjects } from "@/features/urdf/github/githubRepo";
 import {
   findURDFCandidates,
   parseGitHubUrl,
@@ -21,6 +22,7 @@ import type {
 import type { SourceEntryGitHubParams } from "@/app/pages/index/sourceEntryTypes";
 import { readUnknownErrorMessage } from "@/shared/lib/errorMessages";
 import type { GitHubSource } from "@/shared/store/useGitHubSourceStore";
+import type { NativeRobotFormat } from "@/features/layout/page/NativeRobotViewer";
 
 type UseIndexSourceLoadersParams = {
   clearCameras: () => void;
@@ -28,6 +30,7 @@ type UseIndexSourceLoadersParams = {
   loadFilesFromFolder: (fileList: FileList) => Promise<void>;
   loadUrdfText: (content: string, options?: LoadUrdfTextOptions) => void;
   setGitHubSource: (source: GitHubSource) => void;
+  onNativeRobotSelected: (files: File[], primaryPath: string, format: NativeRobotFormat) => Promise<void>;
 };
 
 export const useIndexSourceLoaders = ({
@@ -36,6 +39,7 @@ export const useIndexSourceLoaders = ({
   loadFilesFromFolder,
   loadUrdfText,
   setGitHubSource,
+  onNativeRobotSelected,
 }: UseIndexSourceLoadersParams) => {
   const loadFilesFromFolderWithFreshCameras = useCallback(
     async (fileList: UrdfFileInput, options?: { preserveCameras?: boolean }) => {
@@ -48,7 +52,7 @@ export const useIndexSourceLoaders = ({
   );
 
   const handleLoadGitHubSource = useCallback(
-    async ({ repoUrl, urdfPath, token }: SourceEntryGitHubParams) => {
+    async ({ repoUrl, urdfPath, assetPath, token }: SourceEntryGitHubParams) => {
       try {
         const repoInfo = parseGitHubUrl(repoUrl);
         if (!repoInfo) {
@@ -62,6 +66,33 @@ export const useIndexSourceLoaders = ({
           branch: repoInfo.branch,
         };
         const files = await fetchIluGitHubRepoFiles(sourceInfo, token);
+        const requestedNativePath = assetPath?.trim() || urdfPath?.trim() ||
+          (repoInfo.path && /\.(mjcf|xml|usd|usda|usdc|usdz)$/i.test(repoInfo.path) ? repoInfo.path : "");
+        const nativeCandidates = files.filter((file) => file.type === "file" &&
+          /\.(mjcf|xml|usd|usda|usdc|usdz)$/i.test(file.path));
+        const nativePrimary = requestedNativePath
+          ? nativeCandidates.find((file) => file.path === requestedNativePath) ||
+            files.find((file) => file.path === requestedNativePath && file.type === "file")
+          : nativeCandidates.find((file) => /\.(usd|usda|usdc|usdz)$/i.test(file.path)) ||
+            nativeCandidates.find((file) => /\.(mjcf|xml)$/i.test(file.path));
+        if (nativePrimary) {
+          const format: NativeRobotFormat = /\.(usd|usda|usdc|usdz)$/i.test(nativePrimary.path) ? "USD" : "MJCF";
+          const parent = nativePrimary.path.includes("/")
+            ? nativePrimary.path.slice(0, nativePrimary.path.lastIndexOf("/"))
+            : "";
+          const packageFiles = files.filter((file) => file.type === "file" &&
+            (!parent || file.path === parent || file.path.startsWith(`${parent}/`)));
+          const fileObjects = await fetchGitHubFilesAsFileObjects(
+            files,
+            repoInfo.owner,
+            repoInfo.repo,
+            token,
+            packageFiles
+          );
+          await onNativeRobotSelected(fileObjects, nativePrimary.path, format);
+          toast.success(`Loaded ${nativePrimary.path} from GitHub`);
+          return;
+        }
         const candidates = findURDFCandidates(files);
         const requestedPath = urdfPath?.trim() ||
           (repoInfo.path && /\.(urdf|xacro)$/i.test(repoInfo.path) ? repoInfo.path : "");
@@ -101,7 +132,7 @@ export const useIndexSourceLoaders = ({
         toast.error(message);
       }
     },
-    [loadFilesFromFolderWithFreshCameras, setGitHubSource]
+    [loadFilesFromFolderWithFreshCameras, onNativeRobotSelected, setGitHubSource]
   );
 
   const handleLoadUrlSource = useCallback(

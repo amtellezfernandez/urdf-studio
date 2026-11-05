@@ -189,12 +189,11 @@ export const CoreFolderUploadScreen = ({
     <SourcePanel
       icon={Bot}
       title="Robot"
-      description="Drag a URDF package folder onto this panel, or paste a GitHub repository / direct URDF, Xacro, or OpenUSD robot URL."
+      description="Load a robot from a local folder, GitHub repository, or direct URL. URDF, Xacro, MJCF, and OpenUSD are supported."
       infoContent={
         <>
-          For a GitHub repository, paste the repo link - the URDF is found automatically. Direct
-          OpenUSD links from Hugging Face are identified and opened as robot previews; their pinned
-          revision and source provenance are retained.
+          GitHub repositories are scanned for a robot asset. URDF/Xacro, MJCF/XML, and USD/USDA/USDC/ USDZ
+          files are recognized automatically; an optional path can select a specific asset.
         </>
       }
       isDropActive={robotSourceDropActive}
@@ -202,7 +201,7 @@ export const CoreFolderUploadScreen = ({
       onDrop={handleRobotSourceDrop}
     >
       <LocalSourceButtons
-        dropHint="Drag a URDF here"
+        dropHint="Drag a robot package here"
         onBrowse={() => folderInputRef.current?.click()}
       />
       <form className="space-y-2" onSubmit={stageGithubRobot}>
@@ -210,7 +209,7 @@ export const CoreFolderUploadScreen = ({
           <div className="flex w-full min-w-0 items-center gap-1.5">
             <Input
               type="text"
-              placeholder="https://github.com/owner/repo"
+              placeholder="GitHub repository URL"
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               disabled={isLoadingGithub}
@@ -236,7 +235,7 @@ export const CoreFolderUploadScreen = ({
         <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Input
             type="text"
-            placeholder="URDF, Xacro, or Hugging Face OpenUSD robot URL"
+            placeholder="URDF, Xacro, MJCF, or OpenUSD URL"
             value={urlSource}
             onChange={(event) => setUrlSource(event.target.value)}
             disabled={isLoadingUrl}

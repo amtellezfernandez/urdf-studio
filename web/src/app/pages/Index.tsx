@@ -239,6 +239,18 @@ const Index = () => {
   const handleOpenWorldOnlyWorkspace = useCallback(() => {
     setHasWorldOnlyContent(true);
   }, []);
+  const handleNativeRobotSelected = useCallback(
+    async (files: File[], primaryPath: string, format: NativeRobotFormat): Promise<void> => {
+      setNativeRobotSource({
+        files,
+        primaryPath,
+        format,
+        label: primaryPath.split("/").pop() || `${format} robot`,
+      });
+      setHasWorldOnlyContent(true);
+    },
+    []
+  );
   const {
     handleLoadGitHubSource,
     handleLoadUrlSource,
@@ -250,6 +262,7 @@ const Index = () => {
     loadFilesFromFolder,
     loadUrdfText,
     setGitHubSource,
+    onNativeRobotSelected: handleNativeRobotSelected,
   });
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const markUrdfContentReloaded = useCallback(
@@ -588,18 +601,6 @@ const Index = () => {
     setHasWorldOnlyContent(true);
     toast.success("OpenUSD preview opened. Source revision and provenance are preserved.");
   }, [handleImportWorldLayoutFromEntry]);
-  const handleNativeRobotSelected = useCallback(
-    async (files: File[], primaryPath: string, format: NativeRobotFormat): Promise<void> => {
-      setNativeRobotSource({
-        files,
-        primaryPath,
-        format,
-        label: primaryPath.split("/").pop() || `${format} robot`,
-      });
-      setHasWorldOnlyContent(true);
-    },
-    []
-  );
   const { workspaceTransfer } = useWorkspaceTransferLauncher({
     activeUrdfPath,
     attachedIluSessionId,

@@ -4,6 +4,7 @@ import type { NativeRobotFormat } from "@/features/layout/page/NativeRobotViewer
 export type SourceEntryGitHubParams = {
   repoUrl: string;
   urdfPath?: string;
+  assetPath?: string;
   token?: string;
 };
 
