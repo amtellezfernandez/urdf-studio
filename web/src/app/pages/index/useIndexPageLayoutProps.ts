@@ -1,4 +1,5 @@
 import type { PageLayoutProps } from "@/features/layout/page/PageLayout";
+import type { NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
 type LeftSidebarProps = PageLayoutProps["leftSidebarProps"];
 type ViewerLayoutProps = PageLayoutProps["viewerLayoutProps"];
@@ -63,6 +64,7 @@ type LeftSidebarWorkflowParams = {
 };
 
 type ViewerPaneParams = {
+  nativeRobotSource: NativeRobotSource | null;
   isRightSidebarCollapsed: ViewerLayoutProps["isRightSidebarCollapsed"];
   rightSidebarWidth: ViewerLayoutProps["rightSidebarWidth"];
   urdfEditorSplitView: ViewerLayoutProps["urdfEditorSplitView"];
@@ -180,6 +182,7 @@ const buildLeftSidebarProps = (params: UseIndexPageLayoutPropsParams): LeftSideb
 });
 
 const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLayoutProps => ({
+  nativeRobotSource: params.nativeRobotSource,
   workspaceMode: params.workspaceMode,
   isSidebarCollapsed: params.isSidebarCollapsed,
   isRightSidebarCollapsed: params.isRightSidebarCollapsed,

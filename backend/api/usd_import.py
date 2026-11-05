@@ -58,6 +58,7 @@ class HuggingFaceSource:
 class UsdImportRecord:
     root: Path
     world_path: Path
+    source_path: Path
     metadata: dict[str, Any]
 
 
@@ -148,7 +149,8 @@ def _record_import(source: HuggingFaceSource) -> tuple[str, UsdImportRecord]:
         world_path = package_dir / "world.json"
         world_path.write_text(json.dumps(world, indent=2), encoding="utf-8")
         import_id = uuid.uuid4().hex
-        record = UsdImportRecord(root, world_path, {"import_id": import_id, "source_url": source.source_url, "dataset": source.dataset, "revision": source.revision, "root_path": source.root_path, "usd_file": source.usd_path or usd_file.name, "format": "openusd", "preview": True, "world_object_count": len(world.get("world", {}).get("objects", []))})
+        relative_usd_path = usd_file.relative_to(root / "source").as_posix()
+        record = UsdImportRecord(root, world_path, usd_file, {"import_id": import_id, "source_url": source.source_url, "dataset": source.dataset, "revision": source.revision, "root_path": source.root_path, "usd_file": source.usd_path or relative_usd_path, "format": "openusd", "preview": True, "world_object_count": len(world.get("world", {}).get("objects", []))})
         _IMPORTS[import_id] = record
         return import_id, record
     except Exception:
@@ -164,7 +166,7 @@ async def import_usd_url(request: UsdImportRequest, _access: None = Depends(requ
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"OpenUSD import failed: {exc}") from exc
-    return {**record.metadata, "world_url": f"/usd/imports/{import_id}/world.json", "asset_base_url": f"/usd/imports/{import_id}/assets/"}
+    return {**record.metadata, "world_url": f"/usd/imports/{import_id}/world.json", "asset_base_url": f"/usd/imports/{import_id}/assets/", "native_url": f"/usd/imports/{import_id}/source/{record.source_path.relative_to(record.root / 'source').as_posix()}"}
 
 
 @router.get("/imports/{import_id}/world.json")
@@ -184,4 +186,16 @@ async def get_imported_asset(import_id: str, asset_path: str, _access: None = De
     assets_root = (record.world_path.parent / "assets").resolve()
     if assets_root not in requested.parents or not requested.is_file():
         raise HTTPException(status_code=404, detail="OpenUSD preview asset was not found.")
+    return FileResponse(requested)
+
+
+@router.get("/imports/{import_id}/source/{source_path:path}")
+async def get_imported_source(import_id: str, source_path: str, _access: None = Depends(require_simulator_operator_access_async)) -> FileResponse:
+    record = _IMPORTS.get(import_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="OpenUSD import has expired or does not exist.")
+    source_root = (record.root / "source").resolve()
+    requested = (source_root / source_path).resolve()
+    if source_root not in requested.parents or not requested.is_file():
+        raise HTTPException(status_code=404, detail="OpenUSD source file was not found.")
     return FileResponse(requested)

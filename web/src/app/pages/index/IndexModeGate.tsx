@@ -12,6 +12,7 @@ type IndexModeGateProps = {
   onLoadGitHubSource: SourceEntryActions["onGitHubSelected"];
   onLoadUrlSource: SourceEntryActions["onUrlSelected"];
   onOpenUsdSource: SourceEntryActions["onOpenUsdSelected"];
+  onNativeRobotSelected: SourceEntryActions["onNativeRobotSelected"];
   onImportWorldLayout: SourceEntryActions["onImportWorldLayout"];
   onOpenWorldOnlyWorkspace: SourceEntryActions["onOpenWorldOnlyWorkspace"];
   onPlayDemoMotion: SourceEntryActions["onPlayDemoMotion"];
@@ -35,6 +36,7 @@ export const IndexModeGate = ({
   onLoadGitHubSource,
   onLoadUrlSource,
   onOpenUsdSource,
+  onNativeRobotSelected,
   onImportWorldLayout,
   onOpenWorldOnlyWorkspace,
   onPlayDemoMotion,
@@ -55,6 +57,7 @@ export const IndexModeGate = ({
           onGitHubSelected={onLoadGitHubSource}
           onUrlSelected={onLoadUrlSource}
           onOpenUsdSelected={onOpenUsdSource}
+          onNativeRobotSelected={onNativeRobotSelected}
           onPlayDemoMotion={onPlayDemoMotion}
           onImportWorldLayout={onImportWorldLayout}
           onOpenWorldOnlyWorkspace={onOpenWorldOnlyWorkspace}

@@ -13,6 +13,7 @@ import { useFeatureGateAvailability } from "@/shared/lib/featureGateUi";
 import { lazyNamedComponent } from "@/features/layout/page/workspacePanelsHelpers";
 import { ViewerErrorBoundary } from "@/features/viewer/ViewerErrorBoundary";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
+import { NativeRobotViewer, type NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
 const Viewer3D = lazyNamedComponent(
   () => import("@/features/viewer/Viewer3D"),
@@ -30,14 +31,19 @@ const VIEWER_RUNTIME_PREFIXES = {
 type ViewerHostProps = {
   viewerKey: string;
   viewerProps: Viewer3DProps;
+  nativeRobotSource?: NativeRobotSource | null;
   fallbackClassName?: string;
 };
 
 export const ViewerHost = ({
   viewerKey,
   viewerProps,
+  nativeRobotSource = null,
   fallbackClassName = "h-full w-full bg-background",
 }: ViewerHostProps) => {
+  if (nativeRobotSource) {
+    return <NativeRobotViewer source={nativeRobotSource} />;
+  }
   const rosVizFlagEnabled = useSyncExternalStore(
     subscribeFeatureFlags,
     () => isFeatureFlagEnabled("rosViz"),

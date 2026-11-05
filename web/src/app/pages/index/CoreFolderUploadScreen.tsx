@@ -60,6 +60,7 @@ export const CoreFolderUploadScreen = ({
   onGitHubSelected,
   onUrlSelected,
   onOpenUsdSelected,
+  onNativeRobotSelected,
   onPlayDemoMotion,
   onImportWorldLayout,
   onOpenWorldOnlyWorkspace,
@@ -103,6 +104,7 @@ export const CoreFolderUploadScreen = ({
     onGitHubSelected,
     onUrlSelected,
     onOpenUsdSelected,
+    onNativeRobotSelected,
     shouldPreserveCameras: shouldPreserveCamerasForRobotLoad,
   });
   const {

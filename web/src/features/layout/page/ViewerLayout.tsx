@@ -21,6 +21,7 @@ import { lazyNamedComponent } from "@/features/layout/page/workspacePanelsHelper
 import { resolveViewerLayoutMainStyle } from "@/features/layout/page/viewerLayoutHelpers";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
+import type { NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
 const URDFComparison = lazyNamedComponent(
   () => import("@/features/urdf/editor/URDFComparison"),
@@ -95,6 +96,7 @@ type ViewerLayoutProps = {
   onInertiaReliabilityChange?: Viewer3DProps["onInertiaReliabilityChange"];
   enableObjectActionsInReadOnly?: boolean;
   motionDock?: ReactNode;
+  nativeRobotSource?: NativeRobotSource | null;
 };
 
 export const ViewerLayout = ({
@@ -163,6 +165,7 @@ export const ViewerLayout = ({
   thumbnailMode = false,
   onFixMissingMeshRefs,
   motionDock,
+  nativeRobotSource = null,
 }: ViewerLayoutProps) => {
   const viewerKey = `urdf-${urdfContentVersion}`;
   const viewerProps = toViewer3DProps({
@@ -234,6 +237,7 @@ export const ViewerLayout = ({
         <ViewerHost
           viewerKey={viewerKey}
           viewerProps={viewerProps}
+          nativeRobotSource={nativeRobotSource}
           fallbackClassName={viewerFallbackClassName}
         />
       </main>
@@ -252,6 +256,7 @@ export const ViewerLayout = ({
               <ViewerHost
                 viewerKey={viewerKey}
                 viewerProps={viewerProps}
+                nativeRobotSource={nativeRobotSource}
                 fallbackClassName={viewerFallbackClassName}
               />
             </div>
@@ -282,6 +287,7 @@ export const ViewerLayout = ({
             workspaceMode={workspaceMode}
             viewerKey={viewerKey}
             viewerProps={viewerProps}
+            nativeRobotSource={nativeRobotSource}
             assemblyIssueReportUrl={assemblyIssueReportUrl}
             assemblyContactPairCount={assemblyContactPairCount}
             assemblySecondaryModelsCount={assemblySecondaryModels.length}

@@ -15,6 +15,7 @@ import {
   type RecentRobotSource,
 } from "@/app/pages/index/coreFolderUploadScreenState";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
+import type { NativeRobotFormat } from "@/features/layout/page/NativeRobotViewer";
 
 type StagedRobotSource = {
   label: string;
@@ -27,17 +28,35 @@ type UseRobotSourceControllerParams = {
   onGitHubSelected: SourceEntryActions["onGitHubSelected"];
   onUrlSelected: SourceEntryActions["onUrlSelected"];
   onOpenUsdSelected: SourceEntryActions["onOpenUsdSelected"];
+  onNativeRobotSelected: SourceEntryActions["onNativeRobotSelected"];
   shouldPreserveCameras: () => boolean;
 };
 
 const isUsableRobotFile = (file: File): boolean =>
-  file.size > 0 || /\.(urdf|xacro)$/i.test(file.name);
+  file.size > 0 || /\.(urdf|xacro|xml|mjcf|usd|usda|usdc|usdz)$/i.test(file.name);
+
+const filePath = (file: File): string =>
+  (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+
+const detectNativeRobot = async (
+  files: File[]
+): Promise<{ format: NativeRobotFormat; primaryPath: string } | null> => {
+  const usd = files.find((file) => /\.(usd|usda|usdc|usdz)$/i.test(file.name));
+  if (usd) return { format: "USD", primaryPath: filePath(usd) };
+  const xmlFiles = files.filter((file) => /\.(xml|mjcf)$/i.test(file.name));
+  for (const file of xmlFiles) {
+    const text = await file.text();
+    if (/<mujoco(?:\s|>)/i.test(text)) return { format: "MJCF", primaryPath: filePath(file) };
+  }
+  return null;
+};
 
 export const useRobotSourceController = ({
   onFolderSelected,
   onGitHubSelected,
   onUrlSelected,
   onOpenUsdSelected,
+  onNativeRobotSelected,
   shouldPreserveCameras,
 }: UseRobotSourceControllerParams) => {
   const stagedRobotRef = useRef<StagedRobotSource | null>(null);
@@ -69,10 +88,16 @@ export const useRobotSourceController = ({
         toast.error("No robot files were selected.");
         return;
       }
+      const nativeRobot = await detectNativeRobot(files);
+      if (nativeRobot) {
+        await onNativeRobotSelected(files, nativeRobot.primaryPath, nativeRobot.format);
+        setLoadedRobotName(label);
+        return;
+      }
       await onFolderSelected(files, { preserveCameras: shouldPreserveCameras() });
       setLoadedRobotName(label);
     },
-    [onFolderSelected, shouldPreserveCameras]
+    [onFolderSelected, onNativeRobotSelected, shouldPreserveCameras]
   );
 
   const stageLocalRobotFiles = useCallback(

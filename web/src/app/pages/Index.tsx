@@ -123,6 +123,7 @@ import {
   type SimulationPrepAcceptedUrdfReviewState,
 } from "@/app/pages/index/useSimulationPrepReviewState";
 import { useSimulationPrepRepairActions } from "@/app/pages/index/useSimulationPrepRepairActions";
+import type { NativeRobotFormat, NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -231,6 +232,7 @@ const Index = () => {
     onAutoSelectEndEffector: setEndEffectorLink,
   });
   const [hasWorldOnlyContent, setHasWorldOnlyContent] = useState(false);
+  const [nativeRobotSource, setNativeRobotSource] = useState<NativeRobotSource | null>(null);
   const [scenariosDialogOpen, setScenariosDialogOpen] = useState(false);
   const [waypointRecorderOpen, setWaypointRecorderOpen] = useState(false);
   const hasEnteredWorkspace = hasLoadedFiles || hasWorldOnlyContent;
@@ -563,19 +565,41 @@ const Index = () => {
     const responseText = await response.text();
     const payload = (() => {
       try {
-        return JSON.parse(responseText) as { detail?: string; world_url?: string };
+        return JSON.parse(responseText) as { detail?: string; world_url?: string; native_url?: string };
       } catch {
         return {};
       }
     })();
-    if (!response.ok || !payload.world_url) {
+    if (!response.ok || (!payload.world_url && !payload.native_url)) {
       const detail = payload.detail ?? responseText.slice(0, 240).trim();
       throw new Error(detail || `OpenUSD import failed (HTTP ${response.status})`);
     }
-    await handleImportWorldLayoutFromEntry(`${API_BASE_URL}${payload.world_url}`);
+    if (payload.native_url) {
+      setNativeRobotSource({
+        format: "USD",
+        files: [],
+        primaryPath: "",
+        label: sourceUrl.split("/").pop() || "OpenUSD robot",
+        url: `${API_BASE_URL}${payload.native_url}`,
+      });
+    } else if (payload.world_url) {
+      await handleImportWorldLayoutFromEntry(`${API_BASE_URL}${payload.world_url}`);
+    }
     setHasWorldOnlyContent(true);
     toast.success("OpenUSD preview opened. Source revision and provenance are preserved.");
   }, [handleImportWorldLayoutFromEntry]);
+  const handleNativeRobotSelected = useCallback(
+    async (files: File[], primaryPath: string, format: NativeRobotFormat): Promise<void> => {
+      setNativeRobotSource({
+        files,
+        primaryPath,
+        format,
+        label: primaryPath.split("/").pop() || `${format} robot`,
+      });
+      setHasWorldOnlyContent(true);
+    },
+    []
+  );
   const { workspaceTransfer } = useWorkspaceTransferLauncher({
     activeUrdfPath,
     attachedIluSessionId,
@@ -1610,6 +1634,7 @@ const Index = () => {
     updateUrdfFile: updateUrdfFileWithCollaboration,
     onInertiaReliabilityChange: setInertiaReliability,
     thumbnailMode,
+    nativeRobotSource,
     onDuplicateAssemblyRobot: handleDuplicateAssemblyRobot,
     rightSidebarCollapsed: isRightSidebarCollapsed,
     onJointLimitsChange: handleJointLimitsChange,
@@ -1674,6 +1699,7 @@ const Index = () => {
       onLoadGitHubSource={handleLoadGitHubSource}
       onLoadUrlSource={handleLoadUrlSource}
       onOpenUsdSource={handleOpenUsdSource}
+      onNativeRobotSelected={handleNativeRobotSelected}
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
       onOpenWorldOnlyWorkspace={handleOpenWorldOnlyWorkspace}
       onPlayDemoMotion={handlePlayDemoMotion}

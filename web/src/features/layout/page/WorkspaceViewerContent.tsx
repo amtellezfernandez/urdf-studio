@@ -2,6 +2,7 @@ import { ViewerHost } from "@/features/layout/page/ViewerHost";
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 import type { WorkspaceMode } from "@/features/workspace/types";
+import type { NativeRobotSource } from "@/features/layout/page/NativeRobotViewer";
 
 type WorkspaceViewerContentProps = {
   workspaceMode: WorkspaceMode;
@@ -12,6 +13,7 @@ type WorkspaceViewerContentProps = {
   assemblySecondaryModelsCount: number;
   primaryRobotName: string;
   jointLimits: Viewer3DProps["jointLimits"];
+  nativeRobotSource?: NativeRobotSource | null;
 };
 
 export const WorkspaceViewerContent = ({
@@ -23,6 +25,7 @@ export const WorkspaceViewerContent = ({
   assemblySecondaryModelsCount,
   primaryRobotName,
   jointLimits,
+  nativeRobotSource = null,
 }: WorkspaceViewerContentProps) => {
   const workspaceModeUi = getWorkspaceModeUiPolicy(workspaceMode);
   void jointLimits;
@@ -33,6 +36,7 @@ export const WorkspaceViewerContent = ({
         <ViewerHost
           viewerKey={viewerKey}
           viewerProps={viewerProps}
+          nativeRobotSource={nativeRobotSource}
           fallbackClassName="h-full w-full bg-background"
         />
         <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-border/60 bg-background/85 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur-sm">
@@ -65,6 +69,7 @@ export const WorkspaceViewerContent = ({
     <ViewerHost
       viewerKey={viewerKey}
       viewerProps={viewerProps}
+      nativeRobotSource={nativeRobotSource}
       fallbackClassName="h-full w-full bg-background"
     />
   );
