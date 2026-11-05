@@ -158,14 +158,16 @@ export class HydraMesh {
     this._materials = [this._baseMaterial || this._mesh.material];
     for (const section of this._subsetSections) {
       const material = this._interface.materials[section.materialId];
-      if (!material) continue;
-
-      // Group indices must follow the resolved material array, not the USD
-      // section index. Materials can arrive after the mesh and some sections
-      // may still be unresolved during an early sync pass.
-      const materialIndex = this._materials.length;
-      this._materials.push(material._material);
-      this._geometry.addGroup(section.start, section.length, materialIndex);
+      // Preserve one material slot per USD section even when the material
+      // prim arrives later. Dropping an unresolved section drops its index
+      // range from Three.js rendering entirely, which makes valid robot parts
+      // (for example the waist cover or head shell) disappear.
+      this._materials.push(material?._material || this._materials[0]);
+      this._geometry.addGroup(
+        section.start,
+        section.length,
+        this._materials.length - 1
+      );
     }
 
     // A Three.js mesh with an array material and no groups renders nothing.
