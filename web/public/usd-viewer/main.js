@@ -199,12 +199,15 @@ export function init(options = { container: null, hdrPath: null }) {
       }
 
       function getAllLoadedFilePaths(currentPath, paths) {
-        const files = USD.FS_readdir(currentPath);
-        for (const file of files) {
-          if (file === "." || file === "..") continue;
-          const newPath = currentPath + file + "/";
-          const data = USD.FS_analyzePath(currentPath + file + "/");
-          if (data.object.node_ops.readdir) {
+      const files = USD.FS_readdir(currentPath);
+      for (const file of files) {
+        if (file === "." || file === "..") continue;
+        const newPath = currentPath + file + "/";
+        const data = USD.FS_analyzePath(currentPath + file + "/");
+          // Emscripten's newer FS bindings expose `isFolder` directly;
+          // legacy bindings expose the directory operation under `object`.
+          const isDirectory = data?.isFolder ?? Boolean(data?.object?.node_ops?.readdir);
+          if (isDirectory) {
             if (!SYS_DIRS.includes(newPath))
               getAllLoadedFilePaths(newPath, paths);
           } else {
@@ -244,7 +247,8 @@ export function init(options = { container: null, hdrPath: null }) {
           if (file === "." || file === "..") continue;
           const newPath = path + file + "/";
           const data = USD.FS_analyzePath(path + file + "/");
-          if (data.object.node_ops.readdir) {
+          const isDirectory = data?.isFolder ?? Boolean(data?.object?.node_ops?.readdir);
+          if (isDirectory) {
             if (!SYS_DIRS.includes(newPath)) {
               root[file] = {};
               addPath(root[file], newPath);
