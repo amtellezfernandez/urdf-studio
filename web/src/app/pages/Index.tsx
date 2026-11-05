@@ -560,12 +560,17 @@ const Index = () => {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ source_url: sourceUrl }),
     });
-    const payload = (await response.json().catch(() => ({}))) as {
-      detail?: string;
-      world_url?: string;
-    };
+    const responseText = await response.text();
+    const payload = (() => {
+      try {
+        return JSON.parse(responseText) as { detail?: string; world_url?: string };
+      } catch {
+        return {};
+      }
+    })();
     if (!response.ok || !payload.world_url) {
-      throw new Error(payload.detail ?? `OpenUSD import failed (HTTP ${response.status})`);
+      const detail = payload.detail ?? responseText.slice(0, 240).trim();
+      throw new Error(detail || `OpenUSD import failed (HTTP ${response.status})`);
     }
     await handleImportWorldLayoutFromEntry(`${API_BASE_URL}${payload.world_url}`);
     setHasWorldOnlyContent(true);

@@ -76,12 +76,14 @@ const renderRobotSourceController = async ({
   const onFolderSelectedMock = vi.fn(async () => undefined);
   const onGitHubSelectedMock = vi.fn(async () => undefined);
   const onUrlSelectedMock = vi.fn(async () => undefined);
+  const onOpenUsdSelectedMock = vi.fn(async () => undefined);
 
   const Harness = () => {
     hookValue = useRobotSourceController({
       onFolderSelected: onFolderSelectedMock as SourceEntryActions["onFolderSelected"],
       onGitHubSelected: onGitHubSelectedMock as SourceEntryActions["onGitHubSelected"],
       onUrlSelected: onUrlSelectedMock as SourceEntryActions["onUrlSelected"],
+      onOpenUsdSelected: onOpenUsdSelectedMock as SourceEntryActions["onOpenUsdSelected"],
       shouldPreserveCameras,
     });
     return null;

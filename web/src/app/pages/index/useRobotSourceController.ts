@@ -26,6 +26,7 @@ type UseRobotSourceControllerParams = {
   onFolderSelected: SourceEntryActions["onFolderSelected"];
   onGitHubSelected: SourceEntryActions["onGitHubSelected"];
   onUrlSelected: SourceEntryActions["onUrlSelected"];
+  onOpenUsdSelected: SourceEntryActions["onOpenUsdSelected"];
   shouldPreserveCameras: () => boolean;
 };
 
@@ -36,6 +37,7 @@ export const useRobotSourceController = ({
   onFolderSelected,
   onGitHubSelected,
   onUrlSelected,
+  onOpenUsdSelected,
   shouldPreserveCameras,
 }: UseRobotSourceControllerParams) => {
   const stagedRobotRef = useRef<StagedRobotSource | null>(null);
@@ -163,7 +165,25 @@ export const useRobotSourceController = ({
         load: async () => {
           setIsLoadingUrl(true);
           try {
-            await onUrlSelected(url);
+            const isOpenUsd = (() => {
+              try {
+                const parsed = new URL(url);
+                return (
+                  parsed.hostname.toLowerCase().endsWith("huggingface.co") &&
+                  parsed.pathname.startsWith("/datasets/") &&
+                  /\/(blob|tree|resolve)\//.test(parsed.pathname) &&
+                  (/\.(usd|usda|usdc|usdz)$/i.test(parsed.pathname) ||
+                    /\/tree\/[^/]+\/.+/.test(parsed.pathname))
+                );
+              } catch {
+                return false;
+              }
+            })();
+            if (isOpenUsd) {
+              await onOpenUsdSelected(url);
+            } else {
+              await onUrlSelected(url);
+            }
             setLoadedRobotName(label);
             rememberRecentRobotSource({ kind: "url", url });
           } finally {
@@ -172,7 +192,7 @@ export const useRobotSourceController = ({
         },
       });
     },
-    [onUrlSelected, rememberRecentRobotSource, stageRobot]
+    [onOpenUsdSelected, onUrlSelected, rememberRecentRobotSource, stageRobot]
   );
 
   const stageUrlRobot = useCallback(

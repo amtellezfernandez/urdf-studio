@@ -6,7 +6,6 @@ import {
 } from "react";
 import {
   ArrowRight,
-  Box,
   Bot,
   Camera,
   Check,
@@ -41,6 +40,21 @@ import { useWorldLayoutSourceController } from "@/app/pages/index/useWorldLayout
 
 type CoreFolderUploadScreenProps = SourceEntryActions;
 
+const isHuggingFaceOpenUsdUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.hostname.toLowerCase().endsWith("huggingface.co") &&
+      parsed.pathname.startsWith("/datasets/") &&
+      /\/(blob|tree|resolve)\//.test(parsed.pathname) &&
+      (/\.(usd|usda|usdc|usdz)$/i.test(parsed.pathname) ||
+        /\/tree\/[^/]+\/.+/.test(parsed.pathname))
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const CoreFolderUploadScreen = ({
   onFolderSelected,
   onGitHubSelected,
@@ -59,8 +73,6 @@ export const CoreFolderUploadScreen = ({
   const clearCameras = useCameraStore((state) => state.clearCameras);
   const removeCamera = useCameraStore((state) => state.removeCamera);
   const [isLoadingSetup, setIsLoadingSetup] = useState(false);
-  const [isLoadingUsd, setIsLoadingUsd] = useState(false);
-  const [usdSource, setUsdSource] = useState("");
   const shouldPreserveCamerasForRobotLoad = useCallback(
     () => useCameraStore.getState().cameras.length > 0,
     []
@@ -90,6 +102,7 @@ export const CoreFolderUploadScreen = ({
     onFolderSelected,
     onGitHubSelected,
     onUrlSelected,
+    onOpenUsdSelected,
     shouldPreserveCameras: shouldPreserveCamerasForRobotLoad,
   });
   const {
@@ -174,12 +187,12 @@ export const CoreFolderUploadScreen = ({
     <SourcePanel
       icon={Bot}
       title="Robot"
-      description="Drag a URDF package folder onto this panel, or paste a GitHub repository / direct URDF/Xacro URL."
+      description="Drag a URDF package folder onto this panel, or paste a GitHub repository / direct URDF, Xacro, or OpenUSD robot URL."
       infoContent={
         <>
-          For a GitHub repository, paste the repo link - the URDF is found automatically. Sibling
-          mesh files (.stl/.dae/.obj/.glb/.gltf) referenced by the URDF are resolved automatically
-          from the same repository - you don't need to list them separately.
+          For a GitHub repository, paste the repo link - the URDF is found automatically. Direct
+          OpenUSD links from Hugging Face are identified and opened as robot previews; their pinned
+          revision and source provenance are retained.
         </>
       }
       isDropActive={robotSourceDropActive}
@@ -221,7 +234,7 @@ export const CoreFolderUploadScreen = ({
         <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Input
             type="text"
-            placeholder="https://.../robot.urdf or .xacro"
+            placeholder="URDF, Xacro, or Hugging Face OpenUSD robot URL"
             value={urlSource}
             onChange={(event) => setUrlSource(event.target.value)}
             disabled={isLoadingUrl}
@@ -241,6 +254,11 @@ export const CoreFolderUploadScreen = ({
             Load
           </Button>
         </div>
+        {isHuggingFaceOpenUsdUrl(urlSource) ? (
+          <p className="text-[11px] text-[#ff63d5]">
+            Detected: OpenUSD robot · the pinned Hugging Face revision will be preserved
+          </p>
+        ) : null}
       </form>
       {stagedRobot || loadedRobotName ? (
         <div className="space-y-2 rounded-md border border-border/70 bg-background/40 p-2.5">
@@ -418,66 +436,6 @@ export const CoreFolderUploadScreen = ({
     </SourcePanel>
   );
 
-  const renderOpenUsdLoader = () => (
-    <SourcePanel
-      icon={Box}
-      title="OpenUSD asset"
-      description="Open a pinned Hugging Face USD/USDA/USDC file or SimReady asset folder as a local preview."
-      infoContent={
-        <>
-          URDF Studio does not host the source permanently. The selected Hugging Face revision is
-          fetched for this session, converted to a preview World, and kept linked to its dataset,
-          revision, and original USD filename. Native USD remains the source for simulator export.
-        </>
-      }
-      isDropActive={false}
-      onDropActiveChange={() => undefined}
-      onDrop={() => undefined}
-    >
-      <form
-        className="space-y-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const source = usdSource.trim();
-          if (!source) return;
-          setIsLoadingUsd(true);
-          void onOpenUsdSelected(source)
-            .catch((error: unknown) => {
-              toast.error(error instanceof Error ? error.message : "OpenUSD import failed.");
-            })
-            .finally(() => setIsLoadingUsd(false));
-        }}
-      >
-        <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <Input
-            type="url"
-            placeholder="https://huggingface.co/datasets/.../blob/<revision>/robot.usda"
-            value={usdSource}
-            onChange={(event) => setUsdSource(event.target.value)}
-            disabled={isLoadingUsd}
-            className="min-w-0 flex-1 bg-background/80"
-          />
-          <Button
-            type="submit"
-            disabled={isLoadingUsd || !usdSource.trim()}
-            size="sm"
-            className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
-          >
-            {isLoadingUsd ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Box className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            Open
-          </Button>
-        </div>
-        <p className="text-[11px] text-muted-foreground/80">
-          Remote source · pinned revisions recommended · preview meshes are extracted server-side
-        </p>
-      </form>
-    </SourcePanel>
-  );
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-start bg-background px-4 py-6">
       <div className="flex w-full items-start justify-between pb-2">
@@ -560,7 +518,6 @@ export const CoreFolderUploadScreen = ({
           <div className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryStackClass}>
             {renderRobotLoader()}
             {renderCameraSetupLoader()}
-            {renderOpenUsdLoader()}
           </div>
           {renderWorldLayoutLoader()}
         </div>
