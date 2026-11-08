@@ -1,71 +1,117 @@
-URDF STUDIO PROPRIETARY NON-COMMERCIAL LICENSE
-Version 1.0 — 31 August 2026
+RESEARCH USE LICENSE 1.1
 
-Copyright (c) 2026 Alba Maria Tellez Fernandez. All rights reserved.
+Copyright (c) 2026 Alba Maria Tellez Fernandez.
+Other copyright notices in the respective source files remain applicable.
+Licensor: Alba Maria Tellez Fernandez.
+All rights not expressly granted below are reserved.
 
 1. Scope
+"Software" means this repository's code and documentation, including modifications.
+Separately identified third-party materials, dependencies, datasets and model
+weights retain their own licenses. This license does not relicense those materials.
 
-This license applies to the URDF Studio source code, documentation, assets,
-and other materials in this repository (the “Software”), except materials that
-state their own license or are identified as third-party materials.
+"Research Use" means non-commercial scientific research, experimentation,
+evaluation, teaching and reproduction of research results. It includes local
+integration with research code solely for those purposes. Research Use excludes
+production deployment, paid services, consulting deliverables, product development
+or validation for commercial advantage, and incorporation into a commercial
+product or service. An academic or nonprofit affiliation alone does not make
+a commercial activity Research Use.
 
-2. Limited non-commercial permission
+2. Research permission
+Subject to these terms, you may access, run, study, copy and modify the Software
+for Research Use without payment or an individually signed agreement.
+You may share copies and modifications within your own research team solely to
+perform the same Research Use, preserving this license and all attribution.
+Outside that team, you may not publish, distribute, package, host for others,
+or release the Software or a modified version without the Licensor's prior
+written permission, even without payment or for academic research.
+An exception permits patches, pull requests and contribution-only repository
+forks needed to submit changes to this project's official repository under
+section 5. This exception does not authorize independent releases, replacement
+packages, mirrors marketed as another project, or derivative services.
+These restrictions do not override rights independently granted by applicable
+law, an applicable hosting platform's terms, or a separate written license.
+This permission is non-exclusive, worldwide and royalty-free.
 
-Subject to these terms, Alba Maria Tellez Fernandez (the “Licensor”) grants you
-a personal, revocable, non-exclusive, non-transferable, non-sublicensable right
-to use, copy, and modify the Software solely for non-commercial personal,
-educational, evaluation, and research purposes.
+3. Reserved commercial rights
+Without a separate written commercial license from the Licensor, you may not
+sell, sublicense commercially, rent, offer paid access to, or provide hosted or
+managed services using the Software, whether modified or unmodified.
+You may not embed, bundle, copy or incorporate the Software into commercial
+software, commercial distributions, products or services, including internal
+commercial deployments. Providing the Software without charge as part of a
+commercial offering does not avoid this restriction.
+A separate commercial license may grant different rights; this research license
+does not require the Licensor to offer one.
 
-“Non-commercial” means not primarily intended for, directed toward, or used in
-connection with commercial advantage, monetary compensation, paid services,
-revenue-generating activity, or the development, operation, or support of a
-commercial product or service.
+4. Modification return, attribution and project identity
+If you put a modification of the Software into research use, submit the complete
+corresponding modification to the official upstream project as a reproducible
+patch or pull request within 30 days of first use and before publishing results
+that depend on it, whichever occurs first. A link to an inaccessible private
+fork is not a submission. Unused exploratory edits need not be submitted.
+This duty covers changes to this Software, not independently written research
+code, data or other work merely used alongside it. Submissions are subject to
+section 5. The Licensor may accept, revise or reject a contribution; submission
+does not entitle you to a merge or authorize a separate derivative release.
 
-3. Restrictions
+You must preserve origin, copyright and attribution notices. You may not
+rebrand or present the Software or a derivative as your own or your institution's
+independently originated product, platform or distribution, even for research.
+Changing a name, logo, interface or package identifier does not grant release
+rights. Academic or nonprofit status is not an exemption.
+No right to use project names, logos or other branding as your own source
+identifier, or to imply endorsement or official status, is granted. Accurate
+citation, identification of the upstream software, and clear descriptions of
+your research modifications are permitted. These terms govern use of this
+Software and do not prohibit independently developed software that does not
+copy it.
 
-Without the Licensor’s prior written permission, you may not:
+4a. Results and ownership
+You retain ownership of your original code, modifications and research results.
+This license does not claim ownership of outputs, findings or publications.
+You may publish research findings and independently created results without
+releasing independently written research code. The section 4 return requirement
+still applies to modifications of the Software used for those results.
+Distribution or use of the Software itself remains subject to this license. No trademark rights or endorsement are granted.
 
-  a. use the Software for any commercial purpose;
-  b. distribute, publish, disclose, sublicense, sell, lease, lend, host, or
-     otherwise make the Software or any modified version available to others;
-  c. use the Software to train, improve, benchmark, or provide a commercial
-     model, service, or product;
-  d. remove or alter copyright, attribution, license, or other proprietary
-     notices; or
-  e. represent that you are affiliated with, endorsed by, or authorized by the
-     Licensor.
-
-4. Ownership and contributions
-
-The Software is licensed, not sold. The Licensor retains all right, title, and
-interest in and to the Software and all related intellectual-property rights.
-No contribution, modification, or other material may be submitted for inclusion
-in the Software without the Licensor’s prior written approval and a separately
-executed contributor agreement.
-
-5. Third-party materials
-
-Third-party components remain subject to their own licenses. This license does
-not change or restrict rights granted under those licenses; it governs only the
-Licensor’s original materials.
+5. Contributions
+You may copy, run and modify the Software as reasonably necessary to prepare,
+test and submit contributions to this official project, including if you are
+paid by the Licensor or your employer for that contribution work. This limited
+contribution-purpose permission does not authorize independent products,
+services, derivative releases or other commercial exploitation.
+You may open issues, discuss the project and submit pull requests without an
+individual collaboration agreement, copyright assignment or separate signature.
+You retain copyright in your contributions.
+By intentionally submitting original code or documentation for inclusion in this
+project, you license it to recipients under this Research Use License and also
+grant the Licensor a perpetual, irrevocable, worldwide, non-exclusive, royalty-free
+copyright license to reproduce, modify, prepare derivative works of, distribute,
+publicly display and perform, sublicense and transfer that contribution for any
+purpose, including commercial licensing, sale of the project and release under
+other licenses. This additional grant concerns your submitted contribution only,
+not unrelated code, pre-existing materials that you have not submitted, names
+or trademarks.
+Submit only material you have the right to license on these terms. Identify
+third-party material and its license before submission; do not represent it as
+your original contribution. A separately signed agreement applicable to an
+existing contribution continues to govern that contribution.
+Ordinary issue reports and discussion do not assign ownership of your ideas,
+other work or intellectual property to the Licensor.
 
 6. Termination
+Rights granted to a recipient under section 2 terminate if that recipient violates
+these terms. Stop using and distributing the Software after termination unless
+the Licensor reinstates permission in writing. This does not revoke the
+contribution license already granted under section 5 or a separate commercial
+license. Compliant recipients' rights are not terminated solely by another
+recipient's breach.
 
-This license terminates automatically if you violate any term. On termination,
-you must stop using the Software and delete all copies under your control,
-except where retention is required by law.
-
-7. No warranty; limitation of liability
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-PURPOSE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE
-LICENSOR SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
-FROM OR IN CONNECTION WITH THE SOFTWARE OR THIS LICENSE.
-
-8. Governing law
-
-This license is governed by the laws of France. The courts of Paris, France,
-have exclusive jurisdiction over disputes arising from it.
-
-For commercial licensing or other permissions, contact the Licensor in writing.
+7. Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE AUTHORS
+AND COPYRIGHT HOLDERS ARE NOT LIABLE FOR CLAIMS, DAMAGES OR OTHER LIABILITY
+ARISING FROM THE SOFTWARE OR ITS USE.

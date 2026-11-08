@@ -347,6 +347,21 @@ npm run build
 
 ## License And Contributions
 
-- License: proprietary, non-commercial use only; see [LICENSE](LICENSE)
-- Contributions require written permission and a CLA: see [CLA.md](CLA.md)
-- Contributing guidelines: see [CONTRIBUTING.md](CONTRIBUTING.md)
+URDF Studio is research-use source-available software under the
+[Research Use License 1.1](LICENSE), not MIT, Apache or OSI open source.
+Local noncommercial research modifications are permitted. Commercial use,
+independent releases, redistribution outside your research team and rebranded
+derivatives require prior written permission, including for universities.
+Modifications put into use must be offered upstream within 30 days or before
+publishing dependent results, whichever comes first; maintainer acceptance is
+not guaranteed. Independent research code and results remain yours.
+
+Issues and PRs do not require an individually signed collaboration agreement,
+copyright assignment or direct repository write access. Fork the repository and
+target `urdf-studio-main`; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributors retain ownership and grant the published additional commercial,
+transfer and relicensing rights to Alba Maria Tellez Fernandez in LICENSE section 5.
+[CLA.md](CLA.md) now redirects to those published terms.
+
+Third-party code, robot assets, datasets, model weights and dependencies retain
+their own licenses. Existing separately signed agreements remain applicable.
